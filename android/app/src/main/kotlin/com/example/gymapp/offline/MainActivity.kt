@@ -1,4 +1,4 @@
-package com.example.gymapp
+package com.example.gymapp.offline
 
 import android.os.Build
 import android.view.Display
