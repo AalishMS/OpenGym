@@ -69,7 +69,15 @@
 ## 📸 Screenshots
 
 <p align="center">
-  <img src="flutter_01.png" alt="OpenGym Screenshot" width="350">
+  <img src="screenshots/Screenshot_20260611-130716.png" alt="Home Screen" width="260">
+  <img src="screenshots/Screenshot_20260611-130724.png" alt="Workout Screen" width="260">
+  <img src="screenshots/Screenshot_20260611-130733.png" alt="Exercise Logging" width="260">
+</p>
+
+<p align="center">
+  <img src="screenshots/Screenshot_20260611-130743.png" alt="Statistics" width="260">
+  <img src="screenshots/Screenshot_20260611-130801.png" alt="History" width="260">
+  <img src="screenshots/Screenshot_20260611-130834.png" alt="Settings" width="260">
 </p>
 
 ---
