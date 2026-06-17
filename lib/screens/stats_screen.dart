@@ -411,7 +411,7 @@ class _StatsScreenState extends State<StatsScreen> {
                         showTitles: true,
                         getTitlesWidget: (value, meta) {
                           if (value.toInt() >= progression.length) {
-                            return Text('');
+                            return const Text('');
                           }
                           final date =
                               progression[value.toInt()]['date'] as DateTime;

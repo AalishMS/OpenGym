@@ -23,4 +23,18 @@ class Exercise extends HiveObject {
       note: note ?? this.note,
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'sets': sets.map((s) => s.toJson()).toList(),
+        'note': note,
+      };
+
+  factory Exercise.fromJson(Map<String, dynamic> json) => Exercise(
+        name: json['name'] as String,
+        sets: (json['sets'] as List)
+            .map((s) => Set.fromJson(s as Map<String, dynamic>))
+            .toList(),
+        note: json['note'] as String?,
+      );
 }

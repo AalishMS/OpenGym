@@ -24,6 +24,23 @@ class WorkoutSession extends HiveObject {
     this.weekNumber = 1,
   });
 
+  Map<String, dynamic> toJson() => {
+        'date': date.toIso8601String(),
+        'planName': planName,
+        'weekNumber': weekNumber,
+        'exercises': exercises.map((e) => e.toJson()).toList(),
+      };
+
+  factory WorkoutSession.fromJson(Map<String, dynamic> json) =>
+      WorkoutSession(
+        date: DateTime.parse(json['date'] as String),
+        planName: json['planName'] as String,
+        weekNumber: json['weekNumber'] as int? ?? 1,
+        exercises: (json['exercises'] as List)
+            .map((e) => Exercise.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+
   WorkoutSession copyWith({
     DateTime? date,
     String? planName,

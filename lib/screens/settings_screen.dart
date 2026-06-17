@@ -1,9 +1,17 @@
+import 'dart:convert';
+import 'dart:io' show File;
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+
 import '../providers/settings_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
+import '../services/backup_service.dart';
+import '../services/hive_service.dart';
 import '../services/sample_data_seeder.dart';
 import '../theme/app_theme.dart';
 
@@ -93,6 +101,26 @@ class SettingsScreen extends StatelessWidget {
                 title: 'LOAD SAMPLE DATA',
                 subtitle: 'Add sample plans and workouts for testing',
                 onTap: () => _loadSampleData(context),
+                accent: accent,
+                textPrimary: textPrimary,
+                textSecondary: textSecondary,
+                border: border,
+              ),
+              _buildSettingsTile(
+                icon: Icons.upload,
+                title: 'EXPORT DATA',
+                subtitle: 'Backup all plans, sessions, and settings',
+                onTap: () => _exportData(context),
+                accent: accent,
+                textPrimary: textPrimary,
+                textSecondary: textSecondary,
+                border: border,
+              ),
+              _buildSettingsTile(
+                icon: Icons.download,
+                title: 'IMPORT DATA',
+                subtitle: 'Restore from a backup file (replaces all data)',
+                onTap: () => _importData(context),
                 accent: accent,
                 textPrimary: textPrimary,
                 textSecondary: textSecondary,
@@ -559,6 +587,271 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  void _exportData(BuildContext context) {
+    final surface = surfaceColor(context);
+    final border = borderColor(context);
+    final textSecondary = textSecondaryColor(context);
+    final settings = context.read<SettingsProvider>();
+    final accent = settings.accentColor;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.zero,
+          side: BorderSide(color: border, width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '> EXPORT DATA?',
+                style: GoogleFonts.jetBrainsMono(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: accent),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'This will create a backup file containing all your plans, '
+                'sessions, and settings. Your current data will NOT be affected.',
+                style: GoogleFonts.jetBrainsMono(
+                    fontSize: 12, color: textSecondary),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: Text('[CANCEL]',
+                        style:
+                            GoogleFonts.jetBrainsMono(color: textSecondary)),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      try {
+                        final planProvider =
+                            context.read<WorkoutPlanProvider>();
+                        final sessionProvider =
+                            context.read<WorkoutSessionProvider>();
+                        final result = BackupService.exportData(
+                          plans: planProvider.plans,
+                          sessions: sessionProvider.sessions,
+                          settings: {
+                            'themeMode': settings.themeMode.index,
+                            'accentIndex': settings.accentIndex,
+                            'weightUnit': settings.weightUnit,
+                            'autoFillLast': settings.autoFillLast,
+                            'highRefreshRate': settings.highRefreshRate,
+                          },
+                        );
+                        final bytes =
+                            utf8.encode(result.jsonString);
+                        await Share.shareXFiles(
+                          [
+                            XFile.fromData(
+                              bytes,
+                              name: result.fileName,
+                              mimeType: 'application/json',
+                            ),
+                          ],
+                          text: 'OpenGym Backup',
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('> Backup exported successfully',
+                                  style: GoogleFonts.jetBrainsMono()),
+                              backgroundColor: accent,
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  '> Export failed: ${e.toString()}',
+                                  style: GoogleFonts.jetBrainsMono()),
+                              backgroundColor: errorColor(context),
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accent,
+                      foregroundColor: Colors.black,
+                    ),
+                    child:
+                        Text('[EXPORT]', style: GoogleFonts.jetBrainsMono()),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _importData(BuildContext context) async {
+    try {
+      final pickResult = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (pickResult == null || pickResult.files.isEmpty) return;
+
+      final pickedFile = pickResult.files.single;
+      String jsonString;
+      if (pickedFile.bytes != null) {
+        jsonString = utf8.decode(pickedFile.bytes!);
+      } else {
+        jsonString = await File(pickedFile.path!).readAsString();
+      }
+
+      final importResult = BackupService.importData(jsonString);
+      if (!importResult.success) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('> ${importResult.errorMessage}',
+                  style: GoogleFonts.jetBrainsMono()),
+              backgroundColor: errorColor(context),
+            ),
+          );
+        }
+        return;
+      }
+
+      final surface = surfaceColor(context);
+      final border = borderColor(context);
+      final textSecondary = textSecondaryColor(context);
+      final error = errorColor(context);
+      final settings = context.read<SettingsProvider>();
+      final accent = settings.accentColor;
+
+      showDialog(
+        context: context,
+        builder: (ctx) => Dialog(
+          backgroundColor: surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: border, width: 1),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '> IMPORT BACKUP?',
+                  style: GoogleFonts.jetBrainsMono(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: error),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'This will REPLACE ALL of your current data including:\n'
+                  '• All workout plans\n'
+                  '• All workout history\n'
+                  '• App settings (theme, accent color, units)\n\n'
+                  'This action cannot be undone.',
+                  style: GoogleFonts.jetBrainsMono(
+                      fontSize: 12, color: textSecondary),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      child: Text('[CANCEL]',
+                          style:
+                              GoogleFonts.jetBrainsMono(color: textSecondary)),
+                    ),
+                    const SizedBox(width: 8),
+                    ElevatedButton(
+                      onPressed: () async {
+                        Navigator.pop(ctx);
+                        try {
+                          await HiveService.replaceAllPlans(
+                              importResult.plans!);
+                          await HiveService.replaceAllSessions(
+                              importResult.sessions!);
+                          final s = importResult.settings!;
+                          settings.setThemeMode(
+                              ThemeMode.values[s['themeMode'] as int]);
+                          settings.setAccentColor(
+                              s['accentIndex'] as int);
+                          settings.setWeightUnit(
+                              s['weightUnit'] as String);
+                          context
+                              .read<WorkoutPlanProvider>()
+                              .loadPlans();
+                          context
+                              .read<WorkoutSessionProvider>()
+                              .loadSessions();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    '> Backup imported successfully',
+                                    style: GoogleFonts.jetBrainsMono()),
+                                backgroundColor: accent,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                    '> Import failed: ${e.toString()}',
+                                    style: GoogleFonts.jetBrainsMono()),
+                                backgroundColor: error,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: error,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: Text('[IMPORT]',
+                          style: GoogleFonts.jetBrainsMono()),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('> Import failed: ${e.toString()}',
+                style: GoogleFonts.jetBrainsMono()),
+            backgroundColor: errorColor(context),
+          ),
+        );
+      }
+    }
+  }
+
   void _confirmClearData(BuildContext context) {
     final bg = backgroundColor(context);
     final surface = surfaceColor(context);
@@ -716,7 +1009,7 @@ class SettingsScreen extends StatelessWidget {
                 border: Border.all(color: accent, width: 1),
               ),
               child: isSelected
-                  ? Icon(Icons.check, size: 14, color: Colors.black)
+                  ? const Icon(Icons.check, size: 14, color: Colors.black)
                   : null,
             ),
             const SizedBox(width: 12),

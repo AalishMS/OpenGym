@@ -166,3 +166,13 @@ Repository layer wrapping HiveService for clean architecture:
 - Enhanced settings screen color picker with checkmark indicator for selected color
 - Fixed spacing and visual feedback across all screens
 - `flutter analyze` passes with no errors (only info-level const warnings)
+
+## Export/Import (Backup) Feature
+- Added JSON-based export/import for backing up and restoring all gym data
+- **Models**: Added `toJson()`/`factory fromJson()` to all 5 model classes (Set, Exercise, ExerciseTemplate, WorkoutPlan, WorkoutSession)
+- **BackupService** (`lib/services/backup_service.dart`): Static utility for serialization (exportData) and parse/validate (importData) with version checking
+- **HiveService**: Added `replaceAllPlans()` and `replaceAllSessions()` for batch atomic data replacement
+- **SettingsScreen**: Added EXPORT DATA (non-destructive dialog → share sheet) and IMPORT DATA (file picker → validate → destructive confirmation → write) tiles
+- **Dependencies added**: `file_picker`, `share_plus`
+- **Web support**: Export uses `XFile.fromData()` (no `path_provider`); import handles `PlatformFile.bytes` for web
+- **`flutter analyze` passes with 0 errors**

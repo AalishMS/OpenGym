@@ -14,4 +14,15 @@ class ExerciseTemplate extends HiveObject {
     required this.name,
     required this.sets,
   });
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'sets': sets,
+      };
+
+  factory ExerciseTemplate.fromJson(Map<String, dynamic> json) =>
+      ExerciseTemplate(
+        name: json['name'] as String,
+        sets: json['sets'] as int,
+      );
 }

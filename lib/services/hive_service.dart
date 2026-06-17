@@ -230,6 +230,20 @@ class HiveService {
     }
   }
 
+  static Future<void> replaceAllPlans(List<WorkoutPlan> plans) async {
+    await _plansBox.clear();
+    for (final plan in plans) {
+      await _plansBox.add(plan);
+    }
+  }
+
+  static Future<void> replaceAllSessions(List<WorkoutSession> sessions) async {
+    await _sessionsBox.clear();
+    for (final session in sessions) {
+      await _sessionsBox.add(session);
+    }
+  }
+
   static Future<void> deleteSessionForPlanAndWeek(
       String planName, int weekNumber) async {
     final sessions = _sessionsBox.values

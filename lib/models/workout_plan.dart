@@ -12,4 +12,17 @@ class WorkoutPlan extends HiveObject {
   final List<ExerciseTemplate> exercises;
 
   WorkoutPlan({required this.name, required this.exercises});
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'exercises': exercises.map((e) => e.toJson()).toList(),
+      };
+
+  factory WorkoutPlan.fromJson(Map<String, dynamic> json) => WorkoutPlan(
+        name: json['name'] as String,
+        exercises: (json['exercises'] as List)
+            .map(
+                (e) => ExerciseTemplate.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
 }

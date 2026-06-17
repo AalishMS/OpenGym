@@ -1,0 +1,11 @@
+﻿flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "logo/applogo.png"
+  web:
+    generate: true
+    image_path: "logo/applogo.png"
+  windows:
+    generate: false
+  macos:
+    generate: false

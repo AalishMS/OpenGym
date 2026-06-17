@@ -1,0 +1,661 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - link "Skip to content" [ref=e4] [cursor=pointer]:
+        - /url: "#start-of-content"
+      - banner [ref=e6]:
+        - heading "Navigation Menu" [level=2] [ref=e7]
+        - generic [ref=e8]:
+          - link "Homepage" [ref=e10] [cursor=pointer]:
+            - /url: /
+            - img [ref=e11]
+          - generic [ref=e13]:
+            - navigation "Global" [ref=e16]:
+              - list [ref=e17]:
+                - listitem [ref=e18]:
+                  - button "Platform" [ref=e20] [cursor=pointer]:
+                    - text: Platform
+                    - img [ref=e21]
+                - listitem [ref=e23]:
+                  - button "Solutions" [ref=e25] [cursor=pointer]:
+                    - text: Solutions
+                    - img [ref=e26]
+                - listitem [ref=e28]:
+                  - button "Resources" [ref=e30] [cursor=pointer]:
+                    - text: Resources
+                    - img [ref=e31]
+                - listitem [ref=e33]:
+                  - button "Open Source" [ref=e35] [cursor=pointer]:
+                    - text: Open Source
+                    - img [ref=e36]
+                - listitem [ref=e38]:
+                  - button "Enterprise" [ref=e40] [cursor=pointer]:
+                    - text: Enterprise
+                    - img [ref=e41]
+                - listitem [ref=e43]:
+                  - link "Pricing" [ref=e44] [cursor=pointer]:
+                    - /url: https://github.com/pricing
+                    - generic [ref=e45]: Pricing
+            - generic [ref=e46]:
+              - button "Search or jump to…" [ref=e49] [cursor=pointer]:
+                - img [ref=e51]
+              - link "Sign in" [ref=e54] [cursor=pointer]:
+                - /url: /login?return_to=https%3A%2F%2Fgithub.com%2FAalishMS%2FOpenGym%2Fblob%2Foffline-pre-backend%2FREADME.md
+              - link "Sign up" [ref=e55] [cursor=pointer]:
+                - /url: /signup?ref_cta=Sign+up&ref_loc=header+logged+out&ref_page=%2F%3Cuser-name%3E%2F%3Crepo-name%3E%2Fblob%2Fshow&source=header-repo&source_repo=AalishMS%2FOpenGym
+              - button "Appearance settings" [ref=e58] [cursor=pointer]:
+                - img
+    - main [ref=e62]:
+      - generic [ref=e63]:
+        - generic [ref=e64]:
+          - generic [ref=e66]:
+            - img [ref=e67]
+            - link "AalishMS" [ref=e70] [cursor=pointer]:
+              - /url: /AalishMS
+            - generic [ref=e71]: /
+            - strong [ref=e72]:
+              - link "OpenGym" [ref=e73] [cursor=pointer]:
+                - /url: /AalishMS/OpenGym
+            - generic [ref=e74]: Public
+          - generic [ref=e75]:
+            - list:
+              - listitem [ref=e76]:
+                - link "You must be signed in to change notification settings" [ref=e77] [cursor=pointer]:
+                  - /url: /login?return_to=%2FAalishMS%2FOpenGym
+                  - img [ref=e78]
+                  - text: Notifications
+              - listitem [ref=e80]:
+                - link "Fork 0" [ref=e81] [cursor=pointer]:
+                  - /url: /login?return_to=%2FAalishMS%2FOpenGym
+                  - img [ref=e82]
+                  - text: Fork
+                  - generic "0" [ref=e84]
+              - listitem [ref=e85]:
+                - link "You must be signed in to star a repository" [ref=e87] [cursor=pointer]:
+                  - /url: /login?return_to=%2FAalishMS%2FOpenGym
+                  - img [ref=e88]
+                  - text: Star
+                  - generic "0 users starred this repository" [ref=e90]: "0"
+        - navigation "Repository" [ref=e91]:
+          - list [ref=e92]:
+            - listitem [ref=e93]:
+              - link "Code" [ref=e94] [cursor=pointer]:
+                - /url: /AalishMS/OpenGym
+                - img [ref=e95]
+                - generic [ref=e97]: Code
+            - listitem [ref=e98]:
+              - link "Issues" [ref=e99] [cursor=pointer]:
+                - /url: /AalishMS/OpenGym/issues
+                - img [ref=e100]
+                - generic [ref=e103]: Issues
+            - listitem [ref=e104]:
+              - link "Pull requests" [ref=e105] [cursor=pointer]:
+                - /url: /AalishMS/OpenGym/pulls
+                - img [ref=e106]
+                - generic [ref=e108]: Pull requests
+            - listitem [ref=e109]:
+              - link "Actions" [ref=e110] [cursor=pointer]:
+                - /url: /AalishMS/OpenGym/actions
+                - img [ref=e111]
+                - generic [ref=e113]: Actions
+            - listitem [ref=e114]:
+              - link "Projects" [ref=e115] [cursor=pointer]:
+                - /url: /AalishMS/OpenGym/projects
+                - img [ref=e116]
+                - generic [ref=e118]: Projects
+            - listitem [ref=e119]:
+              - link "Security and quality" [ref=e120] [cursor=pointer]:
+                - /url: /AalishMS/OpenGym/security
+                - img [ref=e121]
+                - generic [ref=e123]: Security and quality
+            - listitem [ref=e124]:
+              - link "Insights" [ref=e125] [cursor=pointer]:
+                - /url: /AalishMS/OpenGym/pulse
+                - img [ref=e126]
+                - generic [ref=e128]: Insights
+      - generic [ref=e136]:
+        - generic [ref=e138]:
+          - generic [ref=e141]:
+            - generic [ref=e142]:
+              - generic [ref=e143]:
+                - heading "Collapse file tree" [level=2] [ref=e144]:
+                  - button "Collapse file tree" [expanded] [ref=e145] [cursor=pointer]:
+                    - img [ref=e146]
+                - heading "Files" [level=2] [ref=e149]
+              - generic [ref=e150]:
+                - button "offline-pre-backend branch" [ref=e152] [cursor=pointer]:
+                  - generic [ref=e153]:
+                    - generic [ref=e155]:
+                      - img [ref=e157]
+                      - generic [ref=e160]: offline-pre-backend
+                    - generic:
+                      - img
+                - button "Search this repository (forward slash)" [ref=e162] [cursor=pointer]:
+                  - img [ref=e163]
+            - generic [ref=e166]:
+              - img [ref=e168]
+              - combobox "Go to file" [ref=e170]
+            - navigation "File Tree Navigation" [ref=e176]:
+              - tree "Files" [ref=e178]:
+                - treeitem "android" [level=1] [ref=e179]:
+                  - generic [ref=e180] [cursor=pointer]:
+                    - img [ref=e182]
+                    - generic [ref=e184]:
+                      - img [ref=e188]
+                      - generic [ref=e190]: android
+                - treeitem "ios" [level=1] [ref=e191]:
+                  - generic [ref=e192] [cursor=pointer]:
+                    - img [ref=e194]
+                    - generic [ref=e196]:
+                      - img [ref=e200]
+                      - generic [ref=e202]: ios
+                - treeitem "lib" [level=1] [ref=e203]:
+                  - generic [ref=e204] [cursor=pointer]:
+                    - img [ref=e206]
+                    - generic [ref=e208]:
+                      - img [ref=e212]
+                      - generic [ref=e214]: lib
+                - treeitem "linux" [level=1] [ref=e215]:
+                  - generic [ref=e216] [cursor=pointer]:
+                    - img [ref=e218]
+                    - generic [ref=e220]:
+                      - img [ref=e224]
+                      - generic [ref=e226]: linux
+                - treeitem "logo" [level=1] [ref=e227]:
+                  - generic [ref=e228] [cursor=pointer]:
+                    - img [ref=e230]
+                    - generic [ref=e232]:
+                      - img [ref=e236]
+                      - generic [ref=e238]: logo
+                - treeitem "macos" [level=1] [ref=e239]:
+                  - generic [ref=e240] [cursor=pointer]:
+                    - img [ref=e242]
+                    - generic [ref=e244]:
+                      - img [ref=e248]
+                      - generic [ref=e250]: macos
+                - treeitem "plans" [level=1] [ref=e251]:
+                  - generic [ref=e252] [cursor=pointer]:
+                    - img [ref=e254]
+                    - generic [ref=e256]:
+                      - img [ref=e260]
+                      - generic [ref=e262]: plans
+                - treeitem "screenshots" [level=1] [ref=e263]:
+                  - generic [ref=e264] [cursor=pointer]:
+                    - img [ref=e266]
+                    - generic [ref=e268]:
+                      - img [ref=e272]
+                      - generic [ref=e274]: screenshots
+                - treeitem "test" [level=1] [ref=e275]:
+                  - generic [ref=e276] [cursor=pointer]:
+                    - img [ref=e278]
+                    - generic [ref=e280]:
+                      - img [ref=e284]
+                      - generic [ref=e286]: test
+                - treeitem "web" [level=1] [ref=e287]:
+                  - generic [ref=e288] [cursor=pointer]:
+                    - img [ref=e290]
+                    - generic [ref=e292]:
+                      - img [ref=e296]
+                      - generic [ref=e298]: web
+                - treeitem "windows" [level=1] [ref=e299]:
+                  - generic [ref=e300] [cursor=pointer]:
+                    - img [ref=e302]
+                    - generic [ref=e304]:
+                      - img [ref=e308]
+                      - generic [ref=e310]: windows
+                - treeitem ".gitignore" [level=1] [ref=e311]:
+                  - generic [ref=e313] [cursor=pointer]:
+                    - img [ref=e316]
+                    - generic [ref=e318]: .gitignore
+                - treeitem ".metadata" [level=1] [ref=e319]:
+                  - generic [ref=e321] [cursor=pointer]:
+                    - img [ref=e324]
+                    - generic [ref=e326]: .metadata
+                - treeitem "AGENTS.md" [level=1] [ref=e327]:
+                  - generic [ref=e329] [cursor=pointer]:
+                    - img [ref=e332]
+                    - generic [ref=e334]: AGENTS.md
+                - treeitem "README.md" [level=1] [ref=e335]:
+                  - generic [ref=e337] [cursor=pointer]:
+                    - img [ref=e340]
+                    - generic [ref=e342]: README.md
+                - treeitem "analysis_options.yaml" [level=1] [ref=e343]:
+                  - generic [ref=e345] [cursor=pointer]:
+                    - img [ref=e348]
+                    - generic [ref=e350]: analysis_options.yaml
+                - treeitem "color_preview.html" [level=1] [ref=e351]:
+                  - generic [ref=e353] [cursor=pointer]:
+                    - img [ref=e356]
+                    - generic [ref=e358]: color_preview.html
+                - treeitem "devtools_options.yaml" [level=1] [ref=e359]:
+                  - generic [ref=e361] [cursor=pointer]:
+                    - img [ref=e364]
+                    - generic [ref=e366]: devtools_options.yaml
+                - treeitem "opencode.md" [level=1] [ref=e367]:
+                  - generic [ref=e369] [cursor=pointer]:
+                    - img [ref=e372]
+                    - generic [ref=e374]: opencode.md
+                - treeitem "pubspec.lock" [level=1] [ref=e375]:
+                  - generic [ref=e377] [cursor=pointer]:
+                    - img [ref=e380]
+                    - generic [ref=e382]: pubspec.lock
+                - treeitem "pubspec.yaml" [level=1] [ref=e383]:
+                  - generic [ref=e385] [cursor=pointer]:
+                    - img [ref=e388]
+                    - generic [ref=e390]: pubspec.yaml
+          - slider "Draggable pane splitter" [ref=e392]
+        - generic [ref=e395]:
+          - generic [ref=e399]:
+            - generic [ref=e401]:
+              - navigation "Breadcrumbs" [ref=e402]:
+                - heading "Breadcrumbs" [level=2] [ref=e403]
+                - list [ref=e404]:
+                  - listitem [ref=e405]:
+                    - link "OpenGym" [ref=e406] [cursor=pointer]:
+                      - /url: /AalishMS/OpenGym/tree/offline-pre-backend
+              - generic [ref=e407]:
+                - text: /
+                - heading "README.md" [level=1] [ref=e408]
+              - button "Copy path" [ref=e409] [cursor=pointer]:
+                - img [ref=e410]
+            - button "More file actions" [ref=e416] [cursor=pointer]:
+              - img [ref=e417]
+          - generic [ref=e419]:
+            - generic [ref=e421]:
+              - heading "Latest commit" [level=2] [ref=e422]
+              - generic [ref=e423]:
+                - generic [ref=e425]:
+                  - img "author" [ref=e426]
+                  - generic "User" [ref=e427]
+                - 'link "docs: replace single screenshot with gallery of 6 screenshots" [ref=e431] [cursor=pointer]':
+                  - /url: /AalishMS/OpenGym/commit/b790a03f1a0830b890a08fa2e28e2a471bc579e1
+              - generic [ref=e432]:
+                - generic [ref=e434]:
+                  - link "Commit b790a03" [ref=e435] [cursor=pointer]:
+                    - /url: /AalishMS/OpenGym/commit/b790a03f1a0830b890a08fa2e28e2a471bc579e1
+                    - text: b790a03
+                  - text: ·
+                  - generic "Jun 11, 2026, 1:14 PM GMT+5:45" [ref=e436]: Jun 11, 20262 minutes ago
+                - generic [ref=e437]:
+                  - heading "History" [level=2] [ref=e438]
+                  - link "History" [ref=e439] [cursor=pointer]:
+                    - /url: /AalishMS/OpenGym/commits/offline-pre-backend/README.md
+                    - generic [ref=e440]:
+                      - generic:
+                        - img
+                      - generic [ref=e441]: History
+            - generic [ref=e443]:
+              - generic [ref=e445]:
+                - heading "File metadata and controls" [level=2] [ref=e446]
+                - list "File view" [ref=e448]:
+                  - listitem [ref=e449]:
+                    - button "Preview" [ref=e450] [cursor=pointer]:
+                      - generic [ref=e452]: Preview
+                  - listitem [ref=e453]:
+                    - button "Code" [ref=e454] [cursor=pointer]:
+                      - generic [ref=e456]: Code
+                  - listitem [ref=e457]:
+                    - button "Blame" [ref=e458] [cursor=pointer]:
+                      - generic [ref=e460]: Blame
+                - generic [ref=e461]:
+                  - generic [ref=e462]:
+                    - generic [ref=e463]:
+                      - link "Raw" [ref=e465] [cursor=pointer]:
+                        - /url: https://github.com/AalishMS/OpenGym/raw/refs/heads/offline-pre-backend/README.md
+                        - generic [ref=e467]: Raw
+                      - button "Copy raw file" [ref=e469] [cursor=pointer]:
+                        - img [ref=e470]
+                      - button "Download raw file" [ref=e474] [cursor=pointer]:
+                        - img [ref=e475]
+                    - generic [ref=e478]:
+                      - button "You must be signed in to make or propose changes" [disabled] [ref=e480]:
+                        - img [ref=e481]
+                      - button "More edit options" [ref=e484] [cursor=pointer]:
+                        - img [ref=e485]
+                  - button "Outline" [ref=e487] [cursor=pointer]:
+                    - img [ref=e488]
+              - region "README.md" [ref=e491]:
+                - article [ref=e493]:
+                  - paragraph [ref=e494]:
+                    - img "OpenGym Logo" [ref=e497]
+                  - generic [ref=e498]:
+                    - heading "🏋️ OpenGym" [level=1] [ref=e499]
+                    - 'link "Permalink: 🏋️ OpenGym" [ref=e500] [cursor=pointer]':
+                      - /url: "#️-opengym"
+                      - img [ref=e501]
+                  - paragraph [ref=e503]:
+                    - emphasis [ref=e504]:
+                      - text: A terminal-style workout tracking app, completely
+                      - strong [ref=e505]: vibecoded
+                      - text: with the help of
+                      - link "Opencode" [ref=e506] [cursor=pointer]:
+                        - /url: https://opencode.ai
+                        - strong [ref=e507]: Opencode
+                  - paragraph [ref=e508]:
+                    - link "Features" [ref=e509] [cursor=pointer]:
+                      - /url: "#features"
+                    - text: •
+                    - link "Screenshots" [ref=e510] [cursor=pointer]:
+                      - /url: "#screenshots"
+                    - text: •
+                    - link "Tech Stack" [ref=e511] [cursor=pointer]:
+                      - /url: "#tech-stack"
+                    - text: •
+                    - link "Getting Started" [ref=e512] [cursor=pointer]:
+                      - /url: "#getting-started"
+                    - text: •
+                    - link "Structure" [ref=e513] [cursor=pointer]:
+                      - /url: "#project-structure"
+                    - text: •
+                    - link "Building" [ref=e514] [cursor=pointer]:
+                      - /url: "#building"
+                  - paragraph [ref=e515]:
+                    - link "Flutter" [ref=e516] [cursor=pointer]:
+                      - /url: https://camo.githubusercontent.com/28c5bc4eedbb5a5822b23b9612dd6cb2306e3e2eceea70c9e17d9e15fff75a5c/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f466c75747465722d332e352532422d3032353639423f6c6f676f3d666c7574746572266c6f676f436f6c6f723d7768697465
+                      - img "Flutter" [ref=e517]
+                    - link "Platforms" [ref=e518] [cursor=pointer]:
+                      - /url: https://camo.githubusercontent.com/d0c8d33cf93d8d9d83aa052e75342bec47764f6e3da17055f542c3cadda9e2e8/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f706c6174666f726d2d416e64726f6964253230253743253230694f532532302537432532305765622532302537432532304465736b746f702d6c6967687467726579
+                      - img "Platforms" [ref=e519]
+                    - link "License" [ref=e520] [cursor=pointer]:
+                      - /url: https://camo.githubusercontent.com/f8df3091bbe1149f398a5369b2c39e896766f9f6efba3477c63e9b4aa940ef14/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f6c6963656e73652d4d49542d677265656e
+                      - img "License" [ref=e521]
+                    - link "Provider" [ref=e522] [cursor=pointer]:
+                      - /url: https://camo.githubusercontent.com/d86af25e2ef414e1c5d43770fde41425ed86b4828cdb9e6d6f171a1f97b8d9db/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f73746174652532306d616e6167656d656e742d50726f76696465722d626c756576696f6c6574
+                      - img "Provider" [ref=e523]
+                    - link "Hive" [ref=e524] [cursor=pointer]:
+                      - /url: https://camo.githubusercontent.com/af0bcd142c84f08564463ca220985647f1aa711703785f2cfa366d6fa4fd05f6/68747470733a2f2f696d672e736869656c64732e696f2f62616467652f64617461626173652d486976652d4646413030303f6c6f676f3d68697665266c6f676f436f6c6f723d7768697465
+                      - img "Hive" [ref=e525]
+                  - blockquote [ref=e526]:
+                    - paragraph [ref=e527]:
+                      - strong [ref=e528]: OpenGym
+                      - text: is a sleek, offline-first workout tracker built with Flutter. Log your sets, reps, and weights with a distinctive terminal-inspired interface. Track personal records, visualize your progress, and manage your training plans — all without an internet connection.
+                  - separator [ref=e529]
+                  - generic [ref=e530]:
+                    - heading "✨ Features" [level=2] [ref=e531]
+                    - 'link "Permalink: ✨ Features" [ref=e532] [cursor=pointer]':
+                      - /url: "#-features"
+                      - img [ref=e533]
+                  - generic [ref=e535]:
+                    - heading "💪 Workout Tracking" [level=3] [ref=e536]
+                    - 'link "Permalink: 💪 Workout Tracking" [ref=e537] [cursor=pointer]':
+                      - /url: "#-workout-tracking"
+                      - img [ref=e538]
+                  - list [ref=e540]:
+                    - listitem [ref=e541]:
+                      - strong [ref=e542]: Plan Management
+                      - text: — Create, edit, copy, and delete custom workout plans
+                    - listitem [ref=e543]:
+                      - strong [ref=e544]: 65+ Pre-built Exercises
+                      - text: — Across 6 muscle categories (Chest, Back, Shoulders, Arms, Legs, Core) + custom exercise entry
+                    - listitem [ref=e545]:
+                      - strong [ref=e546]: Set Logging
+                      - text: — Track weight (kg/lbs), reps, RPE (1-10), and notes per set
+                    - listitem [ref=e547]:
+                      - strong [ref=e548]: Week-Based Periodization
+                      - text: — Organize sessions by week with auto-copy from previous week
+                    - listitem [ref=e549]:
+                      - strong [ref=e550]: Auto-Save
+                      - text: — Never lose progress; saves automatically on navigation
+                    - listitem [ref=e551]:
+                      - strong [ref=e552]: PR Detection
+                      - text: — 🎉 Automatic personal record celebration when you hit new weights
+                    - listitem [ref=e553]:
+                      - strong [ref=e554]: Progression Suggestions
+                      - text: — Smart double-progression logic recommends next weight/reps
+                    - listitem [ref=e555]:
+                      - strong [ref=e556]: Auto-Fill
+                      - text: — Pre-fills weights from your last session for faster logging
+                  - generic [ref=e557]:
+                    - heading "📊 Statistics & History" [level=3] [ref=e558]
+                    - 'link "Permalink: 📊 Statistics & History" [ref=e559] [cursor=pointer]':
+                      - /url: "#-statistics--history"
+                      - img [ref=e560]
+                  - list [ref=e562]:
+                    - listitem [ref=e563]:
+                      - strong [ref=e564]: Workout Frequency Chart
+                      - text: — Weekly bar chart showing your consistency (last 8 weeks)
+                    - listitem [ref=e565]:
+                      - strong [ref=e566]: Exercise Progression Chart
+                      - text: — Line chart tracking max weight over time per exercise
+                    - listitem [ref=e567]:
+                      - strong [ref=e568]: Summary Stats
+                      - text: — Total workouts, weekly count, PRs tracked
+                    - listitem [ref=e569]:
+                      - strong [ref=e570]: Full History
+                      - text: — Expandable session cards with edit/delete for past workouts
+                  - generic [ref=e571]:
+                    - heading "🎨 Customization" [level=3] [ref=e572]
+                    - 'link "Permalink: 🎨 Customization" [ref=e573] [cursor=pointer]':
+                      - /url: "#-customization"
+                      - img [ref=e574]
+                  - list [ref=e576]:
+                    - listitem [ref=e577]:
+                      - strong [ref=e578]: Dark / Light / System Theme
+                      - text: — Seamless automatic or manual theming
+                    - listitem [ref=e579]:
+                      - strong [ref=e580]: 12 Accent Colors
+                      - text: — Electric Blue, Warm Amber, Deep Orange, Hot Pink, Cyan, Purple, Steel Gray, and more
+                    - listitem [ref=e581]:
+                      - strong [ref=e582]: Weight Units
+                      - text: — Switch between kg and lbs on the fly
+                    - listitem [ref=e583]:
+                      - strong [ref=e584]: High Refresh Rate
+                      - text: — 90/120Hz display support for buttery smooth scrolling
+                    - listitem [ref=e585]:
+                      - strong [ref=e586]: JetBrains Mono
+                      - text: — Terminal-inspired monospace typography throughout
+                  - generic [ref=e587]:
+                    - heading "📁 Data" [level=3] [ref=e588]
+                    - 'link "Permalink: 📁 Data" [ref=e589] [cursor=pointer]':
+                      - /url: "#-data"
+                      - img [ref=e590]
+                  - list [ref=e592]:
+                    - listitem [ref=e593]:
+                      - strong [ref=e594]: 100% Offline
+                      - text: — All data stored locally with Hive; no account, no cloud, no tracking
+                    - listitem [ref=e595]:
+                      - strong [ref=e596]: Sample Data
+                      - text: — Load 5 sample plans with 15 sessions across 5 weeks to explore the app
+                    - listitem [ref=e597]:
+                      - strong [ref=e598]: Export / Clear
+                      - text: — Full control over your data
+                  - separator [ref=e599]
+                  - generic [ref=e600]:
+                    - heading "📸 Screenshots" [level=2] [ref=e601]
+                    - 'link "Permalink: 📸 Screenshots" [ref=e602] [cursor=pointer]':
+                      - /url: "#-screenshots"
+                      - img [ref=e603]
+                  - paragraph [ref=e605]:
+                    - link "Home Screen" [ref=e606] [cursor=pointer]:
+                      - /url: /AalishMS/OpenGym/blob/offline-pre-backend/screenshots/Screenshot_20260611-130716.png
+                      - img "Home Screen" [ref=e607]
+                    - link "Workout Screen" [ref=e608] [cursor=pointer]:
+                      - /url: /AalishMS/OpenGym/blob/offline-pre-backend/screenshots/Screenshot_20260611-130724.png
+                      - img "Workout Screen" [ref=e609]
+                    - link "Exercise Logging" [ref=e610] [cursor=pointer]:
+                      - /url: /AalishMS/OpenGym/blob/offline-pre-backend/screenshots/Screenshot_20260611-130733.png
+                      - img "Exercise Logging" [ref=e611]
+                  - paragraph [ref=e612]:
+                    - link "Statistics" [ref=e613] [cursor=pointer]:
+                      - /url: /AalishMS/OpenGym/blob/offline-pre-backend/screenshots/Screenshot_20260611-130743.png
+                      - img "Statistics" [ref=e614]
+                    - link "History" [ref=e615] [cursor=pointer]:
+                      - /url: /AalishMS/OpenGym/blob/offline-pre-backend/screenshots/Screenshot_20260611-130801.png
+                      - img "History" [ref=e616]
+                    - link "Settings" [ref=e617] [cursor=pointer]:
+                      - /url: /AalishMS/OpenGym/blob/offline-pre-backend/screenshots/Screenshot_20260611-130834.png
+                      - img "Settings" [ref=e618]
+                  - separator [ref=e619]
+                  - generic [ref=e620]:
+                    - heading "🛠 Tech Stack" [level=2] [ref=e621]
+                    - 'link "Permalink: 🛠 Tech Stack" [ref=e622] [cursor=pointer]':
+                      - /url: "#-tech-stack"
+                      - img [ref=e623]
+                  - table [ref=e626]:
+                    - rowgroup [ref=e627]:
+                      - row "Technology Purpose" [ref=e628]:
+                        - columnheader "Technology" [ref=e629]
+                        - columnheader "Purpose" [ref=e630]
+                    - rowgroup [ref=e631]:
+                      - row "Flutter 3.5+ Cross-platform UI framework" [ref=e632]:
+                        - cell "Flutter 3.5+" [ref=e633]:
+                          - link "Flutter" [ref=e634] [cursor=pointer]:
+                            - /url: https://flutter.dev
+                          - text: 3.5+
+                        - cell "Cross-platform UI framework" [ref=e635]
+                      - row "Dart 3.5+ Programming language" [ref=e636]:
+                        - cell "Dart 3.5+" [ref=e637]:
+                          - link "Dart" [ref=e638] [cursor=pointer]:
+                            - /url: https://dart.dev
+                          - text: 3.5+
+                        - cell "Programming language" [ref=e639]
+                      - row "Provider State management (ChangeNotifier)" [ref=e640]:
+                        - cell "Provider" [ref=e641]:
+                          - link "Provider" [ref=e642] [cursor=pointer]:
+                            - /url: https://pub.dev/packages/provider
+                        - cell "State management (ChangeNotifier)" [ref=e643]
+                      - row "Hive Local NoSQL database" [ref=e644]:
+                        - cell "Hive" [ref=e645]:
+                          - link "Hive" [ref=e646] [cursor=pointer]:
+                            - /url: https://pub.dev/packages/hive
+                        - cell "Local NoSQL database" [ref=e647]
+                      - row "fl_chart Interactive charts" [ref=e648]:
+                        - cell "fl_chart" [ref=e649]:
+                          - link "fl_chart" [ref=e650] [cursor=pointer]:
+                            - /url: https://pub.dev/packages/fl_chart
+                        - cell "Interactive charts" [ref=e651]
+                      - row "Google Fonts JetBrains Mono typeface" [ref=e652]:
+                        - cell "Google Fonts" [ref=e653]:
+                          - link "Google Fonts" [ref=e654] [cursor=pointer]:
+                            - /url: https://pub.dev/packages/google_fonts
+                        - cell "JetBrains Mono typeface" [ref=e655]
+                      - row "SharedPreferences Settings persistence" [ref=e656]:
+                        - cell "SharedPreferences" [ref=e657]:
+                          - link "SharedPreferences" [ref=e658] [cursor=pointer]:
+                            - /url: https://pub.dev/packages/shared_preferences
+                        - cell "Settings persistence" [ref=e659]
+                  - generic [ref=e660]:
+                    - heading "Architecture" [level=3] [ref=e661]
+                    - 'link "Permalink: Architecture" [ref=e662] [cursor=pointer]':
+                      - /url: "#architecture"
+                      - img [ref=e663]
+                  - generic [ref=e665]:
+                    - code [ref=e667]: lib/ ├── models/ → Hive data models (Set, Exercise, Plan, Session) ├── providers/ → ChangeNotifier state management ├── repositories/ → Clean architecture data layer ├── services/ → Business logic (HiveService, PR Tracking) ├── screens/ → 7 UI screens (Home, Workout, Stats, etc.) ├── widgets/ → Reusable components (SetRow, ExerciseCard, Dialogs) ├── theme/ → Terminal-style theme with 12 accent colors ├── data/ → Exercise library (65+ exercises) └── utils/ → Animations and helpers
+                    - button "Copy code to clipboard" [ref=e669] [cursor=pointer]:
+                      - img [ref=e670]
+                  - separator [ref=e673]
+                  - generic [ref=e674]:
+                    - heading "🚀 Getting Started" [level=2] [ref=e675]
+                    - 'link "Permalink: 🚀 Getting Started" [ref=e676] [cursor=pointer]':
+                      - /url: "#-getting-started"
+                      - img [ref=e677]
+                  - generic [ref=e679]:
+                    - heading "Prerequisites" [level=3] [ref=e680]
+                    - 'link "Permalink: Prerequisites" [ref=e681] [cursor=pointer]':
+                      - /url: "#prerequisites"
+                      - img [ref=e682]
+                  - list [ref=e684]:
+                    - listitem [ref=e685]:
+                      - link "Flutter SDK" [ref=e686] [cursor=pointer]:
+                        - /url: https://docs.flutter.dev/get-started/install
+                      - text: 3.5 or later
+                    - listitem [ref=e687]: Dart SDK (included with Flutter)
+                    - listitem [ref=e688]: Android Studio, Xcode, or VS Code (for your target platform)
+                  - generic [ref=e689]:
+                    - heading "Installation" [level=3] [ref=e690]
+                    - 'link "Permalink: Installation" [ref=e691] [cursor=pointer]':
+                      - /url: "#installation"
+                      - img [ref=e692]
+                  - generic [ref=e694]:
+                    - generic [ref=e695]:
+                      - generic [ref=e696]: "# Clone the repository"
+                      - text: git clone https://github.com/AalishMS/OpenGym.git cd OpenGym
+                      - generic [ref=e697]: "# Install dependencies"
+                      - text: flutter pub get
+                      - generic [ref=e698]: "# Generate Hive adapters"
+                      - text: flutter pub run build_runner build --delete-conflicting-outputs
+                      - generic [ref=e699]: "# Run the app"
+                      - text: flutter run
+                    - button "Copy code to clipboard" [ref=e701] [cursor=pointer]:
+                      - img [ref=e702]
+                  - separator [ref=e705]
+                  - generic [ref=e706]:
+                    - heading "🏗 Building" [level=2] [ref=e707]
+                    - 'link "Permalink: 🏗 Building" [ref=e708] [cursor=pointer]':
+                      - /url: "#-building"
+                      - img [ref=e709]
+                  - generic [ref=e711]:
+                    - heading "Android APK" [level=3] [ref=e712]
+                    - 'link "Permalink: Android APK" [ref=e713] [cursor=pointer]':
+                      - /url: "#android-apk"
+                      - img [ref=e714]
+                  - generic [ref=e716]:
+                    - generic [ref=e717]: flutter build apk --release
+                    - button "Copy code to clipboard" [ref=e719] [cursor=pointer]:
+                      - img [ref=e720]
+                  - paragraph [ref=e723]:
+                    - text: "APK output:"
+                    - code [ref=e724]: build/app/outputs/flutter-apk/app-release.apk
+                  - generic [ref=e725]:
+                    - heading "iOS" [level=3] [ref=e726]
+                    - 'link "Permalink: iOS" [ref=e727] [cursor=pointer]':
+                      - /url: "#ios"
+                      - img [ref=e728]
+                  - generic [ref=e730]:
+                    - generic [ref=e731]: flutter build ios --release
+                    - button "Copy code to clipboard" [ref=e733] [cursor=pointer]:
+                      - img [ref=e734]
+                  - generic [ref=e737]:
+                    - heading "Web" [level=3] [ref=e738]
+                    - 'link "Permalink: Web" [ref=e739] [cursor=pointer]':
+                      - /url: "#web"
+                      - img [ref=e740]
+                  - generic [ref=e742]:
+                    - generic [ref=e743]: flutter build web --release
+                    - button "Copy code to clipboard" [ref=e745] [cursor=pointer]:
+                      - img [ref=e746]
+                  - separator [ref=e749]
+                  - generic [ref=e750]:
+                    - heading "📁 Project Structure" [level=2] [ref=e751]
+                    - 'link "Permalink: 📁 Project Structure" [ref=e752] [cursor=pointer]':
+                      - /url: "#-project-structure"
+                      - img [ref=e753]
+                  - generic [ref=e755]:
+                    - code [ref=e757]: "gymapp-offline/ ├── lib/ │ ├── main.dart # App entry point │ ├── models/ # Hive type adapters │ │ ├── set.dart │ │ ├── exercise.dart │ │ ├── exercise_template.dart │ │ ├── workout_plan.dart │ │ └── workout_session.dart │ ├── providers/ # State management │ │ ├── workout_plan_provider.dart │ │ ├── workout_session_provider.dart │ │ ├── progression_provider.dart │ │ └── settings_provider.dart │ ├── repositories/ # Data access layer │ │ ├── workout_plan_repository.dart │ │ ├── workout_session_repository.dart │ │ └── stats_repository.dart │ ├── services/ # Business logic │ │ ├── hive_service.dart │ │ ├── pr_tracking_service.dart │ │ └── sample_data_seeder.dart │ ├── screens/ # UI screens │ │ ├── home_screen.dart │ │ ├── create_plan_screen.dart │ │ ├── edit_plan_screen.dart │ │ ├── workout_screen.dart │ │ ├── history_screen.dart │ │ ├── stats_screen.dart │ │ └── settings_screen.dart │ ├── widgets/workout/ # Reusable widgets │ │ ├── set_row.dart │ │ ├── exercise_card.dart │ │ ├── arrow_button.dart │ │ └── workout_dialogs.dart │ ├── theme/ │ │ └── app_theme.dart │ ├── data/ │ │ └── exercise_library.dart │ └── utils/ │ └── fade_page_route.dart ├── logo/ # App icon assets ├── test/ # Tests └── web/ # PWA web assets"
+                    - button "Copy code to clipboard" [ref=e759] [cursor=pointer]:
+                      - img [ref=e760]
+                  - separator [ref=e763]
+                  - generic [ref=e764]:
+                    - heading "🧪 Running Tests" [level=2] [ref=e765]
+                    - 'link "Permalink: 🧪 Running Tests" [ref=e766] [cursor=pointer]':
+                      - /url: "#-running-tests"
+                      - img [ref=e767]
+                  - generic [ref=e769]:
+                    - generic [ref=e770]:
+                      - generic [ref=e771]: "# Run all tests"
+                      - text: flutter test
+                      - generic [ref=e772]: "# Run a specific test file"
+                      - text: flutter test test/widget_test.dart
+                      - generic [ref=e773]: "# Run tests matching a name"
+                      - text: flutter test --name=
+                      - generic [ref=e774]: "\"Basic\""
+                    - button "Copy code to clipboard" [ref=e776] [cursor=pointer]:
+                      - img [ref=e777]
+                  - separator [ref=e780]
+                  - generic [ref=e781]:
+                    - heading "📝 License" [level=2] [ref=e782]
+                    - 'link "Permalink: 📝 License" [ref=e783] [cursor=pointer]':
+                      - /url: "#-license"
+                      - img [ref=e784]
+                  - paragraph [ref=e786]:
+                    - text: Distributed under the
+                    - strong [ref=e787]: MIT License
+                    - text: . See
+                    - code [ref=e788]: LICENSE
+                    - text: for more information.
+                  - separator [ref=e789]
+                  - paragraph [ref=e790]:
+                    - text: Built with ❤️ using Flutter ·
+                    - link "Powered by Opencode" [ref=e791] [cursor=pointer]:
+                      - /url: https://opencode.ai
+  - alert [ref=e795]

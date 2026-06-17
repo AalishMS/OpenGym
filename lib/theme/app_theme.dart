@@ -206,7 +206,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
       style: OutlinedButton.styleFrom(
         foregroundColor: accent,
         side: BorderSide(color: accent, width: 1),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         textStyle: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold),
       ),
@@ -278,7 +278,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
       tileColor: surface,
       textColor: textPrimary,
       iconColor: accent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     ),
     dialogTheme: DialogThemeData(
@@ -314,7 +314,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
     ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
       color: accent,

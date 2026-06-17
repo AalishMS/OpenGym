@@ -223,7 +223,7 @@ class _SessionCardState extends State<_SessionCard> {
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
+                          decoration: const BoxDecoration(
                             color: Colors.amber,
                           ),
                           child: Text(

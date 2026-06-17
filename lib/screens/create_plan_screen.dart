@@ -543,7 +543,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                   horizontal: 8, vertical: 8),
                             ),
                             keyboardType:
-                                TextInputType.numberWithOptions(decimal: true),
+                                const TextInputType.numberWithOptions(decimal: true),
                             style: GoogleFonts.jetBrainsMono(fontSize: 12),
                             onChanged: (value) {
                               final weight = double.tryParse(value) ?? 0.0;

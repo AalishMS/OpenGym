@@ -76,12 +76,12 @@ class _MyAppState extends State<MyApp> {
                   ),
                 ),
                 const SizedBox(height: 32),
-                SizedBox(
+                const SizedBox(
                   width: 24,
                   height: 24,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: const Color(0xFF00A8FF),
+                    color: Color(0xFF00A8FF),
                   ),
                 ),
               ],

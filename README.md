@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="logo/opengym_icon_v2.png">
-    <img src="logo/opengym_icon_v2.png" alt="OpenGym Logo" width="120" height="120">
+    <source media="(prefers-color-scheme: dark)" srcset="logo/brandlogo.png">
+    <img src="logo/brandlogo.png" alt="OpenGym Logo" width="120" height="120">
   </picture>
 </p>
 
