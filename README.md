@@ -5,10 +5,10 @@
   </picture>
 </p>
 
-<h1 align="center">🏋️ OpenGym</h1>
+<h1 align="center">OpenGym</h1>
 
 <p align="center">
-  <em>A terminal-style workout tracking app, completely <strong>vibecoded</strong> with the help of <a href="https://opencode.ai"><strong>Opencode</strong></a></em>
+  <em>A terminal-style workout tracking app <strong>vibecoded</strong> with the help of <a href="https://opencode.ai"><strong>Opencode</strong></a></em>
 </p>
 
 <p align="center">
@@ -30,43 +30,43 @@
 
 <br>
 
-> **OpenGym** is a sleek, offline-first workout tracker built with Flutter. Log your sets, reps, and weights with a distinctive terminal-inspired interface. Track personal records, visualize your progress, and manage your training plans — all without an internet connection.
+> **OpenGym** is an offline-first workout tracker built with Flutter. Log sets, reps, and weights through a terminal-inspired interface. Track personal records, view progress over time, and manage training plans locally without internet.
 
 ---
 
-## ✨ Features
+## Features
 
-### 💪 Workout Tracking
-- **Plan Management** — Create, edit, copy, and delete custom workout plans
-- **65+ Pre-built Exercises** — Across 6 muscle categories (Chest, Back, Shoulders, Arms, Legs, Core) + custom exercise entry
-- **Set Logging** — Track weight (kg/lbs), reps, RPE (1-10), and notes per set
-- **Week-Based Periodization** — Organize sessions by week with auto-copy from previous week
-- **Auto-Save** — Never lose progress; saves automatically on navigation
-- **PR Detection** — 🎉 Automatic personal record celebration when you hit new weights
-- **Progression Suggestions** — Smart double-progression logic recommends next weight/reps
-- **Auto-Fill** — Pre-fills weights from your last session for faster logging
+### Workout Tracking
+- **Plan Management** : Create, edit, copy, and delete custom workout plans
+- **65+ Pre-built Exercises** : Across 6 muscle categories (Chest, Back, Shoulders, Arms, Legs, Core) + custom exercise entry
+- **Set Logging** : Track weight (kg/lbs), reps, RPE (1-10), and notes per set
+- **Week-Based Periodization** : Organize sessions by week with auto-copy from previous week
+- **Auto-Save** : Never lose progress; saves automatically on navigation
+- **PR Detection** : Flags new personal records automatically when you hit new weights
+- **Progression Suggestions** : Smart double-progression logic recommends next weight/reps
+- **Auto-Fill** : Pre-fills weights from your last session for faster logging
 
-### 📊 Statistics & History
-- **Workout Frequency Chart** — Weekly bar chart showing your consistency (last 8 weeks)
-- **Exercise Progression Chart** — Line chart tracking max weight over time per exercise
-- **Summary Stats** — Total workouts, weekly count, PRs tracked
-- **Full History** — Expandable session cards with edit/delete for past workouts
+### Statistics & History
+- **Workout Frequency Chart** : Weekly bar chart showing your consistency (last 8 weeks)
+- **Exercise Progression Chart** : Line chart tracking max weight over time per exercise
+- **Summary Stats** : Total workouts, weekly count, PRs tracked
+- **Full History** : Expandable session cards with edit/delete for past workouts
 
-### 🎨 Customization
-- **Dark / Light / System Theme** — Seamless automatic or manual theming
-- **12 Accent Colors** — Electric Blue, Warm Amber, Deep Orange, Hot Pink, Cyan, Purple, Steel Gray, and more
-- **Weight Units** — Switch between kg and lbs on the fly
-- **High Refresh Rate** — 90/120Hz display support for buttery smooth scrolling
-- **JetBrains Mono** — Terminal-inspired monospace typography throughout
+### Customization
+- **Dark / Light / System Theme** : Automatic or manual theming
+- **12 Accent Colors** : Electric Blue, Warm Amber, Deep Orange, Hot Pink, Cyan, Purple, Steel Gray, and more
+- **Weight Units** : Switch between kg and lbs on the fly
+- **High Refresh Rate** : 90/120Hz display support for buttery smooth scrolling
+- **JetBrains Mono** : Terminal-inspired monospace typography throughout
 
-### 📁 Data
-- **100% Offline** — All data stored locally with Hive; no account, no cloud, no tracking
-- **Sample Data** — Load 5 sample plans with 15 sessions across 5 weeks to explore the app
-- **Export / Clear** — Full control over your data
+### Data
+- **100% Offline** : All data stored locally with Hive; no account, no cloud, no tracking
+- **Sample Data** : Load 5 sample plans with 15 sessions across 5 weeks to explore the app
+- **Export / Clear** : Full control over your data
 
 ---
 
-## 📸 Screenshots
+## Screenshots
 
 <p align="center">
   <img src="screenshots/Screenshot_20260611-130716.png" alt="Home Screen" width="260">
@@ -82,7 +82,7 @@
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 | Technology | Purpose |
 |---|---|
@@ -111,7 +111,7 @@ lib/
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -138,7 +138,7 @@ flutter run
 
 ---
 
-## 🏗 Building
+## Building
 
 ### Android APK
 ```bash
@@ -158,7 +158,7 @@ flutter build web --release
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 gymapp-offline/
@@ -209,7 +209,7 @@ gymapp-offline/
 
 ---
 
-## 🧪 Running Tests
+## Running Tests
 
 ```bash
 # Run all tests
@@ -224,13 +224,12 @@ flutter test --name="Basic"
 
 ---
 
-## 📝 License
+## License
 
 Distributed under the **MIT License**. See `LICENSE` for more information.
 
 ---
 
 <p align="center">
-  Built with ❤️ using Flutter &middot;
-  <a href="https://opencode.ai">Powered by Opencode</a>
+  Built with Flutter
 </p>
