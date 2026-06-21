@@ -3,6 +3,7 @@ import '../models/workout_session.dart';
 import '../models/exercise_template.dart';
 import '../models/exercise.dart';
 import '../models/set.dart';
+import '../data/plan_colors.dart';
 import '../services/hive_service.dart';
 
 class SampleDataSeeder {
@@ -22,6 +23,7 @@ class SampleDataSeeder {
     final plans = [
       WorkoutPlan(
         name: 'Push Day',
+        planColor: kPlanColors[0],
         exercises: [
           ExerciseTemplate(name: 'Bench Press', sets: 4),
           ExerciseTemplate(name: 'Incline Dumbbell Press', sets: 3),
@@ -33,6 +35,7 @@ class SampleDataSeeder {
       ),
       WorkoutPlan(
         name: 'Pull Day',
+        planColor: kPlanColors[1],
         exercises: [
           ExerciseTemplate(name: 'Deadlift', sets: 4),
           ExerciseTemplate(name: 'Barbell Row', sets: 4),
@@ -45,6 +48,7 @@ class SampleDataSeeder {
       ),
       WorkoutPlan(
         name: 'Leg Day',
+        planColor: kPlanColors[2],
         exercises: [
           ExerciseTemplate(name: 'Squat', sets: 4),
           ExerciseTemplate(name: 'Romanian Deadlift', sets: 3),
@@ -57,6 +61,7 @@ class SampleDataSeeder {
       ),
       WorkoutPlan(
         name: 'Upper Body',
+        planColor: kPlanColors[3],
         exercises: [
           ExerciseTemplate(name: 'Bench Press', sets: 4),
           ExerciseTemplate(name: 'Barbell Row', sets: 4),
@@ -68,6 +73,7 @@ class SampleDataSeeder {
       ),
       WorkoutPlan(
         name: 'Full Body',
+        planColor: kPlanColors[4],
         exercises: [
           ExerciseTemplate(name: 'Squat', sets: 3),
           ExerciseTemplate(name: 'Bench Press', sets: 3),

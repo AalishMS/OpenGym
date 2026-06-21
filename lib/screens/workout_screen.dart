@@ -30,7 +30,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   List<int> _weeks = [1];
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};
-  bool _isSaving = false;
   final ScrollController _weekNavScrollController = ScrollController();
 
   @override
@@ -117,9 +116,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   Future<void> _autoSave() async {
-    if (_isSaving) return;
-    setState(() => _isSaving = true);
-
     final session = _getOrCreateSession();
     final hasSets = session.exercises.any((e) => e.sets.isNotEmpty);
 
@@ -137,8 +133,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         _showPRDialog(prs);
       }
     }
-
-    setState(() => _isSaving = false);
   }
 
   void _showPRDialog(List<PRResult> prs) {
@@ -512,10 +506,28 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
 
+    final planProvider = context.watch<WorkoutPlanProvider>();
+    final plans = planProvider.plans;
+    final activePlan = plans.firstWhere(
+      (plan) => plan.key == widget.plan.key,
+      orElse: () {
+        if (widget.planIndex >= 0 && widget.planIndex < plans.length) {
+          return plans[widget.planIndex];
+        }
+        return widget.plan;
+      },
+    );
+    final planColor =
+        activePlan.planColor != null ? Color(activePlan.planColor!) : accent;
+
     return Scaffold(
       backgroundColor: backgroundColor(context),
       appBar: AppBar(
-        backgroundColor: surfaceColor(context),
+        backgroundColor: surface,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
         toolbarHeight: 60,
         leading: IconButton(
           icon: Icon(Icons.arrow_back, color: accent),
@@ -524,15 +536,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             Navigator.pop(context);
           },
         ),
-        bottom: _buildPlanTabBar(accent),
+        title: _PlanHeader(
+          planName: activePlan.name,
+          planIndex: widget.planIndex,
+          planColor: planColor,
+        ),
+        bottom: _buildPlanTabBar(accent, plans, activePlan),
       ),
       body: Column(
         children: [
-          _PlanHeader(
-            planName: widget.plan.name,
-            planIndex: widget.planIndex,
-            accent: accent,
-          ),
           Expanded(
             child: _GestureClaimingContainer(
               onSwipeLeft: _currentWeekIndex < _weeks.length - 1
@@ -620,10 +632,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
   }
 
-  PreferredSizeWidget? _buildPlanTabBar(Color accent) {
-    final planProvider = context.watch<WorkoutPlanProvider>();
-    final plans = planProvider.plans;
-
+  PreferredSizeWidget? _buildPlanTabBar(
+    Color accent,
+    List<WorkoutPlan> plans,
+    WorkoutPlan activePlan,
+  ) {
     if (plans.isEmpty) {
       return null;
     }
@@ -640,7 +653,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           itemCount: plans.length,
           itemBuilder: (context, index) {
             final plan = plans[index];
-            final isSelected = index == widget.planIndex;
+            final isSelected =
+                plan.key == activePlan.key || index == widget.planIndex;
             return InkWell(
               onTap: () {
                 Navigator.pushReplacement(
@@ -759,27 +773,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 },
               ),
             ),
-            if (_isSaving)
-              Padding(
-                padding: const EdgeInsets.all(8),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: accent),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '> Auto-saving...',
-                      style: GoogleFonts.jetBrainsMono(
-                          fontSize: 10, color: textSecondaryColor(context)),
-                    ),
-                  ],
-                ),
-              ),
           ],
         ),
       ),
@@ -884,12 +877,12 @@ class _ExposingHorizontalDragGestureRecognizer
 class _PlanHeader extends StatelessWidget {
   final String planName;
   final int planIndex;
-  final Color accent;
+  final Color planColor;
 
   const _PlanHeader({
     required this.planName,
     required this.planIndex,
-    required this.accent,
+    required this.planColor,
   });
 
   @override
@@ -929,17 +922,14 @@ class _PlanHeader extends StatelessWidget {
           }
         }
       },
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        color: surfaceColor(context),
-        child: Text(
-          '> ${planName.toUpperCase()}',
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: accent,
-          ),
+      child: Text(
+        planName.toUpperCase(),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+        style: GoogleFonts.jetBrainsMono(
+          fontSize: 14,
+          fontWeight: FontWeight.bold,
+          color: planColor,
         ),
       ),
     );

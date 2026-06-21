@@ -53,10 +53,7 @@ class _StatsScreenState extends State<StatsScreen> {
           style: GoogleFonts.jetBrainsMono(
               fontSize: 16, fontWeight: FontWeight.bold, color: accent),
         ),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: accent),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: false,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),

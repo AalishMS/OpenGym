@@ -119,6 +119,14 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Updated workout screen header:
+  - Moved active plan name into the AppBar beside the back button
+  - Removed the leading `>` from the plan title
+  - Colored the title using each plan's custom `planColor`
+  - Disabled Material 3 AppBar scrolled-under tint/elevation on the workout screen
+  - Resolved active plan by `plan.key` instead of fragile index, with safe fallbacks
+
+## Recent Changes (Previous)
 - Fixed light mode: Replaced hardcoded terminalX constants with theme-aware functions across ALL screens and widgets:
   - screen files: create_plan_screen, edit_plan_screen, history_screen, settings_screen  
   - widget files: workout/exercise_card, workout/workout_dialogs

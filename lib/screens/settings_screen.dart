@@ -42,10 +42,7 @@ class SettingsScreen extends StatelessWidget {
           style: GoogleFonts.jetBrainsMono(
               fontSize: 16, fontWeight: FontWeight.bold, color: accent),
         ),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: accent),
-          onPressed: () => Navigator.pop(context),
-        ),
+        automaticallyImplyLeading: false,
       ),
       body: Consumer<SettingsProvider>(
         builder: (context, settings, child) {
