@@ -53,12 +53,21 @@ class SetRow extends StatelessWidget {
               highlightColor: accent.withValues(alpha: 0.1),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(
-                  '${set.weight}kg x ${set.reps}${set.rpe != null ? ' @${set.rpe}' : ''}',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: textPrimaryColor(context),
+                child: RichText(
+                  text: TextSpan(
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: textPrimaryColor(context),
+                    ),
+                    children: [
+                      TextSpan(text: '${set.weight}kg x ${set.reps}'),
+                      if (set.rpe != null)
+                        TextSpan(
+                          text: ' @${set.rpe}',
+                          style: TextStyle(color: _rpeColor(set.rpe!)),
+                        ),
+                    ],
                   ),
                 ),
               ),
@@ -110,6 +119,15 @@ class SetRow extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _rpeColor(int rpe) {
+  if (rpe <= 2) return Colors.grey;
+  if (rpe <= 4) return Colors.lightBlue;
+  if (rpe <= 6) return Colors.green;
+  if (rpe <= 8) return Colors.amber;
+  if (rpe == 9) return Colors.orange;
+  return Colors.red;
 }
 
 class _ControlButton extends StatelessWidget {

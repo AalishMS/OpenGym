@@ -119,6 +119,10 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Updated workout screen exercise interactions:
+  - Tapping an exercise name now opens the rename dialog.
+  - Long-press drag remains reserved for exercise reordering.
+  - Displayed RPE values are color-coded by exertion level.
 - Updated workout screen header:
   - Moved active plan name into the AppBar beside the back button
   - Removed the leading `>` from the plan title

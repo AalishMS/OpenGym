@@ -60,7 +60,7 @@ class ExerciseCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: InkWell(
-                  onLongPress: () => onRename(exerciseIndex),
+                  onTap: () => onRename(exerciseIndex),
                   child: Text(
                     exercise.name.toUpperCase(),
                     style: const TextStyle(

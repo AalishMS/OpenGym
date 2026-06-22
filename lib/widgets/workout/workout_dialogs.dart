@@ -19,49 +19,52 @@ class WorkoutDialogs {
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> NEW PR DETECTED!',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: accent,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ...prs.map((pr) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(pr.exerciseName,
-                            style: GoogleFonts.jetBrainsMono(
-                                fontWeight: FontWeight.bold)),
-                        Text(
-                          '${pr.newPR}kg (Previous: ${pr.previousPR}kg)',
-                          style: GoogleFonts.jetBrainsMono(
-                              fontSize: 12, color: textSecondaryColor(context)),
-                        ),
-                      ],
-                    ),
-                  )),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: accent,
-                    foregroundColor: Colors.black,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '> NEW PR DETECTED!',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: accent,
                   ),
-                  child: Text('[ ACKNOWLEDGE ]',
-                      style: GoogleFonts.jetBrainsMono()),
                 ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                ...prs.map((pr) => Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(pr.exerciseName,
+                              style: GoogleFonts.jetBrainsMono(
+                                  fontWeight: FontWeight.bold)),
+                          Text(
+                            '${pr.newPR}kg (Previous: ${pr.previousPR}kg)',
+                            style: GoogleFonts.jetBrainsMono(
+                                fontSize: 12,
+                                color: textSecondaryColor(context)),
+                          ),
+                        ],
+                      ),
+                    )),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accent,
+                      foregroundColor: Colors.black,
+                    ),
+                    child: Text('[ ACKNOWLEDGE ]',
+                        style: GoogleFonts.jetBrainsMono()),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -279,139 +282,141 @@ class WorkoutDialogs {
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '> ADD SET',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: accent,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '> ADD SET',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: accent,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: weightController,
-                      decoration: const InputDecoration(
-                        labelText: 'Weight (kg)',
-                        hintText: 'e.g., 50',
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: weightController,
+                        decoration: const InputDecoration(
+                          labelText: 'Weight (kg)',
+                          hintText: 'e.g., 50',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
                       ),
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: repsController,
-                      decoration: const InputDecoration(
-                        labelText: 'Reps',
-                        hintText: 'e.g., 8',
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: repsController,
+                        decoration: const InputDecoration(
+                          labelText: 'Reps',
+                          hintText: 'e.g., 8',
+                        ),
+                        keyboardType: TextInputType.number,
                       ),
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 16),
-                    Text('RPE (Rate of Perceived Exertion)',
-                        style: GoogleFonts.jetBrainsMono(fontSize: 12)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: List.generate(10, (index) {
-                        final rpe = index + 1;
-                        return InkWell(
-                          onTap: () {
-                            setDialogState(() {
-                              selectedRpe = selectedRpe == rpe ? null : rpe;
-                            });
-                          },
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: selectedRpe == rpe
-                                  ? accent
-                                  : Colors.transparent,
-                              border: Border.all(
+                      const SizedBox(height: 12),
+                      Text('RPE (Rate of Perceived Exertion)',
+                          style: GoogleFonts.jetBrainsMono(fontSize: 12)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: List.generate(10, (index) {
+                          final rpe = index + 1;
+                          return InkWell(
+                            onTap: () {
+                              setDialogState(() {
+                                selectedRpe = selectedRpe == rpe ? null : rpe;
+                              });
+                            },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
                                 color: selectedRpe == rpe
                                     ? accent
-                                    : borderColor(context),
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '$rpe',
-                                style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 12,
+                                    : Colors.transparent,
+                                border: Border.all(
                                   color: selectedRpe == rpe
-                                      ? Colors.black
-                                      : textPrimaryColor(context),
+                                      ? accent
+                                      : borderColor(context),
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '$rpe',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 12,
+                                    color: selectedRpe == rpe
+                                        ? Colors.black
+                                        : textPrimaryColor(context),
+                                  ),
                                 ),
                               ),
                             ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text('[CANCEL]',
+                                style: GoogleFonts.jetBrainsMono(
+                                    color: textSecondaryColor(context))),
                           ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text('[CANCEL]',
-                              style: GoogleFonts.jetBrainsMono(
-                                  color: textSecondaryColor(context))),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () {
-                            final weight =
-                                double.tryParse(weightController.text);
-                            final reps = int.tryParse(repsController.text);
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () {
+                              final weight =
+                                  double.tryParse(weightController.text);
+                              final reps = int.tryParse(repsController.text);
 
-                            if (weight == null || weight < 0) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('> Weight must be >= 0',
-                                      style: GoogleFonts.jetBrainsMono()),
-                                  backgroundColor: errorColor(context),
-                                ),
+                              if (weight == null || weight < 0) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('> Weight must be >= 0',
+                                        style: GoogleFonts.jetBrainsMono()),
+                                    backgroundColor: errorColor(context),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              if (reps == null || reps <= 0) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('> Reps must be > 0',
+                                        style: GoogleFonts.jetBrainsMono()),
+                                    backgroundColor: errorColor(context),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              final newSet = gym.Set(
+                                reps: reps,
+                                weight: weight,
+                                rpe: selectedRpe,
+                                note: null,
                               );
-                              return;
-                            }
 
-                            if (reps == null || reps <= 0) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('> Reps must be > 0',
-                                      style: GoogleFonts.jetBrainsMono()),
-                                  backgroundColor: errorColor(context),
-                                ),
-                              );
-                              return;
-                            }
-
-                            final newSet = gym.Set(
-                              reps: reps,
-                              weight: weight,
-                              rpe: selectedRpe,
-                              note: null,
-                            );
-
-                            Navigator.pop(context);
-                            onAdd(newSet);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accent,
-                            foregroundColor: Colors.black,
+                              Navigator.pop(context);
+                              onAdd(newSet);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: accent,
+                              foregroundColor: Colors.black,
+                            ),
+                            child: Text('[ ADD ]',
+                                style: GoogleFonts.jetBrainsMono()),
                           ),
-                          child: Text('[ ADD ]',
-                              style: GoogleFonts.jetBrainsMono()),
-                        ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
@@ -448,149 +453,153 @@ class WorkoutDialogs {
               ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '> EDIT SET',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: accent,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '> EDIT SET',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: accent,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: weightController,
-                      decoration:
-                          const InputDecoration(labelText: 'Weight (kg)'),
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: repsController,
-                      decoration: const InputDecoration(labelText: 'Reps'),
-                      keyboardType: TextInputType.number,
-                    ),
-                    const SizedBox(height: 16),
-                    Text('RPE', style: GoogleFonts.jetBrainsMono(fontSize: 12)),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: List.generate(10, (index) {
-                        final rpe = index + 1;
-                        return InkWell(
-                          onTap: () {
-                            setDialogState(() {
-                              selectedRpe = selectedRpe == rpe ? null : rpe;
-                            });
-                          },
-                          child: Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: selectedRpe == rpe
-                                  ? accent
-                                  : Colors.transparent,
-                              border: Border.all(
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: weightController,
+                        decoration:
+                            const InputDecoration(labelText: 'Weight (kg)'),
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: repsController,
+                        decoration: const InputDecoration(labelText: 'Reps'),
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 12),
+                      Text('RPE',
+                          style: GoogleFonts.jetBrainsMono(fontSize: 12)),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 4,
+                        children: List.generate(10, (index) {
+                          final rpe = index + 1;
+                          return InkWell(
+                            onTap: () {
+                              setDialogState(() {
+                                selectedRpe = selectedRpe == rpe ? null : rpe;
+                              });
+                            },
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
                                 color: selectedRpe == rpe
                                     ? accent
-                                    : borderColor(context),
-                              ),
-                            ),
-                            child: Center(
-                              child: Text(
-                                '$rpe',
-                                style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 12,
+                                    : Colors.transparent,
+                                border: Border.all(
                                   color: selectedRpe == rpe
-                                      ? Colors.black
-                                      : textPrimaryColor(context),
+                                      ? accent
+                                      : borderColor(context),
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '$rpe',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 12,
+                                    color: selectedRpe == rpe
+                                        ? Colors.black
+                                        : textPrimaryColor(context),
+                                  ),
                                 ),
                               ),
                             ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: noteController,
+                        decoration:
+                            const InputDecoration(labelText: 'Note (optional)'),
+                        maxLines: 2,
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        alignment: WrapAlignment.spaceBetween,
+                        runSpacing: 8,
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              Navigator.pop(context);
+                              onDelete();
+                            },
+                            child: Text('[DELETE]',
+                                style: GoogleFonts.jetBrainsMono(
+                                    color: errorColor(context))),
                           ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: noteController,
-                      decoration:
-                          const InputDecoration(labelText: 'Note (optional)'),
-                      maxLines: 2,
-                    ),
-                    const SizedBox(height: 16),
-                    Wrap(
-                      alignment: WrapAlignment.spaceBetween,
-                      runSpacing: 8,
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                            onDelete();
-                          },
-                          child: Text('[DELETE]',
-                              style: GoogleFonts.jetBrainsMono(
-                                  color: errorColor(context))),
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(context),
-                              child: Text('[CANCEL]',
-                                  style: GoogleFonts.jetBrainsMono(
-                                      color: textSecondaryColor(context))),
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton(
-                              onPressed: () {
-                                final weight =
-                                    double.tryParse(weightController.text);
-                                final reps = int.tryParse(repsController.text);
-
-                                if (weight == null ||
-                                    weight < 0 ||
-                                    reps == null ||
-                                    reps <= 0) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('> Invalid values',
-                                          style: GoogleFonts.jetBrainsMono()),
-                                      backgroundColor: errorColor(context),
-                                    ),
-                                  );
-                                  return;
-                                }
-
-                                final updatedSet = gym.Set(
-                                  reps: reps,
-                                  weight: weight,
-                                  rpe: selectedRpe,
-                                  note: noteController.text.isNotEmpty
-                                      ? noteController.text
-                                      : null,
-                                );
-
-                                Navigator.pop(context);
-                                onSave(updatedSet);
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: accent,
-                                foregroundColor: Colors.black,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: Text('[CANCEL]',
+                                    style: GoogleFonts.jetBrainsMono(
+                                        color: textSecondaryColor(context))),
                               ),
-                              child: Text('[ SAVE ]',
-                                  style: GoogleFonts.jetBrainsMono()),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
+                              const SizedBox(width: 8),
+                              ElevatedButton(
+                                onPressed: () {
+                                  final weight =
+                                      double.tryParse(weightController.text);
+                                  final reps =
+                                      int.tryParse(repsController.text);
+
+                                  if (weight == null ||
+                                      weight < 0 ||
+                                      reps == null ||
+                                      reps <= 0) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('> Invalid values',
+                                            style: GoogleFonts.jetBrainsMono()),
+                                        backgroundColor: errorColor(context),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  final updatedSet = gym.Set(
+                                    reps: reps,
+                                    weight: weight,
+                                    rpe: selectedRpe,
+                                    note: noteController.text.isNotEmpty
+                                        ? noteController.text
+                                        : null,
+                                  );
+
+                                  Navigator.pop(context);
+                                  onSave(updatedSet);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: accent,
+                                  foregroundColor: Colors.black,
+                                ),
+                                child: Text('[ SAVE ]',
+                                    style: GoogleFonts.jetBrainsMono()),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );
