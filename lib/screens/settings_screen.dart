@@ -14,6 +14,7 @@ import '../services/backup_service.dart';
 import '../services/hive_service.dart';
 import '../services/sample_data_seeder.dart';
 import '../theme/app_theme.dart';
+import 'spreadsheet_import_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -118,6 +119,21 @@ class SettingsScreen extends StatelessWidget {
                 title: 'IMPORT DATA',
                 subtitle: 'Restore from a backup file (replaces all data)',
                 onTap: () => _importData(context),
+                accent: accent,
+                textPrimary: textPrimary,
+                textSecondary: textSecondary,
+                border: border,
+              ),
+              _buildSettingsTile(
+                icon: Icons.table_chart,
+                title: 'IMPORT SPREADSHEET',
+                subtitle: 'Convert .xlsx/.csv to workout data',
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const SpreadsheetImportScreen(),
+                  ),
+                ),
                 accent: accent,
                 textPrimary: textPrimary,
                 textSecondary: textSecondary,
