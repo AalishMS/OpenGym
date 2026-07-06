@@ -140,3 +140,18 @@ def test_to_dict():
     assert "valid" in d
     assert "errors" in d
     assert "warnings" in d
+
+
+def test_set_note_wrong_type():
+    data = {
+        "version": 1, "exportedAt": "x", "settings": {},
+        "workoutPlans": [],
+        "workoutSessions": [{
+            "date": "x", "planName": "x",
+            "exercises": [{"name": "x", "sets": [{"reps": 10, "weight": 50.0, "rpe": None, "note": 123}]}],
+            "weekNumber": 1
+        }]
+    }
+    result = validate_opengym_json(data)
+    assert not result.valid
+    assert any("note" in e for e in result.errors)

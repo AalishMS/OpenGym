@@ -94,6 +94,10 @@ def validate_opengym_json(data: Any) -> ValidationResult:
                 elif isinstance(rpe, int) and not (1 <= rpe <= 10):
                     warnings.append(f"sessions[{i}].exercises[{j}].sets[{k}]: rpe {rpe} is outside 1-10 range")
 
+                note_val = set_item.get("note")
+                if note_val is not None and not isinstance(note_val, str):
+                    errors.append(f"sessions[{i}].exercises[{j}].sets[{k}]: note must be null or string, got {type(note_val).__name__}")
+
                 if isinstance(reps, int) and reps == 0:
                     note = set_item.get("note")
                     if not note:
