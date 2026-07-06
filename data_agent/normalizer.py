@@ -13,11 +13,11 @@ from typing import Any
 
 def normalize_reps(raw: Any) -> tuple[int, str | None]:
     """Parse reps value. Returns (int_reps, note_for_original_text).
-
+    
     Handles:
     - Plain integer: "10" -> (10, None)
+    - Fractional: "10.5" -> (10, "10.5") - notes non-integer original
     - With suffix: "10 ES", "12 ea", "15 each side" -> (int, "original text")
-    - Percentage: "8" from "8 ES" -> (8, "8 ES")
     - Non-numeric: "To prepardness", "-", "" -> (0, "original text")
     - None -> (0, None)
     """
@@ -25,7 +25,10 @@ def normalize_reps(raw: Any) -> tuple[int, str | None]:
         return (0, None)
     s = str(raw).strip().lower()
     try:
-        return (int(float(s)), None)
+        v = float(s)
+        if v != int(v):
+            return (int(v), str(raw).strip())
+        return (int(v), None)
     except ValueError:
         pass
     # "10 ES" / "12 ea" / "15 each side" / "20 ES"
@@ -42,17 +45,21 @@ def normalize_reps(raw: Any) -> tuple[int, str | None]:
 
 def normalize_weight(raw: Any) -> tuple[float, str | None]:
     """Parse weight value. Returns (float_weight, note_for_original_text).
-
+    
     Handles:
     - Plain number: "50" -> (50.0, None), "50.5" -> (50.5, None)
-    - With kg/lbs suffix: "50 kg", "50.5kg" -> (50.0, None)
+    - With kg/lbs suffix: "50 kg", "50 kgs", "50 kilograms", "50lbs" -> (50.0, None)
     - "5x2" style: -> (5.0, "5x2")  # weight per dumbbell, note the original
     - Non-numeric: "To prepardness", "-", "" -> (0.0, "original text")
     - None -> (0.0, None)
     """
     if raw is None or str(raw).strip() == "":
         return (0.0, None)
-    s = str(raw).strip().lower().replace("kg", "").replace("lbs", "").strip()
+    s = str(raw).strip().lower()
+    # Strip weight unit suffixes: kg, kgs, kilograms, kilogram, kilo, kilos, lbs, lb, pounds, pound
+    s = re.sub(
+        r'\s*(?:kg|kgs|kilograms?|kilos?|lbs?|pounds?)\s*$', '', s
+    ).strip()
     try:
         return (float(s), None)
     except ValueError:
@@ -86,11 +93,14 @@ def normalize_rpe(raw: Any) -> int | None:
     return None
 
 
-def normalize_set(raw_set: dict) -> dict:
+def normalize_set(raw_set: Any) -> dict:
     """Normalize a single set dict with 'reps', 'weight', 'rpe', 'note' keys.
-
+    
     Returns a clean dict guaranteed to be import-safe.
     """
+    if not isinstance(raw_set, dict):
+        return {"reps": 0, "weight": 0.0, "rpe": None, "note": None}
+
     note_parts = []
 
     reps, reps_note = normalize_reps(raw_set.get("reps"))
@@ -103,8 +113,20 @@ def normalize_set(raw_set: dict) -> dict:
 
     rpe = normalize_rpe(raw_set.get("rpe"))
 
-    existing_note = raw_set.get("note") or ""
-    if existing_note and isinstance(existing_note, str):
+    # If RPE was decimal, note the original value
+    raw_rpe = raw_set.get("rpe")
+    if raw_rpe is not None:
+        raw_rpe_s = str(raw_rpe).strip().lower().replace("rpe", "").strip()
+        try:
+            if "." in raw_rpe_s:
+                rpe_val = float(raw_rpe_s)
+                if rpe_val != int(rpe_val):
+                    note_parts.append(f"rpe: {str(raw_rpe).strip()}")
+        except (ValueError, TypeError):
+            pass
+
+    existing_note = raw_set.get("note") if isinstance(raw_set.get("note"), str) else ""
+    if existing_note:
         note_parts.append(existing_note)
 
     full_note = "; ".join(note_parts) if note_parts else None

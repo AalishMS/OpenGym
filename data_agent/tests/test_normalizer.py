@@ -64,6 +64,24 @@ def test_weight_ambiguous():
     assert result_note == "3 bars"
 
 
+def test_reps_fractional():
+    result_reps, result_note = normalize_reps("10.5")
+    assert result_reps == 10
+    assert result_note is not None
+    assert "10.5" in result_note
+
+def test_reps_fractional_integer():
+    assert normalize_reps("10.0") == (10, None)
+
+def test_weight_unit_variants():
+    assert normalize_weight("50 kgs") == (50.0, None)
+    assert normalize_weight("50 kilograms") == (50.0, None)
+    assert normalize_weight("50 kilogram") == (50.0, None)
+    assert normalize_weight("50 kilos") == (50.0, None)
+    assert normalize_weight("50 lbs") == (50.0, None)
+    assert normalize_weight("50 pounds") == (50.0, None)
+    assert normalize_weight("50lb") == (50.0, None)
+
 def test_rpe():
     assert normalize_rpe("RPE 7") == 7
     assert normalize_rpe("7") == 7
@@ -77,7 +95,32 @@ def test_rpe():
 
 def test_normalize_set_full():
     result = normalize_set({"reps": "10", "weight": "50", "rpe": "RPE 7", "note": None})
-    assert result == {"reps": 10, "weight": 50.0, "rpe": 7, "note": None}
+    assert result["reps"] == 10
+    assert result["weight"] == 50.0
+    assert result["rpe"] == 7
+    assert result["note"] is None
+
+def test_normalize_set_decimal_rpe():
+    result = normalize_set({"reps": "10", "weight": "50", "rpe": "RPE 7.5", "note": None})
+    assert result["rpe"] == 7
+    assert result["note"] is not None
+    assert "7.5" in result["note"]
+
+def test_normalize_set_non_dict():
+    result = normalize_set(None)
+    assert result["reps"] == 0
+    assert result["weight"] == 0.0
+    assert result["rpe"] is None
+
+    result = normalize_set("foo")
+    assert result["reps"] == 0
+    assert result["weight"] == 0.0
+    assert result["rpe"] is None
+
+    result = normalize_set([])
+    assert result["reps"] == 0
+    assert result["weight"] == 0.0
+    assert result["rpe"] is None
 
 
 def test_normalize_set_with_note():
