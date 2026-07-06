@@ -224,6 +224,26 @@ flutter test --name="Basic"
 
 ---
 
+## AI Agent Capstone: Spreadsheet Importer
+
+This project includes an AI agent component as part of the **Vibe Coding Agents Capstone**. See the [`data_agent/`](data_agent/README.md) directory for the full agent implementation.
+
+The agent pipeline uses **Google ADK** (Agent Development Kit) with **Gemini 2.0 Flash Lite** to convert user-uploaded `.xlsx` and `.csv` workout spreadsheets into OpenGym backup JSON. It works in two stages:
+
+1. **Mapping Agent** — Inspects the spreadsheet structure and produces a structured layout plan
+2. **Transform Agent** — Writes and executes pandas code to extract and reshape the data
+
+The output passes through a deterministic normalizer (cleans ambiguous values like "10 ES" or "50 kg") and a schema validator before reaching the app.
+
+```bash
+# Start the converter server
+cd data_agent
+pip install -r requirements.txt
+uvicorn data_agent.main:app --host 0.0.0.0 --port 8000
+```
+
+---
+
 ## License
 
 Distributed under the **MIT License**. See `LICENSE` for more information.

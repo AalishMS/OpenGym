@@ -45,3 +45,6 @@ app.*.map.json
 # Python / data_agent
 .env
 .adk/
+
+# Capstone submission materials (writeup, video plan, checklist)
+submission/
