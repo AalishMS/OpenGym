@@ -1,5 +1,6 @@
-import json
+import csv
 import os
+import tempfile
 from data_agent.tools import read_spreadsheet
 
 SAMPLE_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "sample_excel_workouts")
@@ -20,21 +21,19 @@ def test_introductory_file_readable():
 def test_detects_irregular_layout():
     path = os.path.join(SAMPLE_DIR, "Training - Suyog Man Singh.xlsx")
     result = read_spreadsheet(path)
-    for sheet_name, info in result["sheets"].items():
-        if info.get("irregular_layout_warning"):
-            assert "raw_grid" in info
-            return
-    # At least one sheet should have irregular layout for this file
-    assert any("irregular_layout_warning" in info for info in result["sheets"].values())
+    irregular_sheets = [
+        info for info in result["sheets"].values()
+        if info.get("irregular_layout_warning")
+    ]
+    assert len(irregular_sheets) > 0
+    for info in irregular_sheets:
+        assert "raw_grid" in info
 
 def test_invalid_file():
     result = read_spreadsheet("nonexistent_file.xlsx")
     assert "error" in result
 
 def test_csv_file():
-    # Create a temp CSV to test CSV reading
-    import tempfile
-    import csv
     with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as f:
         writer = csv.writer(f)
         writer.writerow(["Movement", "Sets", "Reps"])
