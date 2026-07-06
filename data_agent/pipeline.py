@@ -31,7 +31,7 @@ def run_pipeline(file_path: str) -> dict:
     if "error" in sheet_info:
         return {"error": sheet_info["error"]}
 
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         placeholder = _build_placeholder(file_path, sheet_info)
         return {
@@ -59,50 +59,89 @@ async def _run_adk_pipeline(file_path: str) -> dict:
     from google.adk.sessions import InMemorySessionService
     from google.genai.types import Content, Part
 
-    from .agent import root_agent
+    from .agent import mapping_agent, transform_agent
 
     session_service = InMemorySessionService()
+    app_name = "opengym_import"
 
-    runner = Runner(
-        agent=root_agent,
-        app_name="opengym_import",
-        session_service=session_service,
+    async def _run_agent(agent, session_id, message_text, state=None):
+        runner = Runner(
+            agent=agent,
+            app_name=app_name,
+            session_service=session_service,
+        )
+        await session_service.create_session(
+            app_name=app_name,
+            user_id="cli",
+            session_id=session_id,
+            state=state,
+        )
+        msg = Content(role="user", parts=[Part(text=message_text)])
+        collected = ""
+        json_output = None
+        async for event in runner.run_async(
+            user_id="cli",
+            session_id=session_id,
+            new_message=msg,
+        ):
+            if event.content and event.content.parts:
+                for part in event.content.parts:
+                    if part.text:
+                        collected += part.text
+                    elif part.function_call:
+                        # Structured output via output_schema arrives as function_call
+                        import json as _json
+                        fc = part.function_call
+                        if hasattr(fc, 'args') and fc.args:
+                            try:
+                                args_str = _json.dumps(fc.args)
+                                if len(args_str) > 20:
+                                    json_output = fc.args
+                            except Exception:
+                                pass
+        return collected, json_output
+
+    # Step 1: Mapping agent inspects the spreadsheet
+    mapping_text, mapping_structured = await _run_agent(
+        mapping_agent, "mapping", file_path
     )
+    mapping_plan = mapping_structured or _extract_json(mapping_text)
+    if mapping_plan is None:
+        return {
+            "error": "Mapping agent did not produce valid JSON",
+            "json": _build_placeholder(file_path, {}),
+            "warnings": [f"Mapping response preview: {mapping_text[:2000]}"],
+        }
 
-    session_service.create_session(
-        app_name="opengym_import",
-        user_id="cli",
-        session_id="default",
+    # Step 2: Transform agent uses the mapping plan
+    transform_text, transform_structured = await _run_agent(
+        transform_agent,
+        "transform",
+        "Transform this spreadsheet into OpenGym backup JSON.",
+        state={"mapping_plan": mapping_plan},
     )
+    json_data = transform_structured or _extract_json(transform_text)
+    if json_data is None:
+        return {
+            "error": "Transform agent did not produce valid JSON",
+            "json": _build_placeholder(file_path, {}),
+            "warnings": [f"Transform response preview: {transform_text[:2000]}"],
+        }
 
-    message = Content(role="user", parts=[Part(text=file_path)])
+    validation = validate_opengym_json(json_data)
+    return {
+        "json": json_data,
+        "warnings": validation.warnings,
+        "_validation_errors": validation.errors,
+    }
 
-    full_response = ""
-    async for event in runner.run_async(
-        user_id="cli",
-        session_id="default",
-        new_message=message,
-    ):
-        if event.content and event.content.parts:
-            for part in event.content.parts:
-                if part.text:
-                    full_response += part.text
 
-    json_match = re.search(r'(\{.*\}|\[.*\])', full_response, re.DOTALL)
+def _extract_json(text: str):
+    """Extract first JSON object or array from a text response."""
+    json_match = re.search(r'(\{.*\}|\[.*\])', text, re.DOTALL)
     if json_match:
         try:
-            json_data = json.loads(json_match.group(1))
-            validation = validate_opengym_json(json_data)
-            return {
-                "json": json_data,
-                "warnings": validation.warnings,
-                "_validation_errors": validation.errors,
-            }
+            return json.loads(json_match.group(1))
         except json.JSONDecodeError:
             pass
-
-    return {
-        "error": "ADK response was not valid JSON",
-        "json": _build_placeholder(file_path, {}),
-        "warnings": [f"Raw response preview: {full_response[:500]}"],
-    }
+    return None

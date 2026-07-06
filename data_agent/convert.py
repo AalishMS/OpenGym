@@ -45,6 +45,7 @@ Examples:
     if args.key:
         import os
         os.environ["GEMINI_API_KEY"] = args.key
+        os.environ["GOOGLE_API_KEY"] = args.key
     
     result = run_pipeline(args.file)
     

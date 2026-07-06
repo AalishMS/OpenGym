@@ -80,7 +80,13 @@ def read_spreadsheet(file_path: str) -> dict:
                 "(nothing dropped) -- use these indices, not indices from 'sample_rows', "
                 "when referring to row positions."
             )
-            sheet_info["raw_grid"] = raw.values.tolist()
+            # Limit raw_grid to 25 rows to avoid flooding LLM context
+            rows = raw.values.tolist()
+            if len(rows) > 25:
+                sheet_info["raw_grid_truncated"] = True
+                sheet_info["raw_grid_total_rows"] = len(rows)
+                rows = rows[:25]
+            sheet_info["raw_grid"] = rows
 
         sheets[name] = sheet_info
 

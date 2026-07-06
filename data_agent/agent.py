@@ -1,11 +1,11 @@
-from google.adk.agents import Agent, SequentialAgent
+from google.adk.agents import Agent
 
 from .tools import read_spreadsheet, run_transform_code
 from .schemas import MappingPlan
 
 mapping_agent = Agent(
     name="mapping_agent",
-    model="gemini-2.5-flash",
+    model="gemini-2.0-flash-lite",
     description="Inspects a workout spreadsheet and produces a structured mapping plan of its layout.",
     instruction="""
 You are the mapping stage of an OpenGym import pipeline.
@@ -54,7 +54,7 @@ the layout.
 
 transform_agent = Agent(
     name="transform_agent",
-    model="gemini-2.5-flash",
+    model="gemini-2.0-flash-lite",
     description="Writes and executes pandas code that turns a mapped spreadsheet into OpenGym backup JSON.",
     instruction="""
 You are the transform stage of an OpenGym import pipeline.
@@ -110,8 +110,7 @@ from the "json" field -- nothing else.
     output_key="opengym_json",
 )
 
-root_agent = SequentialAgent(
-    name="opengym_import_agent",
-    description="Converts a workout spreadsheet into OpenGym backup JSON: maps its layout, then transforms it.",
-    sub_agents=[mapping_agent, transform_agent],
-)
+# SequentialAgent is deprecated in favor of manual orchestration.
+# Use these as individual agents; run mapping first, then pass
+# output as context to transform in the pipeline.
+__all__ = ["mapping_agent", "transform_agent"]
