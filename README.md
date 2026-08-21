@@ -237,8 +237,8 @@ The output passes through a deterministic normalizer (cleans ambiguous values li
 
 ```bash
 # Start the converter server
-cd data_agent
-pip install -r requirements.txt
+pip install -r data_agent/requirements.txt
+echo "GEMINI_API_KEY=your_key_here" > data_agent/.env
 uvicorn data_agent.main:app --host 0.0.0.0 --port 8000
 ```
 

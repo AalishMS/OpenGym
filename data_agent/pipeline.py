@@ -7,6 +7,7 @@ import json
 import os
 import re
 from datetime import datetime
+from pathlib import Path
 
 from .tools import read_spreadsheet
 from .normalizer import normalize_set
@@ -23,6 +24,22 @@ def _build_placeholder(file_path: str, sheet_info: dict) -> dict:
     }
 
 
+def _load_local_env() -> None:
+    env_path = Path(__file__).with_name(".env")
+    if not env_path.exists():
+        return
+
+    for line in env_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, value = stripped.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key:
+            os.environ.setdefault(key, value)
+
+
 def run_pipeline(file_path: str) -> dict:
     if not os.path.exists(file_path):
         return {"error": f"File not found: {file_path}"}
@@ -31,6 +48,7 @@ def run_pipeline(file_path: str) -> dict:
     if "error" in sheet_info:
         return {"error": sheet_info["error"]}
 
+    _load_local_env()
     api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not api_key:
         placeholder = _build_placeholder(file_path, sheet_info)

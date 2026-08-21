@@ -119,6 +119,10 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Fixed spreadsheet converter backend startup/configuration:
+  - `data_agent.pipeline` now loads `data_agent/.env` before checking `GEMINI_API_KEY` / `GOOGLE_API_KEY`, without overriding shell environment variables.
+  - Updated README startup instructions to run `uvicorn data_agent.main:app` from the project root instead of inside `data_agent/`.
+  - Added a regression test proving local `.env` keys activate the ADK pipeline path.
 - Updated workout screen exercise interactions:
   - Tapping an exercise name now opens the rename dialog.
   - Long-press drag remains reserved for exercise reordering.

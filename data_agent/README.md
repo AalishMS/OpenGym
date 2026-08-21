@@ -66,13 +66,14 @@ Spreadsheet (.xlsx / .csv)
 pip install -r data_agent/requirements.txt
 
 # Set your API key
-echo "GEMINI_API_KEY=your_key_here" > .env
+echo "GEMINI_API_KEY=your_key_here" > data_agent/.env
 ```
 
 ### Start the Server
 
 ```bash
-uvicorn data_agent.main:app --host 0.0.0.0 --port 8000
+# Run from the project root (gymapp-offline/)
+uvicorn data_agent.main:app --host 0.0.0.0 --port 8005
 ```
 
 ### Connect from OpenGym
@@ -80,7 +81,7 @@ uvicorn data_agent.main:app --host 0.0.0.0 --port 8000
 1. Open the OpenGym app
 2. Go to **Settings → Spreadsheet Import**
 3. Enter the server URL:
-   - `http://10.0.2.2:8000` (Android emulator)
+   - `http://10.0.2.2:8005` (Android emulator)
    - `http://localhost:8000` (iOS simulator)
    - `http://<your-ip>:8000` (physical device on same network)
 4. Tap **Connect**, pick a `.xlsx` or `.csv` file, then **Convert**
