@@ -42,9 +42,9 @@ class _EditPlanScreenState extends State<EditPlanScreen> {
     _nameController = TextEditingController(text: widget.plan.name);
     _selectedColor = widget.plan.planColor;
 
-    final plans = HiveService.getPlans();
-    final freshPlan =
-        plans.length > widget.planIndex ? plans[widget.planIndex] : null;
+    final freshPlan = widget.plan.id != null
+        ? HiveService.getPlanById(widget.plan.id!)
+        : widget.plan;
 
     _exercises = freshPlan?.exercises
             .map((e) => ExerciseWithSets(
@@ -426,11 +426,12 @@ class _EditPlanScreenState extends State<EditPlanScreen> {
         .toList();
 
     final plan = WorkoutPlan(
+      id: widget.plan.id,
       name: _nameController.text.trim(),
       exercises: exercises,
       planColor: _selectedColor,
     );
-    context.read<WorkoutPlanProvider>().updatePlan(widget.planIndex, plan);
+    context.read<WorkoutPlanProvider>().updatePlan(plan);
     Navigator.pop(context);
   }
 

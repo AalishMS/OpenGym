@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/workout_session.dart';
-import '../models/exercise.dart';
 import '../repositories/workout_session_repository.dart';
+import '../services/sync_service.dart';
 
 class WorkoutSessionProvider with ChangeNotifier {
   final WorkoutSessionRepository _repository = WorkoutSessionRepository();
@@ -22,51 +22,36 @@ class WorkoutSessionProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void startWorkout(String planName, List<Exercise> exercises,
-      {int weekNumber = 1}) {
-    _currentWeek = weekNumber;
-    _currentSession = WorkoutSession(
-      date: DateTime.now(),
-      planName: planName,
-      exercises: exercises,
-      weekNumber: weekNumber,
-    );
-    notifyListeners();
-  }
-
-  void updateCurrentSession(WorkoutSession session) {
-    _currentSession = session;
-    notifyListeners();
-  }
-
   void setCurrentWeek(int week) {
     _currentWeek = week;
     notifyListeners();
   }
 
-  Future<void> saveWorkout() async {
-    if (_currentSession != null) {
-      await _repository.addSession(_currentSession!);
-      _currentSession = null;
-      loadSessions();
-    }
-  }
-
-  Future<void> deleteSession(int index) async {
-    await _repository.deleteSession(index);
+  /// Upsert-by-id. This is the core fix for the append-only bug: repeated
+  /// autosaves of the same (plan, week) session replace ONE row instead of
+  /// appending new ones. The session carries its own stable id.
+  Future<void> upsertSession(WorkoutSession session) async {
+    await _repository.upsertSession(session);
     loadSessions();
+    SyncService.instance.scheduleSync();
   }
 
-  Future<void> updateSession(int index, WorkoutSession session) async {
-    await _repository.updateSession(index, session);
+  /// Kept for API symmetry with the History edit screen.
+  Future<void> updateSession(WorkoutSession session) async {
+    await _repository.upsertSession(session);
     loadSessions();
+    SyncService.instance.scheduleSync();
   }
 
-  List<int> getWeeksForPlan(String planName) {
-    return _repository.getWeeksForPlan(planName);
+  Future<void> deleteSession(String id) async {
+    await _repository.softDeleteSession(id);
+    loadSessions();
+    SyncService.instance.scheduleSync();
   }
 
-  WorkoutSession? getSessionForPlanAndWeek(String planName, int week) {
-    return _repository.getSessionForPlanAndWeek(planName, week);
-  }
+  List<int> getWeeksForPlan(String planName) =>
+      _repository.getWeeksForPlan(planName);
+
+  WorkoutSession? getSessionForPlanAndWeek(String planName, int week) =>
+      _repository.getSessionForPlanAndWeek(planName, week);
 }

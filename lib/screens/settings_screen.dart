@@ -13,6 +13,7 @@ import '../providers/workout_session_provider.dart';
 import '../services/backup_service.dart';
 import '../services/hive_service.dart';
 import '../services/sample_data_seeder.dart';
+import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -135,6 +136,20 @@ class SettingsScreen extends StatelessWidget {
                 error: error,
                 border: border,
               ),
+              if (SupabaseService.currentUser != null)
+                _buildSettingsTile(
+                  icon: Icons.logout,
+                  title: 'SIGN OUT',
+                  subtitle: SupabaseService.currentUser?.email ?? 'Signed in',
+                  onTap: () async {
+                    await SupabaseService.signOut();
+                    // AuthGate reacts and shows LoginScreen automatically.
+                  },
+                  accent: accent,
+                  textPrimary: textPrimary,
+                  textSecondary: textSecondary,
+                  border: border,
+                ),
               Divider(color: border),
               _SectionHeader(title: 'ABOUT', accent: accent, border: border),
               Container(

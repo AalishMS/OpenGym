@@ -363,7 +363,7 @@ class HomeScreen extends StatelessWidget {
                 label: '[DELETE] Remove plan',
                 onTap: () {
                   Navigator.pop(ctx);
-                  context.read<WorkoutPlanProvider>().deletePlan(index);
+                  context.read<WorkoutPlanProvider>().deletePlan(plan.id!);
                 },
                 accent: Colors.red,
               ),
@@ -463,12 +463,8 @@ class HomeScreen extends StatelessWidget {
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: () {
-                            final updated = WorkoutPlan(
-                              name: plan.name,
-                              exercises: plan.exercises,
-                              planColor: selectedColor,
-                            );
-                            context.read<WorkoutPlanProvider>().updatePlan(planIndex, updated);
+                            final updated = plan.copyWith(planColor: selectedColor);
+                            context.read<WorkoutPlanProvider>().updatePlan(updated);
                             Navigator.pop(ctx);
                           },
                           style: ElevatedButton.styleFrom(

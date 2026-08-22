@@ -105,7 +105,7 @@ class HistoryScreen extends StatelessWidget {
                                 const SizedBox(width: 8),
                                 ElevatedButton(
                                   onPressed: () {
-                                    provider.deleteSession(index);
+                                    provider.deleteSession(session.id!);
                                     Navigator.pop(ctx);
                                   },
                                   style: ElevatedButton.styleFrom(
@@ -129,7 +129,6 @@ class HistoryScreen extends StatelessWidget {
                     MaterialPageRoute(
                       builder: (_) => EditSessionScreen(
                         session: session,
-                        sessionIndex: index,
                       ),
                     ),
                   );
@@ -379,12 +378,10 @@ class _ExerciseSection extends StatelessWidget {
 
 class EditSessionScreen extends StatefulWidget {
   final WorkoutSession session;
-  final int sessionIndex;
 
   const EditSessionScreen({
     super.key,
     required this.session,
-    required this.sessionIndex,
   });
 
   @override
@@ -418,9 +415,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
 
   void _save() {
     _session = _session.copyWith(planName: _planNameController.text);
-    context
-        .read<WorkoutSessionProvider>()
-        .updateSession(widget.sessionIndex, _session);
+    context.read<WorkoutSessionProvider>().updateSession(_session);
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
