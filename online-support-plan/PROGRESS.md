@@ -10,16 +10,13 @@
 
 ## Current state
 
-All app code for every phase is written and locally verified. What remains is console work: one
-column type to widen in Postgres, then end-to-end sync verification, then hosting. Nothing left is
-big — each unticked box below is minutes, not hours.
-
-**The migration is still an uncommitted working tree.** Committing it is the first checklist item
-below and is the one thing that isn't yours.
+All app code for every phase is written, locally verified, and committed. What remains is console
+work: one column type to widen in Postgres, then end-to-end sync verification, then hosting. Nothing
+left is big — each unticked box below is minutes, not hours.
 
 ## NEXT ACTION
 
-Two independent things — one yours, one Claude's. Neither blocks the other.
+Next up is yours in the Supabase dashboard.
 
 **Yours.** Run this in the **Supabase SQL editor** (DDL needs the SQL editor — the publishable key
 cannot `ALTER`):
@@ -37,9 +34,6 @@ select data_type from information_schema.columns
 ```
 
 Then tick the first two boxes under **Phase 2** below and re-test a sync push.
-
-**Claude's.** Finish the two-commit split under *Save the work in git* below — the migration is still
-uncommitted.
 
 ---
 
@@ -101,19 +95,19 @@ places to remove (all small and contiguous):
 | `lib/providers/workout_session_provider.dart` | the `sync_service.dart` import + 3 `scheduleSync()` calls |
 | `pubspec.yaml` | the `supabase_flutter` line (keep `uuid` — that's Phase 0) |
 
-- [ ] **[claude]** **Commit 1 — Phase 0.** Stage `lib/models/`, `lib/repositories/`,
+- [x] **[claude]** **Commit 1 — Phase 0.** Stage `lib/models/`, `lib/repositories/`,
       `lib/providers/`, `lib/services/hive_service.dart`, `lib/services/backup_service.dart`, the
       four screens (`home`, `edit_plan`, `history`, `workout`), `pubspec.yaml`, `pubspec.lock`, and
       `online-support-plan/`. **Guard:** `git diff --cached -- lib pubspec.yaml` must not contain
       `SyncService`, `scheduleSync`, `Supabase`, or `supabase_flutter`. Message:
       `feat(phase-0): stable ids + sync metadata, id-based CRUD, fix append/wrong-record bugs`
-- [ ] **[claude]** **Commit 2 — Phases 1–5.** Restore the four removals, then commit them with
+- [x] **[claude]** **Commit 2 — Phases 1–5.** Restore the four removals, then commit them with
       `lib/services/supabase_service.dart`, `lib/auth/`, `lib/screens/login_screen.dart`,
       `lib/services/sync_service.dart`, `lib/services/adopt_local_data.dart`, `lib/main.dart`,
       `lib/screens/settings_screen.dart`, `web/index.html`, `web/manifest.json`, `.gitignore`, and
       the generated plugin registrants. Message:
       `feat(phases-1-5): supabase auth, LWW cloud sync, data adoption, web config`
-- [ ] **[claude]** `flutter analyze` after the restore — back to 0 errors / 18 pre-existing warnings
+- [x] **[claude]** `flutter analyze` after the restore — back to 0 errors / 18 pre-existing warnings
 - [ ] Don't push. `.claude/launch.json` and `.claude/settings.local.json` stay gitignored.
 
 **A ready-to-run script already exists:** `.dart_tool/opengym-split.sh`. It does both commits, strips
@@ -236,3 +230,6 @@ A phase is not the unit of work — a checkbox is. Stopping after one tick is a 
   repo `.gitignore`. The two-commit split was prepared but **not** completed — `git` became
   unavailable partway through (sandbox classifier down); the working tree was restored to its
   verified state and nothing was committed.
+- **2026-08-22** — Completed the planned two-commit split: Phase 0 in `e1dda55`, Phases 1–5 in
+  `cbe08cc`. Re-ran `flutter analyze`: 0 errors, 18 pre-existing warnings/infos. Remaining work is
+  the Supabase `plan_color` bigint ALTER, runtime sync checks, and hosting.
