@@ -34,6 +34,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};
   final ScrollController _weekNavScrollController = ScrollController();
+  final ScrollController _planNavScrollController = ScrollController();
+
+  /// Anchors the active plan's tab so [Scrollable.ensureVisible] can centre it
+  /// without guessing a width — plan names vary, unlike the week chips.
+  final GlobalKey _activePlanTabKey = GlobalKey();
 
   @override
   void initState() {
@@ -41,13 +46,21 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     _loadWeeks();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToSelectedWeek();
+      _scrollToActivePlan();
     });
   }
 
   @override
   void dispose() {
     _weekNavScrollController.dispose();
+    _planNavScrollController.dispose();
     super.dispose();
+  }
+
+  void _scrollToActivePlan() {
+    final context = _activePlanTabKey.currentContext;
+    if (context == null) return;
+    Scrollable.ensureVisible(context, alignment: 0.5, duration: Duration.zero);
   }
 
   void _scrollToSelectedWeek() {
@@ -506,11 +519,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final session = _getOrCreateSession();
     final settings = context.watch<SettingsProvider>();
     final accent = settings.accentColor;
-    final error = errorColor(context);
     final surface = surfaceColor(context);
-    final border = borderColor(context);
-    final textPrimary = textPrimaryColor(context);
-    final textSecondary = textSecondaryColor(context);
 
     final planProvider = context.watch<WorkoutPlanProvider>();
     final plans = planProvider.plans;
@@ -649,6 +658,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
   }
 
+  /// The plan switcher under the app bar.
+  ///
+  /// Every tab used to carry a 2px bottom border, which made the "active"
+  /// indicator indistinguishable from a baseline rule that stopped mid-screen,
+  /// and the selected tab was a solid slab in the *global* accent while the
+  /// title directly above it was drawn in the plan's own colour. Now the bar
+  /// owns one continuous hairline, and the only mark is a 2px underline in the
+  /// active plan's colour, sized to its label.
   PreferredSizeWidget? _buildPlanTabBar(
     Color accent,
     List<WorkoutPlan> plans,
@@ -658,56 +675,119 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       return null;
     }
 
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(40),
-      child: Container(
-        height: 40,
-        color: surfaceColor(context),
-        child: ListView.builder(
-          physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics()),
-          scrollDirection: Axis.horizontal,
-          itemCount: plans.length,
-          itemBuilder: (context, index) {
-            final plan = plans[index];
-            final isSelected =
-                plan.id == activePlan.id || index == widget.planIndex;
-            return InkWell(
-              onTap: () {
-                Navigator.pushReplacement(
-                  context,
-                  FadePageRoute(
-                    page: WorkoutScreen(
-                      plan: plan,
-                      planIndex: index,
+    const double barHeight = 44;
+    final textSecondary = textSecondaryColor(context);
+
+    Widget strip = ListView.builder(
+      controller: _planNavScrollController,
+      physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics()),
+      scrollDirection: Axis.horizontal,
+      itemCount: plans.length,
+      itemBuilder: (context, index) {
+        final plan = plans[index];
+        final isSelected =
+            plan.id == activePlan.id || index == widget.planIndex;
+        // Each tab resolves its own colour, so a red plan no longer gets a
+        // purple tab while its title above is red.
+        final planColor =
+            plan.planColor != null ? Color(plan.planColor!) : accent;
+
+        return InkWell(
+          key: isSelected ? _activePlanTabKey : null,
+          onTap: isSelected
+              ? null
+              : () {
+                  Navigator.pushReplacement(
+                    context,
+                    FadePageRoute(
+                      page: WorkoutScreen(plan: plan, planIndex: index),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: Center(
+              // The underline borders the label, not the full-height cell, so
+              // it spans exactly the text without any intrinsic-width work.
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.only(bottom: 6),
                 decoration: BoxDecoration(
-                  color: isSelected ? accent : Colors.transparent,
                   border: Border(
                     bottom: BorderSide(
-                      color: isSelected ? accent : borderColor(context),
+                      color: isSelected ? planColor : Colors.transparent,
                       width: 2,
                     ),
                   ),
                 ),
-                child: Text(
-                  plan.name.toUpperCase(),
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 11,
-                    color:
-                        isSelected ? Colors.black : textPrimaryColor(context),
-                  ),
+                child: Row(
+                  children: [
+                    // The index is the swipe order between plans, and it
+                    // echoes the [01] on the home cards.
+                    Text(
+                      (index + 1).toString().padLeft(2, '0'),
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 9,
+                        letterSpacing: 0.08,
+                        color: textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 160),
+                      child: Text(
+                        plan.name.toUpperCase(),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 11,
+                          letterSpacing: 0.04,
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.normal,
+                          color: isSelected ? planColor : textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            );
-          },
+            ),
+          ),
+        );
+      },
+    );
+
+    // Fade the ends so an off-screen plan is visible as more-to-scroll rather
+    // than a label sliced off at the edge. Only worth it once it can overflow.
+    if (plans.length > 2) {
+      strip = ShaderMask(
+        shaderCallback: (bounds) => const LinearGradient(
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
+          colors: [
+            Colors.transparent,
+            Colors.black,
+            Colors.black,
+            Colors.transparent,
+          ],
+          stops: [0.0, 0.06, 0.94, 1.0],
+        ).createShader(bounds),
+        blendMode: BlendMode.dstIn,
+        child: strip,
+      );
+    }
+
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(barHeight),
+      child: Container(
+        height: barHeight,
+        decoration: BoxDecoration(
+          color: surfaceColor(context),
+          // A single-edge border is a rule, not a box: one unbroken hairline
+          // across the full width, and it stays square.
+          border: Border(bottom: BorderSide(color: borderColor(context))),
         ),
+        child: strip,
       ),
     );
   }
