@@ -30,7 +30,7 @@
 
 <br>
 
-> **OpenGym** is an offline-first workout tracker built with Flutter. Log sets, reps, and weights through a terminal-inspired interface. Track personal records, view progress over time, and manage training plans locally without internet.
+> **OpenGym** is an offline-first workout tracker built with Flutter. Log sets, reps, and weights through a terminal-inspired interface. Track personal records, view progress over time, and manage training plans on your device, with cloud sync across devices when you sign in.
 
 ---
 
@@ -41,9 +41,9 @@
 - **65+ Pre-built Exercises** : Across 6 muscle categories (Chest, Back, Shoulders, Arms, Legs, Core) + custom exercise entry
 - **Set Logging** : Track weight (kg/lbs), reps, RPE (1-10), and notes per set
 - **Week-Based Periodization** : Organize sessions by week with auto-copy from previous week
-- **Auto-Save** : Never lose progress; saves automatically on navigation
-- **PR Detection** : Flags new personal records automatically when you hit new weights
-- **Progression Suggestions** : Smart double-progression logic recommends next weight/reps
+- **Auto-Save** : Workouts save on every screen change
+- **PR Detection** : Flags new personal records when you log a heavier weight
+- **Progression Suggestions** : Double-progression logic recommends the next weight/reps
 - **Auto-Fill** : Pre-fills weights from your last session for faster logging
 
 ### Statistics & History
@@ -56,11 +56,16 @@
 - **Dark / Light / System Theme** : Automatic or manual theming
 - **12 Accent Colors** : Electric Blue, Warm Amber, Deep Orange, Hot Pink, Cyan, Purple, Steel Gray, and more
 - **Weight Units** : Switch between kg and lbs on the fly
-- **High Refresh Rate** : 90/120Hz display support for buttery smooth scrolling
+- **High Refresh Rate** : 90/120Hz display support
 - **JetBrains Mono** : Terminal-inspired monospace typography throughout
 
+### Sync
+- **Supabase Backend** : Email auth, Postgres tables, and row-level security scoped to your account
+- **Automatic Push/Pull** : Changes sync on save and when the app returns to the foreground; edits made offline drain on reconnect
+- **Last-Write-Wins** : Edits from two devices resolve to the later timestamp
+
 ### Data
-- **100% Offline** : All data stored locally with Hive; no account, no cloud, no tracking
+- **On-Device First** : All records live in local Hive storage, so the app keeps working without a connection
 - **Sample Data** : Load 5 sample plans with 15 sessions across 5 weeks to explore the app
 - **Export / Clear** : Full control over your data
 
@@ -93,6 +98,7 @@
 | [fl_chart](https://pub.dev/packages/fl_chart) | Interactive charts |
 | [Google Fonts](https://pub.dev/packages/google_fonts) | JetBrains Mono typeface |
 | [SharedPreferences](https://pub.dev/packages/shared_preferences) | Settings persistence |
+| [Supabase](https://supabase.com) | Auth, Postgres, and RLS for cloud sync |
 
 ### Architecture
 
@@ -101,7 +107,7 @@ lib/
 ├── models/        → Hive data models (Set, Exercise, Plan, Session)
 ├── providers/     → ChangeNotifier state management
 ├── repositories/  → Clean architecture data layer
-├── services/      → Business logic (HiveService, PR Tracking)
+├── services/      → Business logic (HiveService, SyncService, PR Tracking)
 ├── screens/       → 7 UI screens (Home, Workout, Stats, etc.)
 ├── widgets/       → Reusable components (SetRow, ExerciseCard, Dialogs)
 ├── theme/         → Terminal-style theme with 12 accent colors
