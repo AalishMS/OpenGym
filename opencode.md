@@ -119,6 +119,10 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Fixed online sync startup race:
+  - Concurrent `SyncService.syncNow()` calls now share the active sync future instead of returning early
+  - Post-login adoption waits for in-flight pull data before providers reload
+  - Verified local web push, pull, offline drain, RLS, LWW, tombstone, and no duplicate session row checks against Supabase
 - Updated workout screen exercise interactions:
   - Tapping an exercise name now opens the rename dialog.
   - Long-press drag remains reserved for exercise reordering.

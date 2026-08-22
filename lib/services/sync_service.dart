@@ -18,7 +18,7 @@ class SyncService {
   static const _plansCursorKey = 'plans_last_pulled';
   static const _sessionsCursorKey = 'sessions_last_pulled';
 
-  bool _syncing = false;
+  Future<void>? _activeSync;
   Timer? _debounce;
 
   SupabaseClient get _db => SupabaseService.client;
@@ -35,11 +35,19 @@ class SyncService {
     });
   }
 
-  /// Full cycle: push local changes, then pull remote changes. Safe to call
-  /// concurrently — re-entrancy is guarded. Never throws to the caller.
+  /// Full cycle: push local changes, then pull remote changes. Concurrent
+  /// callers wait for the in-flight cycle so post-login reloads see pulled data.
+  /// Never throws to the caller.
   Future<void> syncNow() async {
-    if (!_canSync || _syncing) return;
-    _syncing = true;
+    if (!_canSync) return;
+    final active = _activeSync;
+    if (active != null) return active;
+    final sync = _runSyncCycle();
+    _activeSync = sync;
+    return sync;
+  }
+
+  Future<void> _runSyncCycle() async {
     try {
       await _pushPlans();
       await _pushSessions();
@@ -50,7 +58,7 @@ class SyncService {
       // ignore: avoid_print
       print('sync cycle error (will retry): $e');
     } finally {
-      _syncing = false;
+      _activeSync = null;
     }
   }
 
