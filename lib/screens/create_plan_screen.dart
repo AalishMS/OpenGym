@@ -104,7 +104,6 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                       height: 3,
                       decoration: BoxDecoration(
                         color: borderColor(context),
-                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                   ),

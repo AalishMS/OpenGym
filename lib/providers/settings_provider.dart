@@ -73,7 +73,9 @@ class SettingsProvider with ChangeNotifier {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
 
-    final themeIndex = prefs.getInt(_themeKey) ?? 1;
+    // Dark-first: default to ThemeMode.dark (index 2) when unset, matching the
+    // field initializer and the terminal aesthetic. ThemeMode = {system, light, dark}.
+    final themeIndex = prefs.getInt(_themeKey) ?? 2;
     _themeMode = ThemeMode.values[themeIndex];
 
     final accentColorIndex = prefs.getInt(_accentColorKey) ?? 0;

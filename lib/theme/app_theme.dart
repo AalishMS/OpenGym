@@ -8,6 +8,7 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
   final Color textPrimary;
   final Color textSecondary;
   final Color error;
+  final Color success;
   final Color accent;
   final Color accentMuted;
 
@@ -18,6 +19,7 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
     required this.textPrimary,
     required this.textSecondary,
     required this.error,
+    required this.success,
     required this.accent,
     required this.accentMuted,
   });
@@ -30,6 +32,7 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
     Color? textPrimary,
     Color? textSecondary,
     Color? error,
+    Color? success,
     Color? accent,
     Color? accentMuted,
   }) {
@@ -40,6 +43,7 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
       textPrimary: textPrimary ?? this.textPrimary,
       textSecondary: textSecondary ?? this.textSecondary,
       error: error ?? this.error,
+      success: success ?? this.success,
       accent: accent ?? this.accent,
       accentMuted: accentMuted ?? this.accentMuted,
     );
@@ -56,40 +60,13 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
       textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
       textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
       error: Color.lerp(error, other.error, t)!,
+      success: Color.lerp(success, other.success, t)!,
       accent: Color.lerp(accent, other.accent, t)!,
       accentMuted: Color.lerp(accentMuted, other.accentMuted, t)!,
     );
   }
 
-  static const dark = AppColorScheme(
-    background: Color(0xFF0F0F0F),
-    surface: Color(0xFF1A1A1A),
-    border: Color(0xFF2A2A2A),
-    textPrimary: Color(0xFFF0F0F0),
-    textSecondary: Color(0xFF888888),
-    error: Color(0xFFFF4444),
-    accent: Color(0xFF00A8FF),
-    accentMuted: Color(0x3300A8FF),
-  );
-
-  static const light = AppColorScheme(
-    background: Color(0xFFF5F5F0),
-    surface: Color(0xFFECECEC),
-    border: Color(0xFFD0D0D0),
-    textPrimary: Color(0xFF111111),
-    textSecondary: Color(0xFF666666),
-    error: Color(0xFFCC3333),
-    accent: Color(0xFF0077CC),
-    accentMuted: Color(0x260077CC),
-  );
 }
-
-const Color terminalBackground = Color(0xFF0F0F0F);
-const Color terminalSurface = Color(0xFF1A1A1A);
-const Color terminalBorder = Color(0xFF2A2A2A);
-const Color terminalTextPrimary = Color(0xFFF0F0F0);
-const Color terminalTextSecondary = Color(0xFF888888);
-const Color terminalError = Color(0xFFFF4444);
 
 Color backgroundColor(BuildContext context) {
   return Theme.of(context).extension<AppColorScheme>()?.background ??
@@ -121,6 +98,19 @@ Color errorColor(BuildContext context) {
       const Color(0xFFFF4444);
 }
 
+Color successColor(BuildContext context) {
+  return Theme.of(context).extension<AppColorScheme>()?.success ??
+      const Color(0xFF4CAF50);
+}
+
+/// The active accent for the current theme. Prefer this over reading
+/// `SettingsProvider.accentColor` directly in widgets — it already reflects
+/// the resolved light/dark brightness through [Theme].
+Color accentColor(BuildContext context) {
+  return Theme.of(context).extension<AppColorScheme>()?.accent ??
+      Theme.of(context).colorScheme.primary;
+}
+
 ThemeData buildTheme(Color accent, Brightness brightness) {
   final isDark = brightness == Brightness.dark;
   final isLightAccent = accent.computeLuminance() > 0.5;
@@ -134,6 +124,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
   final textSecondary =
       isDark ? const Color(0xFF888888) : const Color(0xFF666666);
   final error = isDark ? const Color(0xFFFF4444) : const Color(0xFFCC3333);
+  final success = isDark ? const Color(0xFF4CAF50) : const Color(0xFF2E7D32);
 
   return ThemeData(
     useMaterial3: true,
@@ -158,6 +149,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
         textPrimary: textPrimary,
         textSecondary: textSecondary,
         error: error,
+        success: success,
         accent: accent,
         accentMuted: accent.withAlpha(isDark ? 51 : 38),
       ),
