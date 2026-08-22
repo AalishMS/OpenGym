@@ -21,13 +21,19 @@ class WorkoutSessionAdapter extends TypeAdapter<WorkoutSession> {
       planName: fields[1] as String,
       exercises: (fields[2] as List).cast<Exercise>(),
       weekNumber: fields[3] as int,
+      id: fields[4] as String?,
+      userId: fields[5] as String?,
+      planId: fields[6] as String?,
+      updatedAt: fields[7] as DateTime?,
+      deletedAt: fields[8] as DateTime?,
+      dirty: fields[9] as bool?,
     );
   }
 
   @override
   void write(BinaryWriter writer, WorkoutSession obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.date)
       ..writeByte(1)
@@ -35,7 +41,19 @@ class WorkoutSessionAdapter extends TypeAdapter<WorkoutSession> {
       ..writeByte(2)
       ..write(obj.exercises)
       ..writeByte(3)
-      ..write(obj.weekNumber);
+      ..write(obj.weekNumber)
+      ..writeByte(4)
+      ..write(obj.id)
+      ..writeByte(5)
+      ..write(obj.userId)
+      ..writeByte(6)
+      ..write(obj.planId)
+      ..writeByte(7)
+      ..write(obj.updatedAt)
+      ..writeByte(8)
+      ..write(obj.deletedAt)
+      ..writeByte(9)
+      ..write(obj.dirty);
   }
 
   @override

@@ -116,18 +116,21 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   Future<void> _autoSave() async {
-    final session = _getOrCreateSession();
+    var session = _getOrCreateSession();
     final hasSets = session.exercises.any((e) => e.sets.isNotEmpty);
 
     if (hasSets) {
       final prs = PRTrackingService.checkForNewPRs(session.exercises);
 
-      context.read<WorkoutSessionProvider>().startWorkout(
-            session.planName,
-            session.exercises,
-            weekNumber: _currentWeek,
-          );
-      await context.read<WorkoutSessionProvider>().saveWorkout();
+      // Stamp identity so repeated autosaves upsert ONE row per (plan, week).
+      // upsertSession assigns a UUID on first save and reuses it thereafter.
+      session = session.copyWith(
+        planId: widget.plan.id,
+        planName: widget.plan.name,
+        weekNumber: _currentWeek,
+      );
+      _weekSessions[_currentWeek] = session; // keep the id-stamped instance
+      await context.read<WorkoutSessionProvider>().upsertSession(session);
 
       if (prs.isNotEmpty && mounted) {
         _showPRDialog(prs);
@@ -509,7 +512,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final planProvider = context.watch<WorkoutPlanProvider>();
     final plans = planProvider.plans;
     final activePlan = plans.firstWhere(
-      (plan) => plan.key == widget.plan.key,
+      (plan) => plan.id == widget.plan.id,
       orElse: () {
         if (widget.planIndex >= 0 && widget.planIndex < plans.length) {
           return plans[widget.planIndex];
@@ -654,7 +657,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           itemBuilder: (context, index) {
             final plan = plans[index];
             final isSelected =
-                plan.key == activePlan.key || index == widget.planIndex;
+                plan.id == activePlan.id || index == widget.planIndex;
             return InkWell(
               onTap: () {
                 Navigator.pushReplacement(

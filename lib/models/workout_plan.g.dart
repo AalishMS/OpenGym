@@ -20,19 +20,34 @@ class WorkoutPlanAdapter extends TypeAdapter<WorkoutPlan> {
       name: fields[0] as String,
       exercises: (fields[1] as List).cast<ExerciseTemplate>(),
       planColor: fields[2] as int?,
+      id: fields[4] as String?,
+      userId: fields[5] as String?,
+      updatedAt: fields[6] as DateTime?,
+      deletedAt: fields[7] as DateTime?,
+      dirty: fields[8] as bool?,
     );
   }
 
   @override
   void write(BinaryWriter writer, WorkoutPlan obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
       ..write(obj.exercises)
       ..writeByte(2)
-      ..write(obj.planColor);
+      ..write(obj.planColor)
+      ..writeByte(4)
+      ..write(obj.id)
+      ..writeByte(5)
+      ..write(obj.userId)
+      ..writeByte(6)
+      ..write(obj.updatedAt)
+      ..writeByte(7)
+      ..write(obj.deletedAt)
+      ..writeByte(8)
+      ..write(obj.dirty);
   }
 
   @override

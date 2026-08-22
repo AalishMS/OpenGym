@@ -2,19 +2,13 @@ import '../models/workout_plan.dart';
 import '../services/hive_service.dart';
 
 class WorkoutPlanRepository {
-  List<WorkoutPlan> getPlans() {
-    return HiveService.getPlans();
-  }
+  List<WorkoutPlan> getPlans() => HiveService.getPlans();
 
-  Future<void> addPlan(WorkoutPlan plan) async {
-    await HiveService.addPlan(plan);
-  }
+  WorkoutPlan? getPlanById(String id) => HiveService.getPlanById(id);
 
-  Future<void> updatePlan(int index, WorkoutPlan plan) async {
-    await HiveService.updatePlan(index, plan);
-  }
+  Future<void> addPlan(WorkoutPlan plan) => HiveService.addPlan(plan);
 
-  Future<void> deletePlan(int index) async {
-    await HiveService.deletePlan(index);
-  }
+  Future<void> upsertPlan(WorkoutPlan plan) => HiveService.upsertPlan(plan);
+
+  Future<void> softDeletePlan(String id) => HiveService.softDeletePlan(id);
 }

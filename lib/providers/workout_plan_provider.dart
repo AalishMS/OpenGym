@@ -22,13 +22,13 @@ class WorkoutPlanProvider with ChangeNotifier {
     loadPlans();
   }
 
-  Future<void> updatePlan(int index, WorkoutPlan plan) async {
-    await _repository.updatePlan(index, plan);
+  Future<void> updatePlan(WorkoutPlan plan) async {
+    await _repository.upsertPlan(plan);
     loadPlans();
   }
 
-  Future<void> deletePlan(int index) async {
-    await _repository.deletePlan(index);
+  Future<void> deletePlan(String id) async {
+    await _repository.softDeletePlan(id);
     loadPlans();
   }
 }
