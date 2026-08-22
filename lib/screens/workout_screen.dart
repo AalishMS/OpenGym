@@ -14,6 +14,7 @@ import '../services/hive_service.dart';
 import '../services/pr_tracking_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
+import '../theme/spacing.dart';
 import '../utils/fade_page_route.dart';
 import '../widgets/workout/exercise_card.dart';
 import '../widgets/workout/workout_dialogs.dart';
@@ -562,73 +563,81 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 physics: const BouncingScrollPhysics(
                     parent: AlwaysScrollableScrollPhysics()),
                 slivers: [
-                  SliverReorderableList(
-                    itemCount: session.exercises.length + 1,
-                    onReorder: _reorderExercises,
-                    proxyDecorator: (child, index, animation) {
-                      return Material(
-                        color: surfaceColor(context),
-                        borderRadius: AppRadius.card,
-                        child: child,
-                      );
-                    },
-                    itemBuilder: (context, index) {
-                      if (index == session.exercises.length) {
-                        return ReorderableDelayedDragStartListener(
-                          key: const ValueKey('add_exercise_button'),
-                          index: index,
-                          child: InkWell(
-                            onTap: _addEmptyExercise,
-                            borderRadius: AppRadius.button,
-                            child: Container(
-                              margin: const EdgeInsets.all(8),
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: accent, width: 1),
-                                borderRadius: AppRadius.button,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '[ + ADD EXERCISE ]',
-                                  style:
-                                      GoogleFonts.jetBrainsMono(color: accent),
+                  // State the gutter once, on the sliver, rather than as a
+                  // margin per item: the rounded cards need clearance from the
+                  // screen edges or their corners read as a clipping bug, and
+                  // the + ADD EXERCISE tile inherits the same inset for free.
+                  SliverPadding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    sliver: SliverReorderableList(
+                      itemCount: session.exercises.length + 1,
+                      onReorder: _reorderExercises,
+                      proxyDecorator: (child, index, animation) {
+                        return Material(
+                          color: surfaceColor(context),
+                          borderRadius: AppRadius.card,
+                          child: child,
+                        );
+                      },
+                      itemBuilder: (context, index) {
+                        if (index == session.exercises.length) {
+                          return ReorderableDelayedDragStartListener(
+                            key: const ValueKey('add_exercise_button'),
+                            index: index,
+                            child: InkWell(
+                              onTap: _addEmptyExercise,
+                              borderRadius: AppRadius.button,
+                              child: Container(
+                                padding: const EdgeInsets.all(AppSpacing.lg),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: accent, width: 1),
+                                  borderRadius: AppRadius.button,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '[ + ADD EXERCISE ]',
+                                    style: GoogleFonts.jetBrainsMono(
+                                        color: accent),
+                                  ),
                                 ),
                               ),
                             ),
+                          );
+                        }
+
+                        final exercise = session.exercises[index];
+
+                        return ReorderableDelayedDragStartListener(
+                          key: ValueKey(index),
+                          index: index,
+                          child: Container(
+                            margin:
+                                const EdgeInsets.only(bottom: AppSpacing.sm),
+                            decoration: BoxDecoration(
+                              color: surfaceColor(context),
+                              border: Border.all(
+                                  color: borderColor(context), width: 1),
+                              borderRadius: AppRadius.card,
+                            ),
+                            child: ExerciseCard(
+                              exercise: exercise,
+                              exerciseIndex: index,
+                              accent: accent,
+                              onIncrementReps: _incrementReps,
+                              onDecrementReps: _decrementReps,
+                              onIncrementWeight: _incrementWeight,
+                              onDecrementWeight: _decrementWeight,
+                              onAddSet: (i) => _addSet(i),
+                              onEditSet: (i, setIndex) =>
+                                  _editSet(i, setIndex),
+                              onAddNote: _addExerciseNote,
+                              onRename: _showExerciseRenameDialog,
+                              onDeleteExercise: _deleteExercise,
+                            ),
                           ),
                         );
-                      }
-
-                      final exercise = session.exercises[index];
-
-                      return ReorderableDelayedDragStartListener(
-                        key: ValueKey(index),
-                        index: index,
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: surfaceColor(context),
-                            border: Border.all(
-                                color: borderColor(context), width: 1),
-                            borderRadius: AppRadius.card,
-                          ),
-                          child: ExerciseCard(
-                            exercise: exercise,
-                            exerciseIndex: index,
-                            accent: accent,
-                            onIncrementReps: _incrementReps,
-                            onDecrementReps: _decrementReps,
-                            onIncrementWeight: _incrementWeight,
-                            onDecrementWeight: _decrementWeight,
-                            onAddSet: (i) => _addSet(i),
-                            onEditSet: (i, setIndex) => _editSet(i, setIndex),
-                            onAddNote: _addExerciseNote,
-                            onRename: _showExerciseRenameDialog,
-                            onDeleteExercise: _deleteExercise,
-                          ),
-                        ),
-                      );
-                    },
+                      },
+                    ),
                   ),
                 ],
               ),
