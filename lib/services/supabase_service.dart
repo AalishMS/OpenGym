@@ -4,14 +4,29 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class SupabaseService {
   SupabaseService._();
 
-  static const String supabaseUrl =
-      String.fromEnvironment('SUPABASE_URL', defaultValue: '');
-  static const String supabaseAnonKey =
-      String.fromEnvironment('SUPABASE_ANON_KEY', defaultValue: '');
+  // Baked-in Supabase config so EVERY build (any IDE, any `flutter run`/`build`,
+  // CI) has online support with no --dart-define flags. A --dart-define or
+  // --dart-define-from-file still OVERRIDES these, e.g. to point a build at a
+  // different Supabase project.
+  //
+  // SUPABASE_ANON_KEY here is a *publishable* key (prefix `sb_publishable_`):
+  // it is meant to ship in client bundles/APKs and is already public in the
+  // hosted web build. RLS is the real security boundary. NEVER put a
+  // service_role / `sb_secret_` key here. This is a deliberate exception to the
+  // "no Supabase literals in the repo" note in online-support-plan/phase-5 —
+  // don't "fix" it back to empty defaults.
+  static const String supabaseUrl = String.fromEnvironment(
+    'SUPABASE_URL',
+    defaultValue: 'https://uhvemfdgxlhpalmkulnv.supabase.co',
+  );
+  static const String supabaseAnonKey = String.fromEnvironment(
+    'SUPABASE_ANON_KEY',
+    defaultValue: 'sb_publishable_E31uJl-4yfbbAxihs_71KQ_GaKMlVEt',
+  );
 
-  /// True when compile-time config was provided. When false, the app still runs
-  /// fully offline (auth screens should surface a clear "not configured" state
-  /// rather than crash).
+  /// Whether Supabase config is present. With the baked-in defaults above this
+  /// is normally always true; it becomes false only if a build passes an empty
+  /// override, in which case the app runs fully offline.
   static bool get isConfigured =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
 
