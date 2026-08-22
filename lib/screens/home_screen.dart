@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
@@ -304,7 +305,7 @@ class HomeScreen extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add, size: 12, color: textSecondary),
+            Icon(LucideIcons.plus, size: 12, color: textSecondary),
             const SizedBox(width: 8),
             Text(
               '[+ NEW PLAN]',
@@ -490,7 +491,7 @@ class HomeScreen extends StatelessWidget {
                               borderRadius: AppRadius.badge,
                             ),
                             child: isSelected
-                                ? Icon(Icons.check, size: 18,
+                                ? Icon(LucideIcons.check, size: 18,
                                     color: color.computeLuminance() > 0.5
                                         ? Colors.black
                                         : Colors.white)

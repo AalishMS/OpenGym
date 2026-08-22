@@ -4,6 +4,7 @@
 // (adding reps/weight to ExerciseTemplate or a new SetTemplate model) — out of scope.
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/settings_provider.dart';
@@ -125,7 +126,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                         ),
                         InkWell(
                           onTap: () => Navigator.pop(ctx),
-                          child: Icon(Icons.close, size: 16, color: textSecondaryColor(context)),
+                          child: Icon(LucideIcons.x, size: 16, color: textSecondaryColor(context)),
                         ),
                       ],
                     ),
@@ -247,7 +248,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                   ),
                                 ),
                                 if (isJust)
-                                  Icon(Icons.check, size: 12, color: accent),
+                                  Icon(LucideIcons.check, size: 12, color: accent),
                               ],
                             ),
                           ),
@@ -468,7 +469,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
         children: [
           InkWell(
             onTap: () => Navigator.pop(context),
-            child: Icon(Icons.chevron_left, color: accent),
+            child: Icon(LucideIcons.chevronLeft, color: accent),
           ),
           const SizedBox(width: 8),
           Text(
@@ -573,7 +574,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                   borderRadius: AppRadius.badge,
                 ),
                 child: isSelected
-                    ? Icon(Icons.check, size: 16,
+                    ? Icon(LucideIcons.check, size: 16,
                         color: color.computeLuminance() > 0.5
                             ? Colors.black
                             : Colors.white)
@@ -641,7 +642,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                 index: exerciseIndex,
                 child: Padding(
                   padding: const EdgeInsets.all(4),
-                  child: Icon(Icons.drag_handle, size: 16, color: textSecondaryColor(context)),
+                  child: Icon(LucideIcons.gripHorizontal, size: 16, color: textSecondaryColor(context)),
                 ),
               ),
               const SizedBox(width: 4),
@@ -688,14 +689,14 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                           onTap: () => setState(() => _exercises.removeAt(exerciseIndex)),
                           child: Padding(
                             padding: const EdgeInsets.all(4),
-                            child: Icon(Icons.delete_outline, size: 14, color: textSecondaryColor(context)),
+                            child: Icon(LucideIcons.trash2, size: 14, color: textSecondaryColor(context)),
                           ),
                         ),
                         const SizedBox(width: 4),
                         Icon(
                           (_expandedExercises[exerciseIndex] ?? false)
-                              ? Icons.expand_less
-                              : Icons.expand_more,
+                              ? LucideIcons.chevronUp
+                              : LucideIcons.chevronDown,
                           size: 14,
                           color: textSecondaryColor(context),
                         ),
@@ -776,7 +777,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                         onTap: () => _deleteSet(exerciseIndex, si),
                         child: Padding(
                           padding: const EdgeInsets.all(4),
-                          child: Icon(Icons.close, size: 12, color: textSecondaryColor(context)),
+                          child: Icon(LucideIcons.x, size: 12, color: textSecondaryColor(context)),
                         ),
                       )
                     else
@@ -854,7 +855,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add, size: 12, color: accent),
+            Icon(LucideIcons.plus, size: 12, color: accent),
             const SizedBox(width: 8),
             Text(
               '[+ ADD EXERCISE]',

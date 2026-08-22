@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
@@ -534,7 +535,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         shadowColor: Colors.transparent,
         toolbarHeight: 60,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: accent),
+          icon: Icon(LucideIcons.arrowLeft, color: accent),
           onPressed: () {
             _autoSave();
             Navigator.pop(context);

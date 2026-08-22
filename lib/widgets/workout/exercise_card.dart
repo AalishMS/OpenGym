@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../models/exercise.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
@@ -72,20 +73,26 @@ class ExerciseCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (exercise.note != null)
-                Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: Icon(Icons.note, size: 16, color: accent),
-                ),
+              // One glyph carries the note's state: a filled-in note when the
+              // exercise has one, a pen when it does not. Two icons for one
+              // piece of information crowded a 24px band.
               InkWell(
                 onTap: () => onAddNote(exerciseIndex),
-                child: Icon(Icons.note_add,
-                    size: 20, color: textSecondaryColor(context)),
+                child: Icon(
+                  exercise.note != null
+                      ? LucideIcons.stickyNote
+                      : LucideIcons.notebookPen,
+                  size: 20,
+                  color: exercise.note != null
+                      ? accent
+                      : textSecondaryColor(context),
+                ),
               ),
               const SizedBox(width: 4),
               InkWell(
                 onTap: () => onDeleteExercise(exerciseIndex),
-                child: Icon(Icons.delete_outline, size: 20, color: accent),
+                child: Icon(LucideIcons.trash2,
+                    size: 20, color: textSecondaryColor(context)),
               ),
               const SizedBox(width: 8),
               InkWell(

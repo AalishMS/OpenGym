@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../providers/settings_provider.dart';
@@ -257,7 +258,7 @@ class _SessionCardState extends State<_SessionCard> {
                       ),
                       const SizedBox(width: 8),
                       Icon(
-                        _isExpanded ? Icons.expand_less : Icons.expand_more,
+                        _isExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
                         color: textSecondaryColor(context),
                         size: 20,
                       ),
@@ -446,7 +447,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
               fontSize: 16, fontWeight: FontWeight.bold, color: accent),
         ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: accent),
+          icon: Icon(LucideIcons.arrowLeft, color: accent),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
