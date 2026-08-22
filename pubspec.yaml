@@ -16,6 +16,7 @@ dependencies:
   shared_preferences: ^2.2.2
   fl_chart: ^0.66.0
   google_fonts: ^6.0.0
+  lucide_icons_flutter: ^3.1.17
   file_picker: ^8.1.6
   share_plus: ^10.1.4
   uuid: ^4.3.0
