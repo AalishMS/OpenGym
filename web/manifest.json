@@ -1,11 +1,11 @@
 {
-    "name": "gymapp",
-    "short_name": "gymapp",
+    "name": "OpenGym",
+    "short_name": "OpenGym",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0F0F0F",
+    "theme_color": "#0F0F0F",
+    "description": "Offline-first workout tracker with cloud sync.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

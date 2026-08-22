@@ -151,6 +151,46 @@ class HiveService {
   }
 
   // ---------------------------------------------------------------------------
+  // RAW accessors for the sync engine.
+  // getAll*Raw: include tombstones (deletedAt != null) — sync must push deletes.
+  // put*Raw: write WITHOUT touching dirty/updatedAt — used when applying a
+  //          record pulled from the server (it is already authoritative).
+  // ---------------------------------------------------------------------------
+  static List<WorkoutPlan> getAllPlansRaw() => _plansBox.values.toList();
+
+  static List<WorkoutSession> getAllSessionsRaw() =>
+      _sessionsBox.values.toList();
+
+  static List<WorkoutPlan> getDirtyPlans() =>
+      _plansBox.values.where((p) => p.dirty == true).toList();
+
+  static List<WorkoutSession> getDirtySessions() =>
+      _sessionsBox.values.where((s) => s.dirty == true).toList();
+
+  static Future<void> putPlanRaw(WorkoutPlan plan) async {
+    await _plansBox.put(plan.id, plan);
+  }
+
+  static Future<void> putSessionRaw(WorkoutSession session) async {
+    await _sessionsBox.put(session.id, session);
+  }
+
+  /// Clear the dirty flag after a successful push, without bumping updatedAt.
+  static Future<void> clearPlanDirty(String id) async {
+    final p = _plansBox.get(id);
+    if (p == null) return;
+    p.dirty = false;
+    await _plansBox.put(id, p);
+  }
+
+  static Future<void> clearSessionDirty(String id) async {
+    final s = _sessionsBox.get(id);
+    if (s == null) return;
+    s.dirty = false;
+    await _sessionsBox.put(id, s);
+  }
+
+  // ---------------------------------------------------------------------------
   // Analytics / name-based helpers — UNCHANGED logic (all read via getSessions
   // which now filters tombstones). Signatures preserved.
   // ---------------------------------------------------------------------------

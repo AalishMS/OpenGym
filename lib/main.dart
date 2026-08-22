@@ -6,7 +6,9 @@ import 'providers/workout_session_provider.dart';
 import 'providers/progression_provider.dart';
 import 'providers/settings_provider.dart';
 import 'services/hive_service.dart';
-import 'app_shell.dart';
+import 'services/supabase_service.dart';
+import 'services/sync_service.dart';
+import 'auth/auth_gate.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -14,6 +16,7 @@ void main() async {
 
   try {
     await HiveService.init();
+    await SupabaseService.init();
   } catch (e) {
     debugPrint('Hive init error: $e');
   }
@@ -28,7 +31,7 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   bool _initialized = false;
   late WorkoutPlanProvider _workoutPlanProvider;
   late WorkoutSessionProvider _workoutSessionProvider;
@@ -38,7 +41,22 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initialize();
+    SyncService.instance.syncNow(); // initial cycle if already logged in
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      SyncService.instance.syncNow();
+    }
   }
 
   Future<void> _initialize() async {
@@ -109,7 +127,7 @@ class _MyAppState extends State<MyApp> {
             theme: buildTheme(accentLight, Brightness.light),
             darkTheme: buildTheme(accentDark, Brightness.dark),
             themeMode: settings.themeMode,
-            home: const AppShell(),
+            home: const AuthGate(),
           );
         },
       ),

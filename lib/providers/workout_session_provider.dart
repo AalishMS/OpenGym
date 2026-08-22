@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/workout_session.dart';
 import '../repositories/workout_session_repository.dart';
+import '../services/sync_service.dart';
 
 class WorkoutSessionProvider with ChangeNotifier {
   final WorkoutSessionRepository _repository = WorkoutSessionRepository();
@@ -32,17 +33,20 @@ class WorkoutSessionProvider with ChangeNotifier {
   Future<void> upsertSession(WorkoutSession session) async {
     await _repository.upsertSession(session);
     loadSessions();
+    SyncService.instance.scheduleSync();
   }
 
   /// Kept for API symmetry with the History edit screen.
   Future<void> updateSession(WorkoutSession session) async {
     await _repository.upsertSession(session);
     loadSessions();
+    SyncService.instance.scheduleSync();
   }
 
   Future<void> deleteSession(String id) async {
     await _repository.softDeleteSession(id);
     loadSessions();
+    SyncService.instance.scheduleSync();
   }
 
   List<int> getWeeksForPlan(String planName) =>
