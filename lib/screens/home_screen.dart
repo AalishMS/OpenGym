@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/workout_plan_provider.dart';
+import '../providers/workout_session_provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/workout_plan.dart';
 import '../models/exercise_template.dart';
 import '../data/plan_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/spacing.dart';
+import '../utils/format.dart';
+import '../utils/plan_stats.dart';
 import 'create_plan_screen.dart';
 import 'edit_plan_screen.dart';
 import 'workout_screen.dart';
@@ -125,22 +129,35 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildPlanSection(
       BuildContext context, WorkoutPlanProvider provider, Color accent) {
+    // Roll up each plan's training history once, keyed by its index in
+    // `provider.plans`, so the card footers don't each hit the repository.
+    final sessions = context.watch<WorkoutSessionProvider>().sessions;
+    final statsByIndex = {
+      for (final stat in PlanStat.compute(provider.plans, sessions))
+        stat.planIndex: stat,
+    };
+
     return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.sm),
+      // Max-extent (not a fixed column count) so columns scale with the window:
+      // 2 on a phone, 6–7 on a desktop. A fixed `mainAxisExtent` replaces
+      // `childAspectRatio` — the old ratio made cards as tall as the column was
+      // wide, which on desktop meant two enormous, mostly-empty boxes.
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 260,
+        mainAxisExtent: 148,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
-        childAspectRatio: 0.85,
       ),
       itemCount: provider.plans.length,
-      itemBuilder: (context, index) =>
-          _buildPlanCard(context, provider.plans[index], index, accent),
+      itemBuilder: (context, index) => _buildPlanCard(
+          context, provider.plans[index], index, accent, statsByIndex[index]),
     );
   }
 
-  Widget _buildPlanCard(
-      BuildContext context, WorkoutPlan plan, int index, Color accent) {
+  Widget _buildPlanCard(BuildContext context, WorkoutPlan plan, int index,
+      Color accent, PlanStat? stat) {
     final surface = surfaceColor(context);
     final border = borderColor(context);
     final textPrimary = textPrimaryColor(context);
@@ -171,33 +188,43 @@ class HomeScreen extends StatelessWidget {
             Container(height: 2, color: planColor),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '[${(index + 1).toString().padLeft(2, '0')}]',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 9,
-                        color: textSecondary,
-                        letterSpacing: 0.08,
-                      ),
+                    // Index and title share a line — on its own row the `[01]`
+                    // cost 20px of height for four characters.
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          '[${(index + 1).toString().padLeft(2, '0')}]',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 9,
+                            color: textSecondary,
+                            letterSpacing: 0.08,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            plan.name.toUpperCase(),
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: textPrimary,
+                              letterSpacing: 0.04,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      plan.name.toUpperCase(),
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: textPrimary,
-                        letterSpacing: 0.04,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: AppSpacing.sm),
                     ...previewLines.map((name) => Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
+                      padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
                       child: Text(
                         '· $name',
                         style: GoogleFonts.jetBrainsMono(
@@ -211,7 +238,7 @@ class HomeScreen extends StatelessWidget {
                     )),
                     if (exerciseNames.length > 3)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
                         child: Text(
                           '+${exerciseNames.length - 3} more',
                           style: GoogleFonts.jetBrainsMono(
@@ -222,12 +249,14 @@ class HomeScreen extends StatelessWidget {
                       ),
                     const Spacer(),
                     Text(
-                      '${plan.exercises.length} EXERCISES',
+                      _planFooter(plan, stat),
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 9,
                         color: planColor,
                         letterSpacing: 0.06,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -237,6 +266,17 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// `2D AGO · 3 SESSIONS · 5 EX`, degrading to just the exercise count for a
+  /// plan that has never been trained.
+  String _planFooter(WorkoutPlan plan, PlanStat? stat) {
+    if (stat == null || stat.sessionCount == 0) {
+      return '${plan.exercises.length} EXERCISES';
+    }
+    return '${formatRelativeDay(stat.lastTrained!)}'
+        '  ·  ${stat.sessionCount} SESSIONS'
+        '  ·  ${plan.exercises.length} EX';
   }
 
   Widget _buildNewPlanButton(BuildContext context, Color accent) {

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/set.dart' as gym;
 import '../../theme/app_theme.dart';
+import '../../theme/semantic_colors.dart';
+import '../../utils/format.dart';
 
 class SetRow extends StatelessWidget {
   final int setIndex;
@@ -61,11 +63,12 @@ class SetRow extends StatelessWidget {
                       color: textPrimaryColor(context),
                     ),
                     children: [
-                      TextSpan(text: '${set.weight}kg x ${set.reps}'),
+                      TextSpan(
+                          text: '${formatWeight(set.weight)}kg x ${set.reps}'),
                       if (set.rpe != null)
                         TextSpan(
                           text: ' @${set.rpe}',
-                          style: TextStyle(color: _rpeColor(set.rpe!)),
+                          style: TextStyle(color: rpeColor(set.rpe!)),
                         ),
                     ],
                   ),
@@ -121,13 +124,43 @@ class SetRow extends StatelessWidget {
   }
 }
 
-Color _rpeColor(int rpe) {
-  if (rpe <= 2) return Colors.grey;
-  if (rpe <= 4) return Colors.lightBlue;
-  if (rpe <= 6) return Colors.green;
-  if (rpe <= 8) return Colors.amber;
-  if (rpe == 9) return Colors.orange;
-  return Colors.red;
+/// Width of one stepper box (two 32px buttons + 1px border each side).
+/// [SetHeaderRow] uses it to line its labels up with the boxes below.
+const double kStepperBoxWidth = 66;
+
+/// `WEIGHT` / `REPS` captions above [SetRow]'s two identical stepper boxes.
+///
+/// Without these the pair of `− +` boxes is ambiguous — one card-level header
+/// disambiguates both columns without repeating on every row.
+class SetHeaderRow extends StatelessWidget {
+  const SetHeaderRow({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = GoogleFonts.jetBrainsMono(
+      fontSize: 8,
+      color: textSecondaryColor(context),
+      letterSpacing: 0.1,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: [
+          const Spacer(),
+          SizedBox(
+            width: kStepperBoxWidth,
+            child: Text('WEIGHT', textAlign: TextAlign.center, style: style),
+          ),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: kStepperBoxWidth,
+            child: Text('REPS', textAlign: TextAlign.center, style: style),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ControlButton extends StatelessWidget {

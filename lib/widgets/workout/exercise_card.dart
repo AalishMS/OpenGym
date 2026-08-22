@@ -63,7 +63,7 @@ class ExerciseCard extends StatelessWidget {
                   onTap: () => onRename(exerciseIndex),
                   child: Text(
                     exercise.name.toUpperCase(),
-                    style: const TextStyle(
+                    style: GoogleFonts.jetBrainsMono(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
@@ -115,6 +115,7 @@ class ExerciseCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  const SetHeaderRow(),
                   ...exercise.sets.asMap().entries.map((entry) {
                     final setIndex = entry.key;
                     final set = entry.value;
