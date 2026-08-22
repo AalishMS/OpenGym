@@ -92,6 +92,21 @@ import '../services/hive_service.dart';
 - Never hardcode colors like `Colors.white` or `Colors.black` for UI
 - Use `accent.withAlpha(value)` for splash/highlight effects
 
+### Corner Radii
+- Use the tokens from `lib/theme/radii.dart`, never a literal `BorderRadius`:
+  - `AppRadius.card` - cards, panels, dialogs, bordered content boxes
+  - `AppRadius.button` / `.field` - buttons, full-width tap targets, inputs
+  - `AppRadius.chip` / `.control` - pills, tabs, steppers, small selectables
+  - `AppRadius.badge` - index pills, swatches, anything under ~24px
+  - `AppRadius.micro` - heatmap cells, drag handles, chart bar caps
+  - `AppRadius.sheet` / `.cardTop` / `.cardBottom` / `.leftCap` / `.rightCap` -
+    partial rounding for sheets, card headers/footers, joined segments
+- Never leave a full-perimeter `BoxDecoration` (one with `Border.all`) unrounded
+- Single-edge `Border(top:/bottom:/left:/right:)` decorations are hairline rules,
+  not boxes - leave them square
+- Any `InkWell` wrapping a rounded box needs the same token on its own
+  `borderRadius:`, or the splash squares off the corner on press
+
 ### Error Handling
 - Use try-catch for async operations
 - Show user-friendly SnackBar messages for errors

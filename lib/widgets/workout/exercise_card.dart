@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/exercise.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/radii.dart';
 import 'set_row.dart';
 
 class ExerciseCard extends StatelessWidget {
@@ -47,6 +48,7 @@ class ExerciseCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
                   border: Border.all(color: accent, width: 1),
+                  borderRadius: AppRadius.badge,
                 ),
                 child: Text(
                   '${exerciseIndex + 1}',
@@ -88,10 +90,12 @@ class ExerciseCard extends StatelessWidget {
               const SizedBox(width: 8),
               InkWell(
                 onTap: () => onAddSet(exerciseIndex),
+                borderRadius: AppRadius.badge,
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     border: Border.all(color: accent, width: 1),
+                    borderRadius: AppRadius.badge,
                   ),
                   child: Text('[+]',
                       style: GoogleFonts.jetBrainsMono(

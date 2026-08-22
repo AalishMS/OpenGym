@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/workout_session.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 
@@ -76,12 +77,16 @@ class BracketButton extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       splashColor: color.withAlpha(40),
+      borderRadius: AppRadius.chip,
       child: Container(
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.sm,
           vertical: AppSpacing.xs,
         ),
-        decoration: BoxDecoration(border: Border.all(color: color)),
+        decoration: BoxDecoration(
+          border: Border.all(color: color),
+          borderRadius: AppRadius.chip,
+        ),
         child: Text(
           '[$label]',
           style: GoogleFonts.jetBrainsMono(

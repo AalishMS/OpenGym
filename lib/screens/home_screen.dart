@@ -8,6 +8,7 @@ import '../models/workout_plan.dart';
 import '../models/exercise_template.dart';
 import '../data/plan_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../utils/plan_stats.dart';
@@ -177,10 +178,14 @@ class HomeScreen extends StatelessWidget {
         );
       },
       onLongPress: () => _showPlanOptions(context, plan, index, accent),
+      borderRadius: AppRadius.card,
       child: Container(
+        // Clips the full-bleed accent strip below to the rounded corners.
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: surface,
           border: Border.all(color: border, width: 1),
+          borderRadius: AppRadius.card,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -288,11 +293,13 @@ class HomeScreen extends StatelessWidget {
           MaterialPageRoute(builder: (_) => const CreatePlanScreen()),
         );
       },
+      borderRadius: AppRadius.button,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
           border: Border.all(color: accent.withAlpha(60)),
+          borderRadius: AppRadius.button,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -324,7 +331,7 @@ class HomeScreen extends StatelessWidget {
       builder: (ctx) => Dialog(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: border, width: 1),
         ),
         child: Padding(
@@ -435,7 +442,7 @@ class HomeScreen extends StatelessWidget {
             return Dialog(
               backgroundColor: surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.zero,
+                borderRadius: AppRadius.card,
                 side: BorderSide(color: border, width: 1),
               ),
               child: Padding(
@@ -480,6 +487,7 @@ class HomeScreen extends StatelessWidget {
                                 color: isSelected ? accent : Colors.transparent,
                                 width: 2,
                               ),
+                              borderRadius: AppRadius.badge,
                             ),
                             child: isSelected
                                 ? Icon(Icons.check, size: 18,
@@ -512,7 +520,7 @@ class HomeScreen extends StatelessWidget {
                             foregroundColor: Colors.black,
                             elevation: 0,
                             shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero,
+                              borderRadius: AppRadius.button,
                             ),
                           ),
                           child: Text('[SAVE]', style: GoogleFonts.jetBrainsMono()),
@@ -537,11 +545,13 @@ class HomeScreen extends StatelessWidget {
       onTap: onTap,
       splashColor: accent.withAlpha(51),
       highlightColor: accent.withAlpha(26),
+      borderRadius: AppRadius.button,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           border: Border.all(color: accent, width: 1),
+          borderRadius: AppRadius.button,
         ),
         child: Text(
           label,

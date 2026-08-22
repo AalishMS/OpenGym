@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'radii.dart';
+
 class AppColorScheme extends ThemeExtension<AppColorScheme> {
   final Color background;
   final Color surface;
@@ -171,7 +173,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
       color: surface,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: AppRadius.card,
         side: BorderSide(color: border, width: 1),
       ),
       margin: EdgeInsets.zero,
@@ -187,7 +189,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
         foregroundColor: accent,
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.button,
           side: BorderSide(color: accent, width: 1),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
@@ -198,7 +200,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
       style: OutlinedButton.styleFrom(
         foregroundColor: accent,
         side: BorderSide(color: accent, width: 1),
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         textStyle: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold),
       ),
@@ -206,6 +208,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: accent,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
         textStyle: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold),
       ),
     ),
@@ -214,26 +217,26 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
       foregroundColor: accent,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: AppRadius.card,
         side: BorderSide(color: accent, width: 1),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: false,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: AppRadius.field,
         borderSide: BorderSide(color: border, width: 1),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: AppRadius.field,
         borderSide: BorderSide(color: border, width: 1),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: AppRadius.field,
         borderSide: BorderSide(color: accent, width: 1),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: AppRadius.field,
         borderSide: BorderSide(color: error, width: 1),
       ),
       labelStyle: GoogleFonts.jetBrainsMono(color: textSecondary),
@@ -246,7 +249,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
       labelStyle: GoogleFonts.jetBrainsMono(color: textPrimary),
       secondaryLabelStyle: GoogleFonts.jetBrainsMono(color: onAccent),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: AppRadius.chip,
         side: BorderSide(color: border, width: 1),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -270,13 +273,13 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
       tileColor: surface,
       textColor: textPrimary,
       iconColor: accent,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: AppRadius.card,
         side: BorderSide(color: border, width: 1),
       ),
       titleTextStyle: GoogleFonts.jetBrainsMono(
@@ -290,7 +293,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
       backgroundColor: surface,
       contentTextStyle: GoogleFonts.jetBrainsMono(color: textPrimary),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
+        borderRadius: AppRadius.button,
         side: BorderSide(color: border, width: 1),
       ),
       behavior: SnackBarBehavior.floating,
@@ -306,7 +309,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
     ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: surface,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
       color: accent,
@@ -318,6 +321,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
       decoration: BoxDecoration(
         color: surface,
         border: Border.all(color: border, width: 1),
+        borderRadius: AppRadius.chip,
       ),
       textStyle: GoogleFonts.jetBrainsMono(color: textPrimary),
     ),

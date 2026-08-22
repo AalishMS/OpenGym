@@ -15,6 +15,7 @@ import '../services/hive_service.dart';
 import '../services/sample_data_seeder.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/radii.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -271,6 +272,7 @@ class SettingsScreen extends StatelessWidget {
     return Expanded(
       child: InkWell(
         onTap: () => settings.setThemeMode(mode),
+        borderRadius: AppRadius.button,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
@@ -279,6 +281,7 @@ class SettingsScreen extends StatelessWidget {
               color: isSelected ? accent : border,
               width: isSelected ? 2 : 1,
             ),
+            borderRadius: AppRadius.button,
           ),
           child: Column(
             children: [
@@ -370,6 +373,7 @@ class SettingsScreen extends StatelessWidget {
       onTap: () {
         settings.setAccentColor(SettingsProvider.accents.indexOf(option));
       },
+      borderRadius: AppRadius.button,
       child: Container(
         width: 100,
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
@@ -379,6 +383,7 @@ class SettingsScreen extends StatelessWidget {
             color: isSelected ? accentToShow : border,
             width: isSelected ? 2 : 1,
           ),
+          borderRadius: AppRadius.button,
         ),
         child: Column(
           children: [
@@ -406,6 +411,7 @@ class SettingsScreen extends StatelessWidget {
                           : border,
                       width: isSelected ? 1 : 1,
                     ),
+                    borderRadius: AppRadius.badge,
                   ),
                 ),
                 const SizedBox(width: 2),
@@ -422,6 +428,7 @@ class SettingsScreen extends StatelessWidget {
                           : border,
                       width: isSelected ? 1 : 1,
                     ),
+                    borderRadius: AppRadius.badge,
                   ),
                 ),
                 if (isSelected)
@@ -537,7 +544,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (ctx) => Dialog(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: border, width: 1),
         ),
         child: Padding(
@@ -611,7 +618,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (ctx) => Dialog(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: border, width: 1),
         ),
         child: Padding(
@@ -756,7 +763,7 @@ class SettingsScreen extends StatelessWidget {
         builder: (ctx) => Dialog(
           backgroundColor: surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.zero,
+            borderRadius: AppRadius.card,
             side: BorderSide(color: border, width: 1),
           ),
           child: Padding(
@@ -877,7 +884,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (ctx) => Dialog(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: border, width: 1),
         ),
         child: Padding(
@@ -951,7 +958,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (dialogContext) => Dialog(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: border, width: 1),
         ),
         child: Padding(
@@ -1009,6 +1016,7 @@ class SettingsScreen extends StatelessWidget {
     final isSelected = value == groupValue;
     return InkWell(
       onTap: () => onChanged(value),
+      borderRadius: AppRadius.button,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
@@ -1019,6 +1027,7 @@ class SettingsScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isSelected ? accent : Colors.transparent,
                 border: Border.all(color: accent, width: 1),
+                borderRadius: AppRadius.badge,
               ),
               child: isSelected
                   ? const Icon(Icons.check, size: 14, color: Colors.black)

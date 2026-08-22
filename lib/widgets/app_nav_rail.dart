@@ -5,9 +5,9 @@ import '../providers/settings_provider.dart';
 import '../theme/app_theme.dart';
 
 /// Desktop sidebar navigation. A custom vertical rail (not Material's
-/// [NavigationRail]) so it matches the app's flat, zero-radius terminal look —
-/// the active item is marked by a left accent bar + tinted ground rather than
-/// Material's rounded indicator pill. Mirrors [AppBottomNav]'s styling.
+/// [NavigationRail]) so it matches the app's flat terminal look — the active
+/// item is marked by a left accent bar + tinted ground rather than Material's
+/// rounded indicator pill. Mirrors [AppBottomNav]'s styling.
 class AppNavRail extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;

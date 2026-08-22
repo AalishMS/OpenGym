@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 
 /// The shared frame every dashboard tile sits in: 1px hairline box, a
@@ -32,6 +33,7 @@ class DashboardPanel extends StatelessWidget {
       decoration: BoxDecoration(
         color: surfaceColor(context),
         border: Border.all(color: border, width: 1),
+        borderRadius: AppRadius.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

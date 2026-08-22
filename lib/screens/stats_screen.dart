@@ -7,6 +7,7 @@ import '../repositories/stats_repository.dart';
 import '../repositories/workout_session_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
+import '../theme/radii.dart';
 import '../widgets/dashboard/stat_tile.dart';
 
 class StatsScreen extends StatefulWidget {
@@ -147,11 +148,13 @@ class _StatsScreenState extends State<StatsScreen> {
                 _showOverall = true;
               });
             },
+            borderRadius: AppRadius.button,
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
                 color: _showOverall ? accent : Colors.transparent,
                 border: Border.all(color: accent, width: 1),
+                borderRadius: AppRadius.button,
               ),
               child: Center(
                 child: Text(
@@ -173,11 +176,13 @@ class _StatsScreenState extends State<StatsScreen> {
                 _showOverall = false;
               });
             },
+            borderRadius: AppRadius.button,
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
                 color: !_showOverall ? accent : Colors.transparent,
                 border: Border.all(color: accent, width: 1),
+                borderRadius: AppRadius.button,
               ),
               child: Center(
                 child: Text(
@@ -200,7 +205,7 @@ class _StatsScreenState extends State<StatsScreen> {
       initialValue: _selectedExercise,
       decoration: const InputDecoration(
         labelText: 'SELECT EXERCISE',
-        border: OutlineInputBorder(),
+        border: OutlineInputBorder(borderRadius: AppRadius.field),
       ),
       items: _exerciseNames.map((name) {
         final pr = _statsRepo.getExercisePR(name);
@@ -228,6 +233,7 @@ class _StatsScreenState extends State<StatsScreen> {
       decoration: BoxDecoration(
         color: surfaceColor(context),
         border: Border.all(color: borderColor(context), width: 1),
+        borderRadius: AppRadius.card,
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -325,7 +331,7 @@ class _StatsScreenState extends State<StatsScreen> {
                           toY: count.toDouble(),
                           color: accent,
                           width: 20,
-                          borderRadius: BorderRadius.zero,
+                          borderRadius: AppRadius.barCap,
                         ),
                       ],
                     );
@@ -345,6 +351,7 @@ class _StatsScreenState extends State<StatsScreen> {
         decoration: BoxDecoration(
           color: surfaceColor(context),
           border: Border.all(color: borderColor(context), width: 1),
+          borderRadius: AppRadius.card,
         ),
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -366,6 +373,7 @@ class _StatsScreenState extends State<StatsScreen> {
         decoration: BoxDecoration(
           color: surfaceColor(context),
           border: Border.all(color: borderColor(context), width: 1),
+          borderRadius: AppRadius.card,
         ),
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -395,6 +403,7 @@ class _StatsScreenState extends State<StatsScreen> {
       decoration: BoxDecoration(
         color: surfaceColor(context),
         border: Border.all(color: borderColor(context), width: 1),
+        borderRadius: AppRadius.card,
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),

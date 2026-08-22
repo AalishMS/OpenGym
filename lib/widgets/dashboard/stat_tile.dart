@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 
 /// A single KPI readout — big accented number over a small muted caption.
@@ -30,6 +31,7 @@ class StatTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: surfaceColor(context),
         border: Border.all(color: borderColor(context), width: 1),
+        borderRadius: AppRadius.card,
       ),
       child: Column(
         children: [

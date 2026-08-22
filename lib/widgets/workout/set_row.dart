@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/set.dart' as gym;
 import '../../theme/app_theme.dart';
+import '../../theme/radii.dart';
 import '../../theme/semantic_colors.dart';
 import '../../utils/format.dart';
 
@@ -41,6 +42,7 @@ class SetRow extends StatelessWidget {
             alignment: Alignment.center,
             decoration: BoxDecoration(
               border: Border.all(color: borderColor(context)),
+              borderRadius: AppRadius.badge,
             ),
             child: Text(
               '${setIndex + 1}',
@@ -80,6 +82,7 @@ class SetRow extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               border: Border.all(color: borderColor(context)),
+              borderRadius: AppRadius.control,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -88,11 +91,13 @@ class SetRow extends StatelessWidget {
                   label: '−',
                   onTap: onDecrementWeight,
                   accent: accent,
+                  borderRadius: AppRadius.leftCap,
                 ),
                 _ControlButton(
                   label: '+',
                   onTap: onIncrementWeight,
                   accent: accent,
+                  borderRadius: AppRadius.rightCap,
                 ),
               ],
             ),
@@ -101,6 +106,7 @@ class SetRow extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               border: Border.all(color: borderColor(context)),
+              borderRadius: AppRadius.control,
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
@@ -109,11 +115,13 @@ class SetRow extends StatelessWidget {
                   label: '−',
                   onTap: onDecrementReps,
                   accent: accent,
+                  borderRadius: AppRadius.leftCap,
                 ),
                 _ControlButton(
                   label: '+',
                   onTap: onIncrementReps,
                   accent: accent,
+                  borderRadius: AppRadius.rightCap,
                 ),
               ],
             ),
@@ -168,18 +176,25 @@ class _ControlButton extends StatelessWidget {
   final VoidCallback onTap;
   final Color accent;
 
+  /// Which outer corners this segment caps off. The two buttons share a square
+  /// inner edge so the pair reads as one control, not two pills.
+  final BorderRadius? borderRadius;
+
   const _ControlButton({
     required this.label,
     required this.onTap,
     required this.accent,
+    this.borderRadius,
   });
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
+      borderRadius: borderRadius,
       child: InkWell(
         onTap: onTap,
+        borderRadius: borderRadius,
         splashColor: accent.withValues(alpha: 0.2),
         highlightColor: accent.withValues(alpha: 0.1),
         child: Container(

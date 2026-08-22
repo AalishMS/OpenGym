@@ -12,6 +12,7 @@ import '../providers/settings_provider.dart';
 import '../services/hive_service.dart';
 import '../services/pr_tracking_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/radii.dart';
 import '../utils/fade_page_route.dart';
 import '../widgets/workout/exercise_card.dart';
 import '../widgets/workout/workout_dialogs.dart';
@@ -566,7 +567,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     proxyDecorator: (child, index, animation) {
                       return Material(
                         color: surfaceColor(context),
-                        borderRadius: BorderRadius.zero,
+                        borderRadius: AppRadius.card,
                         child: child,
                       );
                     },
@@ -577,11 +578,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                           index: index,
                           child: InkWell(
                             onTap: _addEmptyExercise,
+                            borderRadius: AppRadius.button,
                             child: Container(
                               margin: const EdgeInsets.all(8),
                               padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 border: Border.all(color: accent, width: 1),
+                                borderRadius: AppRadius.button,
                               ),
                               child: Center(
                                 child: Text(
@@ -606,6 +609,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                             color: surfaceColor(context),
                             border: Border.all(
                                 color: borderColor(context), width: 1),
+                            borderRadius: AppRadius.card,
                           ),
                           child: ExerciseCard(
                             exercise: exercise,
@@ -727,11 +731,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                       child: Center(
                         child: InkWell(
                           onTap: _addNewWeek,
+                          borderRadius: AppRadius.chip,
                           child: Container(
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
                               border: Border.all(color: accent),
+                              borderRadius: AppRadius.chip,
                             ),
                             child: Text('[+ WEEK ${_weeks.length + 1}]',
                                 style: GoogleFonts.jetBrainsMono(
@@ -754,6 +760,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                         },
                         onLongPress: () =>
                             _showWeekOptionsMenu(context, index, week),
+                        borderRadius: AppRadius.chip,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 12, vertical: 6),
@@ -761,6 +768,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                             color: isSelected ? accent : Colors.transparent,
                             border:
                                 Border.all(color: isSelected ? accent : border),
+                            borderRadius: AppRadius.chip,
                           ),
                           child: Text(
                             'WEEK $week',

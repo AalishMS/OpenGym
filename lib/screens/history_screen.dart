@@ -8,6 +8,7 @@ import '../models/exercise.dart';
 import '../models/set.dart' as gym;
 import '../services/pr_tracking_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/radii.dart';
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
@@ -68,7 +69,7 @@ class HistoryScreen extends StatelessWidget {
                     builder: (ctx) => Dialog(
                       backgroundColor: surfaceColor(context),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.zero,
+                        borderRadius: AppRadius.card,
                         side: BorderSide(color: borderColor(context), width: 1),
                       ),
                       child: Padding(
@@ -186,6 +187,7 @@ class _SessionCardState extends State<_SessionCard> {
       decoration: BoxDecoration(
         color: surfaceColor(context),
         border: Border.all(color: border, width: 1),
+        borderRadius: AppRadius.card,
       ),
       child: Column(
         children: [
@@ -195,6 +197,9 @@ class _SessionCardState extends State<_SessionCard> {
                 _isExpanded = !_isExpanded;
               });
             },
+            // Top-only: the header sits above the expandable body, so its
+            // splash follows the card's top corners and stops square below.
+            borderRadius: AppRadius.cardTop,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -207,6 +212,7 @@ class _SessionCardState extends State<_SessionCard> {
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           border: Border.all(color: accent),
+                          borderRadius: AppRadius.chip,
                         ),
                         child: Text(
                           '${session.date.day}/${session.date.month}/${session.date.year}',
@@ -221,6 +227,7 @@ class _SessionCardState extends State<_SessionCard> {
                               horizontal: 6, vertical: 2),
                           decoration: const BoxDecoration(
                             color: Colors.amber,
+                            borderRadius: AppRadius.badge,
                           ),
                           child: Text(
                             '[PR]',
@@ -359,6 +366,7 @@ class _ExerciseSection extends StatelessWidget {
                           horizontal: 4, vertical: 1),
                       decoration: BoxDecoration(
                         border: Border.all(color: borderColor(context)),
+                        borderRadius: AppRadius.chip,
                       ),
                       child: Text(
                         'RPE ${set.rpe}',
@@ -459,7 +467,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
             controller: _planNameController,
             decoration: const InputDecoration(
               labelText: 'Plan Name',
-              border: OutlineInputBorder(),
+              border: OutlineInputBorder(borderRadius: AppRadius.field),
             ),
           ),
           const SizedBox(height: 16),
@@ -477,6 +485,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
               decoration: BoxDecoration(
                 color: surfaceColor(context),
                 border: Border.all(color: borderColor(context), width: 1),
+                borderRadius: AppRadius.card,
               ),
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -490,6 +499,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             border: Border.all(color: accent),
+                            borderRadius: AppRadius.badge,
                           ),
                           child: Text(
                             '[${index + 1}]',
@@ -588,7 +598,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
       builder: (ctx) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -672,7 +682,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
       builder: (ctx) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(

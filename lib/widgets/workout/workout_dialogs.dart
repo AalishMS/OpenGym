@@ -5,6 +5,7 @@ import '../../models/set.dart' as gym;
 import '../../providers/settings_provider.dart';
 import '../../services/pr_tracking_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/radii.dart';
 
 class WorkoutDialogs {
   static void showPRDialog(BuildContext context, List<PRResult> prs) {
@@ -14,7 +15,7 @@ class WorkoutDialogs {
       builder: (context) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -83,7 +84,7 @@ class WorkoutDialogs {
       builder: (context) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -109,12 +110,12 @@ class WorkoutDialogs {
                   labelText: 'Exercise name',
                   labelStyle: GoogleFonts.jetBrainsMono(fontSize: 12),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.zero,
+                    borderRadius: AppRadius.field,
                     borderSide:
                         BorderSide(color: borderColor(context), width: 1),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.zero,
+                    borderRadius: AppRadius.field,
                     borderSide: BorderSide(color: accent, width: 1),
                   ),
                 ),
@@ -174,7 +175,7 @@ class WorkoutDialogs {
       builder: (context) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -200,12 +201,12 @@ class WorkoutDialogs {
                   labelText: 'Exercise name',
                   labelStyle: GoogleFonts.jetBrainsMono(fontSize: 12),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.zero,
+                    borderRadius: AppRadius.field,
                     borderSide:
                         BorderSide(color: borderColor(context), width: 1),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.zero,
+                    borderRadius: AppRadius.field,
                     borderSide: BorderSide(color: accent, width: 1),
                   ),
                 ),
@@ -277,7 +278,7 @@ class WorkoutDialogs {
             return Dialog(
               backgroundColor: surfaceColor(context),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.zero,
+                borderRadius: AppRadius.card,
                 side: BorderSide(color: borderColor(context), width: 1),
               ),
               child: Padding(
@@ -329,6 +330,7 @@ class WorkoutDialogs {
                                 selectedRpe = selectedRpe == rpe ? null : rpe;
                               });
                             },
+                            borderRadius: AppRadius.chip,
                             child: Container(
                               width: 32,
                               height: 32,
@@ -341,6 +343,7 @@ class WorkoutDialogs {
                                       ? accent
                                       : borderColor(context),
                                 ),
+                                borderRadius: AppRadius.chip,
                               ),
                               child: Center(
                                 child: Text(
@@ -448,7 +451,7 @@ class WorkoutDialogs {
             return Dialog(
               backgroundColor: surfaceColor(context),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.zero,
+                borderRadius: AppRadius.card,
                 side: BorderSide(color: borderColor(context), width: 1),
               ),
               child: Padding(
@@ -495,6 +498,7 @@ class WorkoutDialogs {
                                 selectedRpe = selectedRpe == rpe ? null : rpe;
                               });
                             },
+                            borderRadius: AppRadius.chip,
                             child: Container(
                               width: 32,
                               height: 32,
@@ -507,6 +511,7 @@ class WorkoutDialogs {
                                       ? accent
                                       : borderColor(context),
                                 ),
+                                borderRadius: AppRadius.chip,
                               ),
                               child: Center(
                                 child: Text(
@@ -623,7 +628,7 @@ class WorkoutDialogs {
         return Dialog(
           backgroundColor: surfaceColor(context),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.zero,
+            borderRadius: AppRadius.card,
             side: BorderSide(color: borderColor(context), width: 1),
           ),
           child: Padding(
@@ -693,7 +698,7 @@ class WorkoutDialogs {
     showModalBottomSheet(
       context: context,
       backgroundColor: surfaceColor(context),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -733,7 +738,7 @@ class WorkoutDialogs {
       builder: (context) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -804,7 +809,7 @@ class WorkoutDialogs {
       builder: (context) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -866,7 +871,7 @@ class WorkoutDialogs {
       builder: (context) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(

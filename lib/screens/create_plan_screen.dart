@@ -13,6 +13,7 @@ import '../data/exercise_library.dart';
 import '../data/plan_colors.dart';
 import '../models/exercise_with_sets.dart';
 import '../theme/app_theme.dart';
+import '../theme/radii.dart';
 import '../widgets/workout/stepper_widget.dart';
 
 class CreatePlanScreen extends StatefulWidget {
@@ -80,7 +81,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: surfaceColor(context),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
       isScrollControlled: true,
       builder: (ctx) {
         return StatefulBuilder(
@@ -104,6 +105,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                       height: 3,
                       decoration: BoxDecoration(
                         color: borderColor(context),
+                        borderRadius: AppRadius.micro,
                       ),
                     ),
                   ),
@@ -140,6 +142,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                           padding: const EdgeInsets.only(right: 6),
                           child: InkWell(
                             onTap: () => setSheetState(() => selectedCategory = cat),
+                            borderRadius: AppRadius.chip,
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
@@ -147,6 +150,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                                 border: Border.all(
                                   color: active ? accent : borderColor(context),
                                 ),
+                                borderRadius: AppRadius.chip,
                               ),
                               child: Text(
                                 cat,
@@ -178,10 +182,12 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                         if (i == exercises.length) {
                           return InkWell(
                             onTap: () => _showCustomExerciseDialog(ctx, setSheetState),
+                            borderRadius: AppRadius.chip,
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 12),
                               decoration: BoxDecoration(
                                 border: Border.all(color: borderColor(context).withAlpha(128)),
+                                borderRadius: AppRadius.chip,
                               ),
                               child: Row(
                                 children: [
@@ -216,6 +222,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                               if (ctx.mounted) Navigator.pop(ctx);
                             });
                           },
+                          borderRadius: AppRadius.chip,
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
@@ -223,6 +230,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                               border: Border.all(
                                 color: isJust ? accent : borderColor(context),
                               ),
+                              borderRadius: AppRadius.chip,
                             ),
                             child: Row(
                               children: [
@@ -274,7 +282,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           builder: (dialogCtx, setDialogState) {
             return AlertDialog(
               backgroundColor: surfaceColor(context),
-              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+              shape: const RoundedRectangleBorder(borderRadius: AppRadius.card),
               title: Text(
                 '> CUSTOM EXERCISE',
                 style: GoogleFonts.jetBrainsMono(
@@ -497,6 +505,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
       decoration: BoxDecoration(
         color: surfaceColor(context),
         border: Border.all(color: borderColor(context)),
+        borderRadius: AppRadius.card,
       ),
       child: Row(
         children: [
@@ -561,6 +570,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                     color: isSelected ? accent : Colors.transparent,
                     width: 2,
                   ),
+                  borderRadius: AppRadius.badge,
                 ),
                 child: isSelected
                     ? Icon(Icons.check, size: 16,
@@ -606,7 +616,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           elevation: 0,
           shape: RoundedRectangleBorder(
             side: BorderSide(color: borderColor(context)),
-            borderRadius: BorderRadius.zero,
+            borderRadius: AppRadius.card,
           ),
           child: child,
         );
@@ -621,6 +631,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
       decoration: BoxDecoration(
         color: surfaceColor(context),
         border: Border.all(color: borderColor(context)),
+        borderRadius: AppRadius.card,
       ),
       child: Column(
         children: [
@@ -638,6 +649,10 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                 child: InkWell(
                   onTap: () => setState(() => _expandedExercises[exerciseIndex] =
                       !(_expandedExercises[exerciseIndex] ?? false)),
+                  // Top-only: this header sits above the expandable set list, so
+                  // its splash follows the card's top corners and stops square
+                  // where the body begins.
+                  borderRadius: AppRadius.cardTop,
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 11),
                     child: Row(
@@ -772,6 +787,8 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
             }),
             InkWell(
               onTap: () => _addSetToExercise(exerciseIndex),
+              // Last row of the card — splash follows the bottom corners.
+              borderRadius: AppRadius.cardBottom,
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 9),
@@ -826,11 +843,13 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
   Widget _buildAddExerciseButton(Color accent) {
     return InkWell(
       onTap: _showAddExerciseSheet,
+      borderRadius: AppRadius.button,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 13),
         decoration: BoxDecoration(
           border: Border.all(color: accent.withAlpha(64)),
+          borderRadius: AppRadius.button,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -860,7 +879,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
           backgroundColor: accent,
           foregroundColor: Colors.black,
           elevation: 0,
-          shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
           padding: const EdgeInsets.symmetric(vertical: 13),
         ),
         child: Text(

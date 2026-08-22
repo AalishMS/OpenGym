@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/workout_session.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 
 /// GitHub-style contribution grid: one column per week, one square per day.
 ///
-/// Built by hand rather than with fl_chart — the aesthetic wants hard-edged,
-/// zero-radius cells on a 1px grid, which a chart library fights. Intensity is
-/// the accent at increasing alpha, so it recolours with the user's theme.
+/// Built by hand rather than with fl_chart — the cells are barely-rounded
+/// squares on a 1px grid at a size a chart library fights. Intensity is the
+/// accent at increasing alpha, so it recolours with the user's theme.
 ///
 /// [HiveService.getWorkoutFrequency] is per-*week*, so this buckets raw
 /// sessions by calendar day instead.
@@ -148,6 +149,7 @@ class FrequencyHeatmap extends StatelessWidget {
               color: future ? border.withAlpha(80) : border,
               width: 1,
             ),
+            borderRadius: AppRadius.micro,
           ),
         ),
       ),
@@ -185,6 +187,7 @@ class HeatmapLegend extends StatelessWidget {
               decoration: BoxDecoration(
                 color: c,
                 border: Border.all(color: borderColor(context)),
+                borderRadius: AppRadius.micro,
               ),
             ),
           ),

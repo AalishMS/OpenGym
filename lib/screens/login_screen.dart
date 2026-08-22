@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/radii.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -112,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.zero),
+                          borderRadius: AppRadius.button),
                     ),
                     child: _loading
                         ? SizedBox(
@@ -155,11 +156,11 @@ class _LoginScreenState extends State<LoginScreen> {
       labelStyle: mono.copyWith(color: muted),
       enabledBorder: OutlineInputBorder(
         borderSide: BorderSide(color: borderColor(context)),
-        borderRadius: BorderRadius.zero,
+        borderRadius: AppRadius.field,
       ),
       focusedBorder: OutlineInputBorder(
         borderSide: BorderSide(color: accent),
-        borderRadius: BorderRadius.zero,
+        borderRadius: AppRadius.field,
       ),
     );
   }
