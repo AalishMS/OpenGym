@@ -10,30 +10,23 @@
 
 ## Current state
 
-All app code for every phase is written, locally verified, and committed. What remains is console
-work: one column type to widen in Postgres, then end-to-end sync verification, then hosting. Nothing
-left is big — each unticked box below is minutes, not hours.
+All app code for every phase is written, locally verified, and committed. Phase 2's live `plan_color`
+schema fix is done, and Phase 3 sync checks passed against the local web harness plus Supabase REST.
+Phase 4 adoption checks passed manually. Phase 5 is deployed to Netlify
+(<https://open-gym.netlify.app>) and HTTP-verified; only interactive sign-in/sync/offline checks on
+the live site remain.
 
 ## NEXT ACTION
 
-Next up is yours in the Supabase dashboard.
+**Phase 5 is deployed** at <https://open-gym.netlify.app> and HTTP-verified. Two things remain, both
+yours:
 
-**Yours.** Run this in the **Supabase SQL editor** (DDL needs the SQL editor — the publishable key
-cannot `ALTER`):
+1. *(Optional, non-blocking — email autoconfirm is ON)* Supabase → Authentication → URL
+   Configuration: set Site URL + Redirect URLs for the deployed origin.
+2. Interactive verification on the live site: sign up / sign in, confirm a change syncs with the
+   mobile build on the same account, and offline-reload shows cached data.
 
-```sql
-alter table public.workout_plans alter column plan_color type bigint;
-```
-
-Confirm it took:
-
-```sql
-select data_type from information_schema.columns
- where table_name = 'workout_plans' and column_name = 'plan_color';
--- must return: bigint
-```
-
-Then tick the first two boxes under **Phase 2** below and re-test a sync push.
+After that, all five phases are complete.
 
 ---
 
@@ -65,10 +58,10 @@ Things that cost time to rediscover:
 |------:|-------|:----:|:-------:|:--------:|
 | 0 | ids + sync metadata, id-based CRUD, append + wrong-record bug fixes | done | n/a | analyze + tests |
 | 1 | `supabase_service`, `auth/auth_gate`, `login_screen`, main init, sign-out tile | done | project created | live signup + login |
-| 2 | Postgres tables, `server_seq` trigger, 8 RLS policies | n/a | ran, **1 column wrong** | pending |
-| 3 | `sync_service` LWW push/pull/tombstones, triggers, Hive raw accessors | done | — | blocked by Phase 2 |
-| 4 | `adopt_local_data` + `_PostLoginGate` | done | — | not started |
-| 5 | web placeholders (`gymapp` → OpenGym) | done | not hosted | build web OK |
+| 2 | Postgres tables, `server_seq` trigger, 8 RLS policies | n/a | done | bigint push + RLS verified |
+| 3 | `sync_service` LWW push/pull/tombstones, triggers, Hive raw accessors | done | — | local web + REST verified |
+| 4 | `adopt_local_data` + `_PostLoginGate` | done | — | manual pass |
+| 5 | placeholders + web build + Netlify deploy + SPA redirect | done | hosted | deployed + HTTP-verified |
 
 ---
 
@@ -124,44 +117,50 @@ and two bullets above are enough to recreate it.
 
 ### Phase 2 — schema fix
 
-- [ ] **[you]** Run the `plan_color` → `bigint` ALTER (see NEXT ACTION)
-- [ ] **[you]** Confirm `information_schema.columns` reports `bigint`
+- [x] **[you]** Run the `plan_color` → `bigint` ALTER (see NEXT ACTION)
+- [x] **[you]** Confirm `information_schema.columns` reports `bigint`
 
 ### Phase 3 — sync, runtime verification
 
 Two clients: the `:8080` web-server harness plus a device or a second browser profile.
 
-- [ ] **[you]** **Push** — create a plan → row appears in `workout_plans` with the right `user_id`
-- [ ] **[you]** **Pull** — second client, same account, foreground → the plan shows up
-- [ ] **[you]** **LWW** — edit the same plan on both within a few seconds → both converge on the
+- [x] **[you]** **Push** — create a plan → row appears in `workout_plans` with the right `user_id`
+- [x] **[you]** **Pull** — second client, same account, foreground → the plan shows up
+- [x] **[you]** **LWW** — edit the same plan on both within a few seconds → both converge on the
       later `updatedAt`
-- [ ] **[you]** **Offline drain** — go offline, edit (record goes `dirty`), reconnect, foreground →
+- [x] **[you]** **Offline drain** — go offline, edit (record goes `dirty`), reconnect, foreground →
       the edit reaches Postgres and the other client
-- [ ] **[you]** **Tombstone** — delete a session on A → after B syncs it's gone from B's History
-- [ ] **[you]** **RLS isolation** — second account cannot see the first account's rows
-- [ ] **[you]** **No duplicate sessions** — autosave one workout repeatedly → exactly one local row
+- [x] **[you]** **Tombstone** — delete a session on A → after B syncs it's gone from B's History
+- [x] **[you]** **RLS isolation** — second account cannot see the first account's rows
+- [x] **[you]** **No duplicate sessions** — autosave one workout repeatedly → exactly one local row
       and one Postgres row (this is the Phase 0 append-bug fix holding through sync)
 
 ### Phase 4 — adoption, runtime verification
 
-- [ ] **[you]** **Adoption** — create data while logged out, then log in → same data present, rows
+- [x] **[you]** **Adoption** — create data while logged out, then log in → same data present, rows
       land in Postgres under your `user_id`
-- [ ] **[you]** **No duplication on re-login** — sign out, sign back in → no duplicate rows
-- [ ] **[you]** **Pre-existing cloud data isn't clobbered** — log into an account that already has
+- [x] **[you]** **No duplication on re-login** — sign out, sign back in → no duplicate rows
+- [x] **[you]** **Pre-existing cloud data isn't clobbered** — log into an account that already has
       rows from another device, on a device holding different local data → both sets survive
-- [ ] **[you]** **Shared-device reset** — sign in as A, sign out, sign in as B → B does not see A's
+- [x] **[you]** **Shared-device reset** — sign in as A, sign out, sign in as B → B does not see A's
       data
 
 ### Phase 5 — hosting
 
-- [ ] **[you]** `flutter build web --release` with both `--dart-define`s
-- [ ] **[you]** Deploy `build/web` to Netlify or Cloudflare Pages
-- [ ] **[you]** Add the SPA redirect — `build/web/_redirects` containing `/*    /index.html   200`
-- [ ] **[you]** Supabase Auth → URL Configuration: Site URL + Redirect URLs (deployed origin and
-      `http://localhost:8080/**`)
-- [ ] **[you]** Deployed site: signup/login works, syncs with the local build, hard refresh on a
-      non-root path still loads, offline reload still shows cached data
-- [ ] **[you]** Tab title reads **OpenGym**, not `gymapp`
+- [x] **[claude]** `flutter build web --release` with both `--dart-define`s — exit 0, `build/web` produced
+- [x] **[you]** Deployed `build/web` to Netlify (drag-and-drop) — live at
+      <https://open-gym.netlify.app>
+- [x] **[claude]** SPA redirect added at `web/_redirects` (source) — Flutter copies it into
+      `build/web/_redirects` on every build; confirmed present in the output
+- [ ] **[you]** Supabase Auth → URL Configuration: Site URL `https://open-gym.netlify.app` +
+      Redirect URLs `https://open-gym.netlify.app/**` and `http://localhost:8080/**` (not blocking —
+      email autoconfirm is ON — but good practice)
+- [x] **[claude]** Deployed site loads over HTTPS; hard refresh on non-root paths serves the app
+      (SPA redirect verified: `/history` + a deep bogus route → 200 `index.html`); Supabase URL +
+      publishable key confirmed baked into the shipped `main.dart.js`, no secret key leaked
+- [ ] **[you]** Deployed site: **sign up / sign in works**, **syncs with mobile** on the same
+      account, **offline reload** still shows cached data (needs a real signed-in session)
+- [x] Tab title reads **OpenGym** — confirmed on the deployed `<title>`
 
 ---
 
@@ -171,6 +170,16 @@ Found during implementation and a full verification sweep. None block the checkl
 
 **Fixed, don't regress:**
 
+- **Supabase config is baked into `supabase_service.dart` as the `String.fromEnvironment` *defaults***
+  (URL + publishable key) so every build path — Android Studio Run/Build menu, `flutter build
+  apk/appbundle`, `flutter run`, web, CI — has online support with **no `--dart-define` flags**;
+  a `--dart-define`/`--dart-define-from-file` still overrides. The key is a *publishable* key (already
+  public in the web bundle), RLS is the guard, and the `sb_secret_`/service_role key is never used.
+  **Do not revert this to empty defaults** to satisfy the phase-5 "no Supabase literals in the repo"
+  note — that was a deliberate trade made on 2026-08-22 for build convenience.
+- **Login is mandatory on every build, by design.** With config always present, logged-out users get
+  `LoginScreen` on all platforms — there is deliberately no "continue offline" / guest path (user
+  decision, 2026-08-22). Don't add a skip to "restore" offline-first first-run usage.
 - **`plan_color` must be `bigint`.** A Flutter ARGB `Color` is a uint32 (e.g. `4294688548`), which
   overflows Postgres `int4` (max `2147483647`) → `PostgrestException 22003, out of range for type
   integer`. The client sends `planColor` raw (`sync_service.dart:75`), which is correct *provided*
@@ -231,5 +240,33 @@ A phase is not the unit of work — a checkbox is. Stopping after one tick is a 
   unavailable partway through (sandbox classifier down); the working tree was restored to its
   verified state and nothing was committed.
 - **2026-08-22** — Completed the planned two-commit split: Phase 0 in `e1dda55`, Phases 1–5 in
-  `cbe08cc`. Re-ran `flutter analyze`: 0 errors, 18 pre-existing warnings/infos. Remaining work is
-  the Supabase `plan_color` bigint ALTER, runtime sync checks, and hosting.
+   `cbe08cc`. Re-ran `flutter analyze`: 0 errors, 18 pre-existing warnings/infos. Remaining work is
+   the Supabase `plan_color` bigint ALTER, runtime sync checks, and hosting.
+- **2026-08-22** — Ran the live `plan_color` bigint fix and Phase 3 runtime checks. Verified app push,
+  pull, offline drain, bigint color push, LWW, tombstone, RLS isolation, and no duplicate session row.
+  Fixed a startup/adoption sync race where concurrent `syncNow()` calls could return before the
+  in-flight pull had refreshed providers. `flutter analyze`: 0 errors, 18 pre-existing warnings/infos.
+- **2026-08-22** — User manually verified all Phase 4 adoption checks: first-login adoption, no
+  duplicate rows on re-login, pre-existing cloud data preserved, and shared-device reset.
+- **2026-08-22** — Phase 5 hosting. Added `web/_redirects` (SPA fallback), built `flutter build web
+  --release` with the Supabase dart-defines (exit 0); user deployed `build/web` to Netlify via
+  drag-and-drop → <https://open-gym.netlify.app>. HTTP-verified: root + `/history` + a deep bogus
+  route all 200 serving `index.html` (SPA redirect live), assets served with correct MIME, tab title
+  "OpenGym", and the Supabase URL + publishable key are baked into the shipped `main.dart.js` with no
+  secret key leaked. Keys-hygiene `git grep` clean. In-app browser preview can't attach to a remote
+  URL on this install, so interactive sign-in/sync/offline checks on the live site are left to the
+  user, plus the optional Supabase Auth URL config.
+- **2026-08-22** — Made online support the default for *every* build: moved the Supabase URL +
+  publishable key from empty `String.fromEnvironment` defaults to the real values as defaults in
+  `supabase_service.dart`, so Android Studio (Run button and Build → APK menu), `flutter build
+  apk/appbundle`, `flutter run`, web, and CI all get auth/sync with no `--dart-define` flags. Removed
+  the interim `dart_defines.json` / `.example` scaffolding and its gitignore line. Proof: a
+  `flutter build web --release` with NO defines bakes the host + key into `main.dart.js`. `flutter
+  analyze` still 0 errors / 18 pre-existing. Deliberate exception to the phase-5 "no literals" note
+  (the publishable key is already public via the web deploy).
+- **2026-08-22** — Decided (with user) to **require an account on every build**. Since config is now
+  always present, `AuthGate` shows `LoginScreen` for logged-out users on all platforms, with no
+  offline/guest path — the existing behavior, so no code change. Considered the alternative
+  (offline-first + optional login: a "Continue offline" skip plus a Settings sign-in tile) and
+  rejected it. Caveat recorded: first launch needs connectivity to sign up / sign in; the app is
+  offline-capable only *after* that first sign-in.
