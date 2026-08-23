@@ -1,10 +1,12 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
 import '../models/exercise.dart';
+import '../models/exercise_template.dart';
 import '../models/set.dart' as gym;
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
@@ -12,7 +14,10 @@ import '../providers/settings_provider.dart';
 import '../services/hive_service.dart';
 import '../services/pr_tracking_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/radii.dart';
+import '../theme/spacing.dart';
 import '../utils/fade_page_route.dart';
+import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
 import '../widgets/workout/workout_dialogs.dart';
 
@@ -30,29 +35,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   List<int> _weeks = [1];
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};
-  final ScrollController _weekNavScrollController = ScrollController();
 
   @override
   void initState() {
     super.initState();
     _loadWeeks();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToSelectedWeek();
-    });
-  }
-
-  @override
-  void dispose() {
-    _weekNavScrollController.dispose();
-    super.dispose();
-  }
-
-  void _scrollToSelectedWeek() {
-    if (!_weekNavScrollController.hasClients) return;
-    const double itemWidth = 68;
-    final offset = _currentWeekIndex * itemWidth;
-    final maxScroll = _weekNavScrollController.position.maxScrollExtent;
-    _weekNavScrollController.jumpTo(offset.clamp(0.0, maxScroll));
   }
 
   void _loadWeeks() {
@@ -96,6 +83,21 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       }
     }
     return HiveService.getLastSetForExercise(exerciseName);
+  }
+
+  /// The plan entry matching [exerciseName], for target hints only.
+  ///
+  /// Matched by name rather than by index: the session's exercise list can be
+  /// reordered, renamed or extended independently of the plan, so index
+  /// matching would show one exercise's prescription on another's sets. No
+  /// match means no hint.
+  ExerciseTemplate? _templateFor(String exerciseName) {
+    for (final template in widget.plan.exercises) {
+      if (template.name.toLowerCase() == exerciseName.toLowerCase()) {
+        return template;
+      }
+    }
+    return null;
   }
 
   Future<void> _onWeekChanged(int newIndex) async {
@@ -503,11 +505,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final session = _getOrCreateSession();
     final settings = context.watch<SettingsProvider>();
     final accent = settings.accentColor;
-    final error = errorColor(context);
     final surface = surfaceColor(context);
-    final border = borderColor(context);
-    final textPrimary = textPrimaryColor(context);
-    final textSecondary = textSecondaryColor(context);
 
     final planProvider = context.watch<WorkoutPlanProvider>();
     final plans = planProvider.plans;
@@ -533,7 +531,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         shadowColor: Colors.transparent,
         toolbarHeight: 60,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: accent),
+          icon: Icon(LucideIcons.arrowLeft, color: accent),
           onPressed: () {
             _autoSave();
             Navigator.pop(context);
@@ -560,81 +558,101 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 physics: const BouncingScrollPhysics(
                     parent: AlwaysScrollableScrollPhysics()),
                 slivers: [
-                  SliverReorderableList(
-                    itemCount: session.exercises.length + 1,
-                    onReorder: _reorderExercises,
-                    proxyDecorator: (child, index, animation) {
-                      return Material(
-                        color: surfaceColor(context),
-                        borderRadius: BorderRadius.zero,
-                        child: child,
-                      );
-                    },
-                    itemBuilder: (context, index) {
-                      if (index == session.exercises.length) {
-                        return ReorderableDelayedDragStartListener(
-                          key: const ValueKey('add_exercise_button'),
-                          index: index,
-                          child: InkWell(
-                            onTap: _addEmptyExercise,
-                            child: Container(
-                              margin: const EdgeInsets.all(8),
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: accent, width: 1),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '[ + ADD EXERCISE ]',
-                                  style:
-                                      GoogleFonts.jetBrainsMono(color: accent),
+                  // State the gutter once, on the sliver, rather than as a
+                  // margin per item: the rounded cards need clearance from the
+                  // screen edges or their corners read as a clipping bug, and
+                  // the + ADD EXERCISE tile inherits the same inset for free.
+                  SliverPadding(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    sliver: SliverReorderableList(
+                      itemCount: session.exercises.length + 1,
+                      onReorder: _reorderExercises,
+                      proxyDecorator: (child, index, animation) {
+                        return Material(
+                          color: surfaceColor(context),
+                          borderRadius: AppRadius.card,
+                          child: child,
+                        );
+                      },
+                      itemBuilder: (context, index) {
+                        if (index == session.exercises.length) {
+                          return ReorderableDelayedDragStartListener(
+                            key: const ValueKey('add_exercise_button'),
+                            index: index,
+                            child: InkWell(
+                              onTap: _addEmptyExercise,
+                              borderRadius: AppRadius.button,
+                              child: Container(
+                                padding: const EdgeInsets.all(AppSpacing.lg),
+                                decoration: BoxDecoration(
+                                  border: Border.all(color: accent, width: 1),
+                                  borderRadius: AppRadius.button,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '[+ ADD EXERCISE]',
+                                    style: GoogleFonts.jetBrainsMono(
+                                        color: accent),
+                                  ),
                                 ),
                               ),
                             ),
+                          );
+                        }
+
+                        final exercise = session.exercises[index];
+
+                        return ReorderableDelayedDragStartListener(
+                          key: ValueKey(index),
+                          index: index,
+                          child: Container(
+                            margin:
+                                const EdgeInsets.only(bottom: AppSpacing.sm),
+                            decoration: BoxDecoration(
+                              color: surfaceColor(context),
+                              border: Border.all(
+                                  color: borderColor(context), width: 1),
+                              borderRadius: AppRadius.card,
+                            ),
+                            child: ExerciseCard(
+                              exercise: exercise,
+                              exerciseIndex: index,
+                              accent: accent,
+                              template: _templateFor(exercise.name),
+                              onIncrementReps: _incrementReps,
+                              onDecrementReps: _decrementReps,
+                              onIncrementWeight: _incrementWeight,
+                              onDecrementWeight: _decrementWeight,
+                              onAddSet: (i) => _addSet(i),
+                              onEditSet: (i, setIndex) =>
+                                  _editSet(i, setIndex),
+                              onAddNote: _addExerciseNote,
+                              onRename: _showExerciseRenameDialog,
+                              onDeleteExercise: _deleteExercise,
+                            ),
                           ),
                         );
-                      }
-
-                      final exercise = session.exercises[index];
-
-                      return ReorderableDelayedDragStartListener(
-                        key: ValueKey(index),
-                        index: index,
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: surfaceColor(context),
-                            border: Border.all(
-                                color: borderColor(context), width: 1),
-                          ),
-                          child: ExerciseCard(
-                            exercise: exercise,
-                            exerciseIndex: index,
-                            accent: accent,
-                            onIncrementReps: _incrementReps,
-                            onDecrementReps: _decrementReps,
-                            onIncrementWeight: _incrementWeight,
-                            onDecrementWeight: _decrementWeight,
-                            onAddSet: (i) => _addSet(i),
-                            onEditSet: (i, setIndex) => _editSet(i, setIndex),
-                            onAddNote: _addExerciseNote,
-                            onRename: _showExerciseRenameDialog,
-                            onDeleteExercise: _deleteExercise,
-                          ),
-                        ),
-                      );
-                    },
+                      },
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-          _buildWeekNavBar(),
+          _buildWeekNavBar(planColor, accent),
         ],
       ),
     );
   }
 
+  /// The plan switcher under the app bar.
+  ///
+  /// Every tab used to carry a 2px bottom border, which made the "active"
+  /// indicator indistinguishable from a baseline rule that stopped mid-screen,
+  /// and the selected tab was a solid slab in the *global* accent while the
+  /// title directly above it was drawn in the plan's own colour. Now the bar
+  /// owns one continuous hairline, and the only mark is a 2px underline in the
+  /// active plan's colour, sized to its label.
   PreferredSizeWidget? _buildPlanTabBar(
     Color accent,
     List<WorkoutPlan> plans,
@@ -644,139 +662,95 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       return null;
     }
 
+    const double barHeight = 44;
+    final selectedIndex = plans.indexWhere((p) => p.id == activePlan.id);
+
     return PreferredSize(
-      preferredSize: const Size.fromHeight(40),
-      child: Container(
-        height: 40,
-        color: surfaceColor(context),
-        child: ListView.builder(
-          physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics()),
-          scrollDirection: Axis.horizontal,
-          itemCount: plans.length,
-          itemBuilder: (context, index) {
-            final plan = plans[index];
-            final isSelected =
-                plan.id == activePlan.id || index == widget.planIndex;
-            return InkWell(
-              onTap: () {
-                Navigator.pushReplacement(
-                  context,
-                  FadePageRoute(
-                    page: WorkoutScreen(
-                      plan: plan,
-                      planIndex: index,
-                    ),
-                  ),
-                );
-              },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isSelected ? accent : Colors.transparent,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isSelected ? accent : borderColor(context),
-                      width: 2,
-                    ),
-                  ),
-                ),
-                child: Text(
-                  plan.name.toUpperCase(),
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 11,
-                    color:
-                        isSelected ? Colors.black : textPrimaryColor(context),
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
+      preferredSize: const Size.fromHeight(barHeight),
+      child: UnderlineTabStrip(
+        rule: StripRule.bottom,
+        height: barHeight,
+        selectedIndex: selectedIndex >= 0 ? selectedIndex : widget.planIndex,
+        tabs: [
+          for (var index = 0; index < plans.length; index++)
+            UnderlineTabData(
+              // The index is the swipe order between plans, and it echoes the
+              // [01] on the home cards.
+              index: (index + 1).toString().padLeft(2, '0'),
+              label: plans[index].name.toUpperCase(),
+              // Each tab resolves its own colour, so a red plan no longer gets
+              // a purple tab while its title above is red.
+              color: plans[index].planColor != null
+                  ? Color(plans[index].planColor!)
+                  : accent,
+              onTap: plans[index].id == activePlan.id
+                  ? null
+                  : () {
+                      Navigator.pushReplacement(
+                        context,
+                        FadePageRoute(
+                          page: WorkoutScreen(
+                            plan: plans[index],
+                            planIndex: index,
+                          ),
+                        ),
+                      );
+                    },
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildWeekNavBar() {
-    final accent = context.watch<SettingsProvider>().accentColor;
-    final surface = surfaceColor(context);
-    final border = borderColor(context);
-    final textPrimary = textPrimaryColor(context);
-
+  /// The week switcher above the bottom edge — the plan switcher's twin.
+  ///
+  /// It used to be a row of filled pills in the global accent, which said
+  /// "toggle" where the strip above it said "tab", and coloured the current week
+  /// with the app's accent rather than the plan you are actually inside. Same
+  /// control, same language now: an underline in the plan's colour. The week
+  /// number is its own ordinal, so these tabs carry no index prefix.
+  Widget _buildWeekNavBar(Color planColor, Color accent) {
     return Container(
-      decoration: BoxDecoration(
-        color: surface,
-        border: Border(top: BorderSide(color: border, width: 1)),
-      ),
+      // The ground reaches into the safe-area inset; only the tabs stop short
+      // of it, so there is no bare strip of background under the bar.
+      color: surfaceColor(context),
       child: SafeArea(
-        child: Column(
-          children: [
-            SizedBox(
-              height: 40,
-              child: ListView.builder(
-                controller: _weekNavScrollController,
-                physics: const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics()),
-                scrollDirection: Axis.horizontal,
-                itemCount: _weeks.length + 1,
-                itemBuilder: (context, index) {
-                  if (index == _weeks.length) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Center(
-                        child: InkWell(
-                          onTap: _addNewWeek,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: accent),
-                            ),
-                            child: Text('[+ WEEK ${_weeks.length + 1}]',
-                                style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 10, color: accent)),
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-                  final week = _weeks[index];
-                  final isSelected = index == _currentWeekIndex;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Center(
-                      child: InkWell(
-                        onTap: () {
-                          setState(() {
-                            _currentWeekIndex = index;
-                          });
-                        },
-                        onLongPress: () =>
-                            _showWeekOptionsMenu(context, index, week),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: isSelected ? accent : Colors.transparent,
-                            border:
-                                Border.all(color: isSelected ? accent : border),
-                          ),
-                          child: Text(
-                            'WEEK $week',
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 11,
-                              color: isSelected ? Colors.black : textPrimary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
+        top: false,
+        child: UnderlineTabStrip(
+          rule: StripRule.top,
+          selectedIndex: _currentWeekIndex,
+          tabs: [
+            for (var index = 0; index < _weeks.length; index++)
+              UnderlineTabData(
+                label: 'WEEK ${_weeks[index]}',
+                color: planColor,
+                // Routed through _onWeekChanged, same as a swipe: tapping used
+                // to move the index without saving the week you were leaving or
+                // loading the one you arrived at.
+                onTap: index == _currentWeekIndex
+                    ? null
+                    : () => _onWeekChanged(index),
+                onLongPress: () =>
+                    _showWeekOptionsMenu(context, index, _weeks[index]),
+              ),
+          ],
+          trailing: InkWell(
+            onTap: _addNewWeek,
+            borderRadius: AppRadius.chip,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                border: Border.all(color: accent),
+                borderRadius: AppRadius.chip,
+              ),
+              child: Text(
+                '[+ WEEK ${_weeks.length + 1}]',
+                style:
+                    GoogleFonts.jetBrainsMono(fontSize: 10, color: accent),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );

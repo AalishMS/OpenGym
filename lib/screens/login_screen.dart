@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
+import '../theme/app_theme.dart';
+import '../theme/radii.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -53,13 +55,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    const bg = Color(0xFF0F0F0F);
-    const fg = Color(0xFFE0E0E0);
-    const accent = Color(0xFF00A8FF);
+    // On theme now: colours come from tokens so the screen honours the user's
+    // chosen accent and light/dark mode instead of hardcoded terminal values.
+    final fg = textPrimaryColor(context);
+    final muted = textSecondaryColor(context);
+    final accent = accentColor(context);
+    final onAccent = onAccentColor(context);
     final mono = GoogleFonts.jetBrainsMono();
 
     return Scaffold(
-      backgroundColor: bg,
+      backgroundColor: backgroundColor(context),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -77,46 +82,48 @@ class _LoginScreenState extends State<LoginScreen> {
                           fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Text(_isSignUp ? '// create account' : '// sign in',
-                      style: mono.copyWith(color: fg.withAlpha(153))),
+                      style: mono.copyWith(color: muted)),
                   const SizedBox(height: 32),
                   TextField(
                     controller: _emailController,
                     style: mono.copyWith(color: fg),
                     keyboardType: TextInputType.emailAddress,
                     autocorrect: false,
-                    decoration: _decoration('email', mono, fg, accent),
+                    decoration: _decoration('email', mono, muted, accent),
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _passwordController,
                     style: mono.copyWith(color: fg),
                     obscureText: true,
-                    decoration: _decoration('password', mono, fg, accent),
+                    decoration: _decoration('password', mono, muted, accent),
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 16),
                     Text(_error!,
                         style: mono.copyWith(
-                            color: const Color(0xFFFF5252), fontSize: 13)),
+                            color: errorColor(context), fontSize: 13)),
                   ],
                   const SizedBox(height: 24),
                   ElevatedButton(
                     onPressed: _loading ? null : _submit,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: bg,
+                      foregroundColor: onAccent,
+                      elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4)),
+                      shape: const RoundedRectangleBorder(
+                          borderRadius: AppRadius.button),
                     ),
                     child: _loading
-                        ? const SizedBox(
+                        ? SizedBox(
                             height: 18,
                             width: 18,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: bg))
-                        : Text(_isSignUp ? 'CREATE ACCOUNT' : 'SIGN IN',
-                            style: mono.copyWith(fontWeight: FontWeight.bold)),
+                                strokeWidth: 2, color: onAccent))
+                        : Text(_isSignUp ? '[CREATE ACCOUNT]' : '[SIGN IN]',
+                            style: mono.copyWith(
+                                fontWeight: FontWeight.bold, color: onAccent)),
                   ),
                   const SizedBox(height: 16),
                   TextButton(
@@ -143,17 +150,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   InputDecoration _decoration(
-      String label, TextStyle mono, Color fg, Color accent) {
+      String label, TextStyle mono, Color muted, Color accent) {
     return InputDecoration(
       labelText: label,
-      labelStyle: mono.copyWith(color: fg.withAlpha(128)),
+      labelStyle: mono.copyWith(color: muted),
       enabledBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: fg.withAlpha(51)),
-        borderRadius: BorderRadius.circular(4),
+        borderSide: BorderSide(color: borderColor(context)),
+        borderRadius: AppRadius.field,
       ),
       focusedBorder: OutlineInputBorder(
         borderSide: BorderSide(color: accent),
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: AppRadius.field,
       ),
     );
   }

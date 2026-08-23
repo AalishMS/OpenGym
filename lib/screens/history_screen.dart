@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../providers/settings_provider.dart';
@@ -8,6 +9,7 @@ import '../models/exercise.dart';
 import '../models/set.dart' as gym;
 import '../services/pr_tracking_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/radii.dart';
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
@@ -68,7 +70,7 @@ class HistoryScreen extends StatelessWidget {
                     builder: (ctx) => Dialog(
                       backgroundColor: surfaceColor(context),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.zero,
+                        borderRadius: AppRadius.card,
                         side: BorderSide(color: borderColor(context), width: 1),
                       ),
                       child: Padding(
@@ -110,7 +112,8 @@ class HistoryScreen extends StatelessWidget {
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: errorColor(context),
-                                    foregroundColor: Colors.white,
+                                    foregroundColor:
+                                        onColor(errorColor(context)),
                                   ),
                                   child: Text('[DELETE]',
                                       style: GoogleFonts.jetBrainsMono()),
@@ -186,6 +189,7 @@ class _SessionCardState extends State<_SessionCard> {
       decoration: BoxDecoration(
         color: surfaceColor(context),
         border: Border.all(color: border, width: 1),
+        borderRadius: AppRadius.card,
       ),
       child: Column(
         children: [
@@ -195,6 +199,9 @@ class _SessionCardState extends State<_SessionCard> {
                 _isExpanded = !_isExpanded;
               });
             },
+            // Top-only: the header sits above the expandable body, so its
+            // splash follows the card's top corners and stops square below.
+            borderRadius: AppRadius.cardTop,
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -207,6 +214,7 @@ class _SessionCardState extends State<_SessionCard> {
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           border: Border.all(color: accent),
+                          borderRadius: AppRadius.chip,
                         ),
                         child: Text(
                           '${session.date.day}/${session.date.month}/${session.date.year}',
@@ -221,11 +229,12 @@ class _SessionCardState extends State<_SessionCard> {
                               horizontal: 6, vertical: 2),
                           decoration: const BoxDecoration(
                             color: Colors.amber,
+                            borderRadius: AppRadius.badge,
                           ),
                           child: Text(
                             '[PR]',
                             style: GoogleFonts.jetBrainsMono(
-                                fontSize: 10, color: Colors.black),
+                                fontSize: 10, color: onColor(Colors.amber)),
                           ),
                         ),
                       ],
@@ -250,7 +259,7 @@ class _SessionCardState extends State<_SessionCard> {
                       ),
                       const SizedBox(width: 8),
                       Icon(
-                        _isExpanded ? Icons.expand_less : Icons.expand_more,
+                        _isExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
                         color: textSecondaryColor(context),
                         size: 20,
                       ),
@@ -359,6 +368,7 @@ class _ExerciseSection extends StatelessWidget {
                           horizontal: 4, vertical: 1),
                       decoration: BoxDecoration(
                         border: Border.all(color: borderColor(context)),
+                        borderRadius: AppRadius.chip,
                       ),
                       child: Text(
                         'RPE ${set.rpe}',
@@ -438,7 +448,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
               fontSize: 16, fontWeight: FontWeight.bold, color: accent),
         ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: accent),
+          icon: Icon(LucideIcons.arrowLeft, color: accent),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
@@ -446,7 +456,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
             onTap: _save,
             child: Container(
               padding: const EdgeInsets.all(12),
-              child: Text('[ SAVE ]',
+              child: Text('[SAVE]',
                   style: GoogleFonts.jetBrainsMono(color: accent)),
             ),
           ),
@@ -459,7 +469,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
             controller: _planNameController,
             decoration: const InputDecoration(
               labelText: 'Plan Name',
-              border: OutlineInputBorder(),
+              border: OutlineInputBorder(borderRadius: AppRadius.field),
             ),
           ),
           const SizedBox(height: 16),
@@ -477,6 +487,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
               decoration: BoxDecoration(
                 color: surfaceColor(context),
                 border: Border.all(color: borderColor(context), width: 1),
+                borderRadius: AppRadius.card,
               ),
               child: Padding(
                 padding: const EdgeInsets.all(12),
@@ -490,6 +501,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                               horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             border: Border.all(color: accent),
+                            borderRadius: AppRadius.badge,
                           ),
                           child: Text(
                             '[${index + 1}]',
@@ -564,7 +576,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                       onTap: () => _showAddSetDialog(index, exercise),
                       splashColor: accent.withValues(alpha: 0.2),
                       highlightColor: accent.withValues(alpha: 0.1),
-                      child: Text('[ + ADD SET ]',
+                      child: Text('[+ ADD SET]',
                           style: GoogleFonts.jetBrainsMono(
                               fontSize: 10, color: accent)),
                     ),
@@ -588,7 +600,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
       builder: (ctx) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -648,7 +660,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
                     child: Text('[ADD]', style: GoogleFonts.jetBrainsMono()),
                   ),
@@ -672,7 +684,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
       builder: (ctx) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -764,7 +776,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: accent,
-                          foregroundColor: Colors.black,
+                          foregroundColor: onAccentColor(context),
                         ),
                         child:
                             Text('[SAVE]', style: GoogleFonts.jetBrainsMono()),

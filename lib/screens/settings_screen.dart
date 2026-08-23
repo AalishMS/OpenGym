@@ -4,6 +4,7 @@ import 'dart:io' show File;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -15,6 +16,7 @@ import '../services/hive_service.dart';
 import '../services/sample_data_seeder.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/radii.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -57,7 +59,7 @@ class SettingsScreen extends StatelessWidget {
               Divider(color: border),
               _SectionHeader(title: 'WORKOUT', accent: accent, border: border),
               _buildSwitchTile(
-                icon: Icons.speed,
+                icon: LucideIcons.gauge,
                 title: 'HIGH REFRESH RATE',
                 subtitle: 'Enable 90/120Hz display support',
                 value: settings.highRefreshRate,
@@ -68,7 +70,7 @@ class SettingsScreen extends StatelessWidget {
                 textPrimary: textPrimary,
               ),
               _buildSwitchTile(
-                icon: Icons.bolt,
+                icon: LucideIcons.zap,
                 title: 'AUTO-FILL LAST WEIGHTS',
                 subtitle: 'Automatically fill weight from previous workout',
                 value: settings.autoFillLast,
@@ -81,7 +83,7 @@ class SettingsScreen extends StatelessWidget {
               Divider(color: border),
               _SectionHeader(title: 'UNITS', accent: accent, border: border),
               _buildSettingsTile(
-                icon: Icons.fitness_center,
+                icon: LucideIcons.dumbbell,
                 title: 'WEIGHT UNIT',
                 subtitle: settings.weightUnit == 'kg'
                     ? 'KILOGRAMS (KG)'
@@ -95,7 +97,7 @@ class SettingsScreen extends StatelessWidget {
               Divider(color: border),
               _SectionHeader(title: 'DATA', accent: accent, border: border),
               _buildSettingsTile(
-                icon: Icons.download,
+                icon: LucideIcons.flaskConical,
                 title: 'LOAD SAMPLE DATA',
                 subtitle: 'Add sample plans and workouts for testing',
                 onTap: () => _loadSampleData(context),
@@ -105,7 +107,7 @@ class SettingsScreen extends StatelessWidget {
                 border: border,
               ),
               _buildSettingsTile(
-                icon: Icons.upload,
+                icon: LucideIcons.upload,
                 title: 'EXPORT DATA',
                 subtitle: 'Backup all plans, sessions, and settings',
                 onTap: () => _exportData(context),
@@ -115,7 +117,7 @@ class SettingsScreen extends StatelessWidget {
                 border: border,
               ),
               _buildSettingsTile(
-                icon: Icons.download,
+                icon: LucideIcons.download,
                 title: 'IMPORT DATA',
                 subtitle: 'Restore from a backup file (replaces all data)',
                 onTap: () => _importData(context),
@@ -125,7 +127,7 @@ class SettingsScreen extends StatelessWidget {
                 border: border,
               ),
               _buildSettingsTile(
-                icon: Icons.delete_forever,
+                icon: LucideIcons.trash2,
                 title: 'CLEAR ALL DATA',
                 subtitle: 'Delete all plans and workout history',
                 onTap: () => _confirmClearData(context),
@@ -138,7 +140,7 @@ class SettingsScreen extends StatelessWidget {
               ),
               if (SupabaseService.currentUser != null)
                 _buildSettingsTile(
-                  icon: Icons.logout,
+                  icon: LucideIcons.logOut,
                   title: 'SIGN OUT',
                   subtitle: SupabaseService.currentUser?.email ?? 'Signed in',
                   onTap: () async {
@@ -216,7 +218,7 @@ class SettingsScreen extends StatelessWidget {
               _buildThemeOption(
                 context: context,
                 mode: ThemeMode.dark,
-                icon: Icons.dark_mode,
+                icon: LucideIcons.moon,
                 label: 'DARK',
                 isSelected: settings.themeMode == ThemeMode.dark,
                 settings: settings,
@@ -228,7 +230,7 @@ class SettingsScreen extends StatelessWidget {
               _buildThemeOption(
                 context: context,
                 mode: ThemeMode.light,
-                icon: Icons.light_mode,
+                icon: LucideIcons.sun,
                 label: 'LIGHT',
                 isSelected: settings.themeMode == ThemeMode.light,
                 settings: settings,
@@ -240,7 +242,7 @@ class SettingsScreen extends StatelessWidget {
               _buildThemeOption(
                 context: context,
                 mode: ThemeMode.system,
-                icon: Icons.brightness_auto,
+                icon: LucideIcons.sunMoon,
                 label: 'SYSTEM',
                 isSelected: settings.themeMode == ThemeMode.system,
                 settings: settings,
@@ -271,6 +273,7 @@ class SettingsScreen extends StatelessWidget {
     return Expanded(
       child: InkWell(
         onTap: () => settings.setThemeMode(mode),
+        borderRadius: AppRadius.button,
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 12),
           decoration: BoxDecoration(
@@ -279,6 +282,7 @@ class SettingsScreen extends StatelessWidget {
               color: isSelected ? accent : border,
               width: isSelected ? 2 : 1,
             ),
+            borderRadius: AppRadius.button,
           ),
           child: Column(
             children: [
@@ -298,7 +302,7 @@ class SettingsScreen extends StatelessWidget {
               ),
               if (isSelected) ...[
                 const SizedBox(height: 2),
-                Icon(Icons.check, size: 12, color: accent),
+                Icon(LucideIcons.check, size: 12, color: accent),
               ],
             ],
           ),
@@ -364,12 +368,12 @@ class SettingsScreen extends StatelessWidget {
       Color border,
       Color textSecondary) {
     final accentToShow = isDark ? option.dark : option.light;
-    final isLight = accentToShow.computeLuminance() > 0.5;
 
     return InkWell(
       onTap: () {
         settings.setAccentColor(SettingsProvider.accents.indexOf(option));
       },
+      borderRadius: AppRadius.button,
       child: Container(
         width: 100,
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
@@ -379,6 +383,7 @@ class SettingsScreen extends StatelessWidget {
             color: isSelected ? accentToShow : border,
             width: isSelected ? 2 : 1,
           ),
+          borderRadius: AppRadius.button,
         ),
         child: Column(
           children: [
@@ -401,11 +406,10 @@ class SettingsScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: option.dark,
                     border: Border.all(
-                      color: isSelected
-                          ? (isLight ? Colors.black : Colors.white)
-                          : border,
+                      color: isSelected ? onColor(option.dark) : border,
                       width: isSelected ? 1 : 1,
                     ),
+                    borderRadius: AppRadius.badge,
                   ),
                 ),
                 const SizedBox(width: 2),
@@ -415,19 +419,17 @@ class SettingsScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: option.light,
                     border: Border.all(
-                      color: isSelected
-                          ? (option.light.computeLuminance() > 0.5
-                              ? Colors.black
-                              : Colors.white)
-                          : border,
+                      color: isSelected ? onColor(option.light) : border,
                       width: isSelected ? 1 : 1,
                     ),
+                    borderRadius: AppRadius.badge,
                   ),
                 ),
                 if (isSelected)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 2),
-                    child: Icon(Icons.check, size: 12, color: Colors.white),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child:
+                        Icon(LucideIcons.check, size: 12, color: accentToShow),
                   ),
               ],
             ),
@@ -516,7 +518,7 @@ class SettingsScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: textSecondary, size: 20),
+              Icon(LucideIcons.chevronRight, color: textSecondary, size: 20),
             ],
           ),
         ),
@@ -537,7 +539,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (ctx) => Dialog(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: border, width: 1),
         ),
         child: Padding(
@@ -586,7 +588,7 @@ class SettingsScreen extends StatelessWidget {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
                     child: Text('[LOAD]', style: GoogleFonts.jetBrainsMono()),
                   ),
@@ -611,7 +613,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (ctx) => Dialog(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: border, width: 1),
         ),
         child: Padding(
@@ -700,7 +702,7 @@ class SettingsScreen extends StatelessWidget {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
                     child:
                         Text('[EXPORT]', style: GoogleFonts.jetBrainsMono()),
@@ -756,7 +758,7 @@ class SettingsScreen extends StatelessWidget {
         builder: (ctx) => Dialog(
           backgroundColor: surface,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.zero,
+            borderRadius: AppRadius.card,
             side: BorderSide(color: border, width: 1),
           ),
           child: Padding(
@@ -839,7 +841,7 @@ class SettingsScreen extends StatelessWidget {
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: error,
-                        foregroundColor: Colors.white,
+                        foregroundColor: onColor(error),
                       ),
                       child: Text('[IMPORT]',
                           style: GoogleFonts.jetBrainsMono()),
@@ -877,7 +879,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (ctx) => Dialog(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: border, width: 1),
         ),
         child: Padding(
@@ -925,7 +927,7 @@ class SettingsScreen extends StatelessWidget {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: error,
-                      foregroundColor: Colors.white,
+                      foregroundColor: onColor(error),
                     ),
                     child:
                         Text('[CLEAR ALL]', style: GoogleFonts.jetBrainsMono()),
@@ -951,7 +953,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (dialogContext) => Dialog(
         backgroundColor: surface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: border, width: 1),
         ),
         child: Padding(
@@ -1009,6 +1011,7 @@ class SettingsScreen extends StatelessWidget {
     final isSelected = value == groupValue;
     return InkWell(
       onTap: () => onChanged(value),
+      borderRadius: AppRadius.button,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         child: Row(
@@ -1019,9 +1022,10 @@ class SettingsScreen extends StatelessWidget {
               decoration: BoxDecoration(
                 color: isSelected ? accent : Colors.transparent,
                 border: Border.all(color: accent, width: 1),
+                borderRadius: AppRadius.badge,
               ),
               child: isSelected
-                  ? const Icon(Icons.check, size: 14, color: Colors.black)
+                  ? Icon(LucideIcons.check, size: 14, color: onColor(accent))
                   : null,
             ),
             const SizedBox(width: 12),

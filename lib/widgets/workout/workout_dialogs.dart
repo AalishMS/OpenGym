@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../models/set.dart' as gym;
 import '../../providers/settings_provider.dart';
 import '../../services/pr_tracking_service.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/radii.dart';
+import '../../utils/format.dart';
 
 class WorkoutDialogs {
   static void showPRDialog(BuildContext context, List<PRResult> prs) {
@@ -14,7 +17,7 @@ class WorkoutDialogs {
       builder: (context) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -57,9 +60,9 @@ class WorkoutDialogs {
                     onPressed: () => Navigator.pop(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
-                    child: Text('[ ACKNOWLEDGE ]',
+                    child: Text('[ACKNOWLEDGE]',
                         style: GoogleFonts.jetBrainsMono()),
                   ),
                 ),
@@ -83,7 +86,7 @@ class WorkoutDialogs {
       builder: (context) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -109,12 +112,12 @@ class WorkoutDialogs {
                   labelText: 'Exercise name',
                   labelStyle: GoogleFonts.jetBrainsMono(fontSize: 12),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.zero,
+                    borderRadius: AppRadius.field,
                     borderSide:
                         BorderSide(color: borderColor(context), width: 1),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.zero,
+                    borderRadius: AppRadius.field,
                     borderSide: BorderSide(color: accent, width: 1),
                   ),
                 ),
@@ -148,9 +151,9 @@ class WorkoutDialogs {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
-                    child: Text('[ ADD ]', style: GoogleFonts.jetBrainsMono()),
+                    child: Text('[ADD]', style: GoogleFonts.jetBrainsMono()),
                   ),
                 ],
               ),
@@ -174,7 +177,7 @@ class WorkoutDialogs {
       builder: (context) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -200,12 +203,12 @@ class WorkoutDialogs {
                   labelText: 'Exercise name',
                   labelStyle: GoogleFonts.jetBrainsMono(fontSize: 12),
                   enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.zero,
+                    borderRadius: AppRadius.field,
                     borderSide:
                         BorderSide(color: borderColor(context), width: 1),
                   ),
                   focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.zero,
+                    borderRadius: AppRadius.field,
                     borderSide: BorderSide(color: accent, width: 1),
                   ),
                 ),
@@ -239,10 +242,10 @@ class WorkoutDialogs {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
                     child:
-                        Text('[ RENAME ]', style: GoogleFonts.jetBrainsMono()),
+                        Text('[RENAME]', style: GoogleFonts.jetBrainsMono()),
                   ),
                 ],
               ),
@@ -277,7 +280,7 @@ class WorkoutDialogs {
             return Dialog(
               backgroundColor: surfaceColor(context),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.zero,
+                borderRadius: AppRadius.card,
                 side: BorderSide(color: borderColor(context), width: 1),
               ),
               child: Padding(
@@ -329,6 +332,7 @@ class WorkoutDialogs {
                                 selectedRpe = selectedRpe == rpe ? null : rpe;
                               });
                             },
+                            borderRadius: AppRadius.chip,
                             child: Container(
                               width: 32,
                               height: 32,
@@ -341,6 +345,7 @@ class WorkoutDialogs {
                                       ? accent
                                       : borderColor(context),
                                 ),
+                                borderRadius: AppRadius.chip,
                               ),
                               child: Center(
                                 child: Text(
@@ -348,7 +353,7 @@ class WorkoutDialogs {
                                   style: GoogleFonts.jetBrainsMono(
                                     fontSize: 12,
                                     color: selectedRpe == rpe
-                                        ? Colors.black
+                                        ? onAccentColor(context)
                                         : textPrimaryColor(context),
                                   ),
                                 ),
@@ -408,9 +413,9 @@ class WorkoutDialogs {
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: accent,
-                              foregroundColor: Colors.black,
+                              foregroundColor: onAccentColor(context),
                             ),
-                            child: Text('[ ADD ]',
+                            child: Text('[ADD]',
                                 style: GoogleFonts.jetBrainsMono()),
                           ),
                         ],
@@ -448,7 +453,7 @@ class WorkoutDialogs {
             return Dialog(
               backgroundColor: surfaceColor(context),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.zero,
+                borderRadius: AppRadius.card,
                 side: BorderSide(color: borderColor(context), width: 1),
               ),
               child: Padding(
@@ -495,6 +500,7 @@ class WorkoutDialogs {
                                 selectedRpe = selectedRpe == rpe ? null : rpe;
                               });
                             },
+                            borderRadius: AppRadius.chip,
                             child: Container(
                               width: 32,
                               height: 32,
@@ -507,6 +513,7 @@ class WorkoutDialogs {
                                       ? accent
                                       : borderColor(context),
                                 ),
+                                borderRadius: AppRadius.chip,
                               ),
                               child: Center(
                                 child: Text(
@@ -514,7 +521,7 @@ class WorkoutDialogs {
                                   style: GoogleFonts.jetBrainsMono(
                                     fontSize: 12,
                                     color: selectedRpe == rpe
-                                        ? Colors.black
+                                        ? onAccentColor(context)
                                         : textPrimaryColor(context),
                                   ),
                                 ),
@@ -589,9 +596,9 @@ class WorkoutDialogs {
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: accent,
-                                  foregroundColor: Colors.black,
+                                  foregroundColor: onAccentColor(context),
                                 ),
-                                child: Text('[ SAVE ]',
+                                child: Text('[SAVE]',
                                     style: GoogleFonts.jetBrainsMono()),
                               ),
                             ],
@@ -623,7 +630,7 @@ class WorkoutDialogs {
         return Dialog(
           backgroundColor: surfaceColor(context),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.zero,
+            borderRadius: AppRadius.card,
             side: BorderSide(color: borderColor(context), width: 1),
           ),
           child: Padding(
@@ -669,10 +676,10 @@ class WorkoutDialogs {
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: accent,
-                        foregroundColor: Colors.black,
+                        foregroundColor: onAccentColor(context),
                       ),
                       child:
-                          Text('[ SAVE ]', style: GoogleFonts.jetBrainsMono()),
+                          Text('[SAVE]', style: GoogleFonts.jetBrainsMono()),
                     ),
                   ],
                 ),
@@ -693,13 +700,13 @@ class WorkoutDialogs {
     showModalBottomSheet(
       context: context,
       backgroundColor: surfaceColor(context),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: Icon(Icons.edit, color: accent),
+              leading: Icon(LucideIcons.pencil, color: accent),
               title: Text('RENAME', style: GoogleFonts.jetBrainsMono()),
               onTap: () {
                 Navigator.pop(context);
@@ -707,7 +714,7 @@ class WorkoutDialogs {
               },
             ),
             ListTile(
-              leading: Icon(Icons.delete, color: errorColor(context)),
+              leading: Icon(LucideIcons.trash2, color: errorColor(context)),
               title: Text('DELETE',
                   style: GoogleFonts.jetBrainsMono(color: errorColor(context))),
               onTap: () {
@@ -733,7 +740,7 @@ class WorkoutDialogs {
       builder: (context) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -781,10 +788,10 @@ class WorkoutDialogs {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
                     child:
-                        Text('[ RENAME ]', style: GoogleFonts.jetBrainsMono()),
+                        Text('[RENAME]', style: GoogleFonts.jetBrainsMono()),
                   ),
                 ],
               ),
@@ -804,7 +811,7 @@ class WorkoutDialogs {
       builder: (context) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -842,10 +849,10 @@ class WorkoutDialogs {
                     onPressed: () => Navigator.pop(context, true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: errorColor(context),
-                      foregroundColor: Colors.white,
+                      foregroundColor: onColor(errorColor(context)),
                     ),
                     child:
-                        Text('[ DELETE ]', style: GoogleFonts.jetBrainsMono()),
+                        Text('[DELETE]', style: GoogleFonts.jetBrainsMono()),
                   ),
                 ],
               ),
@@ -866,7 +873,7 @@ class WorkoutDialogs {
       builder: (context) => Dialog(
         backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: borderColor(context), width: 1),
         ),
         child: Padding(
@@ -904,10 +911,10 @@ class WorkoutDialogs {
                     onPressed: () => Navigator.pop(context, true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: errorColor(context),
-                      foregroundColor: Colors.white,
+                      foregroundColor: onColor(errorColor(context)),
                     ),
                     child:
-                        Text('[ DELETE ]', style: GoogleFonts.jetBrainsMono()),
+                        Text('[DELETE]', style: GoogleFonts.jetBrainsMono()),
                   ),
                 ],
               ),
@@ -917,5 +924,244 @@ class WorkoutDialogs {
       ),
     );
     return result ?? false;
+  }
+
+  /// Confirms removing a plan from the plans list.
+  ///
+  /// The body says what actually happens rather than the usual "permanently
+  /// delete" boilerplate: [WorkoutPlanProvider.deletePlan] soft-deletes the plan
+  /// and leaves every logged session in History.
+  static Future<bool> showDeletePlanDialog(
+    BuildContext context, {
+    required String planName,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: surfaceColor(context),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.card,
+          side: BorderSide(color: borderColor(context), width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '> DELETE PLAN?',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: errorColor(context),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Removes "$planName" from your plans. '
+                'Logged sessions stay in History.',
+                style: GoogleFonts.jetBrainsMono(
+                    fontSize: 12, color: textSecondaryColor(context)),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text('[CANCEL]',
+                        style: GoogleFonts.jetBrainsMono(
+                            color: textSecondaryColor(context))),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: errorColor(context),
+                      foregroundColor: onColor(errorColor(context)),
+                    ),
+                    child:
+                        Text('[DELETE]', style: GoogleFonts.jetBrainsMono()),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Confirms leaving the plan editor with unsaved edits.
+  ///
+  /// Destructive in the same sense as [showDeletePlanDialog] — the edits are
+  /// gone once you leave — so it borrows the same red-titled shape, and
+  /// `[KEEP EDITING]` is the quiet way out because it is the safe one.
+  static Future<bool> showDiscardChangesDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: surfaceColor(context),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.card,
+          side: BorderSide(color: borderColor(context), width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '> DISCARD CHANGES?',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: errorColor(context),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'This plan has unsaved edits. Leaving now throws them away.',
+                style: GoogleFonts.jetBrainsMono(
+                    fontSize: 12, color: textSecondaryColor(context)),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text('[KEEP EDITING]',
+                        style: GoogleFonts.jetBrainsMono(
+                            color: textSecondaryColor(context))),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: errorColor(context),
+                      foregroundColor: onColor(errorColor(context)),
+                    ),
+                    child:
+                        Text('[DISCARD]', style: GoogleFonts.jetBrainsMono()),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Types a weight and reps straight into one prescribed set in the plan
+  /// editor.
+  ///
+  /// The editor's rows adjust by stepper, which is fine for a nudge and awful
+  /// for a jump — reaching 70kg from 0 is 28 taps. Tapping the value gets here
+  /// instead.
+  ///
+  /// Deliberately not [showEditSetDialog]: that one edits a logged `gym.Set`
+  /// and carries RPE and a note, neither of which a plan prescribes. [accent]
+  /// comes in as a parameter so the dialog wears the plan's own colour rather
+  /// than the global accent.
+  static void showEditPlanSetDialog(
+    BuildContext context, {
+    required int setNumber,
+    required int reps,
+    required double weight,
+    required Color accent,
+    required void Function(int reps, double weight) onSave,
+  }) {
+    final weightController =
+        TextEditingController(text: formatWeight(weight));
+    final repsController = TextEditingController(text: reps.toString());
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: surfaceColor(dialogContext),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.card,
+          side: BorderSide(color: borderColor(dialogContext), width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '> SET $setNumber',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: weightController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Weight (kg)',
+                  hintText: 'e.g., 70',
+                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: repsController,
+                decoration: const InputDecoration(
+                  labelText: 'Reps',
+                  hintText: 'e.g., 8',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: Text('[CANCEL]',
+                        style: GoogleFonts.jetBrainsMono(
+                            color: textSecondaryColor(dialogContext))),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      // An unparseable or blank field keeps what the set already
+                      // had, so a stray keystroke cannot silently zero a
+                      // prescription.
+                      final newWeight =
+                          double.tryParse(weightController.text.trim()) ??
+                              weight;
+                      final newReps =
+                          int.tryParse(repsController.text.trim()) ?? reps;
+                      Navigator.pop(dialogContext);
+                      onSave(
+                        newReps.clamp(1, 999),
+                        newWeight.clamp(0, 999).toDouble(),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accent,
+                      foregroundColor: onColor(accent),
+                    ),
+                    child: Text('[SAVE]', style: GoogleFonts.jetBrainsMono()),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

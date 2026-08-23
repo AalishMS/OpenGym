@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../theme/radii.dart';
+
 class StepperWidget extends StatefulWidget {
   final double value;
   final double min;
@@ -131,12 +133,16 @@ class _StepperWidgetState extends State<StepperWidget> {
       children: [
         InkWell(
           onTap: () => widget.onChanged((_currentValue - widget.step).clamp(widget.min, widget.max)),
+          borderRadius: AppRadius.leftCap,
           child: Container(
             width: 30,
             height: 30,
             decoration: BoxDecoration(
               color: widget.surfaceColor,
               border: Border.all(color: widget.borderColor),
+              // Outer cap only — the shared edge with the value box stays
+              // square so the three segments read as one control.
+              borderRadius: AppRadius.leftCap,
             ),
             child: Center(
               child: Text('−',
@@ -171,12 +177,14 @@ class _StepperWidgetState extends State<StepperWidget> {
         ),
         InkWell(
           onTap: () => widget.onChanged(_currentValue + widget.step),
+          borderRadius: AppRadius.rightCap,
           child: Container(
             width: 30,
             height: 30,
             decoration: BoxDecoration(
               color: widget.surfaceColor,
               border: Border.all(color: widget.borderColor),
+              borderRadius: AppRadius.rightCap,
             ),
             child: Center(
               child: Text('+',

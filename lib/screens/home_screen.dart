@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../providers/workout_plan_provider.dart';
+import '../providers/workout_session_provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/workout_plan.dart';
 import '../models/exercise_template.dart';
+import '../models/set_template.dart';
 import '../data/plan_colors.dart';
 import '../theme/app_theme.dart';
-import 'create_plan_screen.dart';
-import 'edit_plan_screen.dart';
+import '../theme/breakpoints.dart';
+import '../theme/radii.dart';
+import '../theme/spacing.dart';
+import '../utils/format.dart';
+import '../utils/plan_stats.dart';
+import '../widgets/workout/workout_dialogs.dart';
+import 'plan_editor_screen.dart';
 import 'workout_screen.dart';
 import '../services/sample_data_seeder.dart';
 
@@ -38,9 +46,19 @@ class HomeScreen extends StatelessWidget {
                 },
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: _buildNewPlanButton(context, accent),
+            // Hidden while the list is empty: the empty state carries the same
+            // action as its primary button, and two `[+ NEW PLAN]`s on one
+            // screen make the reader pick between identical doors.
+            Consumer<WorkoutPlanProvider>(
+              builder: (context, provider, child) {
+                if (provider.plans.isEmpty) return const SizedBox.shrink();
+                return _CappedWidth(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: _buildNewPlanButton(context, accent),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -54,17 +72,19 @@ class HomeScreen extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: border, width: 1)),
       ),
-      child: Row(
-        children: [
-          Text(
-            '> OPENGYM',
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: accent,
+      child: _CappedWidth(
+        child: Row(
+          children: [
+            Text(
+              '> OPENGYM',
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: accent,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -75,7 +95,7 @@ class HomeScreen extends StatelessWidget {
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -86,7 +106,7 @@ class HomeScreen extends StatelessWidget {
                 color: textSecondary,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               'Create your first workout plan',
               style: GoogleFonts.jetBrainsMono(
@@ -94,8 +114,29 @@ class HomeScreen extends StatelessWidget {
                 color: textSecondary,
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: AppSpacing.xxl),
+            // The line above has always said "create your first workout plan",
+            // but the only button here seeded demo data — the one thing a
+            // first-run screen exists to start could not be started from it.
             OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (_) => const PlanEditorScreen.create()),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: accent,
+                side: BorderSide(color: accent, width: 1),
+              ),
+              child: Text('[+ NEW PLAN]', style: GoogleFonts.jetBrainsMono()),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            // Sample data stays reachable for someone who wants to look around
+            // before committing to their own plan, at text weight so it reads
+            // as the way out rather than the way in. It also lives in Settings.
+            TextButton(
               onPressed: () async {
                 await SampleDataSeeder.seedSampleData();
                 provider.loadPlans();
@@ -103,19 +144,16 @@ class HomeScreen extends StatelessWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('> Sample data loaded!',
-                          style:
-                              GoogleFonts.jetBrainsMono(color: Colors.black)),
+                          style: GoogleFonts.jetBrainsMono(
+                              color: onAccentColor(context))),
                       backgroundColor: accent,
                     ),
                   );
                 }
               },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: accent,
-                side: BorderSide(color: accent, width: 1),
-              ),
-              child: Text('[ LOAD SAMPLE DATA ]',
-                  style: GoogleFonts.jetBrainsMono()),
+              style: TextButton.styleFrom(foregroundColor: textSecondary),
+              child: Text('[LOAD SAMPLE DATA]',
+                  style: GoogleFonts.jetBrainsMono(fontSize: 11)),
             ),
           ],
         ),
@@ -125,22 +163,38 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildPlanSection(
       BuildContext context, WorkoutPlanProvider provider, Color accent) {
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 0.85,
+    // Roll up each plan's training history once, keyed by its index in
+    // `provider.plans`, so the card footers don't each hit the repository.
+    final sessions = context.watch<WorkoutSessionProvider>().sessions;
+    final statsByIndex = {
+      for (final stat in PlanStat.compute(provider.plans, sessions))
+        stat.planIndex: stat,
+    };
+
+    return _CappedWidth(
+      child: GridView.builder(
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.sm),
+        // Max-extent (not a fixed column count) so columns scale with the
+        // window: 2 on a phone, 5 at the capped desktop measure. A fixed
+        // `mainAxisExtent` replaces `childAspectRatio` — the old ratio made
+        // cards as tall as the column was wide, which on desktop meant two
+        // enormous, mostly-empty boxes.
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 260,
+          mainAxisExtent: 148,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+        ),
+        itemCount: provider.plans.length,
+        itemBuilder: (context, index) => _buildPlanCard(
+            context, provider.plans[index], index, accent, statsByIndex[index]),
       ),
-      itemCount: provider.plans.length,
-      itemBuilder: (context, index) =>
-          _buildPlanCard(context, provider.plans[index], index, accent),
     );
   }
 
-  Widget _buildPlanCard(
-      BuildContext context, WorkoutPlan plan, int index, Color accent) {
+  Widget _buildPlanCard(BuildContext context, WorkoutPlan plan, int index,
+      Color accent, PlanStat? stat) {
     final surface = surfaceColor(context);
     final border = borderColor(context);
     final textPrimary = textPrimaryColor(context);
@@ -159,11 +213,15 @@ class HomeScreen extends StatelessWidget {
           ),
         );
       },
-      onLongPress: () => _showPlanOptions(context, plan, index, accent),
+      onLongPress: () => _showPlanOptions(context, plan, index, accent, stat),
+      borderRadius: AppRadius.card,
       child: Container(
+        // Clips the full-bleed accent strip below to the rounded corners.
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: surface,
           border: Border.all(color: border, width: 1),
+          borderRadius: AppRadius.card,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -171,47 +229,58 @@ class HomeScreen extends StatelessWidget {
             Container(height: 2, color: planColor),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(AppSpacing.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '[${(index + 1).toString().padLeft(2, '0')}]',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 9,
-                        color: textSecondary,
-                        letterSpacing: 0.08,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      plan.name.toUpperCase(),
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: textPrimary,
-                        letterSpacing: 0.04,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    ...previewLines.map((name) => Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Text(
-                        '· $name',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 9,
-                          color: textSecondary,
-                          letterSpacing: 0.02,
+                    // Index and title share a line — on its own row the `[01]`
+                    // cost 20px of height for four characters.
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Text(
+                          '[${(index + 1).toString().padLeft(2, '0')}]',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 9,
+                            color: textSecondary,
+                            letterSpacing: 0.08,
+                          ),
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    )),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            plan.name.toUpperCase(),
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: textPrimary,
+                              letterSpacing: 0.04,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    ...previewLines.map((name) => Padding(
+                          padding:
+                              const EdgeInsets.only(bottom: AppSpacing.xxs),
+                          child: Text(
+                            '· $name',
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 9,
+                              color: textSecondary,
+                              letterSpacing: 0.02,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        )),
                     if (exerciseNames.length > 3)
                       Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
                         child: Text(
                           '+${exerciseNames.length - 3} more',
                           style: GoogleFonts.jetBrainsMono(
@@ -222,12 +291,14 @@ class HomeScreen extends StatelessWidget {
                       ),
                     const Spacer(),
                     Text(
-                      '${plan.exercises.length} EXERCISES',
+                      _planFooter(plan, stat),
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 9,
                         color: planColor,
                         letterSpacing: 0.06,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -239,25 +310,38 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+  /// `2D AGO · 3 SESSIONS · 5 EX`, degrading to just the exercise count for a
+  /// plan that has never been trained.
+  String _planFooter(WorkoutPlan plan, PlanStat? stat) {
+    if (stat == null || stat.sessionCount == 0) {
+      return '${plan.exercises.length} EXERCISES';
+    }
+    return '${formatRelativeDay(stat.lastTrained!)}'
+        '  ·  ${stat.sessionCount} SESSIONS'
+        '  ·  ${plan.exercises.length} EX';
+  }
+
   Widget _buildNewPlanButton(BuildContext context, Color accent) {
     final textSecondary = textSecondaryColor(context);
     return InkWell(
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const CreatePlanScreen()),
+          MaterialPageRoute(builder: (_) => const PlanEditorScreen.create()),
         );
       },
+      borderRadius: AppRadius.button,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
           border: Border.all(color: accent.withAlpha(60)),
+          borderRadius: AppRadius.button,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.add, size: 12, color: textSecondary),
+            Icon(LucideIcons.plus, size: 12, color: textSecondary),
             const SizedBox(width: 8),
             Text(
               '[+ NEW PLAN]',
@@ -273,107 +357,165 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  void _showPlanOptions(
-      BuildContext context, WorkoutPlan plan, int index, Color accent) {
-    final surface = surfaceColor(context);
+  void _showPlanOptions(BuildContext context, WorkoutPlan plan, int index,
+      Color accent, PlanStat? stat) {
+    final planColor = plan.planColor != null ? Color(plan.planColor!) : accent;
     final border = borderColor(context);
+    final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
 
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: surface,
+        backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.zero,
+          borderRadius: AppRadius.card,
           side: BorderSide(color: border, width: 1),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> ${plan.name}',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: accent,
+        // Without a cap the dialog takes Material's share of a desktop window
+        // and the four rows end up a hand-span apart.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            // Vertical inset only — the header and rows carry their own
+            // horizontal padding, so the two rules run full-bleed.
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // The header names what you long-pressed and echoes the card's
+                // colour bar, so there's no doubt which plan is about to change.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg,
+                      AppSpacing.xs, AppSpacing.lg, AppSpacing.md),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 3,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: planColor,
+                          borderRadius: AppRadius.micro,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              plan.name.toUpperCase(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: textPrimary,
+                                letterSpacing: 0.04,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xxs),
+                            Text(
+                              _planFooter(plan, stat),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 9,
+                                color: textSecondary,
+                                letterSpacing: 0.06,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Select action:',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 12,
-                  color: textSecondary,
+                Divider(height: 1, thickness: 1, color: border),
+                _PlanActionRow(
+                  icon: LucideIcons.paintbrush,
+                  label: 'CHANGE COLOR',
+                  color: textPrimary,
+                  // Shows the current value without opening the picker.
+                  trailing: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: planColor,
+                      borderRadius: AppRadius.badge,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showColorPickerDialog(context, plan, index, accent);
+                  },
                 ),
-              ),
-              const SizedBox(height: 16),
-              _buildActionButton(
-                label: '[COLOR] Change plan color',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showColorPickerDialog(context, plan, index, accent);
-                },
-                accent: accent,
-              ),
-              const SizedBox(height: 8),
-              _buildActionButton(
-                label: '[COPY] Duplicate plan',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  final copyPlan = WorkoutPlan(
-                    name: '${plan.name} (Copy)',
-                    exercises: plan.exercises
-                        .map(
-                            (e) => ExerciseTemplate(name: e.name, sets: e.sets))
-                        .toList(),
-                    planColor: plan.planColor,
-                  );
-                  context.read<WorkoutPlanProvider>().addPlan(copyPlan);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('> Plan copied!',
-                          style:
-                              GoogleFonts.jetBrainsMono(color: Colors.black)),
-                      backgroundColor: accent,
-                    ),
-                  );
-                },
-                accent: accent,
-              ),
-              const SizedBox(height: 8),
-              _buildActionButton(
-                label: '[EDIT] Modify plan',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          EditPlanScreen(plan: plan, planIndex: index),
-                    ),
-                  );
-                },
-                accent: accent,
-              ),
-              const SizedBox(height: 8),
-              _buildActionButton(
-                label: '[DELETE] Remove plan',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  context.read<WorkoutPlanProvider>().deletePlan(plan.id!);
-                },
-                accent: Colors.red,
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text('[CANCEL]',
-                    style: GoogleFonts.jetBrainsMono(color: textSecondary)),
-              ),
-            ],
+                _PlanActionRow(
+                  icon: LucideIcons.copy,
+                  label: 'DUPLICATE PLAN',
+                  color: textPrimary,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    final copyPlan = WorkoutPlan(
+                      name: '${plan.name} (Copy)',
+                      exercises: plan.exercises
+                          .map((e) => ExerciseTemplate(
+                                name: e.name,
+                                sets: e.sets,
+                                setTargets: e.setTargets
+                                    ?.map((t) => SetTemplate(
+                                        reps: t.reps, weight: t.weight))
+                                    .toList(),
+                              ))
+                          .toList(),
+                      planColor: plan.planColor,
+                    );
+                    context.read<WorkoutPlanProvider>().addPlan(copyPlan);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('> Plan copied!',
+                            style: GoogleFonts.jetBrainsMono(
+                                color: onAccentColor(context))),
+                        backgroundColor: accent,
+                      ),
+                    );
+                  },
+                ),
+                _PlanActionRow(
+                  icon: LucideIcons.pencil,
+                  label: 'EDIT PLAN',
+                  color: textPrimary,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => PlanEditorScreen.edit(plan),
+                      ),
+                    );
+                  },
+                ),
+                // A rule and the error colour set the one irreversible action
+                // apart; deleting also asks first, which it never used to.
+                Divider(height: 1, thickness: 1, color: border),
+                _PlanActionRow(
+                  icon: LucideIcons.trash2,
+                  label: 'DELETE PLAN',
+                  color: errorColor(context),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final confirmed = await WorkoutDialogs.showDeletePlanDialog(
+                      context,
+                      planName: plan.name,
+                    );
+                    if (confirmed && context.mounted) {
+                      context.read<WorkoutPlanProvider>().deletePlan(plan.id!);
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -395,7 +537,7 @@ class HomeScreen extends StatelessWidget {
             return Dialog(
               backgroundColor: surface,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.zero,
+                borderRadius: AppRadius.card,
                 side: BorderSide(color: border, width: 1),
               ),
               child: Padding(
@@ -440,12 +582,11 @@ class HomeScreen extends StatelessWidget {
                                 color: isSelected ? accent : Colors.transparent,
                                 width: 2,
                               ),
+                              borderRadius: AppRadius.control,
                             ),
                             child: isSelected
-                                ? Icon(Icons.check, size: 18,
-                                    color: color.computeLuminance() > 0.5
-                                        ? Colors.black
-                                        : Colors.white)
+                                ? Icon(LucideIcons.check,
+                                    size: 18, color: onColor(color))
                                 : null,
                           ),
                         );
@@ -458,24 +599,29 @@ class HomeScreen extends StatelessWidget {
                         TextButton(
                           onPressed: () => Navigator.pop(ctx),
                           child: Text('[CANCEL]',
-                              style: GoogleFonts.jetBrainsMono(color: textSecondary)),
+                              style: GoogleFonts.jetBrainsMono(
+                                  color: textSecondary)),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: () {
-                            final updated = plan.copyWith(planColor: selectedColor);
-                            context.read<WorkoutPlanProvider>().updatePlan(updated);
+                            final updated =
+                                plan.copyWith(planColor: selectedColor);
+                            context
+                                .read<WorkoutPlanProvider>()
+                                .updatePlan(updated);
                             Navigator.pop(ctx);
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: accent,
-                            foregroundColor: Colors.black,
+                            foregroundColor: onAccentColor(context),
                             elevation: 0,
                             shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero,
+                              borderRadius: AppRadius.button,
                             ),
                           ),
-                          child: Text('[SAVE]', style: GoogleFonts.jetBrainsMono()),
+                          child: Text('[SAVE]',
+                              style: GoogleFonts.jetBrainsMono()),
                         ),
                       ],
                     ),
@@ -488,24 +634,75 @@ class HomeScreen extends StatelessWidget {
       },
     );
   }
+}
 
-  Widget _buildActionButton(
-      {required String label,
-      required VoidCallback onTap,
-      required Color accent}) {
+/// Centres its child and caps it at [Breakpoints.expanded].
+///
+/// The plans grid sizes columns by max extent, so an ultra-wide monitor gave it
+/// ten columns and a card's three-line preview stretched a hand-span across the
+/// desk. Header, grid, and footer button all sit in the same capped measure, so
+/// they share one left edge; only the header's ground and its rule still run
+/// full-bleed, because a rule is screen furniture rather than content.
+class _CappedWidth extends StatelessWidget {
+  final Widget child;
+
+  const _CappedWidth({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: Breakpoints.expanded),
+        child: child,
+      ),
+    );
+  }
+}
+
+/// One row of the long-press plan menu.
+///
+/// No ground and no outline: the header's colour bar is the only accent in the
+/// dialog, so the rows stay quiet and the destructive one is set apart by colour
+/// and a rule instead of competing with three identical outlined pills. The
+/// splash stays square because the row is a full-bleed strip, not a rounded box.
+class _PlanActionRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Widget? trailing;
+  final VoidCallback onTap;
+
+  const _PlanActionRow({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      splashColor: accent.withAlpha(51),
-      highlightColor: accent.withAlpha(26),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          border: Border.all(color: accent, width: 1),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.jetBrainsMono(fontSize: 12, color: accent),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+            vertical: AppSpacing.md, horizontal: AppSpacing.lg),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 12,
+                  color: color,
+                  letterSpacing: 0.06,
+                ),
+              ),
+            ),
+            if (trailing != null) trailing!,
+          ],
         ),
       ),
     );

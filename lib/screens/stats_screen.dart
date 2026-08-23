@@ -6,6 +6,9 @@ import '../providers/settings_provider.dart';
 import '../repositories/stats_repository.dart';
 import '../repositories/workout_session_repository.dart';
 import '../theme/app_theme.dart';
+import '../theme/breakpoints.dart';
+import '../theme/radii.dart';
+import '../widgets/dashboard/stat_tile.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -55,21 +58,52 @@ class _StatsScreenState extends State<StatsScreen> {
         ),
         automaticallyImplyLeading: false,
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          _buildSummaryCards(totalWorkouts, workoutsThisWeek, totalPRs, accent),
-          const SizedBox(height: 24),
-          _buildViewToggle(accent),
-          const SizedBox(height: 16),
-          if (_showOverall)
-            _buildFrequencyChart(frequency, accent)
-          else
-            _buildProgressionChart(accent),
-          const SizedBox(height: 24),
-          if (!_showOverall && _exerciseNames.isNotEmpty)
-            _buildExerciseSelector(accent),
-        ],
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          // With a sidebar taking 180px, the usable width at the 900px shell
+          // breakpoint is ~720 — enough for two charts side by side, which
+          // makes the [OVERALL]/[EXERCISE] toggle redundant.
+          final wide = constraints.maxWidth >= Breakpoints.medium - 180;
+          final chartHeight = wide ? 300.0 : 200.0;
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _buildSummaryCards(
+                  totalWorkouts, workoutsThisWeek, totalPRs, accent),
+              const SizedBox(height: 24),
+              if (wide) ...[
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(
+                        child: _buildFrequencyChart(
+                            frequency, accent, chartHeight),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: _buildProgressionChart(accent, chartHeight),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                if (_exerciseNames.isNotEmpty) _buildExerciseSelector(accent),
+              ] else ...[
+                _buildViewToggle(accent),
+                const SizedBox(height: 16),
+                if (_showOverall)
+                  _buildFrequencyChart(frequency, accent, chartHeight)
+                else
+                  _buildProgressionChart(accent, chartHeight),
+                const SizedBox(height: 24),
+                if (!_showOverall && _exerciseNames.isNotEmpty)
+                  _buildExerciseSelector(accent),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -78,7 +112,7 @@ class _StatsScreenState extends State<StatsScreen> {
     return Row(
       children: [
         Expanded(
-          child: _SummaryCard(
+          child: StatTile(
             label: 'TOTAL WORKOUTS',
             value: '$total',
             accent: accent,
@@ -86,7 +120,7 @@ class _StatsScreenState extends State<StatsScreen> {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: _SummaryCard(
+          child: StatTile(
             label: 'THIS WEEK',
             value: '$thisWeek',
             accent: accent,
@@ -94,7 +128,7 @@ class _StatsScreenState extends State<StatsScreen> {
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: _SummaryCard(
+          child: StatTile(
             label: 'PRS TRACKED',
             value: '$prs',
             accent: accent,
@@ -114,18 +148,20 @@ class _StatsScreenState extends State<StatsScreen> {
                 _showOverall = true;
               });
             },
+            borderRadius: AppRadius.button,
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
                 color: _showOverall ? accent : Colors.transparent,
                 border: Border.all(color: accent, width: 1),
+                borderRadius: AppRadius.button,
               ),
               child: Center(
                 child: Text(
                   '[OVERALL]',
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 12,
-                    color: _showOverall ? Colors.black : accent,
+                    color: _showOverall ? onAccentColor(context) : accent,
                   ),
                 ),
               ),
@@ -140,18 +176,20 @@ class _StatsScreenState extends State<StatsScreen> {
                 _showOverall = false;
               });
             },
+            borderRadius: AppRadius.button,
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
                 color: !_showOverall ? accent : Colors.transparent,
                 border: Border.all(color: accent, width: 1),
+                borderRadius: AppRadius.button,
               ),
               child: Center(
                 child: Text(
                   '[EXERCISE]',
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 12,
-                    color: !_showOverall ? Colors.black : accent,
+                    color: !_showOverall ? onAccentColor(context) : accent,
                   ),
                 ),
               ),
@@ -167,7 +205,7 @@ class _StatsScreenState extends State<StatsScreen> {
       initialValue: _selectedExercise,
       decoration: const InputDecoration(
         labelText: 'SELECT EXERCISE',
-        border: OutlineInputBorder(),
+        border: OutlineInputBorder(borderRadius: AppRadius.field),
       ),
       items: _exerciseNames.map((name) {
         final pr = _statsRepo.getExercisePR(name);
@@ -185,7 +223,8 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  Widget _buildFrequencyChart(Map<int, int> frequency, Color accent) {
+  Widget _buildFrequencyChart(
+      Map<int, int> frequency, Color accent, double chartHeight) {
     final maxY = frequency.values.isEmpty
         ? 5.0
         : (frequency.values.reduce((a, b) => a > b ? a : b) + 2).toDouble();
@@ -194,6 +233,7 @@ class _StatsScreenState extends State<StatsScreen> {
       decoration: BoxDecoration(
         color: surfaceColor(context),
         border: Border.all(color: borderColor(context), width: 1),
+        borderRadius: AppRadius.card,
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -219,7 +259,7 @@ class _StatsScreenState extends State<StatsScreen> {
             ),
             const SizedBox(height: 24),
             SizedBox(
-              height: 200,
+              height: chartHeight,
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
@@ -291,7 +331,7 @@ class _StatsScreenState extends State<StatsScreen> {
                           toY: count.toDouble(),
                           color: accent,
                           width: 20,
-                          borderRadius: BorderRadius.zero,
+                          borderRadius: AppRadius.barCap,
                         ),
                       ],
                     );
@@ -305,12 +345,13 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  Widget _buildProgressionChart(Color accent) {
+  Widget _buildProgressionChart(Color accent, double chartHeight) {
     if (_selectedExercise == null) {
       return Container(
         decoration: BoxDecoration(
           color: surfaceColor(context),
           border: Border.all(color: borderColor(context), width: 1),
+          borderRadius: AppRadius.card,
         ),
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -332,6 +373,7 @@ class _StatsScreenState extends State<StatsScreen> {
         decoration: BoxDecoration(
           color: surfaceColor(context),
           border: Border.all(color: borderColor(context), width: 1),
+          borderRadius: AppRadius.card,
         ),
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -361,6 +403,7 @@ class _StatsScreenState extends State<StatsScreen> {
       decoration: BoxDecoration(
         color: surfaceColor(context),
         border: Border.all(color: borderColor(context), width: 1),
+        borderRadius: AppRadius.card,
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -382,7 +425,7 @@ class _StatsScreenState extends State<StatsScreen> {
             ),
             const SizedBox(height: 24),
             SizedBox(
-              height: 200,
+              height: chartHeight,
               child: LineChart(
                 LineChartData(
                   minY: 0,
@@ -517,51 +560,9 @@ class _StatsScreenState extends State<StatsScreen> {
     if (progression.length < 2) return textSecondaryColor(context);
     final first = progression.first['maxWeight'] as double;
     final last = progression.last['maxWeight'] as double;
-    if (last > first) return Colors.green;
+    if (last > first) return successColor(context);
     if (last < first) return errorColor(context);
     return textSecondaryColor(context);
-  }
-}
-
-class _SummaryCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color accent;
-
-  const _SummaryCard({
-    required this.label,
-    required this.value,
-    required this.accent,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border.all(color: borderColor(context), width: 1),
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: accent,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: GoogleFonts.jetBrainsMono(
-                fontSize: 10, color: textSecondaryColor(context)),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
   }
 }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../providers/settings_provider.dart';
 import '../theme/app_theme.dart';
@@ -10,10 +11,10 @@ class AppBottomNav extends StatelessWidget {
   const AppBottomNav({required this.currentIndex, required this.onTap, super.key});
 
   static const _icons = [
-    Icons.grid_view,
-    Icons.history,
-    Icons.bar_chart,
-    Icons.settings,
+    LucideIcons.clipboardList,
+    LucideIcons.history,
+    LucideIcons.trendingUp,
+    LucideIcons.settings2,
   ];
 
   static const _labels = ['PLANS', 'HISTORY', 'STATS', 'SETTINGS'];

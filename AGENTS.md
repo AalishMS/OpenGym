@@ -81,6 +81,22 @@ import '../services/hive_service.dart';
 - Extract widgets into separate files in `lib/widgets/workout/` subdirectory
 - Use terminal-style UI with JetBrains Mono font (`GoogleFonts.jetBrainsMono()`)
 
+### Bracket Labels
+Actionable text wears square brackets - it is the app's button vocabulary.
+One rule, no exceptions:
+
+- `[LABEL]` - no padding inside the brackets, and the label is uppercase:
+  `[SAVE]`, `[CANCEL]`, `[LOAD SAMPLE DATA]`. Never `[ SAVE ]`
+- `[+ LABEL]` - a leading glyph binds to the opening bracket, one space
+  before the label: `[+ NEW PLAN]`, `[+ ADD SET]`. Never `[ + ADD SET ]`
+- `[+]` - a bare glyph when the target is too small for words
+- `[01]` - zero-padded index pills, on cards and tabs
+- Passing a label to a wrapper that adds the brackets itself (`BracketButton`)
+  means passing `'RESUME'`, not `' RESUME '`
+
+Reach for `[DEL]` over `[DELETE]` only where the row is genuinely too tight
+for the full word - the abbreviation is a space decision, not a style.
+
 ### Theme & Colors
 - Use theme-aware color functions from `app_theme.dart`:
   - `backgroundColor(context)` - main background
@@ -89,8 +105,34 @@ import '../services/hive_service.dart';
   - `textPrimaryColor(context)` - main text
   - `textSecondaryColor(context)` - secondary text
   - `accentColor(context)` - accent color from settings
+  - `onAccentColor(context)` - text/icons drawn *on* the accent
+  - `onColor(ground)` - text/icons drawn on any other coloured ground
 - Never hardcode colors like `Colors.white` or `Colors.black` for UI
+- Anything drawn on a coloured ground asks for its foreground:
+  - accent ground (filled button, selected chip/tab, accent snackbar) →
+    `onAccentColor(context)`
+  - any other coloured ground (a plan's colour, `errorColor(context)`, an RPE
+    swatch, a palette chip) → `onColor(thatGround)`
+  - `onColor` is the single place in the app allowed to name black or white;
+    a literal `Colors.black` foreground is a bug waiting for a dark accent
+  - exception: alpha-only `ShaderMask` stops under `BlendMode.dstIn`, where
+    black/white mean opaque/transparent rather than a colour — comment those
 - Use `accent.withAlpha(value)` for splash/highlight effects
+
+### Corner Radii
+- Use the tokens from `lib/theme/radii.dart`, never a literal `BorderRadius`:
+  - `AppRadius.card` - cards, panels, dialogs, bordered content boxes
+  - `AppRadius.button` / `.field` - buttons, full-width tap targets, inputs
+  - `AppRadius.chip` / `.control` - pills, tabs, steppers, small selectables
+  - `AppRadius.badge` - index pills, swatches, anything under ~24px
+  - `AppRadius.micro` - heatmap cells, drag handles, chart bar caps
+  - `AppRadius.sheet` / `.cardTop` / `.cardBottom` / `.leftCap` / `.rightCap` -
+    partial rounding for sheets, card headers/footers, joined segments
+- Never leave a full-perimeter `BoxDecoration` (one with `Border.all`) unrounded
+- Single-edge `Border(top:/bottom:/left:/right:)` decorations are hairline rules,
+  not boxes - leave them square
+- Any `InkWell` wrapping a rounded box needs the same token on its own
+  `borderRadius:`, or the splash squares off the corner on press
 
 ### Error Handling
 - Use try-catch for async operations
