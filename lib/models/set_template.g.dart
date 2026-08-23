@@ -1,38 +1,35 @@
 // GENERATED CODE - DO NOT MODIFY BY HAND
 
-part of 'exercise_template.dart';
+part of 'set_template.dart';
 
 // **************************************************************************
 // TypeAdapterGenerator
 // **************************************************************************
 
-class ExerciseTemplateAdapter extends TypeAdapter<ExerciseTemplate> {
+class SetTemplateAdapter extends TypeAdapter<SetTemplate> {
   @override
-  final int typeId = 2;
+  final int typeId = 5;
 
   @override
-  ExerciseTemplate read(BinaryReader reader) {
+  SetTemplate read(BinaryReader reader) {
     final numOfFields = reader.readByte();
     final fields = <int, dynamic>{
       for (int i = 0; i < numOfFields; i++) reader.readByte(): reader.read(),
     };
-    return ExerciseTemplate(
-      name: fields[0] as String,
-      sets: fields[1] as int,
-      setTargets: (fields[2] as List?)?.cast<SetTemplate>(),
+    return SetTemplate(
+      reps: fields[0] as int,
+      weight: fields[1] as double,
     );
   }
 
   @override
-  void write(BinaryWriter writer, ExerciseTemplate obj) {
+  void write(BinaryWriter writer, SetTemplate obj) {
     writer
-      ..writeByte(3)
-      ..writeByte(0)
-      ..write(obj.name)
-      ..writeByte(1)
-      ..write(obj.sets)
       ..writeByte(2)
-      ..write(obj.setTargets);
+      ..writeByte(0)
+      ..write(obj.reps)
+      ..writeByte(1)
+      ..write(obj.weight);
   }
 
   @override
@@ -41,7 +38,7 @@ class ExerciseTemplateAdapter extends TypeAdapter<ExerciseTemplate> {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is ExerciseTemplateAdapter &&
+      other is SetTemplateAdapter &&
           runtimeType == other.runtimeType &&
           typeId == other.typeId;
 }

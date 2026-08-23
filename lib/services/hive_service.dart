@@ -7,6 +7,7 @@ import '../models/workout_session.dart';
 import '../models/exercise_template.dart';
 import '../models/exercise.dart';
 import '../models/set.dart';
+import '../models/set_template.dart';
 
 class HiveService {
   static const String plansBox = 'workout_plans';
@@ -18,6 +19,7 @@ class HiveService {
     await Hive.initFlutter();
 
     Hive.registerAdapter(SetAdapter());
+    Hive.registerAdapter(SetTemplateAdapter());
     Hive.registerAdapter(ExerciseAdapter());
     Hive.registerAdapter(ExerciseTemplateAdapter());
     Hive.registerAdapter(WorkoutPlanAdapter());

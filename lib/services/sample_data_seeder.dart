@@ -3,6 +3,7 @@ import '../models/workout_session.dart';
 import '../models/exercise_template.dart';
 import '../models/exercise.dart';
 import '../models/set.dart';
+import '../models/set_template.dart';
 import '../data/plan_colors.dart';
 import '../services/hive_service.dart';
 
@@ -25,62 +26,62 @@ class SampleDataSeeder {
         name: 'Push Day',
         planColor: kPlanColors[0],
         exercises: [
-          ExerciseTemplate(name: 'Bench Press', sets: 4),
-          ExerciseTemplate(name: 'Incline Dumbbell Press', sets: 3),
-          ExerciseTemplate(name: 'Overhead Press', sets: 3),
-          ExerciseTemplate(name: 'Lateral Raise', sets: 3),
-          ExerciseTemplate(name: 'Tricep Pushdown', sets: 3),
-          ExerciseTemplate(name: 'Dumbbell Fly', sets: 2),
+          _template('Bench Press', 4, reps: 8, weight: 70),
+          _template('Incline Dumbbell Press', 3, reps: 10, weight: 32),
+          _template('Overhead Press', 3, reps: 8, weight: 50),
+          _template('Lateral Raise', 3, reps: 12, weight: 12),
+          _template('Tricep Pushdown', 3, reps: 12, weight: 35),
+          _template('Dumbbell Fly', 2, reps: 12, weight: 22),
         ],
       ),
       WorkoutPlan(
         name: 'Pull Day',
         planColor: kPlanColors[1],
         exercises: [
-          ExerciseTemplate(name: 'Deadlift', sets: 4),
-          ExerciseTemplate(name: 'Barbell Row', sets: 4),
-          ExerciseTemplate(name: 'Lat Pulldown', sets: 3),
-          ExerciseTemplate(name: 'Seated Cable Row', sets: 3),
-          ExerciseTemplate(name: 'Face Pull', sets: 3),
-          ExerciseTemplate(name: 'Bicep Curl', sets: 3),
-          ExerciseTemplate(name: 'Hammer Curl', sets: 2),
+          _template('Deadlift', 4, reps: 5, weight: 120),
+          _template('Barbell Row', 4, reps: 8, weight: 70),
+          _template('Lat Pulldown', 3, reps: 10, weight: 60),
+          _template('Seated Cable Row', 3, reps: 10, weight: 50),
+          _template('Face Pull', 3, reps: 15, weight: 20),
+          _template('Bicep Curl', 3, reps: 12, weight: 16),
+          _template('Hammer Curl', 2, reps: 10, weight: 12),
         ],
       ),
       WorkoutPlan(
         name: 'Leg Day',
         planColor: kPlanColors[2],
         exercises: [
-          ExerciseTemplate(name: 'Squat', sets: 4),
-          ExerciseTemplate(name: 'Romanian Deadlift', sets: 3),
-          ExerciseTemplate(name: 'Leg Press', sets: 3),
-          ExerciseTemplate(name: 'Leg Extension', sets: 3),
-          ExerciseTemplate(name: 'Leg Curl', sets: 3),
-          ExerciseTemplate(name: 'Calf Raise', sets: 4),
-          ExerciseTemplate(name: 'Hip Thrust', sets: 3),
+          _template('Squat', 4, reps: 6, weight: 95),
+          _template('Romanian Deadlift', 3, reps: 8, weight: 75),
+          _template('Leg Press', 3, reps: 10, weight: 150),
+          _template('Leg Extension', 3, reps: 12, weight: 50),
+          _template('Leg Curl', 3, reps: 12, weight: 35),
+          _template('Calf Raise', 4, reps: 15, weight: 75),
+          _template('Hip Thrust', 3, reps: 10, weight: 100),
         ],
       ),
       WorkoutPlan(
         name: 'Upper Body',
         planColor: kPlanColors[3],
         exercises: [
-          ExerciseTemplate(name: 'Bench Press', sets: 4),
-          ExerciseTemplate(name: 'Barbell Row', sets: 4),
-          ExerciseTemplate(name: 'Overhead Press', sets: 3),
-          ExerciseTemplate(name: 'Pull-ups', sets: 3),
-          ExerciseTemplate(name: 'Dumbbell Fly', sets: 3),
-          ExerciseTemplate(name: 'Shrugs', sets: 3),
+          _template('Bench Press', 4, reps: 8, weight: 70),
+          _template('Barbell Row', 4, reps: 8, weight: 70),
+          _template('Overhead Press', 3, reps: 8, weight: 50),
+          _template('Pull-ups', 3, reps: 8, weight: 0),
+          _template('Dumbbell Fly', 3, reps: 12, weight: 22),
+          _template('Shrugs', 3, reps: 12, weight: 60),
         ],
       ),
       WorkoutPlan(
         name: 'Full Body',
         planColor: kPlanColors[4],
         exercises: [
-          ExerciseTemplate(name: 'Squat', sets: 3),
-          ExerciseTemplate(name: 'Bench Press', sets: 3),
-          ExerciseTemplate(name: 'Deadlift', sets: 3),
-          ExerciseTemplate(name: 'Overhead Press', sets: 3),
-          ExerciseTemplate(name: 'Barbell Row', sets: 3),
-          ExerciseTemplate(name: 'Lateral Raise', sets: 2),
+          _template('Squat', 3, reps: 6, weight: 95),
+          _template('Bench Press', 3, reps: 8, weight: 70),
+          _template('Deadlift', 3, reps: 5, weight: 120),
+          _template('Overhead Press', 3, reps: 8, weight: 50),
+          _template('Barbell Row', 3, reps: 8, weight: 70),
+          _template('Lateral Raise', 2, reps: 12, weight: 12),
         ],
       ),
     ];
@@ -88,6 +89,21 @@ class SampleDataSeeder {
     for (var plan in plans) {
       await HiveService.addPlan(plan);
     }
+  }
+
+  /// An [ExerciseTemplate] whose every set carries the same prescribed target.
+  static ExerciseTemplate _template(
+    String name,
+    int sets, {
+    required int reps,
+    required double weight,
+  }) {
+    return ExerciseTemplate(
+      name: name,
+      sets: sets,
+      setTargets:
+          List.generate(sets, (_) => SetTemplate(reps: reps, weight: weight)),
+    );
   }
 
   static Future<void> _createSampleSessions() async {
