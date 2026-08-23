@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../models/exercise.dart';
+import '../../models/exercise_template.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import 'set_row.dart';
@@ -10,6 +11,13 @@ class ExerciseCard extends StatelessWidget {
   final Exercise exercise;
   final int exerciseIndex;
   final Color accent;
+
+  /// The plan entry this exercise came from, when one still matches it.
+  ///
+  /// Only used to hint at prescribed reps/weight on untouched sets; the session
+  /// itself never inherits those numbers.
+  final ExerciseTemplate? template;
+
   final void Function(int exerciseIndex, int setIndex) onIncrementReps;
   final void Function(int exerciseIndex, int setIndex) onDecrementReps;
   final void Function(int exerciseIndex, int setIndex) onIncrementWeight;
@@ -25,6 +33,7 @@ class ExerciseCard extends StatelessWidget {
     required this.exercise,
     required this.exerciseIndex,
     required this.accent,
+    this.template,
     required this.onIncrementReps,
     required this.onDecrementReps,
     required this.onIncrementWeight,
@@ -139,6 +148,7 @@ class ExerciseCard extends StatelessWidget {
                       set: set,
                       exerciseIndex: exerciseIndex,
                       accent: accent,
+                      target: template?.targetAt(setIndex),
                       onDecrementReps: () =>
                           onDecrementReps(exerciseIndex, setIndex),
                       onIncrementReps: () =>

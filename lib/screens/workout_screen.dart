@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
 import '../models/exercise.dart';
+import '../models/exercise_template.dart';
 import '../models/set.dart' as gym;
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
@@ -82,6 +83,21 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       }
     }
     return HiveService.getLastSetForExercise(exerciseName);
+  }
+
+  /// The plan entry matching [exerciseName], for target hints only.
+  ///
+  /// Matched by name rather than by index: the session's exercise list can be
+  /// reordered, renamed or extended independently of the plan, so index
+  /// matching would show one exercise's prescription on another's sets. No
+  /// match means no hint.
+  ExerciseTemplate? _templateFor(String exerciseName) {
+    for (final template in widget.plan.exercises) {
+      if (template.name.toLowerCase() == exerciseName.toLowerCase()) {
+        return template;
+      }
+    }
+    return null;
   }
 
   Future<void> _onWeekChanged(int newIndex) async {
@@ -602,6 +618,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                               exercise: exercise,
                               exerciseIndex: index,
                               accent: accent,
+                              template: _templateFor(exercise.name),
                               onIncrementReps: _incrementReps,
                               onDecrementReps: _decrementReps,
                               onIncrementWeight: _incrementWeight,

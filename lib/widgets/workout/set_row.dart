@@ -1,16 +1,98 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../models/set.dart' as gym;
+import '../../models/set_template.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/semantic_colors.dart';
 import '../../utils/format.dart';
+
+/// The set value's number style — the `70` and `8` in `70kg x 8`.
+///
+/// The set is the reason the workout screen exists, so the numbers are the
+/// loudest thing on it. They used to be 15/w500 under a 14/bold exercise name —
+/// a hair larger but visibly lighter, which read as subordinate to the title.
+///
+/// Shared with the plan editor so a prescribed set and a logged set are set in
+/// the same voice. Changing it here changes both screens, which is the point:
+/// the two used to drift.
+TextStyle setValueStyle(BuildContext context) => GoogleFonts.jetBrainsMono(
+      fontSize: 17,
+      fontWeight: FontWeight.bold,
+      height: 1.1,
+      color: textPrimaryColor(context),
+    );
+
+/// The units and separators sitting around [setValueStyle] — `kg`, ` x `, and
+/// the plan's target hint.
+///
+/// These are not data. Dropping them back is what lets `70` and `8` carry the
+/// row without needing a bigger size still.
+TextStyle setUnitStyle(BuildContext context) => GoogleFonts.jetBrainsMono(
+      fontSize: 11,
+      fontWeight: FontWeight.normal,
+      color: textSecondaryColor(context),
+    );
+
+/// One `− +` stepper: two buttons sharing a square inner edge inside a single
+/// hairline box, so the pair reads as one control rather than two pills.
+///
+/// Both the workout screen and the plan editor build their weight and reps
+/// columns out of these. The box measures [kStepperBoxWidth], which is what lets
+/// [SetHeaderRow] line its captions up with the boxes below.
+class StepperBox extends StatelessWidget {
+  final VoidCallback onDecrement;
+  final VoidCallback onIncrement;
+  final Color accent;
+
+  const StepperBox({
+    super.key,
+    required this.onDecrement,
+    required this.onIncrement,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: borderColor(context)),
+        borderRadius: AppRadius.control,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _ControlButton(
+            label: '−',
+            onTap: onDecrement,
+            accent: accent,
+            borderRadius: AppRadius.leftCap,
+          ),
+          _ControlButton(
+            label: '+',
+            onTap: onIncrement,
+            accent: accent,
+            borderRadius: AppRadius.rightCap,
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class SetRow extends StatelessWidget {
   final int setIndex;
   final gym.Set set;
   final int exerciseIndex;
   final Color accent;
+
+  /// The plan's prescribed reps/weight for this set, if the plan has one.
+  ///
+  /// Rendered as a dim hint *beside* the live value while the set is untouched,
+  /// and never written into the session — a planned weight must not become a PR
+  /// or count towards volume.
+  final SetTemplate? target;
+
   final VoidCallback onDecrementReps;
   final VoidCallback onIncrementReps;
   final VoidCallback onDecrementWeight;
@@ -23,6 +105,7 @@ class SetRow extends StatelessWidget {
     required this.set,
     required this.exerciseIndex,
     required this.accent,
+    this.target,
     required this.onDecrementReps,
     required this.onIncrementReps,
     required this.onDecrementWeight,
@@ -30,27 +113,28 @@ class SetRow extends StatelessWidget {
     required this.onEdit,
   });
 
+  /// The hint text, or null when there is nothing worth hinting at — no target,
+  /// an empty target, or a set the user has already put a number on.
+  ///
+  /// Because it only shows on an untouched set, it can never share the row with
+  /// a three-digit weight or an RPE: the live half is always the shortest it
+  /// gets (`0kg x 0`), so the hint cannot be what forces [FittedBox] to shrink
+  /// the numbers.
+  String? get _targetHint {
+    final t = target;
+    if (t == null) return null;
+    if (set.weight != 0 || set.reps != 0) return null;
+    if (t.weight == 0 && t.reps == 0) return null;
+    if (t.weight == 0) return '  → ${t.reps} reps';
+    return '  → ${formatWeight(t.weight)}×${t.reps}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
-
-    // The set is the reason the screen exists, so the numbers are the loudest
-    // thing on it. They used to be 15/w500 under a 14/bold exercise name — a
-    // hair larger but visibly lighter, which read as subordinate to the title.
-    final numberStyle = GoogleFonts.jetBrainsMono(
-      fontSize: 17,
-      fontWeight: FontWeight.bold,
-      height: 1.1,
-      color: textPrimary,
-    );
-    // The unit and the separator are not data. Dropping them back is what lets
-    // `70` and `8` carry the row without needing a bigger size still.
-    final unitStyle = GoogleFonts.jetBrainsMono(
-      fontSize: 11,
-      fontWeight: FontWeight.normal,
-      color: textSecondary,
-    );
+    final numberStyle = setValueStyle(context);
+    final unitStyle = setUnitStyle(context);
+    final hint = _targetHint;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -108,6 +192,8 @@ class SetRow extends StatelessWidget {
                               color: rpeColor(set.rpe!),
                             ),
                           ),
+                        if (hint != null)
+                          TextSpan(text: hint, style: unitStyle),
                       ],
                     ),
                   ),
@@ -116,52 +202,16 @@ class SetRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: borderColor(context)),
-              borderRadius: AppRadius.control,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ControlButton(
-                  label: '−',
-                  onTap: onDecrementWeight,
-                  accent: accent,
-                  borderRadius: AppRadius.leftCap,
-                ),
-                _ControlButton(
-                  label: '+',
-                  onTap: onIncrementWeight,
-                  accent: accent,
-                  borderRadius: AppRadius.rightCap,
-                ),
-              ],
-            ),
+          StepperBox(
+            onDecrement: onDecrementWeight,
+            onIncrement: onIncrementWeight,
+            accent: accent,
           ),
           const SizedBox(width: 4),
-          Container(
-            decoration: BoxDecoration(
-              border: Border.all(color: borderColor(context)),
-              borderRadius: AppRadius.control,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ControlButton(
-                  label: '−',
-                  onTap: onDecrementReps,
-                  accent: accent,
-                  borderRadius: AppRadius.leftCap,
-                ),
-                _ControlButton(
-                  label: '+',
-                  onTap: onIncrementReps,
-                  accent: accent,
-                  borderRadius: AppRadius.rightCap,
-                ),
-              ],
-            ),
+          StepperBox(
+            onDecrement: onDecrementReps,
+            onIncrement: onIncrementReps,
+            accent: accent,
           ),
         ],
       ),
@@ -173,12 +223,18 @@ class SetRow extends StatelessWidget {
 /// [SetHeaderRow] uses it to line its labels up with the boxes below.
 const double kStepperBoxWidth = 66;
 
-/// `WEIGHT` / `REPS` captions above [SetRow]'s two identical stepper boxes.
+/// `WEIGHT` / `REPS` captions above the pair of [StepperBox]es in a set row.
 ///
-/// Without these the pair of `− +` boxes is ambiguous — one card-level header
-/// disambiguates both columns without repeating on every row.
+/// Without these the two identical `− +` boxes are ambiguous — one card-level
+/// header disambiguates both columns without repeating on every row.
 class SetHeaderRow extends StatelessWidget {
-  const SetHeaderRow({super.key});
+  /// Width of the trailing column the rows below reserve past the second
+  /// stepper, if any. The plan editor's rows end in a 28px delete button; the
+  /// header has to reserve the same width or its captions sit 28px right of the
+  /// boxes they label.
+  final double trailingGap;
+
+  const SetHeaderRow({super.key, this.trailingGap = 0});
 
   @override
   Widget build(BuildContext context) {
@@ -202,6 +258,7 @@ class SetHeaderRow extends StatelessWidget {
             width: kStepperBoxWidth,
             child: Text('REPS', textAlign: TextAlign.center, style: style),
           ),
+          if (trailingGap > 0) SizedBox(width: trailingGap),
         ],
       ),
     );
