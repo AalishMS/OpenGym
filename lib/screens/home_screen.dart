@@ -9,6 +9,7 @@ import '../models/workout_plan.dart';
 import '../models/exercise_template.dart';
 import '../data/plan_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/breakpoints.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
@@ -45,9 +46,11 @@ class HomeScreen extends StatelessWidget {
                 },
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              child: _buildNewPlanButton(context, accent),
+            _CappedWidth(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: _buildNewPlanButton(context, accent),
+              ),
             ),
           ],
         ),
@@ -61,17 +64,19 @@ class HomeScreen extends StatelessWidget {
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: border, width: 1)),
       ),
-      child: Row(
-        children: [
-          Text(
-            '> OPENGYM',
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: accent,
+      child: _CappedWidth(
+        child: Row(
+          children: [
+            Text(
+              '> OPENGYM',
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: accent,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -140,22 +145,25 @@ class HomeScreen extends StatelessWidget {
         stat.planIndex: stat,
     };
 
-    return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.sm),
-      // Max-extent (not a fixed column count) so columns scale with the window:
-      // 2 on a phone, 6–7 on a desktop. A fixed `mainAxisExtent` replaces
-      // `childAspectRatio` — the old ratio made cards as tall as the column was
-      // wide, which on desktop meant two enormous, mostly-empty boxes.
-      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 260,
-        mainAxisExtent: 148,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+    return _CappedWidth(
+      child: GridView.builder(
+        padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.sm),
+        // Max-extent (not a fixed column count) so columns scale with the
+        // window: 2 on a phone, 5 at the capped desktop measure. A fixed
+        // `mainAxisExtent` replaces `childAspectRatio` — the old ratio made
+        // cards as tall as the column was wide, which on desktop meant two
+        // enormous, mostly-empty boxes.
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 260,
+          mainAxisExtent: 148,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+        ),
+        itemCount: provider.plans.length,
+        itemBuilder: (context, index) => _buildPlanCard(
+            context, provider.plans[index], index, accent, statsByIndex[index]),
       ),
-      itemCount: provider.plans.length,
-      itemBuilder: (context, index) => _buildPlanCard(
-          context, provider.plans[index], index, accent, statsByIndex[index]),
     );
   }
 
@@ -590,6 +598,29 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
+}
+
+/// Centres its child and caps it at [Breakpoints.expanded].
+///
+/// The plans grid sizes columns by max extent, so an ultra-wide monitor gave it
+/// ten columns and a card's three-line preview stretched a hand-span across the
+/// desk. Header, grid, and footer button all sit in the same capped measure, so
+/// they share one left edge; only the header's ground and its rule still run
+/// full-bleed, because a rule is screen furniture rather than content.
+class _CappedWidth extends StatelessWidget {
+  final Widget child;
+
+  const _CappedWidth({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: Breakpoints.expanded),
+        child: child,
+      ),
+    );
+  }
 }
 
 /// One row of the long-press plan menu.
