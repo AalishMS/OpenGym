@@ -41,6 +41,39 @@ flutter pub run build_runner build --delete-conflicting-outputs
 ```
 **Required** whenever Hive model files (.dart) are modified. Run `flutter analyze` after.
 
+### Releasing
+
+The app self-updates from GitHub Releases, so a release is only installable if
+the version is bumped correctly.
+
+```bash
+# 1. Bump BOTH parts, then stage pubspec.yaml explicitly
+# 2. Tag must equal the pubspec version exactly, with a leading v
+git add pubspec.yaml && git commit -m "chore: release 1.0.2+3"
+git tag v1.0.2+3 && git push && git push --tags
+```
+
+- **Always increment the `+build` number**, never just the version name. It
+  becomes the Android `versionCode`, it is what `UpdateService.isNewer`
+  compares, and Android refuses to install an APK whose versionCode is not
+  greater than the installed one. `1.0.2+2` after `1.0.1+2` builds and
+  publishes fine but no phone can install it
+- The build number must strictly increase across *all* releases - it is never
+  reset when the version name changes
+- The tag must match `version:` in pubspec character for character, `+build`
+  included. `.github/workflows/release.yml` fails the build on a mismatch or a
+  missing build number, but it cannot detect a reused one
+- Never `git commit -am` here - it sweeps the generated plugin registrants'
+  line-ending churn into the release commit (see Common Issues)
+- Every APK must be signed with the same keystore (`android/key.properties`,
+  git-ignored; CI writes it from repository secrets). A key change strands
+  every installed copy, and the workflow refuses to publish a debug-signed APK
+- One universal APK, never `--split-per-abi`: the updater picks the first
+  `.apk` asset it finds, so multiple assets could hand out the wrong ABI
+- The release must not be a draft or prerelease - the `/releases/latest`
+  endpoint the app polls skips both
+
+
 ---
 
 ## Code Style Guidelines
@@ -217,3 +250,11 @@ class MyModel extends HiveObject {
 - **Gesture conflicts**: Use angle-based disambiguation for horizontal vs vertical swipe
 - **Week tab scroll**: Use `ScrollController` with `addPostFrameCallback` for initial position
 - **Model changes**: Always run `build_runner` then `flutter analyze`
+- **Generated plugin registrants**: the five files under `linux/flutter/`,
+  `macos/Flutter/`, and `windows/flutter/` re-dirty themselves with
+  whitespace-only (LF vs CRLF) diffs on every `pub get`, `analyze`, or build.
+  They abort `git pull` and break `git stash pop`. Confirm the diff is empty
+  under `git diff --ignore-all-space --stat`, then
+  `git checkout -- linux/ macos/ windows/` and continue - Flutter regenerates
+  them on the next build. Stage files explicitly rather than using
+  `git commit -am`, and don't use `git stash` to get a clean analyzer baseline
