@@ -4,7 +4,11 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.5.4
+  # Floor raised from ^3.5.4 because ota_update 7.1.0 requires Dart >=3.7.0.
+  # The old floor let an SDK too old for that package resolve silently to an
+  # ancient version of it instead of failing, which would have bitten CI rather
+  # than a local build.
+  sdk: ^3.7.0
 
 dependencies:
   flutter:
@@ -21,6 +25,20 @@ dependencies:
   share_plus: ^10.1.4
   uuid: ^4.3.0
   supabase_flutter: ^2.5.0
+  # In-app updater: query the GitHub Releases API, read the installed version,
+  # then download and hand off to the installer.
+  #
+  # There is deliberately no permission_handler here. It wanted 30+ permission
+  # handlers and compileSdk 37 to give us one boolean; the "install unknown
+  # apps" check is canRequestPackageInstalls(), which MainActivity exposes over
+  # the MethodChannel it already had.
+  http: ^1.6.0
+  # Held at 9.x: package_info_plus 10.x needs win32 ^6.0.1 while share_plus
+  # 10.1.4 needs win32 ^5.5.3. Bumping share_plus instead is a breaking API
+  # change to the working export flow, and 9.x reads version/buildNumber the
+  # same way, so there is nothing to gain by forcing it.
+  package_info_plus: ^9.0.1
+  ota_update: ^7.1.0
 
 dev_dependencies:
   flutter_test:

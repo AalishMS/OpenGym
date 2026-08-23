@@ -9,25 +9,101 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../providers/settings_provider.dart';
+import '../providers/update_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../services/backup_service.dart';
 import '../services/hive_service.dart';
 import '../services/sample_data_seeder.dart';
 import '../services/supabase_service.dart';
+import '../services/update_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
+import '../widgets/update_dialog.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Needed for the VERSION line. Cheap, cached in the provider, and harmless
+    // if it fails — the label falls back to an em dash.
+    context.read<UpdateProvider>().loadInstalledVersion();
+  }
 
   String _getAccentColorName(SettingsProvider settings) {
     return SettingsProvider.accents[settings.accentIndex].name;
   }
 
+  /// The tile's second line, which doubles as the result readout for a manual
+  /// check — the outcome stays visible after the snackbar has gone.
+  String _updateSubtitle(UpdateProvider updates) {
+    if (!UpdateService.isSupportedPlatform) {
+      return 'Only available on Android';
+    }
+    switch (updates.status) {
+      case UpdateStatus.checking:
+        return 'Checking GitHub...';
+      case UpdateStatus.available:
+        return '${updates.release?.displayVersion ?? 'A new version'} is ready';
+      case UpdateStatus.upToDate:
+        return "You're up to date";
+      case UpdateStatus.downloading:
+        return 'Downloading... ${(updates.progress * 100).round()}%';
+      case UpdateStatus.installing:
+        return 'Opening the installer...';
+      case UpdateStatus.failed:
+        return updates.error ?? 'Last check failed';
+      case UpdateStatus.idle:
+        return 'Check GitHub for a new release';
+    }
+  }
+
+  Future<void> _handleUpdateCheck(
+      BuildContext context, UpdateProvider updates) async {
+    // Already found one, or already working — reopen the dialog rather than
+    // starting a second check on top of the first.
+    if (updates.isUpdateAvailable || updates.isBusy) {
+      await showUpdateDialog(context);
+      return;
+    }
+    if (updates.status == UpdateStatus.checking) return;
+
+    await updates.checkManually();
+    if (!context.mounted) return;
+
+    if (updates.isUpdateAvailable) {
+      await showUpdateDialog(context);
+      return;
+    }
+
+    // The user asked, so say something either way. Silence on a tapped button
+    // reads as a bug.
+    final failed = updates.status == UpdateStatus.failed;
+    final ground = failed ? errorColor(context) : accentColor(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          failed
+              ? '> ${updates.error ?? 'Update check failed'}'
+              : "> You're up to date",
+          style: GoogleFonts.jetBrainsMono(color: onColor(ground)),
+        ),
+        backgroundColor: ground,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<SettingsProvider>();
+    final updates = context.watch<UpdateProvider>();
     final accent = settings.accentColor;
     final bg = backgroundColor(context);
     final surface = surfaceColor(context);
@@ -153,6 +229,18 @@ class SettingsScreen extends StatelessWidget {
                   border: border,
                 ),
               Divider(color: border),
+              _SectionHeader(title: 'UPDATES', accent: accent, border: border),
+              _buildSettingsTile(
+                icon: LucideIcons.download,
+                title: 'CHECK FOR UPDATES',
+                subtitle: _updateSubtitle(updates),
+                onTap: () => _handleUpdateCheck(context, updates),
+                accent: accent,
+                textPrimary: textPrimary,
+                textSecondary: textSecondary,
+                border: border,
+              ),
+              Divider(color: border),
               _SectionHeader(title: 'ABOUT', accent: accent, border: border),
               Container(
                 padding: const EdgeInsets.all(16),
@@ -165,7 +253,7 @@ class SettingsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '1.0.0',
+                      updates.installedVersionLabel,
                       style: GoogleFonts.jetBrainsMono(
                           fontSize: 14, color: textPrimary),
                     ),

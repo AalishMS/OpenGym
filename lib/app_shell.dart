@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'providers/update_provider.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/stats_screen.dart';
@@ -7,6 +10,7 @@ import 'screens/history_screen.dart';
 import 'theme/breakpoints.dart';
 import 'widgets/app_bottom_nav.dart';
 import 'widgets/app_nav_rail.dart';
+import 'widgets/update_dialog.dart';
 
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
@@ -20,6 +24,9 @@ class _AppShellState extends State<AppShell> {
   // bottom bar addresses screens 1–4.
   int _currentIndex = 0;
 
+  /// Guards against a second prompt if this State is rebuilt.
+  bool _updatePromptShown = false;
+
   final List<Widget> _screens = const [
     DashboardScreen(),
     HomeScreen(),
@@ -27,6 +34,25 @@ class _AppShellState extends State<AppShell> {
     StatsScreen(),
     SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    // Deliberately not awaited. The check runs after the first frame so it
+    // cannot delay startup, and AppShell is the first widget that is past both
+    // Hive init and the auth gate — so the prompt never lands on the splash or
+    // the login screen.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdate());
+  }
+
+  Future<void> _checkForUpdate() async {
+    final updates = context.read<UpdateProvider>();
+    await updates.checkOnStartup();
+    if (!mounted || _updatePromptShown) return;
+    if (!updates.isUpdateAvailable) return;
+    _updatePromptShown = true;
+    await showUpdateDialog(context);
+  }
 
   @override
   Widget build(BuildContext context) {

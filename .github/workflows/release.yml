@@ -1,0 +1,173 @@
+# Builds, signs, and publishes a release APK when a v* tag is pushed.
+#
+# The whole in-app updater depends on two invariants this workflow enforces:
+#
+#   1. Every APK is signed with the SAME release key. Android refuses to install
+#      an update signed by a different key, so a key change would strand every
+#      installed copy of the app.
+#   2. The build number (the `+N` in pubspec's `version:`) strictly increases.
+#      It is what the updater compares and what Android enforces as the
+#      versionCode, so a release that forgets to bump it cannot be installed.
+#
+# Required repository secrets (Settings > Secrets and variables > Actions):
+#   KEYSTORE_BASE64    - base64 of android/app/opengym-release.jks
+#   KEYSTORE_PASSWORD  - the keystore password
+#   KEY_ALIAS          - the key alias inside the keystore
+#   KEY_PASSWORD       - the key password
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Needed to create the release and upload the APK to it.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the tag
+        uses: actions/checkout@v4
+
+      # Fails the build on a tag/pubspec mismatch rather than publishing a
+      # release the updater would then refuse to offer. Runs before anything
+      # expensive so a typo costs seconds, not a full build.
+      - name: Verify the tag matches pubspec
+        run: |
+          set -euo pipefail
+          pubspec_version="$(grep -m1 '^version:' pubspec.yaml \
+            | sed 's/^version:[[:space:]]*//' | tr -d '[:space:]')"
+          tag_version="${GITHUB_REF_NAME#v}"
+
+          echo "pubspec: $pubspec_version"
+          echo "tag:     $tag_version"
+
+          if [ "$pubspec_version" != "$tag_version" ]; then
+            echo "::error::Tag '$GITHUB_REF_NAME' does not match pubspec version" \
+                 "'$pubspec_version'. Bump pubspec and retag."
+            exit 1
+          fi
+
+          # No build number means no versionCode bump, which means the APK
+          # cannot install over the previous one.
+          case "$pubspec_version" in
+            *+*) ;;
+            *)
+              echo "::error::Version '$pubspec_version' has no +build number." \
+                   "Tag as vX.Y.Z+N so the versionCode increases."
+              exit 1
+              ;;
+          esac
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Pinned, not 'stable'. The updater's dependencies need Dart >=3.7, and an
+      # unpinned channel would silently change the toolchain under the release.
+      - name: Set up Flutter 3.44.1
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.1'
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+      # Secrets are passed through env rather than interpolated into the script
+      # so they never appear in the rendered command in the log.
+      - name: Restore the signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::KEYSTORE_BASE64 is not set. Add the four signing" \
+                 "secrets before tagging a release."
+            exit 1
+          fi
+
+          keystore="$RUNNER_TEMP/opengym-release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$keystore"
+
+          # android/app/build.gradle reads this file; an absolute storeFile
+          # avoids any doubt about what the Gradle file() call resolves against.
+          {
+            echo "storeFile=$keystore"
+            echo "storePassword=$KEYSTORE_PASSWORD"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASSWORD"
+          } > android/key.properties
+
+      # One universal APK on purpose. --split-per-abi would attach several
+      # .apk assets and the updater picks the first one it finds by extension,
+      # so it could hand the user an APK for the wrong architecture.
+      - name: Build the release APK
+        run: flutter build apk --release
+
+      # Confirms the APK carries the release key rather than the debug fallback
+      # in android/app/build.gradle. A debug-signed release would install for
+      # nobody and is the one failure this workflow must never publish.
+      - name: Verify the APK is signed with the release key
+        run: |
+          set -euo pipefail
+          apk=build/app/outputs/flutter-apk/app-release.apk
+          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner \
+            2>/dev/null | sort | tail -1)"
+          if [ -z "$apksigner" ]; then
+            echo "::error::No apksigner under \$ANDROID_HOME/build-tools." \
+                 "Refusing to publish an APK whose signature was never checked."
+            exit 1
+          fi
+          "$apksigner" verify --print-certs "$apk" | tee certs.txt
+
+          if grep -qi 'CN=Android Debug' certs.txt; then
+            echo "::error::The APK is signed with the DEBUG key. Check that the" \
+                 "signing secrets are set correctly."
+            exit 1
+          fi
+
+      # '+' is legal in a git tag but has to be percent-encoded in a URL, so it
+      # is swapped for '-' in the filename. The updater locates the asset by its
+      # .apk extension, so the exact name is free to change.
+      - name: Name the artifact
+        id: artifact
+        run: |
+          set -euo pipefail
+          safe_tag="${GITHUB_REF_NAME//+/-}"
+          name="OpenGym-${safe_tag}.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "$name"
+          echo "path=$name" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.artifact.outputs.path }}
+          # /releases/latest — the endpoint the app polls — skips drafts and
+          # prereleases, so a release marked as either is invisible to the
+          # updater.
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            Install the APK below. If OpenGym is already installed, it will
+            offer this update from inside the app.
+
+      # The runner is ephemeral, but an early failure in a later step should
+      # still not leave signing material sitting in the workspace.
+      - name: Remove the signing material
+        if: always()
+        run: rm -f android/key.properties "$RUNNER_TEMP/opengym-release.jks"

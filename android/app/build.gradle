@@ -5,14 +5,29 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// Release signing credentials live in android/key.properties, which is git-ignored.
+// CI writes it from repository secrets. When it is absent (a fresh clone, or a
+// contributor without the keystore) the release build falls back to the debug key
+// so `flutter run --release` still works locally.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file("key.properties")
+def hasReleaseKeystore = keystorePropertiesFile.exists()
+if (hasReleaseKeystore) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 android {
-    namespace = "com.example.gymapp.offline"
+    namespace = "com.aalishms.opengym"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        // Required by ota_update, which uses java.nio.file APIs that do not
+        // exist on older Android runtimes. Without this the release build fails
+        // at :app:checkReleaseAarMetadata.
+        coreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -20,8 +35,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.gymapp.offline"
+        applicationId = "com.aalishms.opengym"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
@@ -30,15 +44,33 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (hasReleaseKeystore) {
+            release {
+                storeFile = file(keystoreProperties["storeFile"])
+                storePassword = keystoreProperties["storePassword"]
+                keyAlias = keystoreProperties["keyAlias"]
+                keyPassword = keystoreProperties["keyPassword"]
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            // Every published APK MUST be signed with the same release key, or the
+            // in-app updater cannot install over the previously installed version.
+            signingConfig = hasReleaseKeystore
+                ? signingConfigs.release
+                : signingConfigs.debug
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Backing library for coreLibraryDesugaringEnabled above.
+    coreLibraryDesugaring "com.android.tools:desugar_jdk_libs:2.1.5"
 }

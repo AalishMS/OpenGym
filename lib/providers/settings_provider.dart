@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const _refreshRateChannel = MethodChannel('com.example.gymapp/refresh_rate');
+const _refreshRateChannel = MethodChannel('com.aalishms.opengym/refresh_rate');
 
 class AppAccent {
   final String name;
