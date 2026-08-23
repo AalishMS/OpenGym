@@ -19,6 +19,7 @@ import '../widgets/dashboard/plan_status_tile.dart';
 import '../widgets/dashboard/progression_sparkline.dart';
 import '../widgets/dashboard/recent_prs_tile.dart';
 import '../widgets/dashboard/stat_tile.dart';
+import 'create_plan_screen.dart';
 import 'workout_screen.dart';
 
 /// Desktop overview: everything the phone spreads across four tabs, on one
@@ -298,7 +299,24 @@ class _EmptyState extends StatelessWidget {
                   fontSize: 12, color: textSecondary),
             ),
             const SizedBox(height: AppSpacing.xxl),
+            // Same as the plans empty state: the copy asks for a plan, so the
+            // button makes one. Seeding demo data filled the dashboard without
+            // ever getting the reader closer to their own numbers.
             OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CreatePlanScreen()),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: accent,
+                side: BorderSide(color: accent, width: 1),
+              ),
+              child: Text('[+ NEW PLAN]', style: GoogleFonts.jetBrainsMono()),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextButton(
               onPressed: () async {
                 await SampleDataSeeder.seedSampleData();
                 if (!context.mounted) return;
@@ -313,12 +331,9 @@ class _EmptyState extends StatelessWidget {
                   ),
                 );
               },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: accent,
-                side: BorderSide(color: accent, width: 1),
-              ),
-              child:
-                  Text('[LOAD SAMPLE DATA]', style: GoogleFonts.jetBrainsMono()),
+              style: TextButton.styleFrom(foregroundColor: textSecondary),
+              child: Text('[LOAD SAMPLE DATA]',
+                  style: GoogleFonts.jetBrainsMono(fontSize: 11)),
             ),
           ],
         ),

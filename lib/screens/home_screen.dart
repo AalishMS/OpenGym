@@ -46,11 +46,19 @@ class HomeScreen extends StatelessWidget {
                 },
               ),
             ),
-            _CappedWidth(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: _buildNewPlanButton(context, accent),
-              ),
+            // Hidden while the list is empty: the empty state carries the same
+            // action as its primary button, and two `[+ NEW PLAN]`s on one
+            // screen make the reader pick between identical doors.
+            Consumer<WorkoutPlanProvider>(
+              builder: (context, provider, child) {
+                if (provider.plans.isEmpty) return const SizedBox.shrink();
+                return _CappedWidth(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    child: _buildNewPlanButton(context, accent),
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -87,7 +95,7 @@ class HomeScreen extends StatelessWidget {
 
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(AppSpacing.xxl),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -98,7 +106,7 @@ class HomeScreen extends StatelessWidget {
                 color: textSecondary,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               'Create your first workout plan',
               style: GoogleFonts.jetBrainsMono(
@@ -106,8 +114,28 @@ class HomeScreen extends StatelessWidget {
                 color: textSecondary,
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: AppSpacing.xxl),
+            // The line above has always said "create your first workout plan",
+            // but the only button here seeded demo data — the one thing a
+            // first-run screen exists to start could not be started from it.
             OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const CreatePlanScreen()),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: accent,
+                side: BorderSide(color: accent, width: 1),
+              ),
+              child: Text('[+ NEW PLAN]', style: GoogleFonts.jetBrainsMono()),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            // Sample data stays reachable for someone who wants to look around
+            // before committing to their own plan, at text weight so it reads
+            // as the way out rather than the way in. It also lives in Settings.
+            TextButton(
               onPressed: () async {
                 await SampleDataSeeder.seedSampleData();
                 provider.loadPlans();
@@ -122,12 +150,9 @@ class HomeScreen extends StatelessWidget {
                   );
                 }
               },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: accent,
-                side: BorderSide(color: accent, width: 1),
-              ),
+              style: TextButton.styleFrom(foregroundColor: textSecondary),
               child: Text('[LOAD SAMPLE DATA]',
-                  style: GoogleFonts.jetBrainsMono()),
+                  style: GoogleFonts.jetBrainsMono(fontSize: 11)),
             ),
           ],
         ),
