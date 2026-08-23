@@ -16,6 +16,7 @@ import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/fade_page_route.dart';
+import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
 import '../widgets/workout/workout_dialogs.dart';
 
@@ -33,42 +34,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   List<int> _weeks = [1];
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};
-  final ScrollController _weekNavScrollController = ScrollController();
-  final ScrollController _planNavScrollController = ScrollController();
-
-  /// Anchors the active plan's tab so [Scrollable.ensureVisible] can centre it
-  /// without guessing a width — plan names vary, unlike the week chips.
-  final GlobalKey _activePlanTabKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _loadWeeks();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToSelectedWeek();
-      _scrollToActivePlan();
-    });
-  }
-
-  @override
-  void dispose() {
-    _weekNavScrollController.dispose();
-    _planNavScrollController.dispose();
-    super.dispose();
-  }
-
-  void _scrollToActivePlan() {
-    final context = _activePlanTabKey.currentContext;
-    if (context == null) return;
-    Scrollable.ensureVisible(context, alignment: 0.5, duration: Duration.zero);
-  }
-
-  void _scrollToSelectedWeek() {
-    if (!_weekNavScrollController.hasClients) return;
-    const double itemWidth = 68;
-    final offset = _currentWeekIndex * itemWidth;
-    final maxScroll = _weekNavScrollController.position.maxScrollExtent;
-    _weekNavScrollController.jumpTo(offset.clamp(0.0, maxScroll));
   }
 
   void _loadWeeks() {
@@ -652,7 +622,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               ),
             ),
           ),
-          _buildWeekNavBar(),
+          _buildWeekNavBar(planColor, accent),
         ],
       ),
     );
@@ -676,209 +646,94 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     }
 
     const double barHeight = 44;
-    final textSecondary = textSecondaryColor(context);
-
-    Widget strip = ListView.builder(
-      controller: _planNavScrollController,
-      physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics()),
-      scrollDirection: Axis.horizontal,
-      itemCount: plans.length,
-      itemBuilder: (context, index) {
-        final plan = plans[index];
-        final isSelected =
-            plan.id == activePlan.id || index == widget.planIndex;
-        // Each tab resolves its own colour, so a red plan no longer gets a
-        // purple tab while its title above is red.
-        final planColor =
-            plan.planColor != null ? Color(plan.planColor!) : accent;
-
-        return InkWell(
-          key: isSelected ? _activePlanTabKey : null,
-          onTap: isSelected
-              ? null
-              : () {
-                  Navigator.pushReplacement(
-                    context,
-                    FadePageRoute(
-                      page: WorkoutScreen(plan: plan, planIndex: index),
-                    ),
-                  );
-                },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-            child: Center(
-              // The underline borders the label, not the full-height cell, so
-              // it spans exactly the text without any intrinsic-width work.
-              child: Container(
-                padding: const EdgeInsets.only(bottom: 6),
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: isSelected ? planColor : Colors.transparent,
-                      width: 2,
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    // The index is the swipe order between plans, and it
-                    // echoes the [01] on the home cards.
-                    Text(
-                      (index + 1).toString().padLeft(2, '0'),
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 9,
-                        letterSpacing: 0.08,
-                        color: textSecondary,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 160),
-                      child: Text(
-                        plan.name.toUpperCase(),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 11,
-                          letterSpacing: 0.04,
-                          fontWeight:
-                              isSelected ? FontWeight.bold : FontWeight.normal,
-                          color: isSelected ? planColor : textSecondary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-
-    // Fade the ends so an off-screen plan is visible as more-to-scroll rather
-    // than a label sliced off at the edge. Only worth it once it can overflow.
-    if (plans.length > 2) {
-      strip = ShaderMask(
-        // dstIn reads alpha only — these are mask stops, not UI colours, so
-        // opaque/transparent is all that black and white mean here.
-        shaderCallback: (bounds) => const LinearGradient(
-          begin: Alignment.centerLeft,
-          end: Alignment.centerRight,
-          colors: [
-            Colors.transparent,
-            Colors.black,
-            Colors.black,
-            Colors.transparent,
-          ],
-          stops: [0.0, 0.06, 0.94, 1.0],
-        ).createShader(bounds),
-        blendMode: BlendMode.dstIn,
-        child: strip,
-      );
-    }
+    final selectedIndex = plans.indexWhere((p) => p.id == activePlan.id);
 
     return PreferredSize(
       preferredSize: const Size.fromHeight(barHeight),
-      child: Container(
+      child: UnderlineTabStrip(
+        rule: StripRule.bottom,
         height: barHeight,
-        decoration: BoxDecoration(
-          color: surfaceColor(context),
-          // A single-edge border is a rule, not a box: one unbroken hairline
-          // across the full width, and it stays square.
-          border: Border(bottom: BorderSide(color: borderColor(context))),
-        ),
-        child: strip,
+        selectedIndex: selectedIndex >= 0 ? selectedIndex : widget.planIndex,
+        tabs: [
+          for (var index = 0; index < plans.length; index++)
+            UnderlineTabData(
+              // The index is the swipe order between plans, and it echoes the
+              // [01] on the home cards.
+              index: (index + 1).toString().padLeft(2, '0'),
+              label: plans[index].name.toUpperCase(),
+              // Each tab resolves its own colour, so a red plan no longer gets
+              // a purple tab while its title above is red.
+              color: plans[index].planColor != null
+                  ? Color(plans[index].planColor!)
+                  : accent,
+              onTap: plans[index].id == activePlan.id
+                  ? null
+                  : () {
+                      Navigator.pushReplacement(
+                        context,
+                        FadePageRoute(
+                          page: WorkoutScreen(
+                            plan: plans[index],
+                            planIndex: index,
+                          ),
+                        ),
+                      );
+                    },
+            ),
+        ],
       ),
     );
   }
 
-  Widget _buildWeekNavBar() {
-    final accent = context.watch<SettingsProvider>().accentColor;
-    final surface = surfaceColor(context);
-    final border = borderColor(context);
-    final textPrimary = textPrimaryColor(context);
-
+  /// The week switcher above the bottom edge — the plan switcher's twin.
+  ///
+  /// It used to be a row of filled pills in the global accent, which said
+  /// "toggle" where the strip above it said "tab", and coloured the current week
+  /// with the app's accent rather than the plan you are actually inside. Same
+  /// control, same language now: an underline in the plan's colour. The week
+  /// number is its own ordinal, so these tabs carry no index prefix.
+  Widget _buildWeekNavBar(Color planColor, Color accent) {
     return Container(
-      decoration: BoxDecoration(
-        color: surface,
-        border: Border(top: BorderSide(color: border, width: 1)),
-      ),
+      // The ground reaches into the safe-area inset; only the tabs stop short
+      // of it, so there is no bare strip of background under the bar.
+      color: surfaceColor(context),
       child: SafeArea(
-        child: Column(
-          children: [
-            SizedBox(
-              height: 40,
-              child: ListView.builder(
-                controller: _weekNavScrollController,
-                physics: const AlwaysScrollableScrollPhysics(
-                    parent: BouncingScrollPhysics()),
-                scrollDirection: Axis.horizontal,
-                itemCount: _weeks.length + 1,
-                itemBuilder: (context, index) {
-                  if (index == _weeks.length) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Center(
-                        child: InkWell(
-                          onTap: _addNewWeek,
-                          borderRadius: AppRadius.chip,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: accent),
-                              borderRadius: AppRadius.chip,
-                            ),
-                            child: Text('[+ WEEK ${_weeks.length + 1}]',
-                                style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 10, color: accent)),
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-                  final week = _weeks[index];
-                  final isSelected = index == _currentWeekIndex;
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Center(
-                      child: InkWell(
-                        onTap: () {
-                          setState(() {
-                            _currentWeekIndex = index;
-                          });
-                        },
-                        onLongPress: () =>
-                            _showWeekOptionsMenu(context, index, week),
-                        borderRadius: AppRadius.chip,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: isSelected ? accent : Colors.transparent,
-                            border:
-                                Border.all(color: isSelected ? accent : border),
-                            borderRadius: AppRadius.chip,
-                          ),
-                          child: Text(
-                            'WEEK $week',
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 11,
-                              color: isSelected
-                                  ? onAccentColor(context)
-                                  : textPrimary,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
+        top: false,
+        child: UnderlineTabStrip(
+          rule: StripRule.top,
+          selectedIndex: _currentWeekIndex,
+          tabs: [
+            for (var index = 0; index < _weeks.length; index++)
+              UnderlineTabData(
+                label: 'WEEK ${_weeks[index]}',
+                color: planColor,
+                // Routed through _onWeekChanged, same as a swipe: tapping used
+                // to move the index without saving the week you were leaving or
+                // loading the one you arrived at.
+                onTap: index == _currentWeekIndex
+                    ? null
+                    : () => _onWeekChanged(index),
+                onLongPress: () =>
+                    _showWeekOptionsMenu(context, index, _weeks[index]),
+              ),
+          ],
+          trailing: InkWell(
+            onTap: _addNewWeek,
+            borderRadius: AppRadius.chip,
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                border: Border.all(color: accent),
+                borderRadius: AppRadius.chip,
+              ),
+              child: Text(
+                '[+ WEEK ${_weeks.length + 1}]',
+                style:
+                    GoogleFonts.jetBrainsMono(fontSize: 10, color: accent),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
