@@ -1,4 +1,4 @@
-package com.example.gymapp.offline
+package com.aalishms.opengym
 
 import android.os.Build
 import android.view.Display
@@ -8,7 +8,7 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "com.example.gymapp/refresh_rate"
+    private val CHANNEL = "com.aalishms.opengym/refresh_rate"
     private var highRefreshRateEnabled = true
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

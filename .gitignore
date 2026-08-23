@@ -40,6 +40,18 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Gradle build output
+/android/build/
+/android/.gradle/
+
+# Release signing material. NEVER commit these: the keystore plus its password is
+# the app's whole signing identity, and anyone holding it can publish an APK that
+# installs over OpenGym as an update. Keep an offline backup instead; CI reads
+# these from repository secrets.
+/android/key.properties
+*.jks
+*.keystore
+
 # Local launch config carries Supabase --dart-define values; never commit.
 .claude/launch.json
 .claude/settings.local.json
