@@ -66,9 +66,13 @@ class ExerciseCard extends StatelessWidget {
                   onTap: () => onRename(exerciseIndex),
                   child: Text(
                     exercise.name.toUpperCase(),
+                    // The card's title, not its headline. At 14/bold it
+                    // out-shouted the set values below it, which are the numbers
+                    // you came to the screen to read and change.
                     style: GoogleFonts.jetBrainsMono(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.04,
                     ),
                   ),
                 ),

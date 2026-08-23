@@ -32,6 +32,26 @@ class SetRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textPrimary = textPrimaryColor(context);
+    final textSecondary = textSecondaryColor(context);
+
+    // The set is the reason the screen exists, so the numbers are the loudest
+    // thing on it. They used to be 15/w500 under a 14/bold exercise name — a
+    // hair larger but visibly lighter, which read as subordinate to the title.
+    final numberStyle = GoogleFonts.jetBrainsMono(
+      fontSize: 17,
+      fontWeight: FontWeight.bold,
+      height: 1.1,
+      color: textPrimary,
+    );
+    // The unit and the separator are not data. Dropping them back is what lets
+    // `70` and `8` carry the row without needing a bigger size still.
+    final unitStyle = GoogleFonts.jetBrainsMono(
+      fontSize: 11,
+      fontWeight: FontWeight.normal,
+      color: textSecondary,
+    );
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(
@@ -46,7 +66,10 @@ class SetRow extends StatelessWidget {
             ),
             child: Text(
               '${setIndex + 1}',
-              style: GoogleFonts.jetBrainsMono(fontSize: 9),
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 9,
+                color: textSecondary,
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -57,22 +80,36 @@ class SetRow extends StatelessWidget {
               highlightColor: accent.withValues(alpha: 0.1),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: RichText(
-                  text: TextSpan(
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: textPrimaryColor(context),
+                // One datum, one line. Left to wrap, a three-digit weight with
+                // an RPE dropped its `@8` onto a second line on a narrow phone
+                // and pushed every row below it down. scaleDown gives up a
+                // little size in that case instead, and nothing at all on a
+                // screen where the run already fits.
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: RichText(
+                    softWrap: false,
+                    text: TextSpan(
+                      style: numberStyle,
+                      children: [
+                        TextSpan(text: formatWeight(set.weight)),
+                        TextSpan(text: 'kg', style: unitStyle),
+                        TextSpan(text: ' x ', style: unitStyle),
+                        TextSpan(text: '${set.reps}'),
+                        if (set.rpe != null)
+                          TextSpan(
+                            // An annotation on the set, not a third number.
+                            text: ' @${set.rpe}',
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              height: 1.1,
+                              color: rpeColor(set.rpe!),
+                            ),
+                          ),
+                      ],
                     ),
-                    children: [
-                      TextSpan(
-                          text: '${formatWeight(set.weight)}kg x ${set.reps}'),
-                      if (set.rpe != null)
-                        TextSpan(
-                          text: ' @${set.rpe}',
-                          style: TextStyle(color: rpeColor(set.rpe!)),
-                        ),
-                    ],
                   ),
                 ),
               ),
@@ -204,8 +241,11 @@ class _ControlButton extends StatelessWidget {
           child: Text(
             label,
             style: GoogleFonts.jetBrainsMono(
-              fontSize: 16,
-              color: textPrimaryColor(context),
+              fontSize: 15,
+              // A control, not a value: at 16/primary the two stepper boxes
+              // were the second-loudest thing in the row, right behind the
+              // numbers they adjust. The outline is what marks them tappable.
+              color: textSecondaryColor(context),
             ),
           ),
         ),
