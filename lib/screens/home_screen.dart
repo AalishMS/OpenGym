@@ -13,6 +13,7 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../utils/plan_stats.dart';
+import '../widgets/workout/workout_dialogs.dart';
 import 'create_plan_screen.dart';
 import 'edit_plan_screen.dart';
 import 'workout_screen.dart';
@@ -178,7 +179,7 @@ class HomeScreen extends StatelessWidget {
           ),
         );
       },
-      onLongPress: () => _showPlanOptions(context, plan, index, accent),
+      onLongPress: () => _showPlanOptions(context, plan, index, accent, stat),
       borderRadius: AppRadius.card,
       child: Container(
         // Clips the full-bleed accent strip below to the rounded corners.
@@ -321,107 +322,160 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  void _showPlanOptions(
-      BuildContext context, WorkoutPlan plan, int index, Color accent) {
-    final surface = surfaceColor(context);
+  void _showPlanOptions(BuildContext context, WorkoutPlan plan, int index,
+      Color accent, PlanStat? stat) {
+    final planColor = plan.planColor != null ? Color(plan.planColor!) : accent;
     final border = borderColor(context);
+    final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
 
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
-        backgroundColor: surface,
+        backgroundColor: surfaceColor(context),
         shape: RoundedRectangleBorder(
           borderRadius: AppRadius.card,
           side: BorderSide(color: border, width: 1),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> ${plan.name}',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: accent,
+        // Without a cap the dialog takes Material's share of a desktop window
+        // and the four rows end up a hand-span apart.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Padding(
+            // Vertical inset only — the header and rows carry their own
+            // horizontal padding, so the two rules run full-bleed.
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // The header names what you long-pressed and echoes the card's
+                // colour bar, so there's no doubt which plan is about to change.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg,
+                      AppSpacing.xs, AppSpacing.lg, AppSpacing.md),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 3,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: planColor,
+                          borderRadius: AppRadius.micro,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              plan.name.toUpperCase(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: textPrimary,
+                                letterSpacing: 0.04,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xxs),
+                            Text(
+                              _planFooter(plan, stat),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 9,
+                                color: textSecondary,
+                                letterSpacing: 0.06,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Select action:',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 12,
-                  color: textSecondary,
+                Divider(height: 1, thickness: 1, color: border),
+                _PlanActionRow(
+                  icon: LucideIcons.paintbrush,
+                  label: 'CHANGE COLOR',
+                  color: textPrimary,
+                  // Shows the current value without opening the picker.
+                  trailing: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: planColor,
+                      borderRadius: AppRadius.badge,
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showColorPickerDialog(context, plan, index, accent);
+                  },
                 ),
-              ),
-              const SizedBox(height: 16),
-              _buildActionButton(
-                label: '[COLOR] Change plan color',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showColorPickerDialog(context, plan, index, accent);
-                },
-                accent: accent,
-              ),
-              const SizedBox(height: 8),
-              _buildActionButton(
-                label: '[COPY] Duplicate plan',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  final copyPlan = WorkoutPlan(
-                    name: '${plan.name} (Copy)',
-                    exercises: plan.exercises
-                        .map(
-                            (e) => ExerciseTemplate(name: e.name, sets: e.sets))
-                        .toList(),
-                    planColor: plan.planColor,
-                  );
-                  context.read<WorkoutPlanProvider>().addPlan(copyPlan);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('> Plan copied!',
-                          style:
-                              GoogleFonts.jetBrainsMono(color: Colors.black)),
-                      backgroundColor: accent,
-                    ),
-                  );
-                },
-                accent: accent,
-              ),
-              const SizedBox(height: 8),
-              _buildActionButton(
-                label: '[EDIT] Modify plan',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          EditPlanScreen(plan: plan, planIndex: index),
-                    ),
-                  );
-                },
-                accent: accent,
-              ),
-              const SizedBox(height: 8),
-              _buildActionButton(
-                label: '[DELETE] Remove plan',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  context.read<WorkoutPlanProvider>().deletePlan(plan.id!);
-                },
-                accent: Colors.red,
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text('[CANCEL]',
-                    style: GoogleFonts.jetBrainsMono(color: textSecondary)),
-              ),
-            ],
+                _PlanActionRow(
+                  icon: LucideIcons.copy,
+                  label: 'DUPLICATE PLAN',
+                  color: textPrimary,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    final copyPlan = WorkoutPlan(
+                      name: '${plan.name} (Copy)',
+                      exercises: plan.exercises
+                          .map((e) =>
+                              ExerciseTemplate(name: e.name, sets: e.sets))
+                          .toList(),
+                      planColor: plan.planColor,
+                    );
+                    context.read<WorkoutPlanProvider>().addPlan(copyPlan);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('> Plan copied!',
+                            style:
+                                GoogleFonts.jetBrainsMono(color: Colors.black)),
+                        backgroundColor: accent,
+                      ),
+                    );
+                  },
+                ),
+                _PlanActionRow(
+                  icon: LucideIcons.pencil,
+                  label: 'EDIT PLAN',
+                  color: textPrimary,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            EditPlanScreen(plan: plan, planIndex: index),
+                      ),
+                    );
+                  },
+                ),
+                // A rule and the error colour set the one irreversible action
+                // apart; deleting also asks first, which it never used to.
+                Divider(height: 1, thickness: 1, color: border),
+                _PlanActionRow(
+                  icon: LucideIcons.trash2,
+                  label: 'DELETE PLAN',
+                  color: errorColor(context),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final confirmed = await WorkoutDialogs.showDeletePlanDialog(
+                      context,
+                      planName: plan.name,
+                    );
+                    if (confirmed && context.mounted) {
+                      context.read<WorkoutPlanProvider>().deletePlan(plan.id!);
+                    }
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -488,7 +542,7 @@ class HomeScreen extends StatelessWidget {
                                 color: isSelected ? accent : Colors.transparent,
                                 width: 2,
                               ),
-                              borderRadius: AppRadius.badge,
+                              borderRadius: AppRadius.control,
                             ),
                             child: isSelected
                                 ? Icon(LucideIcons.check, size: 18,
@@ -538,25 +592,52 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActionButton(
-      {required String label,
-      required VoidCallback onTap,
-      required Color accent}) {
+}
+
+/// One row of the long-press plan menu.
+///
+/// No ground and no outline: the header's colour bar is the only accent in the
+/// dialog, so the rows stay quiet and the destructive one is set apart by colour
+/// and a rule instead of competing with three identical outlined pills. The
+/// splash stays square because the row is a full-bleed strip, not a rounded box.
+class _PlanActionRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Widget? trailing;
+  final VoidCallback onTap;
+
+  const _PlanActionRow({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+    this.trailing,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      splashColor: accent.withAlpha(51),
-      highlightColor: accent.withAlpha(26),
-      borderRadius: AppRadius.button,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        decoration: BoxDecoration(
-          border: Border.all(color: accent, width: 1),
-          borderRadius: AppRadius.button,
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.jetBrainsMono(fontSize: 12, color: accent),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+            vertical: AppSpacing.md, horizontal: AppSpacing.lg),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(
+                label,
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 12,
+                  color: color,
+                  letterSpacing: 0.06,
+                ),
+              ),
+            ),
+            if (trailing != null) trailing!,
+          ],
         ),
       ),
     );

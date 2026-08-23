@@ -924,4 +924,72 @@ class WorkoutDialogs {
     );
     return result ?? false;
   }
+
+  /// Confirms removing a plan from the plans list.
+  ///
+  /// The body says what actually happens rather than the usual "permanently
+  /// delete" boilerplate: [WorkoutPlanProvider.deletePlan] soft-deletes the plan
+  /// and leaves every logged session in History.
+  static Future<bool> showDeletePlanDialog(
+    BuildContext context, {
+    required String planName,
+  }) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: surfaceColor(context),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.card,
+          side: BorderSide(color: borderColor(context), width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '> DELETE PLAN?',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: errorColor(context),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Removes "$planName" from your plans. '
+                'Logged sessions stay in History.',
+                style: GoogleFonts.jetBrainsMono(
+                    fontSize: 12, color: textSecondaryColor(context)),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text('[CANCEL]',
+                        style: GoogleFonts.jetBrainsMono(
+                            color: textSecondaryColor(context))),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: errorColor(context),
+                      foregroundColor: Colors.white,
+                    ),
+                    child:
+                        Text('[ DELETE ]', style: GoogleFonts.jetBrainsMono()),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return result ?? false;
+  }
 }
