@@ -112,7 +112,8 @@ class HistoryScreen extends StatelessWidget {
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: errorColor(context),
-                                    foregroundColor: Colors.white,
+                                    foregroundColor:
+                                        onColor(errorColor(context)),
                                   ),
                                   child: Text('[DELETE]',
                                       style: GoogleFonts.jetBrainsMono()),
@@ -233,7 +234,7 @@ class _SessionCardState extends State<_SessionCard> {
                           child: Text(
                             '[PR]',
                             style: GoogleFonts.jetBrainsMono(
-                                fontSize: 10, color: Colors.black),
+                                fontSize: 10, color: onColor(Colors.amber)),
                           ),
                         ),
                       ],
@@ -659,7 +660,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
                     child: Text('[ADD]', style: GoogleFonts.jetBrainsMono()),
                   ),
@@ -775,7 +776,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                         },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: accent,
-                          foregroundColor: Colors.black,
+                          foregroundColor: onAccentColor(context),
                         ),
                         child:
                             Text('[SAVE]', style: GoogleFonts.jetBrainsMono()),

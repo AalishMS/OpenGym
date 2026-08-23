@@ -161,7 +161,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   '[OVERALL]',
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 12,
-                    color: _showOverall ? Colors.black : accent,
+                    color: _showOverall ? onAccentColor(context) : accent,
                   ),
                 ),
               ),
@@ -189,7 +189,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   '[EXERCISE]',
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 12,
-                    color: !_showOverall ? Colors.black : accent,
+                    color: !_showOverall ? onAccentColor(context) : accent,
                   ),
                 ),
               ),

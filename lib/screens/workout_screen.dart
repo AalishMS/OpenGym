@@ -761,6 +761,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     // than a label sliced off at the edge. Only worth it once it can overflow.
     if (plans.length > 2) {
       strip = ShaderMask(
+        // dstIn reads alpha only — these are mask stops, not UI colours, so
+        // opaque/transparent is all that black and white mean here.
         shaderCallback: (bounds) => const LinearGradient(
           begin: Alignment.centerLeft,
           end: Alignment.centerRight,
@@ -864,7 +866,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                             'WEEK $week',
                             style: GoogleFonts.jetBrainsMono(
                               fontSize: 11,
-                              color: isSelected ? Colors.black : textPrimary,
+                              color: isSelected
+                                  ? onAccentColor(context)
+                                  : textPrimary,
                             ),
                           ),
                         ),

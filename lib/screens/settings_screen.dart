@@ -368,7 +368,6 @@ class SettingsScreen extends StatelessWidget {
       Color border,
       Color textSecondary) {
     final accentToShow = isDark ? option.dark : option.light;
-    final isLight = accentToShow.computeLuminance() > 0.5;
 
     return InkWell(
       onTap: () {
@@ -407,9 +406,7 @@ class SettingsScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: option.dark,
                     border: Border.all(
-                      color: isSelected
-                          ? (isLight ? Colors.black : Colors.white)
-                          : border,
+                      color: isSelected ? onColor(option.dark) : border,
                       width: isSelected ? 1 : 1,
                     ),
                     borderRadius: AppRadius.badge,
@@ -422,20 +419,17 @@ class SettingsScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: option.light,
                     border: Border.all(
-                      color: isSelected
-                          ? (option.light.computeLuminance() > 0.5
-                              ? Colors.black
-                              : Colors.white)
-                          : border,
+                      color: isSelected ? onColor(option.light) : border,
                       width: isSelected ? 1 : 1,
                     ),
                     borderRadius: AppRadius.badge,
                   ),
                 ),
                 if (isSelected)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 2),
-                    child: Icon(LucideIcons.check, size: 12, color: Colors.white),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child:
+                        Icon(LucideIcons.check, size: 12, color: accentToShow),
                   ),
               ],
             ),
@@ -594,7 +588,7 @@ class SettingsScreen extends StatelessWidget {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
                     child: Text('[LOAD]', style: GoogleFonts.jetBrainsMono()),
                   ),
@@ -708,7 +702,7 @@ class SettingsScreen extends StatelessWidget {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
                     child:
                         Text('[EXPORT]', style: GoogleFonts.jetBrainsMono()),
@@ -847,7 +841,7 @@ class SettingsScreen extends StatelessWidget {
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: error,
-                        foregroundColor: Colors.white,
+                        foregroundColor: onColor(error),
                       ),
                       child: Text('[IMPORT]',
                           style: GoogleFonts.jetBrainsMono()),
@@ -933,7 +927,7 @@ class SettingsScreen extends StatelessWidget {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: error,
-                      foregroundColor: Colors.white,
+                      foregroundColor: onColor(error),
                     ),
                     child:
                         Text('[CLEAR ALL]', style: GoogleFonts.jetBrainsMono()),
@@ -1031,7 +1025,7 @@ class SettingsScreen extends StatelessWidget {
                 borderRadius: AppRadius.badge,
               ),
               child: isSelected
-                  ? const Icon(LucideIcons.check, size: 14, color: Colors.black)
+                  ? Icon(LucideIcons.check, size: 14, color: onColor(accent))
                   : null,
             ),
             const SizedBox(width: 12),

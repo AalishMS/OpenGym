@@ -60,7 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final fg = textPrimaryColor(context);
     final muted = textSecondaryColor(context);
     final accent = accentColor(context);
-    final onAccent = accent.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+    final onAccent = onAccentColor(context);
     final mono = GoogleFonts.jetBrainsMono();
 
     return Scaffold(

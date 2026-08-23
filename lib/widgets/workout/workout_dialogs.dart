@@ -59,7 +59,7 @@ class WorkoutDialogs {
                     onPressed: () => Navigator.pop(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
                     child: Text('[ ACKNOWLEDGE ]',
                         style: GoogleFonts.jetBrainsMono()),
@@ -150,7 +150,7 @@ class WorkoutDialogs {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
                     child: Text('[ ADD ]', style: GoogleFonts.jetBrainsMono()),
                   ),
@@ -241,7 +241,7 @@ class WorkoutDialogs {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
                     child:
                         Text('[ RENAME ]', style: GoogleFonts.jetBrainsMono()),
@@ -352,7 +352,7 @@ class WorkoutDialogs {
                                   style: GoogleFonts.jetBrainsMono(
                                     fontSize: 12,
                                     color: selectedRpe == rpe
-                                        ? Colors.black
+                                        ? onAccentColor(context)
                                         : textPrimaryColor(context),
                                   ),
                                 ),
@@ -412,7 +412,7 @@ class WorkoutDialogs {
                             },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: accent,
-                              foregroundColor: Colors.black,
+                              foregroundColor: onAccentColor(context),
                             ),
                             child: Text('[ ADD ]',
                                 style: GoogleFonts.jetBrainsMono()),
@@ -520,7 +520,7 @@ class WorkoutDialogs {
                                   style: GoogleFonts.jetBrainsMono(
                                     fontSize: 12,
                                     color: selectedRpe == rpe
-                                        ? Colors.black
+                                        ? onAccentColor(context)
                                         : textPrimaryColor(context),
                                   ),
                                 ),
@@ -595,7 +595,7 @@ class WorkoutDialogs {
                                 },
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: accent,
-                                  foregroundColor: Colors.black,
+                                  foregroundColor: onAccentColor(context),
                                 ),
                                 child: Text('[ SAVE ]',
                                     style: GoogleFonts.jetBrainsMono()),
@@ -675,7 +675,7 @@ class WorkoutDialogs {
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: accent,
-                        foregroundColor: Colors.black,
+                        foregroundColor: onAccentColor(context),
                       ),
                       child:
                           Text('[ SAVE ]', style: GoogleFonts.jetBrainsMono()),
@@ -787,7 +787,7 @@ class WorkoutDialogs {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: accent,
-                      foregroundColor: Colors.black,
+                      foregroundColor: onAccentColor(context),
                     ),
                     child:
                         Text('[ RENAME ]', style: GoogleFonts.jetBrainsMono()),
@@ -848,7 +848,7 @@ class WorkoutDialogs {
                     onPressed: () => Navigator.pop(context, true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: errorColor(context),
-                      foregroundColor: Colors.white,
+                      foregroundColor: onColor(errorColor(context)),
                     ),
                     child:
                         Text('[ DELETE ]', style: GoogleFonts.jetBrainsMono()),
@@ -910,7 +910,7 @@ class WorkoutDialogs {
                     onPressed: () => Navigator.pop(context, true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: errorColor(context),
-                      foregroundColor: Colors.white,
+                      foregroundColor: onColor(errorColor(context)),
                     ),
                     child:
                         Text('[ DELETE ]', style: GoogleFonts.jetBrainsMono()),
@@ -978,7 +978,7 @@ class WorkoutDialogs {
                     onPressed: () => Navigator.pop(context, true),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: errorColor(context),
-                      foregroundColor: Colors.white,
+                      foregroundColor: onColor(errorColor(context)),
                     ),
                     child:
                         Text('[ DELETE ]', style: GoogleFonts.jetBrainsMono()),

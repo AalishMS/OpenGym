@@ -14,6 +14,11 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
   final Color accent;
   final Color accentMuted;
 
+  /// Foreground for anything drawn *on top of* [accent] — label text on a
+  /// filled button, a snackbar message, a selected chip. Derived from the
+  /// accent's luminance, so a pale accent gets dark text and vice versa.
+  final Color onAccent;
+
   const AppColorScheme({
     required this.background,
     required this.surface,
@@ -24,6 +29,7 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
     required this.success,
     required this.accent,
     required this.accentMuted,
+    required this.onAccent,
   });
 
   @override
@@ -37,6 +43,7 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
     Color? success,
     Color? accent,
     Color? accentMuted,
+    Color? onAccent,
   }) {
     return AppColorScheme(
       background: background ?? this.background,
@@ -48,6 +55,7 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
       success: success ?? this.success,
       accent: accent ?? this.accent,
       accentMuted: accentMuted ?? this.accentMuted,
+      onAccent: onAccent ?? this.onAccent,
     );
   }
 
@@ -65,6 +73,9 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
       success: Color.lerp(success, other.success, t)!,
       accent: Color.lerp(accent, other.accent, t)!,
       accentMuted: Color.lerp(accentMuted, other.accentMuted, t)!,
+      // Stepped, not interpolated: a foreground whose only job is to stay
+      // legible must never pass through mid-grey on its way across.
+      onAccent: t < 0.5 ? onAccent : other.onAccent,
     );
   }
 
@@ -113,10 +124,27 @@ Color accentColor(BuildContext context) {
       Theme.of(context).colorScheme.primary;
 }
 
+/// Foreground for text and icons drawn on top of an arbitrary coloured
+/// [ground] — a plan's own colour, an RPE swatch, the error red.
+///
+/// This is the *only* place in the app that names pure black or white: every
+/// other site asks this function, so picking a dark accent can never leave
+/// black text on a dark ground. Prefer [onAccentColor] when the ground is the
+/// theme accent — it reads the value the theme already computed.
+Color onColor(Color ground) {
+  return ground.computeLuminance() > 0.5 ? Colors.black : Colors.white;
+}
+
+/// Foreground for anything sitting on [accentColor] — filled buttons, selected
+/// chips and tabs, snackbars tinted with the accent.
+Color onAccentColor(BuildContext context) {
+  final scheme = Theme.of(context).extension<AppColorScheme>();
+  return scheme?.onAccent ?? onColor(accentColor(context));
+}
+
 ThemeData buildTheme(Color accent, Brightness brightness) {
   final isDark = brightness == Brightness.dark;
-  final isLightAccent = accent.computeLuminance() > 0.5;
-  final onAccent = isLightAccent ? Colors.black : Colors.white;
+  final onAccent = onColor(accent);
 
   final background = isDark ? const Color(0xFF0F0F0F) : const Color(0xFFF5F5F0);
   final surface = isDark ? const Color(0xFF1A1A1A) : const Color(0xFFECECEC);
@@ -139,7 +167,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
       secondary: accent,
       onSecondary: onAccent,
       error: error,
-      onError: isDark ? Colors.white : Colors.white,
+      onError: onColor(error),
       surface: surface,
       onSurface: textPrimary,
     ),
@@ -154,6 +182,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
         success: success,
         accent: accent,
         accentMuted: accent.withAlpha(isDark ? 51 : 38),
+        onAccent: onAccent,
       ),
     ],
     textTheme: _buildTextTheme(textPrimary, textSecondary),
@@ -185,7 +214,10 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.black,
+        // The app's own ground, not pure black: this is an accent-on-ground
+        // button with an accent hairline, and in light mode a black slab read
+        // as a hole punched in the page.
+        backgroundColor: background,
         foregroundColor: accent,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -213,7 +245,7 @@ ThemeData buildTheme(Color accent, Brightness brightness) {
       ),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: Colors.black,
+      backgroundColor: background,
       foregroundColor: accent,
       elevation: 0,
       shape: RoundedRectangleBorder(

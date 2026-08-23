@@ -88,9 +88,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
             final exercises = ExerciseLibrary.exercisesByCategory[selectedCategory] ?? [];
-            final onAccent = accent.computeLuminance() > 0.5
-                ? Colors.black
-                : Colors.white;
+            final onAccent = onAccentColor(context);
 
             return Container(
               constraints: BoxConstraints(
@@ -575,9 +573,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
                 ),
                 child: isSelected
                     ? Icon(LucideIcons.check, size: 16,
-                        color: color.computeLuminance() > 0.5
-                            ? Colors.black
-                            : Colors.white)
+                        color: onColor(color))
                     : null,
               ),
             );
@@ -878,7 +874,7 @@ class _CreatePlanScreenState extends State<CreatePlanScreen> {
         onPressed: _savePlan,
         style: ElevatedButton.styleFrom(
           backgroundColor: accent,
-          foregroundColor: Colors.black,
+          foregroundColor: onColor(accent),
           elevation: 0,
           shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
           padding: const EdgeInsets.symmetric(vertical: 13),

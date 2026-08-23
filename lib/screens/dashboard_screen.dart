@@ -307,7 +307,8 @@ class _EmptyState extends StatelessWidget {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text('> Sample data loaded!',
-                        style: GoogleFonts.jetBrainsMono(color: Colors.black)),
+                        style: GoogleFonts.jetBrainsMono(
+                            color: onAccentColor(context))),
                     backgroundColor: accent,
                   ),
                 );

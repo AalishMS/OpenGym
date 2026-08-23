@@ -89,7 +89,18 @@ import '../services/hive_service.dart';
   - `textPrimaryColor(context)` - main text
   - `textSecondaryColor(context)` - secondary text
   - `accentColor(context)` - accent color from settings
+  - `onAccentColor(context)` - text/icons drawn *on* the accent
+  - `onColor(ground)` - text/icons drawn on any other coloured ground
 - Never hardcode colors like `Colors.white` or `Colors.black` for UI
+- Anything drawn on a coloured ground asks for its foreground:
+  - accent ground (filled button, selected chip/tab, accent snackbar) →
+    `onAccentColor(context)`
+  - any other coloured ground (a plan's colour, `errorColor(context)`, an RPE
+    swatch, a palette chip) → `onColor(thatGround)`
+  - `onColor` is the single place in the app allowed to name black or white;
+    a literal `Colors.black` foreground is a bug waiting for a dark accent
+  - exception: alpha-only `ShaderMask` stops under `BlendMode.dstIn`, where
+    black/white mean opaque/transparent rather than a colour — comment those
 - Use `accent.withAlpha(value)` for splash/highlight effects
 
 ### Corner Radii

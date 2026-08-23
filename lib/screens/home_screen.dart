@@ -110,8 +110,8 @@ class HomeScreen extends StatelessWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text('> Sample data loaded!',
-                          style:
-                              GoogleFonts.jetBrainsMono(color: Colors.black)),
+                          style: GoogleFonts.jetBrainsMono(
+                              color: onAccentColor(context))),
                       backgroundColor: accent,
                     ),
                   );
@@ -434,8 +434,8 @@ class HomeScreen extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('> Plan copied!',
-                            style:
-                                GoogleFonts.jetBrainsMono(color: Colors.black)),
+                            style: GoogleFonts.jetBrainsMono(
+                                color: onAccentColor(context))),
                         backgroundColor: accent,
                       ),
                     );
@@ -546,9 +546,7 @@ class HomeScreen extends StatelessWidget {
                             ),
                             child: isSelected
                                 ? Icon(LucideIcons.check, size: 18,
-                                    color: color.computeLuminance() > 0.5
-                                        ? Colors.black
-                                        : Colors.white)
+                                    color: onColor(color))
                                 : null,
                           ),
                         );
@@ -572,7 +570,7 @@ class HomeScreen extends StatelessWidget {
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: accent,
-                            foregroundColor: Colors.black,
+                            foregroundColor: onAccentColor(context),
                             elevation: 0,
                             shape: const RoundedRectangleBorder(
                               borderRadius: AppRadius.button,
