@@ -19,7 +19,7 @@ import '../widgets/dashboard/plan_status_tile.dart';
 import '../widgets/dashboard/progression_sparkline.dart';
 import '../widgets/dashboard/recent_prs_tile.dart';
 import '../widgets/dashboard/stat_tile.dart';
-import 'create_plan_screen.dart';
+import 'plan_editor_screen.dart';
 import 'workout_screen.dart';
 
 /// Desktop overview: everything the phone spreads across four tabs, on one
@@ -74,8 +74,7 @@ class DashboardScreen extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.lg),
           child: Center(
             child: ConstrainedBox(
-              constraints:
-                  const BoxConstraints(maxWidth: Breakpoints.expanded),
+              constraints: const BoxConstraints(maxWidth: Breakpoints.expanded),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -190,9 +189,8 @@ class DashboardScreen extends StatelessWidget {
       // rather than disappearing, so the row keeps its shape.
       action: BracketButton(
         label: 'RESUME',
-        onTap: index >= 0
-            ? () => _openPlan(context, index, plans[index])
-            : null,
+        onTap:
+            index >= 0 ? () => _openPlan(context, index, plans[index]) : null,
       ),
       child: LastSessionTile(session: last),
     );
@@ -227,8 +225,7 @@ class DashboardScreen extends StatelessWidget {
         counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
     final name = display[topKey]!;
     final progression = statsRepo.getExerciseProgression(name);
-    final values =
-        progression.map((p) => p['maxWeight'] as double).toList();
+    final values = progression.map((p) => p['maxWeight'] as double).toList();
 
     return DashboardPanel(
       title: 'PROGRESSION',
@@ -289,14 +286,14 @@ class _EmptyState extends StatelessWidget {
           children: [
             Text(
               '> NO DATA',
-              style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16, color: textSecondary),
+              style:
+                  GoogleFonts.jetBrainsMono(fontSize: 16, color: textSecondary),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'Create a plan and log a workout to fill this in',
-              style: GoogleFonts.jetBrainsMono(
-                  fontSize: 12, color: textSecondary),
+              style:
+                  GoogleFonts.jetBrainsMono(fontSize: 12, color: textSecondary),
             ),
             const SizedBox(height: AppSpacing.xxl),
             // Same as the plans empty state: the copy asks for a plan, so the
@@ -306,7 +303,8 @@ class _EmptyState extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const CreatePlanScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const PlanEditorScreen.create()),
                 );
               },
               style: OutlinedButton.styleFrom(

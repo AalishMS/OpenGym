@@ -7,6 +7,7 @@ import '../../providers/settings_provider.dart';
 import '../../services/pr_tracking_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
+import '../../utils/format.dart';
 
 class WorkoutDialogs {
   static void showPRDialog(BuildContext context, List<PRResult> prs) {
@@ -991,5 +992,176 @@ class WorkoutDialogs {
       ),
     );
     return result ?? false;
+  }
+
+  /// Confirms leaving the plan editor with unsaved edits.
+  ///
+  /// Destructive in the same sense as [showDeletePlanDialog] — the edits are
+  /// gone once you leave — so it borrows the same red-titled shape, and
+  /// `[KEEP EDITING]` is the quiet way out because it is the safe one.
+  static Future<bool> showDiscardChangesDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: surfaceColor(context),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.card,
+          side: BorderSide(color: borderColor(context), width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '> DISCARD CHANGES?',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: errorColor(context),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'This plan has unsaved edits. Leaving now throws them away.',
+                style: GoogleFonts.jetBrainsMono(
+                    fontSize: 12, color: textSecondaryColor(context)),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: Text('[KEEP EDITING]',
+                        style: GoogleFonts.jetBrainsMono(
+                            color: textSecondaryColor(context))),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: errorColor(context),
+                      foregroundColor: onColor(errorColor(context)),
+                    ),
+                    child:
+                        Text('[DISCARD]', style: GoogleFonts.jetBrainsMono()),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    return result ?? false;
+  }
+
+  /// Types a weight and reps straight into one prescribed set in the plan
+  /// editor.
+  ///
+  /// The editor's rows adjust by stepper, which is fine for a nudge and awful
+  /// for a jump — reaching 70kg from 0 is 28 taps. Tapping the value gets here
+  /// instead.
+  ///
+  /// Deliberately not [showEditSetDialog]: that one edits a logged `gym.Set`
+  /// and carries RPE and a note, neither of which a plan prescribes. [accent]
+  /// comes in as a parameter so the dialog wears the plan's own colour rather
+  /// than the global accent.
+  static void showEditPlanSetDialog(
+    BuildContext context, {
+    required int setNumber,
+    required int reps,
+    required double weight,
+    required Color accent,
+    required void Function(int reps, double weight) onSave,
+  }) {
+    final weightController =
+        TextEditingController(text: formatWeight(weight));
+    final repsController = TextEditingController(text: reps.toString());
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: surfaceColor(dialogContext),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.card,
+          side: BorderSide(color: borderColor(dialogContext), width: 1),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '> SET $setNumber',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: accent,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: weightController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Weight (kg)',
+                  hintText: 'e.g., 70',
+                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: repsController,
+                decoration: const InputDecoration(
+                  labelText: 'Reps',
+                  hintText: 'e.g., 8',
+                ),
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: Text('[CANCEL]',
+                        style: GoogleFonts.jetBrainsMono(
+                            color: textSecondaryColor(dialogContext))),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      // An unparseable or blank field keeps what the set already
+                      // had, so a stray keystroke cannot silently zero a
+                      // prescription.
+                      final newWeight =
+                          double.tryParse(weightController.text.trim()) ??
+                              weight;
+                      final newReps =
+                          int.tryParse(repsController.text.trim()) ?? reps;
+                      Navigator.pop(dialogContext);
+                      onSave(
+                        newReps.clamp(1, 999),
+                        newWeight.clamp(0, 999).toDouble(),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: accent,
+                      foregroundColor: onColor(accent),
+                    ),
+                    child: Text('[SAVE]', style: GoogleFonts.jetBrainsMono()),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

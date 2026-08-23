@@ -7,6 +7,7 @@ import '../providers/workout_session_provider.dart';
 import '../providers/settings_provider.dart';
 import '../models/workout_plan.dart';
 import '../models/exercise_template.dart';
+import '../models/set_template.dart';
 import '../data/plan_colors.dart';
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
@@ -15,8 +16,7 @@ import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../utils/plan_stats.dart';
 import '../widgets/workout/workout_dialogs.dart';
-import 'create_plan_screen.dart';
-import 'edit_plan_screen.dart';
+import 'plan_editor_screen.dart';
 import 'workout_screen.dart';
 import '../services/sample_data_seeder.dart';
 
@@ -122,7 +122,8 @@ class HomeScreen extends StatelessWidget {
               onPressed: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const CreatePlanScreen()),
+                  MaterialPageRoute(
+                      builder: (_) => const PlanEditorScreen.create()),
                 );
               },
               style: OutlinedButton.styleFrom(
@@ -264,18 +265,19 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.sm),
                     ...previewLines.map((name) => Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
-                      child: Text(
-                        '· $name',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 9,
-                          color: textSecondary,
-                          letterSpacing: 0.02,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    )),
+                          padding:
+                              const EdgeInsets.only(bottom: AppSpacing.xxs),
+                          child: Text(
+                            '· $name',
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 9,
+                              color: textSecondary,
+                              letterSpacing: 0.02,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        )),
                     if (exerciseNames.length > 3)
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
@@ -325,7 +327,7 @@ class HomeScreen extends StatelessWidget {
       onTap: () {
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const CreatePlanScreen()),
+          MaterialPageRoute(builder: (_) => const PlanEditorScreen.create()),
         );
       },
       borderRadius: AppRadius.button,
@@ -458,8 +460,14 @@ class HomeScreen extends StatelessWidget {
                     final copyPlan = WorkoutPlan(
                       name: '${plan.name} (Copy)',
                       exercises: plan.exercises
-                          .map((e) =>
-                              ExerciseTemplate(name: e.name, sets: e.sets))
+                          .map((e) => ExerciseTemplate(
+                                name: e.name,
+                                sets: e.sets,
+                                setTargets: e.setTargets
+                                    ?.map((t) => SetTemplate(
+                                        reps: t.reps, weight: t.weight))
+                                    .toList(),
+                              ))
                           .toList(),
                       planColor: plan.planColor,
                     );
@@ -483,8 +491,7 @@ class HomeScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            EditPlanScreen(plan: plan, planIndex: index),
+                        builder: (_) => PlanEditorScreen.edit(plan),
                       ),
                     );
                   },
@@ -578,8 +585,8 @@ class HomeScreen extends StatelessWidget {
                               borderRadius: AppRadius.control,
                             ),
                             child: isSelected
-                                ? Icon(LucideIcons.check, size: 18,
-                                    color: onColor(color))
+                                ? Icon(LucideIcons.check,
+                                    size: 18, color: onColor(color))
                                 : null,
                           ),
                         );
@@ -592,13 +599,17 @@ class HomeScreen extends StatelessWidget {
                         TextButton(
                           onPressed: () => Navigator.pop(ctx),
                           child: Text('[CANCEL]',
-                              style: GoogleFonts.jetBrainsMono(color: textSecondary)),
+                              style: GoogleFonts.jetBrainsMono(
+                                  color: textSecondary)),
                         ),
                         const SizedBox(width: 8),
                         ElevatedButton(
                           onPressed: () {
-                            final updated = plan.copyWith(planColor: selectedColor);
-                            context.read<WorkoutPlanProvider>().updatePlan(updated);
+                            final updated =
+                                plan.copyWith(planColor: selectedColor);
+                            context
+                                .read<WorkoutPlanProvider>()
+                                .updatePlan(updated);
                             Navigator.pop(ctx);
                           },
                           style: ElevatedButton.styleFrom(
@@ -609,7 +620,8 @@ class HomeScreen extends StatelessWidget {
                               borderRadius: AppRadius.button,
                             ),
                           ),
-                          child: Text('[SAVE]', style: GoogleFonts.jetBrainsMono()),
+                          child: Text('[SAVE]',
+                              style: GoogleFonts.jetBrainsMono()),
                         ),
                       ],
                     ),
@@ -622,7 +634,6 @@ class HomeScreen extends StatelessWidget {
       },
     );
   }
-
 }
 
 /// Centres its child and caps it at [Breakpoints.expanded].
