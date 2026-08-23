@@ -5,6 +5,7 @@ import 'providers/workout_plan_provider.dart';
 import 'providers/workout_session_provider.dart';
 import 'providers/progression_provider.dart';
 import 'providers/settings_provider.dart';
+import 'providers/update_provider.dart';
 import 'services/hive_service.dart';
 import 'services/supabase_service.dart';
 import 'services/sync_service.dart';
@@ -115,6 +116,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ChangeNotifierProvider.value(value: _workoutSessionProvider),
         ChangeNotifierProvider.value(value: _progressionProvider),
         ChangeNotifierProvider.value(value: _settingsProvider),
+        // Created here rather than in _initialize because it holds no state
+        // that has to exist before the first frame — the check itself is
+        // kicked off by AppShell once the UI is up.
+        ChangeNotifierProvider(create: (_) => UpdateProvider()),
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settings, child) {

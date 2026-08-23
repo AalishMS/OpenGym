@@ -1,4 +1,33 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Flutter injects INTERNET into the debug/profile manifests only, so a
+         release APK has no network access unless it is declared here. No plugin
+         in this project contributes it either. The in-app updater needs it to
+         reach the GitHub Releases API, and Supabase sync needs it too. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Lets the app hand a downloaded APK to the system installer so it can
+         update itself. The user must still approve "install unknown apps" and
+         then confirm the install; this only allows us to ask. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+
+    <!-- ota_update's own manifest merges these two in, and neither belongs in a
+         normal app. The plugin downloads to internal storage
+         (dataDir/files/ota_update) and never touches the shared volume, so
+         WRITE_EXTERNAL_STORAGE only adds a scary line to the permission list.
+         INSTALL_PACKAGES is signature|privileged: a sideloaded app can never
+         hold it, and the plugin already falls back to asking the system
+         installer when it is denied. -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        tools:node="remove"/>
+    <uses-permission android:name="android.permission.INSTALL_PACKAGES"
+        tools:node="remove"/>
+    <!-- The merger derives this from ota_update's WRITE_EXTERNAL_STORAGE before
+         it honours the removal above, so the implied sibling has to go too.
+         Nothing else needs it: file_picker declares no storage permission and
+         reaches files through the Storage Access Framework. -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        tools:node="remove"/>
+
     <application
         android:label="OpenGym Offline"
         android:name="${applicationName}"
@@ -30,6 +59,33 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- ota_update ships the OtaUpdateFileProvider class but does NOT declare
+             it, so the app has to. Without this entry the plugin's
+             FileProvider.getUriForFile call throws once the download finishes and
+             takes the app down with it. The authority must stay exactly
+             "<applicationId>.ota_update_provider" — that is the default the
+             plugin derives from the package name. -->
+        <provider
+            android:name="sk.fourq.otaupdate.OtaUpdateFileProvider"
+            android:authorities="${applicationId}.ota_update_provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/filepaths" />
+        </provider>
+        <!-- Only used by the plugin's PackageInstaller path, which needs a
+             broadcast target for the install result. We take the
+             ACTION_INSTALL_PACKAGE path instead, but declaring this costs
+             nothing and keeps the plugin whole if that path is ever taken. -->
+        <receiver
+            android:name="sk.fourq.otaupdate.InstallResultReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="${applicationId}.ACTION_INSTALL_COMPLETE"/>
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

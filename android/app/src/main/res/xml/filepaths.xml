@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Grants the system installer read access to the one directory the updater
+  writes into. ota_update downloads to dataDir/files/ota_update, and
+  <files-path> is rooted at getFilesDir() (= dataDir/files), so this exposes
+  exactly that folder and nothing else in the app's private storage.
+-->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <files-path name="internal_apk_storage" path="ota_update/"/>
+</paths>

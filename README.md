@@ -164,6 +164,90 @@ flutter build web --release
 
 ---
 
+## Releasing
+
+OpenGym updates itself. Installed copies poll the GitHub Releases API, and when
+a newer build is published they offer to download and install it — no app store
+involved. Publishing is a tag push; GitHub Actions does the rest.
+
+### Cutting a release
+
+1. Bump `version:` in `pubspec.yaml`. **Always increment the `+build` number** —
+   it becomes the Android `versionCode`, it is what the updater compares, and
+   Android refuses to install an APK whose versionCode did not increase. A new
+   version name with the same build number is an unpublishable release.
+
+   ```yaml
+   version: 1.0.1+2
+   ```
+
+2. Commit, then tag with `v` + the exact pubspec version and push:
+
+   ```bash
+   git commit -am "release: 1.0.1+2" && git tag v1.0.1+2 && git push && git push --tags
+   ```
+
+`.github/workflows/release.yml` then verifies the tag matches pubspec (and fails
+loudly if not), runs the tests, builds a single universal signed APK, checks it
+is signed with the release key rather than the debug fallback, and publishes it
+as a GitHub Release. Installed apps pick it up on their next check.
+
+Two things will make a release invisible to the updater, so the workflow avoids
+both: marking it as a **draft** or a **prerelease** (the `/releases/latest`
+endpoint skips those), and attaching more than one `.apk` (which is why the
+build is universal rather than `--split-per-abi`).
+
+### One-time setup
+
+Signing keys are not in the repository. Generate a keystore once and keep it
+forever — **every** APK must be signed with the same key, or installed copies
+cannot update and the only way forward is uninstall-and-reinstall, which erases
+local data.
+
+```bash
+keytool -genkeypair -v -keystore android/app/opengym-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias opengym
+```
+
+Then create `android/key.properties` (git-ignored) so local release builds sign:
+
+```properties
+storeFile=opengym-release.jks
+storePassword=<your keystore password>
+keyAlias=opengym
+keyPassword=<your key password>
+```
+
+Back the `.jks` file and its passwords up somewhere offline. Losing them ends
+the update path for every installed copy.
+
+For CI, add these four repository secrets under
+**Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+| --- | --- |
+| `KEYSTORE_BASE64` | `base64 -w0 android/app/opengym-release.jks` |
+| `KEYSTORE_PASSWORD` | the keystore password |
+| `KEY_ALIAS` | the key alias (`opengym` above) |
+| `KEY_PASSWORD` | the key password |
+
+`android/key.properties`, `*.jks`, and `*.keystore` are git-ignored. Never
+commit them, and never paste the base64 anywhere but the secret field.
+
+### Updating from a pre-1.0.1 hand-installed build
+
+Builds distributed before this release were signed with the debug key and used a
+different application ID (`com.example.gymapp.offline`). Android treats the new
+release as a **different app**, so it installs alongside the old one and starts
+empty. Migrating once:
+
+1. In the old app: **Settings → EXPORT DATA**, and keep the file somewhere safe.
+2. Install the new APK, then **Settings → IMPORT DATA** and pick that file.
+3. Uninstall the old app.
+
+Do the export *first*. Uninstalling the old app deletes its local database.
+
+---
+
 ## Project Structure
 
 ```

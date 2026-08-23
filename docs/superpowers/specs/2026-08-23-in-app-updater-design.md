@@ -35,10 +35,12 @@ Facts confirmed against the repo, not assumed. Several contradict the original b
    history. The key change *alone* already forces this (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`),
    so the rename is free — pay the cliff once, now. Mitigation is the existing
    EXPORT/IMPORT flow. See [Migration](#one-time-migration).
-2. **Pinning CI to a Dart-3.5.4-era Flutter would break the build.** `package_info_plus`
-   10.2.1 needs Dart >=3.10.0 / Flutter >=3.38.1. Pinning Flutter 3.24.x makes it
-   unresolvable — CI hard-fails or silently falls back to ancient versions. Fix: raise the
-   pubspec floor to `^3.10.0` and pin CI to 3.44.1, matching local exactly.
+2. **Pinning CI to a Dart-3.5.4-era Flutter would break the build.** `ota_update` 7.1.0
+   needs Dart >=3.7.0, and `permission_handler` 13 needs Flutter >=3.24.0. Pinning
+   Flutter 3.24.x makes them unresolvable — CI hard-fails or silently falls back to
+   ancient versions. Fix: raise the pubspec floor to `^3.7.0` and pin CI to 3.44.1,
+   matching local exactly. (Resolved down from an initially-planned `^3.10.0`, which was
+   `package_info_plus` 10.x's floor; that package is held at 9.x — see below.)
 3. **`com.example` is also a live Kotlin↔Dart contract.** The MethodChannel name
    `com.example.gymapp/refresh_rate` appears in both `MainActivity.kt` and
    `settings_provider.dart`. Renaming one side silently breaks high-refresh-rate. The
@@ -70,8 +72,24 @@ Facts confirmed against the repo, not assumed. Several contradict the original b
 `ota_update` 7.1.0 (160/160 pub points, updated Dec 2025, adds `PackageInstaller`) over a
 hand-rolled `http`+`open_filex`+FileProvider stack: one plugin covers download, progress,
 and install, and it scores better than `open_filex` (140, 17 months stale). Plus `http`
-1.6.0 (already transitive via Supabase), `package_info_plus` 10.2.1, `permission_handler`
+1.6.0 (already transitive via Supabase), `package_info_plus` **9.0.1**, `permission_handler`
 13.0.1.
+
+`package_info_plus` is held at 9.x rather than 10.x: 10.1.0+ requires `win32` ^6.0.1 while
+`share_plus` 10.1.4 requires `win32` ^5.5.3, so the two cannot co-resolve. Bumping
+`share_plus` instead is a breaking API change to the working export flow
+(`settings_screen.dart`), and 9.x reports `version`/`buildNumber` identically — so there is
+nothing to gain by forcing it.
+
+`ota_update` ships `OtaUpdateFileProvider` but does **not** declare it in its own manifest,
+so the app must. Its `installUsingActionInstallPackage` path — the one taken on minSdk 24
+with `usePackageInstaller: false` — calls `FileProvider.getUriForFile` with no try/catch, so
+a missing `<provider>` crashes the app *after* a successful download. Declared in
+`AndroidManifest.xml` with authority `${applicationId}.ota_update_provider` plus
+`res/xml/filepaths.xml`. The plugin's merged `WRITE_EXTERNAL_STORAGE` is stripped with
+`tools:node="remove"` (it downloads to internal `dataDir/files/ota_update` and never
+touches the shared volume), as is `INSTALL_PACKAGES` (signature|privileged — a sideloaded
+app can never hold it).
 
 ## Architecture
 
@@ -114,7 +132,7 @@ dialog. The `.apk` asset is found by extension, never by filename.
 - Manifest: `INTERNET` + `REQUEST_INSTALL_PACKAGES`.
 - `build.gradle`: read `key.properties`, real `release` signingConfig, graceful fallback to
   debug so `flutter run` works without the keystore.
-- pubspec: `environment.sdk` `^3.5.4` → `^3.10.0`, plus the four deps.
+- pubspec: `environment.sdk` `^3.5.4` → `^3.7.0`, plus the four deps.
 - `.github/workflows/release.yml`: Java 17 → Flutter 3.44.1 pinned → version guard →
   decode keystore → `flutter test` → `flutter build apk --release` (single universal APK,
   **no** `--split-per-abi`) → `softprops/action-gh-release` with `draft: false,
