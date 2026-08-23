@@ -92,8 +92,7 @@ Repository layer wrapping HiveService for clean architecture:
 | Screen | Description |
 |--------|-------------|
 | `HomeScreen` | Main screen showing workout plans list, quick access to start workout |
-| `CreatePlanScreen` | Form to create new workout plans with exercises and sets |
-| `EditPlanScreen` | Edit existing workout plans |
+| `PlanEditorScreen` | Create (`.create()`) or edit (`.edit(plan)`) a plan: exercises, per-set targets, reorder, plan color |
 | `WorkoutScreen` | Active workout session with sets/reps/weight logging, week tabs |
 | `HistoryScreen` | View past workout sessions |
 | `StatsScreen` | Charts and statistics (PRs, workout frequency, progression) |
@@ -119,6 +118,21 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Added per-set plan targets:
+  - New `SetTemplate` model (typeId: 5) holding prescribed `reps`/`weight`
+  - `ExerciseTemplate.setTargets` is optional and read through `targetAt(index)`, so pre-existing plans need no migration
+  - Targets are display-only: a session is never seeded from them, or `PRTrackingService` would report PRs for weights nobody lifted
+  - The workout screen's set row hints at the target beside the live value until the set is touched, matching the plan entry by exercise name (not index)
+- Replaced duplicated create/edit plan screens with one `PlanEditorScreen`:
+  - Create and edit flows now share the same UI and persistence path
+  - Per-set plan targets save through `ExerciseTemplate.setTargets`
+  - Add-exercise sheet supports search, multi-add, and duplicate prevention
+  - Obsolete `create_plan_screen.dart`, `edit_plan_screen.dart`, and `exercise_with_sets.dart` were removed
+- Rebuilt the plan editor's exercise card to the workout screen's spec:
+  - `setValueStyle`, `setUnitStyle` and `StepperBox` moved into `set_row.dart` and are now shared by both screens; `SetHeaderRow` takes a `trailingGap`
+  - Set values lead the row at 17/bold with quiet steppers beside them, and tapping a value opens `WorkoutDialogs.showEditPlanSetDialog` to type it
+  - Collapsed cards state their own prescription, so a plan reads without expanding every card
+  - Add-set and delete moved to a card footer; delete now goes through `showDeleteExerciseDialog` instead of removing an exercise silently
 - Fixed online sync startup race:
   - Concurrent `SyncService.syncNow()` calls now share the active sync future instead of returning early
   - Post-login adoption waits for in-flight pull data before providers reload
