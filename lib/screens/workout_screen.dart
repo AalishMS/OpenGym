@@ -604,7 +604,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                 ),
                                 child: Center(
                                   child: Text(
-                                    '[ + ADD EXERCISE ]',
+                                    '[+ ADD EXERCISE]',
                                     style: GoogleFonts.jetBrainsMono(
                                         color: accent),
                                   ),

@@ -121,7 +121,7 @@ class HomeScreen extends StatelessWidget {
                 foregroundColor: accent,
                 side: BorderSide(color: accent, width: 1),
               ),
-              child: Text('[ LOAD SAMPLE DATA ]',
+              child: Text('[LOAD SAMPLE DATA]',
                   style: GoogleFonts.jetBrainsMono()),
             ),
           ],

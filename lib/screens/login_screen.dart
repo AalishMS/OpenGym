@@ -121,7 +121,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             width: 18,
                             child: CircularProgressIndicator(
                                 strokeWidth: 2, color: onAccent))
-                        : Text(_isSignUp ? '[ CREATE ACCOUNT ]' : '[ SIGN IN ]',
+                        : Text(_isSignUp ? '[CREATE ACCOUNT]' : '[SIGN IN]',
                             style: mono.copyWith(
                                 fontWeight: FontWeight.bold, color: onAccent)),
                   ),

@@ -456,7 +456,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
             onTap: _save,
             child: Container(
               padding: const EdgeInsets.all(12),
-              child: Text('[ SAVE ]',
+              child: Text('[SAVE]',
                   style: GoogleFonts.jetBrainsMono(color: accent)),
             ),
           ),
@@ -576,7 +576,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                       onTap: () => _showAddSetDialog(index, exercise),
                       splashColor: accent.withValues(alpha: 0.2),
                       highlightColor: accent.withValues(alpha: 0.1),
-                      child: Text('[ + ADD SET ]',
+                      child: Text('[+ ADD SET]',
                           style: GoogleFonts.jetBrainsMono(
                               fontSize: 10, color: accent)),
                     ),

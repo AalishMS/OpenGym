@@ -188,7 +188,7 @@ class DashboardScreen extends StatelessWidget {
       // A deleted or renamed plan can't be reopened — the button greys out
       // rather than disappearing, so the row keeps its shape.
       action: BracketButton(
-        label: ' RESUME ',
+        label: 'RESUME',
         onTap: index >= 0
             ? () => _openPlan(context, index, plans[index])
             : null,
@@ -318,7 +318,7 @@ class _EmptyState extends StatelessWidget {
                 side: BorderSide(color: accent, width: 1),
               ),
               child:
-                  Text('[ LOAD SAMPLE DATA ]', style: GoogleFonts.jetBrainsMono()),
+                  Text('[LOAD SAMPLE DATA]', style: GoogleFonts.jetBrainsMono()),
             ),
           ],
         ),
