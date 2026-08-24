@@ -1,7 +1,7 @@
 name: gymapp
 description: "A mobile gym tracking app for workout logging"
 publish_to: 'none'
-version: 1.0.2+3
+version: 1.0.3+4
 
 environment:
   # Floor raised from ^3.5.4 because ota_update 7.1.0 requires Dart >=3.7.0.
