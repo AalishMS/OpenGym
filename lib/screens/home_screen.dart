@@ -4,7 +4,6 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
-import '../providers/settings_provider.dart';
 import '../models/workout_plan.dart';
 import '../models/exercise_template.dart';
 import '../models/set_template.dart';
@@ -25,8 +24,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final settings = context.watch<SettingsProvider>();
-    final accent = settings.accentColor;
+    final accent = accentColor(context);
     final bg = backgroundColor(context);
     final border = borderColor(context);
 
@@ -146,7 +144,7 @@ class HomeScreen extends StatelessWidget {
                       content: Text('> Sample data loaded!',
                           style: GoogleFonts.jetBrainsMono(
                               color: onAccentColor(context))),
-                      backgroundColor: accent,
+                      backgroundColor: accentFillColor(context),
                     ),
                   );
                 }
@@ -199,7 +197,7 @@ class HomeScreen extends StatelessWidget {
     final border = borderColor(context);
     final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
-    final planColor = plan.planColor != null ? Color(plan.planColor!) : accent;
+    final planColor = planColorOf(plan.planColor, context);
 
     final exerciseNames = plan.exercises.map((e) => e.name).toList();
     final previewLines = exerciseNames.take(3).toList();
@@ -359,7 +357,7 @@ class HomeScreen extends StatelessWidget {
 
   void _showPlanOptions(BuildContext context, WorkoutPlan plan, int index,
       Color accent, PlanStat? stat) {
-    final planColor = plan.planColor != null ? Color(plan.planColor!) : accent;
+    final planColor = planColorOf(plan.planColor, context);
     final border = borderColor(context);
     final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
@@ -477,7 +475,7 @@ class HomeScreen extends StatelessWidget {
                         content: Text('> Plan copied!',
                             style: GoogleFonts.jetBrainsMono(
                                 color: onAccentColor(context))),
-                        backgroundColor: accent,
+                        backgroundColor: accentFillColor(context),
                       ),
                     );
                   },
@@ -566,9 +564,15 @@ class HomeScreen extends StatelessWidget {
                     Wrap(
                       spacing: 10,
                       runSpacing: 10,
-                      children: kPlanColors.map((colorValue) {
-                        final color = Color(colorValue);
-                        final isSelected = selectedColor == colorValue;
+                      children: List.generate(kPlanColors.length, (slot) {
+                        final colorValue = kPlanColors[slot];
+                        // The chip shows the tone this slot resolves to in the
+                        // current mode, so what you tap is what gets painted.
+                        // Selection is matched by slot, not by value, so a plan
+                        // saved before the palette change still highlights.
+                        final color = planSwatch(slot, context);
+                        final isSelected = selectedColor != null &&
+                            planSlotOf(selectedColor!) == slot;
                         return GestureDetector(
                           onTap: () {
                             setDialogState(() => selectedColor = colorValue);
@@ -590,7 +594,7 @@ class HomeScreen extends StatelessWidget {
                                 : null,
                           ),
                         );
-                      }).toList(),
+                      }),
                     ),
                     const SizedBox(height: 20),
                     Row(
@@ -613,7 +617,7 @@ class HomeScreen extends StatelessWidget {
                             Navigator.pop(ctx);
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: accent,
+                            backgroundColor: accentFillColor(context),
                             foregroundColor: onAccentColor(context),
                             elevation: 0,
                             shape: const RoundedRectangleBorder(

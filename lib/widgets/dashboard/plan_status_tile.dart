@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../data/plan_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
@@ -36,9 +37,7 @@ class PlanStatusTile extends StatelessWidget {
                   Container(
                     width: 2,
                     height: 22,
-                    color: stat.plan.planColor != null
-                        ? Color(stat.plan.planColor!)
-                        : accent,
+                    color: planColorOf(stat.plan.planColor, context),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(

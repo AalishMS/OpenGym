@@ -137,20 +137,48 @@ for the full word - the abbreviation is a space decision, not a style.
   - `borderColor(context)` - borders
   - `textPrimaryColor(context)` - main text
   - `textSecondaryColor(context)` - secondary text
-  - `accentColor(context)` - accent color from settings
-  - `onAccentColor(context)` - text/icons drawn *on* the accent
+  - `accentColor(context)` - the accent as **ink**: text, icons, hairlines
+  - `accentFillColor(context)` - the accent as a **ground**: anything with a
+    label or glyph painted on top of it
+  - `accentMutedColor(context)` / `accentDimColor(context)` - the two opaque
+    washes between the background and the fill, for ramps like the heatmap
+  - `onAccentColor(context)` - text/icons drawn *on* `accentFillColor`
   - `onColor(ground)` - text/icons drawn on any other coloured ground
+- Every one of these is *solved* against the real ground for a WCAG target, per
+  accent and per mode - see `lib/theme/tones.dart`. Never reintroduce a
+  hand-picked hex: a hex cannot be checked, only a relationship can
+- **One deliberate exception: `surface` is a perceptual step off `background`**
+  (OKLab lightness), not a contrast ratio. WCAG's `+0.05` term dominates near
+  black, so the same ratio buys dark mode ~2.4x the step light mode gets - which
+  is how a 1.45:1 "quiet" card came out at `#2F2F2F`, a grey box on a black page
+  with the whole workout screen tiled in it. Contrast ratios stay the metric for
+  anything that has to be **read**. Don't restate the card separation as a
+  ratio; the test asserts the step *and* keeps 1.15:1 as a floor, so the old
+  invisible-card bug can't come back either way
+- Dark mode is meant to read as **black**, not as a tinted charcoal: the neutral
+  seed is achromatic on purpose, so the accent is the only thing carrying a hue.
+  Don't give the neutrals a cool or warm cast
 - Never hardcode colors like `Colors.white` or `Colors.black` for UI
+- **`accent` is ink, `accentFill` is a ground - never swap them.** They are
+  solved against different targets, so `accent` is the darker of the two in
+  light mode. Painting `onAccentColor` on `accentColor` scores 3.63:1 on every
+  accent, which is how 23 filled buttons and snackbars ended up failing AA
 - Anything drawn on a coloured ground asks for its foreground:
   - accent ground (filled button, selected chip/tab, accent snackbar) →
-    `onAccentColor(context)`
+    `accentFillColor(context)` for the ground, `onAccentColor(context)` on it
   - any other coloured ground (a plan's colour, `errorColor(context)`, an RPE
     swatch, a palette chip) → `onColor(thatGround)`
   - `onColor` is the single place in the app allowed to name black or white;
     a literal `Colors.black` foreground is a bug waiting for a dark accent
   - exception: alpha-only `ShaderMask` stops under `BlendMode.dstIn`, where
     black/white mean opaque/transparent rather than a colour — comment those
-- Use `accent.withAlpha(value)` for splash/highlight effects
+- Use `accent.withAlpha(value)` for splash/highlight effects. A translucent
+  wash is fine as a *tint*; it is not fine as a step in a ramp that carries
+  meaning, because it composites differently on a card than on the page - use
+  the opaque `accentMuted`/`accentDim`/`accentFill` steps there
+- `test/theme_contrast_test.dart` enforces all of the above for every accent in
+  both modes, including a source scan for the ink/ground swap. If it fails, the
+  colour is wrong - don't relax the target
 
 ### Corner Radii
 - Use the tokens from `lib/theme/radii.dart`, never a literal `BorderRadius`:

@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
-import '../providers/settings_provider.dart';
 import '../repositories/stats_repository.dart';
 import '../repositories/workout_session_repository.dart';
 import '../theme/app_theme.dart';
@@ -40,7 +38,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = context.watch<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     final frequency = _statsRepo.getWorkoutFrequency(8);
     final totalWorkouts = _sessionRepo.getSessions().length;
     final workoutsThisWeek = _statsRepo.getWorkoutsThisWeek();
@@ -152,7 +150,11 @@ class _StatsScreenState extends State<StatsScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: _showOverall ? accent : Colors.transparent,
+                // `accentFill`, not `accent`: the label below is `onAccent`,
+                // which is solved against the fill. Painting it on the text
+                // accent instead is the pairing that scores 3.63:1 in light
+                // mode. The border stays `accent` — it is a line, not a ground.
+                color: _showOverall ? accentFillColor(context) : Colors.transparent,
                 border: Border.all(color: accent, width: 1),
                 borderRadius: AppRadius.button,
               ),
@@ -180,7 +182,7 @@ class _StatsScreenState extends State<StatsScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 12),
               decoration: BoxDecoration(
-                color: !_showOverall ? accent : Colors.transparent,
+                color: !_showOverall ? accentFillColor(context) : Colors.transparent,
                 border: Border.all(color: accent, width: 1),
                 borderRadius: AppRadius.button,
               ),

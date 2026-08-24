@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenGym — Color System Study</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    background: #050505; color: #d8d8d8; line-height: 1.5; padding: 24px 20px 80px;
+  }
+  h1 { font-size: 20px; letter-spacing: .04em; margin-bottom: 4px; }
+  .lede { color: #8a8a8a; font-size: 12.5px; max-width: 800px; margin-bottom: 18px; }
+  .lede strong { color: #ccc; }
+  .controls {
+    position: sticky; top: 0; z-index: 20; background: #050505f2;
+    backdrop-filter: blur(6px); padding: 12px 0 14px; margin-bottom: 8px;
+    border-bottom: 1px solid #1e1e1e; display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  }
+  .controls label { font-size: 11px; color: #8a8a8a; letter-spacing: .06em; }
+  select, .seg button {
+    font-family: inherit; font-size: 12px; background: #141414; color: #eee;
+    border: 1px solid #2c2c2c; border-radius: 8px; padding: 6px 10px; cursor: pointer;
+  }
+  .seg { display: inline-flex; }
+  .seg button { border-radius: 0; border-left: none; }
+  .seg button:first-child { border-radius: 8px 0 0 8px; border-left: 1px solid #2c2c2c; }
+  .seg button:last-child { border-radius: 0 8px 8px 0; }
+  .seg button.on { background: #2b2b2b; color: #fff; }
+  .legend { font-size: 11px; color: #777; margin-left: auto; }
+  .pill { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pass { background: #10331b; color: #6ee7a0; }
+  .fail { background: #3a1414; color: #ff8a8a; }
+
+  section.dir { margin-top: 34px; }
+  section.dir > h2 { font-size: 15px; letter-spacing: .05em; margin-bottom: 2px; }
+  section.dir > .desc { color: #8a8a8a; font-size: 12px; max-width: 860px; margin-bottom: 14px; }
+  .modes { display: flex; gap: 26px; flex-wrap: wrap; }
+  .mode { flex: 1 1 470px; min-width: 430px; }
+  .mode > h3 { font-size: 11px; letter-spacing: .12em; color: #777; margin-bottom: 10px; text-transform: uppercase; }
+  .row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+
+  .phone { width: 262px; border-radius: 20px; overflow: hidden; border: 1px solid #262626; flex: 0 0 auto; }
+  .phone .scr { padding: 12px 12px 14px; }
+  .appbar { display: flex; align-items: center; font-size: 13px; font-weight: 700; padding: 4px 2px 12px; letter-spacing: .03em; }
+
+  .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+  .pcard { border-radius: 12px; overflow: hidden; border-width: 1px; border-style: solid; }
+  .pstripe { height: 4px; width: 100%; }
+  .pbody { padding: 8px 9px 9px; }
+  .idx { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 4px; border: 1px solid; }
+  .ptitle { font-size: 12px; font-weight: 700; letter-spacing: .02em; margin-top: 8px; }
+  .pmeta { font-size: 9.5px; margin-top: 10px; letter-spacing: .06em; }
+  .btnrow { display: flex; gap: 8px; margin-top: 10px; }
+  .btn { flex: 1; height: 32px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; letter-spacing: .03em; }
+  .btn.outline { border-width: 1px; border-style: solid; background: transparent; }
+
+  .tabs { display: flex; gap: 6px; padding: 2px 0 12px; }
+  .tab { font-size: 10px; font-weight: 700; padding: 5px 8px; border-radius: 6px; letter-spacing: .04em; white-space: nowrap; }
+  .ecard { border-radius: 12px; border-width: 1px; border-style: solid; padding: 9px 10px; }
+  .ehead { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; }
+  .etitle { font-size: 11px; font-weight: 700; letter-spacing: .03em; }
+  .set { display: flex; align-items: center; gap: 6px; font-size: 11px; padding: 4px 0; }
+  .setidx { font-size: 9px; opacity: .6; width: 9px; }
+  .rpe { font-weight: 700; }
+  .stepper { margin-left: auto; display: flex; gap: 4px; }
+  .step { width: 22px; height: 20px; border-radius: 6px; border-width: 1px; border-style: solid; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+  .heat { display: flex; gap: 3px; margin-top: 10px; align-items: center; }
+  .hcell { width: 11px; height: 11px; border-radius: 2px; border-width: 1px; border-style: solid; }
+
+  .swatches { flex: 0 0 auto; width: 258px; border: 1px solid #262626; border-radius: 14px; padding: 12px; }
+  .swatches h4 { font-size: 10px; letter-spacing: .1em; color: #8a8a8a; margin: 11px 0 6px; text-transform: uppercase; }
+  .swatches h4:first-child { margin-top: 0; }
+  .sw { display: flex; align-items: center; gap: 8px; font-size: 10.5px; padding: 3px 0; }
+  .chip { width: 26px; height: 20px; border-radius: 5px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; }
+  .chip.bordered { border: 1px solid; }
+  .sw .nm { flex: 1 1 auto; }
+  .ramp { display: flex; gap: 3px; margin: 5px 0 2px; }
+  .ramp .r { flex: 1; height: 18px; border-radius: 4px; }
+  .hues { display: flex; gap: 3px; flex-wrap: wrap; }
+  .hues .h { width: 20px; height: 20px; border-radius: 4px; }
+  .note { font-size: 9.5px; color: #6c6c6c; margin-top: 6px; line-height: 1.45; }
+  .verdict { margin-top: 12px; padding-top: 10px; border-top: 1px solid #2a2a2a; font-size: 10.5px; }
+</style>
+</head>
+<body>
+  <h1>OpenGym — Color System Study</h1>
+  <p class="lede">
+    Every color here is <strong>solved, not picked</strong>: an accent is a seed (hue + chroma), and each role's
+    lightness is bisected in OKLab until it meets a contrast target against its actual ground. Hue and chroma
+    survive; only lightness moves, and only as far as legibility demands. This is the formula that will ship in
+    Dart, so these numbers are the real ones. AA wants <strong>4.5:1</strong> for text and <strong>3:1</strong> for
+    icons and UI edges. Change the accent to confirm <em>every</em> accent holds up — that's the whole point.
+  </p>
+
+  <div class="controls">
+    <label>ACCENT</label>
+    <select id="accentSel"></select>
+    <div class="seg" id="showSeg">
+      <button data-show="both" class="on">BOTH SCREENS</button>
+      <button data-show="plans">PLANS</button>
+      <button data-show="workout">WORKOUT</button>
+    </div>
+    <span class="legend"><span class="pill pass">4.52</span> meets target &nbsp;·&nbsp; <span class="pill fail">2.10</span> under target</span>
+  </div>
+
+  <div id="root"></div>
+
+<script>
+/* ============================================================================
+   COLOR ENGINE — faithful JS port of the Dart `tones.dart` that will ship.
+   OKLab / OKLCh conversion, WCAG contrast, and contrast-solving bisection.
+   ========================================================================== */
+const clamp01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
+const srgbToLin = c => { c /= 255; return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+const linToSrgb = c => { c = clamp01(c); return 255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055); };
+const hexToRgb = h => { h = h.replace('#', ''); return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)]; };
+const rgbToHex = (r,g,b) => '#' + [r,g,b].map(x => Math.round(clamp01(x/255)*255).toString(16).padStart(2,'0')).join('');
+
+function rgbToOklab(r, g, b) {
+  const R = srgbToLin(r), G = srgbToLin(g), B = srgbToLin(b);
+  const l = 0.4122214708*R + 0.5363325363*G + 0.0514459929*B;
+  const m = 0.2119034982*R + 0.6806995451*G + 0.1073969566*B;
+  const s = 0.0883024619*R + 0.2817188376*G + 0.6299787005*B;
+  const l_ = Math.cbrt(l), m_ = Math.cbrt(m), s_ = Math.cbrt(s);
+  return [
+    0.2104542553*l_ + 0.7936177850*m_ - 0.0040720468*s_,
+    1.9779984951*l_ - 2.4285922050*m_ + 0.4505937099*s_,
+    0.0259040371*l_ + 0.7827717662*m_ - 0.8086757660*s_,
+  ];
+}
+function oklabToRgb(L, a, b) {
+  const l_ = L + 0.3963377774*a + 0.2158037573*b;
+  const m_ = L - 0.1055613458*a - 0.0638541728*b;
+  const s_ = L - 0.0894841775*a - 1.2914855480*b;
+  const l = l_**3, m = m_**3, s = s_**3;
+  return [
+    linToSrgb(+4.0767416621*l - 3.3077115913*m + 0.2309699292*s),
+    linToSrgb(-1.2684380046*l + 2.6097574011*m - 0.3413193965*s),
+    linToSrgb(-0.0041960863*l - 0.7034186147*m + 1.7076147010*s),
+  ];
+}
+const hexToOklch = hex => { const [r,g,b] = hexToRgb(hex); const [L,a,bb] = rgbToOklab(r,g,b);
+  return { L, C: Math.hypot(a, bb), h: Math.atan2(bb, a) }; };
+const oklchToHex = (L, C, h) => rgbToHex(...oklabToRgb(L, C*Math.cos(h), C*Math.sin(h)));
+
+const relLum = hex => { const [r,g,b] = hexToRgb(hex); return 0.2126*srgbToLin(r) + 0.7152*srgbToLin(g) + 0.0722*srgbToLin(b); };
+function contrast(a, b) {
+  const la = relLum(a), lb = relLum(b);
+  return (Math.max(la,lb) + 0.05) / (Math.min(la,lb) + 0.05);
+}
+/* Replaces the app's `onColor`, whose `luminance > 0.5` test is wrong — the real
+   crossover is ~0.179. Comparing both candidates can't be off by a constant. */
+const bestForeground = ground =>
+  contrast('#000000', ground) >= contrast('#ffffff', ground) ? '#000000' : '#ffffff';
+
+/* Bisect OKLab lightness, preserving the seed's hue and chroma, until
+   contrast(result, ground) >= target. Contrast is measured on the
+   gamut-clamped realized color, so out-of-gamut chroma can't fake a pass.
+
+   anchor 'seed'   — a foreground. Keep the seed untouched when it already
+                     passes; move only when it fails. Preserves character.
+   anchor 'ground' — a ground or a wash. Always land AT the target, i.e. the
+                     tone closest to the ground that still passes. A mid-grey
+                     seed must not be accepted verbatim as a 1.45:1 surface.  */
+function solve(seedHex, ground, target, wantLighter, anchor) {
+  const { C, h } = hexToOklch(seedHex);
+  if (anchor === 'seed' && contrast(seedHex, ground) >= target) return seedHex;
+  const extreme = oklchToHex(wantLighter ? 1 : 0, C, h);
+  if (contrast(extreme, ground) < target) return extreme;   // unreachable: best effort
+  const gL = hexToOklch(ground).L;
+  let lo = wantLighter ? gL : 0;
+  let hi = wantLighter ? 1 : gL;
+  for (let i = 0; i < 22; i++) {
+    const mid = (lo + hi) / 2;
+    const ok = contrast(oklchToHex(mid, C, h), ground) >= target;
+    if (wantLighter) { if (ok) hi = mid; else lo = mid; }
+    else             { if (ok) lo = mid; else hi = mid; }
+  }
+  return oklchToHex(wantLighter ? hi : lo, C, h);
+}
+const trimChroma = (hex, mult) => { const { L, C, h } = hexToOklch(hex); return oklchToHex(L, C*mult, h); };
+
+/* ============================================================================
+   ACCENT SEEDS — the current seven, plus a green for the 146° dead zone, and
+   STEEL GRAY reworked into a slate that resolves to a distinguishable hue
+   instead of collapsing into textSecondary.
+   ========================================================================== */
+const SEEDS = [
+  { name: 'ELECTRIC BLUE', seed: '#00A8FF' },
+  { name: 'GREEN (new)',   seed: '#22C55E' },
+  { name: 'WARM AMBER',    seed: '#FF9500' },
+  { name: 'DEEP ORANGE',   seed: '#FF5722' },
+  { name: 'HOT PINK',      seed: '#FF1493' },
+  { name: 'CYAN',          seed: '#00CED1' },
+  { name: 'PURPLE',        seed: '#8B5CF6' },
+  { name: 'SLATE (was STEEL GRAY)', seed: '#7C8AA0' },
+];
+
+/* ============================================================================
+   DIRECTIONS — identical role architecture; they differ only in the seeds'
+   chroma treatment, the neutral tint, and the separation targets.
+   ========================================================================== */
+const DIRECTIONS = {
+  A: {
+    title: 'A — Same vibe, executed properly',
+    desc: 'Current hues and chroma kept as-is. Only what is measurably broken changes: card separation, accent contrast, and the light-mode neutral that today is tinted 60° against a pure-grey surface. Someone opening the app says "cleaner," not "different."',
+    chroma: 1.0,
+    bg: { dark: '#0D0D0D', light: '#F7F7F6' },
+    neutralSeed: '#8A8A8A',                       // pure neutral — no tint
+    surfLift:     { dark: 0.075, light: 0.061 },
+    surfFloor:    { dark: 1.15,  light: 1.15  },
+    borderTarget: { dark: 3.00, light: 1.90 },
+  },
+  B: {
+    title: 'B — Warmer, less neon',
+    desc: 'Chroma pulled back ~24% so accents read confident rather than glowing, and the neutrals carry one consistent warmth in BOTH modes — today only the light background is tinted, which is why light-mode cards look faintly dirty against the page.',
+    chroma: 0.76,
+    bg: { dark: '#111010', light: '#F6F4F0' },
+    neutralSeed: '#8B877F',                       // warm grey
+    surfLift:     { dark: 0.085, light: 0.068 },
+    surfFloor:    { dark: 1.15,  light: 1.15  },
+    borderTarget: { dark: 3.00, light: 2.00 },
+  },
+  C: {
+    title: 'C — Truer terminal',
+    desc: 'Near-true-black ground, and separation carried by a stronger hairline border rather than a lifted card fill. Accent is reserved as phosphor emphasis — one filled element per screen, everything else outlined, so the accent means something again.',
+    chroma: 1.0, reserved: true,
+    bg: { dark: '#080808', light: '#F2F2F0' },
+    neutralSeed: '#7F8480',                       // faintest cool-green cast
+    surfLift:     { dark: 0.050, light: 0.040 },
+    surfFloor:    { dark: 1.10,  light: 1.10  },
+    borderTarget: { dark: 3.60, light: 2.40 },
+  },
+};
+
+/* Neutral ramp. Everything that has to be *read* — the border, both text tones —
+   is solved to a contrast target. The card's fill is not: it is a step in OKLab
+   lightness, because a WCAG ratio is a poor measure of separation near black. Its
+   `+0.05` term dominates at a near-black page's luminance, so asking dark and
+   light for the same ratio hands dark ~2.4x the perceptual step — which is how a
+   1.45:1 "quiet" card landed on #2F2F2F. `surfFloor` keeps the ratio as a floor,
+   since cards at 1.10:1 were the invisible-card bug this replaced. */
+function neutrals(mode, dir) {
+  const up = mode === 'dark';                       // move away from the ground
+  const bg = dir.bg[mode];
+  const seed = dir.neutralSeed;
+  const { C, h } = hexToOklch(seed);
+  const surface       = oklchToHex(
+    hexToOklch(bg).L + dir.surfLift[mode] * (up ? 1 : -1), C, h);
+  const border        = solve(seed, surface, dir.borderTarget[mode], up, 'ground');
+  const textPrimary   = solve(seed, bg,      13.0,                   up, 'ground');
+  const textSecondary = solve(seed, surface, 4.5,                    up, 'ground');
+  return { bg, surface, border, textPrimary, textSecondary };
+}
+
+/* Full accent role-set. `accent` keeps the seed when the seed is already
+   legible (dark mode) and darkens only when it isn't (light mode) — that one
+   line is the fix for both the illegible-label and the dead-light-mode bugs. */
+function resolveAccent(seedHex, mode, dir) {
+  const n = neutrals(mode, dir);
+  const seed = trimChroma(seedHex, dir.chroma);
+  const up = mode === 'dark';
+  const worse = contrast(seed, n.bg) < contrast(seed, n.surface) ? n.bg : n.surface;
+  const accent      = solve(seed, worse, 4.5, up, 'seed');    // text + icons
+  const accentFill  = solve(seed, n.bg,  3.0, up, 'seed');    // a ground
+  const onAccent    = bestForeground(accentFill);             // label on that ground
+
+  // The wash/heatmap steps are EVEN FRACTIONS of the bg→fill lightness span,
+  // not fixed contrast targets. A fixed target can't stay evenly spaced when
+  // the fill itself moves: solving muted/dim to 1.3/2.1 leaves dark mode at
+  // 1.33 → 2.11 → 7.45, three "steps" where the last is a cliff. By fraction,
+  // every accent gets the same three perceptual steps in both modes — and it
+  // lands within ~0.2 of today's alpha ramp in dark, so the look survives.
+  const { C, h } = hexToOklch(seed);
+  const bL = hexToOklch(n.bg).L, fL = hexToOklch(accentFill).L;
+  const at = f => oklchToHex(bL + (fL - bL) * f, C, h);
+  const accentMuted = at(1 / 3);
+  const accentDim   = at(2 / 3);
+  return { ...n, seed, accent, accentFill, onAccent, accentDim, accentMuted };
+}
+
+/* 10 evenly-spaced plan hues — one system with the accents, not a rainbow. */
+const PLAN_HUES = Array.from({ length: 10 }, (_, i) => i * 36);
+const planColors = (mode, dir, ground) => PLAN_HUES.map(deg =>
+  solve(oklchToHex(0.70, 0.16 * dir.chroma, deg * Math.PI / 180), ground, 4.5, mode === 'dark', 'seed'));
+
+/* RPE keeps its traffic-light MEANING — fixed hues, tone solved per mode. */
+const RPE = [
+  { nm: '≤2',  deg: null, c: 0    },
+  { nm: '3-4', deg: 245,  c: 0.13 },
+  { nm: '5-6', deg: 150,  c: 0.15 },
+  { nm: '7-8', deg: 85,   c: 0.15 },
+  { nm: '9',   deg: 55,   c: 0.16 },
+  { nm: '10',  deg: 29,   c: 0.17 },
+];
+const rpeColors = (mode, dir, ground) => RPE.map(r =>
+  solve(r.deg === null ? oklchToHex(0.62, 0, 0)
+                       : oklchToHex(0.62, r.c * dir.chroma, r.deg * Math.PI / 180),
+        ground, 4.5, mode === 'dark', 'seed'));
+
+/* ============================================================================
+   RENDER
+   ========================================================================== */
+const AA_TEXT = 4.5, AA_UI = 3.0;
+const badge = (cr, target) =>
+  `<span class="pill ${cr >= target - 0.005 ? 'pass' : 'fail'}">${cr.toFixed(2)}</span>`;
+
+function swatchPanel(p, mode, dir) {
+  const g = p.surface;
+  const planC = planColors(mode, dir, g), rpeC = rpeColors(mode, dir, g);
+  const minPlan = Math.min(...planC.map(c => contrast(c, g)));
+  const minRpe  = Math.min(...rpeC.map(c => contrast(c, g)));
+  const bt = dir.borderTarget[mode];
+  return `
+  <div class="swatches" style="background:${p.bg};color:${p.textPrimary}">
+    <h4>Accent roles</h4>
+    <div class="sw"><div class="chip" style="background:${p.accent}"></div><span class="nm">accent · text &amp; icons</span>${badge(contrast(p.accent, g), AA_TEXT)}</div>
+    <div class="sw"><div class="chip" style="background:${p.accentFill};color:${p.onAccent}">Aa</div><span class="nm">onAccent on fill</span>${badge(contrast(p.onAccent, p.accentFill), AA_TEXT)}</div>
+    <div class="ramp">
+      <div class="r" style="background:${p.accentMuted}"></div>
+      <div class="r" style="background:${p.accentDim}"></div>
+      <div class="r" style="background:${p.accentFill}"></div>
+    </div>
+    <div class="note">muted · dim · fill &mdash; ${contrast(p.accentMuted, p.bg).toFixed(2)} / ${contrast(p.accentDim, p.bg).toFixed(2)} / ${contrast(p.accentFill, p.bg).toFixed(2)} vs bg. Opaque even steps replacing <code>withAlpha(90/160)</code>, which today produce no usable ramp at all in light mode.</div>
+
+    <h4>Plan colors — 10 hues</h4>
+    <div class="hues">${planC.map(c => `<div class="h" style="background:${c}"></div>`).join('')}</div>
+    <div class="note">worst of the ten on this card ${badge(minPlan, AA_TEXT)}</div>
+
+    <h4>RPE ramp</h4>
+    <div class="hues">${rpeC.map((c,i) => `<div class="h" style="background:${c}" title="RPE ${RPE[i].nm}"></div>`).join('')}</div>
+    <div class="note">traffic-light order kept; worst step ${badge(minRpe, AA_TEXT)}</div>
+
+    <h4>Neutrals</h4>
+    <div class="sw"><div class="chip bordered" style="background:${p.surface};border-color:${p.border}"></div><span class="nm">surface vs bg</span>${badge(contrast(p.surface, p.bg), dir.surfFloor[mode])}</div>
+    <div class="sw"><div class="chip" style="background:${p.border}"></div><span class="nm">border vs surface</span>${badge(contrast(p.border, p.surface), bt)}</div>
+    <div class="sw"><div class="chip" style="background:${p.surface};color:${p.textSecondary}">ab</div><span class="nm">2° text vs surface</span>${badge(contrast(p.textSecondary, p.surface), AA_TEXT)}</div>
+    <div class="note">Today: surface/bg <strong>${mode === 'dark' ? '1.10' : '1.08'}</strong>, border/surface <strong>${mode === 'dark' ? '1.21' : '1.31'}</strong> — cards you can only find by their stripe.
+    ${bt < AA_UI ? `<br>Border target here is ${bt.toFixed(2)}, under AA's 3:1 — deliberate: a card edge is decorative, and 3:1 in light mode reads heavy.` : ''}</div>
+  </div>`;
+}
+
+const PLANS = [
+  { i: '01', t: 'PUSH DAY',   n: '6 EXERCISES' },
+  { i: '02', t: 'PULL DAY',   n: '7 EXERCISES' },
+  { i: '03', t: 'LEG DAY',    n: '7 EXERCISES' },
+  { i: '04', t: 'UPPER BODY', n: '6 EXERCISES' },
+];
+function plansFrame(p, mode, dir) {
+  const planC = planColors(mode, dir, p.surface);
+  const cards = PLANS.map((pl, i) => `
+    <div class="pcard" style="background:${p.surface};border-color:${p.border}">
+      <div class="pstripe" style="background:${planC[i]}"></div>
+      <div class="pbody">
+        <span class="idx" style="color:${p.accent};border-color:${p.accent}">[${pl.i}]</span>
+        <div class="ptitle" style="color:${p.textPrimary}">${pl.t}</div>
+        <div class="pmeta" style="color:${p.textSecondary}">${pl.n}</div>
+      </div>
+    </div>`).join('');
+  // Real primary/secondary hierarchy — today both buttons are identical outlines.
+  const buttons = `
+    <div class="btnrow">
+      <div class="btn outline" style="border-color:${p.border};color:${p.textSecondary}">[IMPORT]</div>
+      <div class="btn" style="background:${p.accentFill};color:${p.onAccent}">[+ NEW PLAN]</div>
+    </div>`;
+  return `
+  <div class="phone" style="background:${p.bg}">
+    <div class="scr">
+      <div class="appbar" style="color:${p.accent}">&gt; OPENGYM</div>
+      <div class="plans">${cards}</div>
+      ${buttons}
+    </div>
+  </div>`;
+}
+
+const DAYS = ['PUSH', 'PULL', 'LEG', 'UPPER'];
+const SETS = [
+  { w: '70kg x 8', r: '@8',  i: 3 },
+  { w: '70kg x 8', r: '@8',  i: 3 },
+  { w: '70kg x 7', r: '@9',  i: 4 },
+  { w: '70kg x 5', r: '@10', i: 5 },
+];
+function workoutFrame(p, mode, dir) {
+  const rpeC = rpeColors(mode, dir, p.surface);
+  const tabs = DAYS.map((d, i) => i === 0
+    ? `<div class="tab" style="background:${p.accentFill};color:${p.onAccent}">${d}</div>`
+    : `<div class="tab" style="color:${p.textSecondary};border:1px solid ${p.border}">${d}</div>`).join('');
+  const sets = SETS.map((s, i) => `
+    <div class="set" style="color:${p.textPrimary}">
+      <span class="setidx">${i + 1}</span><span>${s.w}</span>
+      <span class="rpe" style="color:${rpeC[s.i]}">${s.r}</span>
+      <span class="stepper">
+        <span class="step" style="border-color:${p.border};color:${p.accent}">−</span>
+        <span class="step" style="border-color:${p.border};color:${p.accent}">+</span>
+      </span>
+    </div>`).join('');
+  const heat = [p.bg, p.accentMuted, p.accentDim, p.accentFill]
+    .map(c => `<div class="hcell" style="background:${c};border-color:${p.border}"></div>`).join('');
+  return `
+  <div class="phone" style="background:${p.bg}">
+    <div class="scr">
+      <div class="appbar" style="color:${p.textPrimary}">PUSH DAY</div>
+      <div class="tabs">${tabs}</div>
+      <div class="ecard" style="background:${p.surface};border-color:${p.border}">
+        <div class="ehead">
+          <span class="idx" style="color:${p.accent};border-color:${p.accent}">[1]</span>
+          <span class="etitle" style="color:${p.textPrimary}">BENCH PRESS</span>
+        </div>${sets}
+      </div>
+      <div style="height:9px"></div>
+      <div class="ecard" style="background:${p.surface};border-color:${p.border}">
+        <div class="ehead">
+          <span class="idx" style="color:${p.accent};border-color:${p.accent}">[2]</span>
+          <span class="etitle" style="color:${p.textPrimary}">INCLINE PRESS</span>
+        </div>${sets}
+        <div class="heat"><span style="font-size:9px;color:${p.textSecondary}">LESS</span>${heat}<span style="font-size:9px;color:${p.textSecondary}">MORE</span></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+let ACCENT = SEEDS[0].seed, SHOW = 'both';
+
+function render() {
+  document.getElementById('root').innerHTML = Object.values(DIRECTIONS).map(dir => {
+    const modes = ['dark', 'light'].map(mode => {
+      const p = resolveAccent(ACCENT, mode, dir);
+      const frames = [];
+      if (SHOW !== 'workout') frames.push(plansFrame(p, mode, dir));
+      if (SHOW !== 'plans')   frames.push(workoutFrame(p, mode, dir));
+      return `<div class="mode"><h3>${mode}</h3><div class="row">${swatchPanel(p, mode, dir)}${frames.join('')}</div></div>`;
+    }).join('');
+    return `<section class="dir"><h2>${dir.title}</h2><p class="desc">${dir.desc}</p><div class="modes">${modes}</div></section>`;
+  }).join('');
+}
+
+const sel = document.getElementById('accentSel');
+SEEDS.forEach(s => { const o = document.createElement('option'); o.value = s.seed; o.textContent = s.name; sel.appendChild(o); });
+sel.value = ACCENT;
+sel.addEventListener('change', e => { ACCENT = e.target.value; render(); });
+document.querySelectorAll('#showSeg button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#showSeg button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); SHOW = b.dataset.show; render();
+}));
+render();
+</script>
+</body>
+</html>

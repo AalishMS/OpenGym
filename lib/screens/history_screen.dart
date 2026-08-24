@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../providers/workout_session_provider.dart';
-import '../providers/settings_provider.dart';
 import '../models/workout_session.dart';
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
@@ -16,7 +15,7 @@ class HistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = context.watch<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -170,7 +169,7 @@ class _SessionCardState extends State<_SessionCard> {
     final session = widget.session;
     final prs = PRTrackingService.checkForNewPRs(session.exercises);
     final hasPR = prs.isNotEmpty;
-    final accent = context.watch<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     final border = borderColor(context);
     final textSecondary = textSecondaryColor(context);
     final error = errorColor(context);
@@ -227,14 +226,18 @@ class _SessionCardState extends State<_SessionCard> {
                         Container(
                           padding: const EdgeInsets.symmetric(
                               horizontal: 6, vertical: 2),
-                          decoration: const BoxDecoration(
-                            color: Colors.amber,
+                          decoration: BoxDecoration(
+                            // A PR is the log's one celebratory event — the
+                            // "good" end of the semantic ramp, solved per mode,
+                            // not a hand-picked amber that only worked on dark.
+                            color: successColor(context),
                             borderRadius: AppRadius.badge,
                           ),
                           child: Text(
                             '[PR]',
                             style: GoogleFonts.jetBrainsMono(
-                                fontSize: 10, color: onColor(Colors.amber)),
+                                fontSize: 10,
+                                color: onColor(successColor(context))),
                           ),
                         ),
                       ],
@@ -429,15 +432,16 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('> Workout updated!', style: GoogleFonts.jetBrainsMono()),
-        backgroundColor: Colors.green,
+        content: Text('> Workout updated!',
+            style: GoogleFonts.jetBrainsMono(color: onAccentColor(context))),
+        backgroundColor: accentFillColor(context),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final accent = context.watch<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     return Scaffold(
       backgroundColor: backgroundColor(context),
       appBar: AppBar(
@@ -591,7 +595,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
   }
 
   void _showAddSetDialog(int exerciseIndex, Exercise exercise) {
-    final accent = context.read<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     final weightController = TextEditingController();
     final repsController = TextEditingController();
 
@@ -659,7 +663,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: accent,
+                      backgroundColor: accentFillColor(context),
                       foregroundColor: onAccentColor(context),
                     ),
                     child: Text('[ADD]', style: GoogleFonts.jetBrainsMono()),
@@ -674,7 +678,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
   }
 
   void _showEditSetDialog(int exerciseIndex, int setIndex, gym.Set set) {
-    final accent = context.read<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     final weightController = TextEditingController(text: set.weight.toString());
     final repsController = TextEditingController(text: set.reps.toString());
     final noteController = TextEditingController(text: set.note ?? '');
@@ -775,7 +779,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: accent,
+                          backgroundColor: accentFillColor(context),
                           foregroundColor: onAccentColor(context),
                         ),
                         child:

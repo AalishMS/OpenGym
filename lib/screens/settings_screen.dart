@@ -102,9 +102,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final settings = context.watch<SettingsProvider>();
     final updates = context.watch<UpdateProvider>();
-    final accent = settings.accentColor;
+    final accent = accentColor(context);
     final bg = backgroundColor(context);
     final surface = surfaceColor(context);
     final border = borderColor(context);
@@ -438,7 +437,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               final option = SettingsProvider.accents[index];
               final isSelected = settings.accentIndex == index;
               final isDark = Theme.of(context).brightness == Brightness.dark;
-              return _buildColorBox(option, isSelected, settings, accent,
+              return _buildColorBox(option, isSelected, settings,
                   isDark, border, textSecondary);
             }),
           ),
@@ -451,11 +450,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       AppAccent option,
       bool isSelected,
       SettingsProvider settings,
-      Color currentAccent,
       bool isDark,
       Color border,
       Color textSecondary) {
-    final accentToShow = isDark ? option.dark : option.light;
+    // One swatch, not two. The old box showed the hand-picked dark and light
+    // hexes side by side; they differed by about a shade, so the pair read as
+    // noise rather than as information. There is now a single tone per mode,
+    // resolved through the same solver the theme uses, so this chip is exactly
+    // the colour that selecting it will paint.
+    final swatch =
+        accentToneFor(option.seed, isDark ? Brightness.dark : Brightness.light);
 
     return InkWell(
       onTap: () {
@@ -466,9 +470,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         width: 100,
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
         decoration: BoxDecoration(
-          color: isSelected ? accentToShow.withAlpha(38) : Colors.transparent,
+          color: isSelected ? swatch.withAlpha(38) : Colors.transparent,
           border: Border.all(
-            color: isSelected ? accentToShow : border,
+            color: isSelected ? swatch : border,
             width: isSelected ? 2 : 1,
           ),
           borderRadius: AppRadius.button,
@@ -480,44 +484,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
-                color: isSelected ? accentToShow : textSecondary,
+                color: isSelected ? swatch : textSecondary,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 6),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 12,
-                  height: 12,
+                  width: 14,
+                  height: 14,
                   decoration: BoxDecoration(
-                    color: option.dark,
+                    color: swatch,
                     border: Border.all(
-                      color: isSelected ? onColor(option.dark) : border,
-                      width: isSelected ? 1 : 1,
-                    ),
-                    borderRadius: AppRadius.badge,
-                  ),
-                ),
-                const SizedBox(width: 2),
-                Container(
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: option.light,
-                    border: Border.all(
-                      color: isSelected ? onColor(option.light) : border,
-                      width: isSelected ? 1 : 1,
+                      color: isSelected ? onColor(swatch) : border,
                     ),
                     borderRadius: AppRadius.badge,
                   ),
                 ),
                 if (isSelected)
                   Padding(
-                    padding: const EdgeInsets.only(left: 2),
-                    child:
-                        Icon(LucideIcons.check, size: 12, color: accentToShow),
+                    padding: const EdgeInsets.only(left: 4),
+                    child: Icon(LucideIcons.check, size: 12, color: swatch),
                   ),
               ],
             ),
@@ -615,12 +604,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _loadSampleData(BuildContext context) async {
-    final settings = context.read<SettingsProvider>();
     final bg = backgroundColor(context);
     final surface = surfaceColor(context);
     final border = borderColor(context);
     final textSecondary = textSecondaryColor(context);
-    final accent = settings.accentColor;
+    final accent = accentColor(context);
 
     showDialog(
       context: context,
@@ -668,14 +656,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('> Sample data refreshed!',
-                                style: GoogleFonts.jetBrainsMono()),
-                            backgroundColor: accent,
+                                style: GoogleFonts.jetBrainsMono(
+                                    color: onAccentColor(context))),
+                            backgroundColor: accentFillColor(context),
                           ),
                         );
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: accent,
+                      backgroundColor: accentFillColor(context),
                       foregroundColor: onAccentColor(context),
                     ),
                     child: Text('[LOAD]', style: GoogleFonts.jetBrainsMono()),
@@ -694,7 +683,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final border = borderColor(context);
     final textSecondary = textSecondaryColor(context);
     final settings = context.read<SettingsProvider>();
-    final accent = settings.accentColor;
+    final accent = accentColor(context);
 
     showDialog(
       context: context,
@@ -770,8 +759,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text('> Backup exported successfully',
-                                  style: GoogleFonts.jetBrainsMono()),
-                              backgroundColor: accent,
+                                  style: GoogleFonts.jetBrainsMono(
+                                      color: onAccentColor(context))),
+                              backgroundColor: accentFillColor(context),
                             ),
                           );
                         }
@@ -789,7 +779,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: accent,
+                      backgroundColor: accentFillColor(context),
                       foregroundColor: onAccentColor(context),
                     ),
                     child:
@@ -839,7 +829,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final textSecondary = textSecondaryColor(context);
       final error = errorColor(context);
       final settings = context.read<SettingsProvider>();
-      final accent = settings.accentColor;
 
       showDialog(
         context: context,
@@ -909,8 +898,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               SnackBar(
                                 content: Text(
                                     '> Backup imported successfully',
-                                    style: GoogleFonts.jetBrainsMono()),
-                                backgroundColor: accent,
+                                    style: GoogleFonts.jetBrainsMono(
+                                        color: onAccentColor(context))),
+                                backgroundColor: accentFillColor(context),
                               ),
                             );
                           }
@@ -1007,8 +997,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('> All data cleared',
-                                style: GoogleFonts.jetBrainsMono()),
-                            backgroundColor: Colors.orange,
+                                style: GoogleFonts.jetBrainsMono(
+                                    color: onAccentColor(context))),
+                            backgroundColor: accentFillColor(context),
                           ),
                         );
                       }
@@ -1034,7 +1025,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final border = borderColor(context);
     final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
-    final accent = settings.accentColor;
+    final accent = accentColor(context);
 
     showDialog(
       context: context,
@@ -1108,12 +1099,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: 20,
               height: 20,
               decoration: BoxDecoration(
-                color: isSelected ? accent : Colors.transparent,
+                color: isSelected ? accentFillColor(context) : Colors.transparent,
                 border: Border.all(color: accent, width: 1),
                 borderRadius: AppRadius.badge,
               ),
               child: isSelected
-                  ? Icon(LucideIcons.check, size: 14, color: onColor(accent))
+                  ? Icon(LucideIcons.check,
+                      size: 14, color: onAccentColor(context))
                   : null,
             ),
             const SizedBox(width: 12),

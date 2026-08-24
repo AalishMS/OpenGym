@@ -10,7 +10,6 @@ import '../models/exercise_template.dart';
 import '../models/set.dart' as gym;
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
-import '../providers/settings_provider.dart';
 import '../services/hive_service.dart';
 import '../services/pr_tracking_service.dart';
 import '../theme/app_theme.dart';
@@ -503,8 +502,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   @override
   Widget build(BuildContext context) {
     final session = _getOrCreateSession();
-    final settings = context.watch<SettingsProvider>();
-    final accent = settings.accentColor;
+    final accent = accentColor(context);
     final surface = surfaceColor(context);
 
     final planProvider = context.watch<WorkoutPlanProvider>();
