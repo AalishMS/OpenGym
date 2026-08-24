@@ -50,5 +50,12 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  assets:
-    - logo/
+  # No `assets:` block on purpose. The files in logo/ are icon *sources* - they
+  # are consumed by tool/generate_app_icon.dart and flutter_launcher_icons at
+  # build time, and the launcher icons themselves ship as compiled Android
+  # resources under android/app/src/main/res/, not as Flutter assets. Declaring
+  # `- logo/` bundled ~3.7MB of never-loaded images (a 2048px source JPG and two
+  # superseded logos among them) into every APK. Nothing in lib/ calls
+  # Image.asset, AssetImage or rootBundle, so none of it was ever read. That
+  # weight matters more than usual here: the app self-updates over the network,
+  # so every device re-downloaded it on every release.

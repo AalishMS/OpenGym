@@ -1,10 +1,33 @@
-﻿flutter_launcher_icons:
+# Regenerate with:
+#   flutter test tool/generate_app_icon.dart   # derives the three PNGs below
+#   flutter pub run flutter_launcher_icons     # fans them out to every platform
+#
+# The adaptive_icon_* trio is the important part. Without it Android 8+ has no
+# adaptive icon to work with, so the launcher falls back to the legacy
+# ic_launcher.png, shrinks it, and drops it on its own light backdrop - which is
+# what left the old icon double-framed inside a white circle. The foreground and
+# monochrome PNGs already carry their safe-zone padding, because the launcher
+# scales them to the full 108dp canvas and only guarantees the centre 66%.
+#
+# adaptive_icon_background is the ground colour sampled from the source art; the
+# generator prints it, so re-derive rather than hand-editing if the art changes.
+flutter_launcher_icons:
   android: true
   ios: true
   image_path: "logo/applogo.png"
+  adaptive_icon_background: "#65CAF2"
+  adaptive_icon_foreground: "logo/applogo_foreground.png"
+  # Android 13+ themed icons. The system tints this, so it ships as a solid
+  # white silhouette on transparent.
+  adaptive_icon_monochrome: "logo/applogo_monochrome.png"
+  # iOS rejects an icon with an alpha channel. applogo.png is already fully
+  # opaque, but flattening is declared rather than assumed.
+  remove_alpha_ios: true
   web:
     generate: true
     image_path: "logo/applogo.png"
+    background_color: "#65CAF2"
+    theme_color: "#65CAF2"
   windows:
     generate: false
   macos:
