@@ -18,17 +18,12 @@ class UnderlineTabData {
 
   final String label;
 
-  /// The tab's own colour: its underline and its label when selected. Plans each
-  /// resolve their own, so a red plan never gets a purple tab.
-  final Color color;
-
   /// Null for the tab you are already on — no splash, nothing to do.
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
   const UnderlineTabData({
     required this.label,
-    required this.color,
     this.index,
     this.onTap,
     this.onLongPress,
@@ -39,9 +34,9 @@ class UnderlineTabData {
 ///
 /// The workout screen shows two of these — plans under the app bar, weeks above
 /// the bottom edge — and they used to be the same control in two visual
-/// languages: the plan strip an underlined label, the week bar a filled slab in
-/// the *global* accent. One widget now, so switching plan and switching week
-/// look like the same kind of move.
+/// languages: the plan strip an underlined label, the week bar a row of filled
+/// slabs. One widget now, so switching plan and switching week look like the
+/// same kind of move.
 ///
 /// The strip lays every tab out eagerly rather than lazily. Tabs are short
 /// labels, a couple of dozen at most, and laying them out is what lets the
@@ -54,6 +49,11 @@ class UnderlineTabStrip extends StatefulWidget {
   /// Index into [tabs] of the tab currently selected. The strip scrolls it into
   /// view on first build and whenever it changes.
   final int selectedIndex;
+
+  /// Marks the selected tab — its underline and its label. One colour for the
+  /// whole strip: the mark says *which tab*, so varying it per tab would spend
+  /// hue on something the position already tells you.
+  final Color color;
 
   /// An action pinned after the last tab and scrolling with it — the week bar's
   /// `[+ WEEK 6]`. Deliberately not styled as a tab: it adds to the set rather
@@ -71,6 +71,7 @@ class UnderlineTabStrip extends StatefulWidget {
     super.key,
     required this.tabs,
     required this.selectedIndex,
+    required this.color,
     required this.rule,
     this.trailing,
     this.height = 44,
@@ -197,6 +198,7 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
                 key: i == widget.selectedIndex ? _selectedTabKey : null,
                 data: widget.tabs[i],
                 selected: i == widget.selectedIndex,
+                color: widget.color,
                 maxLabelWidth: widget.maxLabelWidth,
               ),
             if (widget.trailing != null)
@@ -232,12 +234,14 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
 class _UnderlineTab extends StatelessWidget {
   final UnderlineTabData data;
   final bool selected;
+  final Color color;
   final double maxLabelWidth;
 
   const _UnderlineTab({
     super.key,
     required this.data,
     required this.selected,
+    required this.color,
     required this.maxLabelWidth,
   });
 
@@ -258,7 +262,7 @@ class _UnderlineTab extends StatelessWidget {
             decoration: BoxDecoration(
               border: Border(
                 bottom: BorderSide(
-                  color: selected ? data.color : Colors.transparent,
+                  color: selected ? color : Colors.transparent,
                   width: 2,
                 ),
               ),
@@ -287,7 +291,7 @@ class _UnderlineTab extends StatelessWidget {
                       letterSpacing: 0.04,
                       fontWeight:
                           selected ? FontWeight.bold : FontWeight.normal,
-                      color: selected ? data.color : textSecondary,
+                      color: selected ? color : textSecondary,
                     ),
                   ),
                 ),

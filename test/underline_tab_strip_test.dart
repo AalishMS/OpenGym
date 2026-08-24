@@ -4,9 +4,11 @@ import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/underline_tab_strip.dart';
 
 void main() {
+  const accent = Color(0xFF7C5CFF);
+
   Widget host(int count, int selected, {double width = 360}) {
     return MaterialApp(
-      theme: buildTheme(const Color(0xFF7C5CFF), Brightness.dark),
+      theme: buildTheme(accent, Brightness.dark),
       home: Scaffold(
         body: Center(
           child: SizedBox(
@@ -14,11 +16,11 @@ void main() {
             child: UnderlineTabStrip(
               rule: StripRule.top,
               selectedIndex: selected,
+              color: accent,
               tabs: [
                 for (var i = 0; i < count; i++)
                   UnderlineTabData(
                     label: 'WEEK ${i + 1}',
-                    color: const Color(0xFF7C5CFF),
                     onTap: () {},
                   ),
               ],
@@ -28,6 +30,31 @@ void main() {
       ),
     );
   }
+
+  testWidgets('marks only the selected tab, in the strip colour',
+      (tester) async {
+    await tester.pumpWidget(host(4, 2));
+    await tester.pumpAndSettle();
+
+    // The colour belongs to the strip rather than to each tab. Plans used to
+    // resolve their own, which painted the workout screen in as many hues as
+    // there were plans; the mark's job is to say *which tab*, and position
+    // already carries that.
+    expect(tester.widget<Text>(find.text('WEEK 3')).style?.color, accent);
+    for (final label in ['WEEK 1', 'WEEK 2', 'WEEK 4']) {
+      expect(tester.widget<Text>(find.text(label)).style?.color, isNot(accent));
+    }
+
+    final marks = tester
+        .widgetList<Container>(find.byType(Container))
+        .map((container) => container.decoration)
+        .whereType<BoxDecoration>()
+        .map((decoration) => decoration.border)
+        .whereType<Border>()
+        .where((border) =>
+            border.bottom.width == 2 && border.bottom.color == accent);
+    expect(marks, hasLength(1));
+  });
 
   testWidgets('lays out every tab, including those past the viewport',
       (tester) async {

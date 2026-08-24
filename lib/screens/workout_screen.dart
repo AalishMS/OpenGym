@@ -518,8 +518,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         return widget.plan;
       },
     );
-    final planColor =
-        activePlan.planColor != null ? Color(activePlan.planColor!) : accent;
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -540,7 +538,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         title: _PlanHeader(
           planName: activePlan.name,
           planIndex: widget.planIndex,
-          planColor: planColor,
+          color: accent,
         ),
         bottom: _buildPlanTabBar(accent, plans, activePlan),
       ),
@@ -639,7 +637,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               ),
             ),
           ),
-          _buildWeekNavBar(planColor, accent),
+          _buildWeekNavBar(accent),
         ],
       ),
     );
@@ -648,11 +646,16 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   /// The plan switcher under the app bar.
   ///
   /// Every tab used to carry a 2px bottom border, which made the "active"
-  /// indicator indistinguishable from a baseline rule that stopped mid-screen,
-  /// and the selected tab was a solid slab in the *global* accent while the
-  /// title directly above it was drawn in the plan's own colour. Now the bar
-  /// owns one continuous hairline, and the only mark is a 2px underline in the
-  /// active plan's colour, sized to its label.
+  /// indicator indistinguishable from a baseline rule that stopped mid-screen.
+  /// Now the bar owns one continuous hairline, and the only mark is a 2px
+  /// underline sized to the active tab's label.
+  ///
+  /// The mark is the global accent, not the plan's own colour. A plan's colour
+  /// identifies it in a *set* — the home grid, the dashboard's plan list — where
+  /// several plans are on screen at once and hue is what tells them apart. In
+  /// here you are inside one plan, so that job is already done by the title, and
+  /// colouring every tab its own hue only fights the accent everywhere else on
+  /// the screen.
   PreferredSizeWidget? _buildPlanTabBar(
     Color accent,
     List<WorkoutPlan> plans,
@@ -670,6 +673,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       child: UnderlineTabStrip(
         rule: StripRule.bottom,
         height: barHeight,
+        color: accent,
         selectedIndex: selectedIndex >= 0 ? selectedIndex : widget.planIndex,
         tabs: [
           for (var index = 0; index < plans.length; index++)
@@ -678,11 +682,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               // [01] on the home cards.
               index: (index + 1).toString().padLeft(2, '0'),
               label: plans[index].name.toUpperCase(),
-              // Each tab resolves its own colour, so a red plan no longer gets
-              // a purple tab while its title above is red.
-              color: plans[index].planColor != null
-                  ? Color(plans[index].planColor!)
-                  : accent,
               onTap: plans[index].id == activePlan.id
                   ? null
                   : () {
@@ -704,12 +703,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   /// The week switcher above the bottom edge — the plan switcher's twin.
   ///
-  /// It used to be a row of filled pills in the global accent, which said
-  /// "toggle" where the strip above it said "tab", and coloured the current week
-  /// with the app's accent rather than the plan you are actually inside. Same
-  /// control, same language now: an underline in the plan's colour. The week
-  /// number is its own ordinal, so these tabs carry no index prefix.
-  Widget _buildWeekNavBar(Color planColor, Color accent) {
+  /// It used to be a row of filled pills, which said "toggle" where the strip
+  /// above it said "tab". Same control, same language now: an underline in the
+  /// accent. The week number is its own ordinal, so these tabs carry no index
+  /// prefix.
+  Widget _buildWeekNavBar(Color accent) {
     return Container(
       // The ground reaches into the safe-area inset; only the tabs stop short
       // of it, so there is no bare strip of background under the bar.
@@ -718,12 +716,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         top: false,
         child: UnderlineTabStrip(
           rule: StripRule.top,
+          color: accent,
           selectedIndex: _currentWeekIndex,
           tabs: [
             for (var index = 0; index < _weeks.length; index++)
               UnderlineTabData(
                 label: 'WEEK ${_weeks[index]}',
-                color: planColor,
                 // Routed through _onWeekChanged, same as a swipe: tapping used
                 // to move the index without saving the week you were leaving or
                 // loading the one you arrived at.
@@ -854,12 +852,15 @@ class _ExposingHorizontalDragGestureRecognizer
 class _PlanHeader extends StatelessWidget {
   final String planName;
   final int planIndex;
-  final Color planColor;
+
+  /// The global accent, matching the back arrow beside it. Deliberately not the
+  /// plan's own colour — see [_WorkoutScreenState._buildPlanTabBar].
+  final Color color;
 
   const _PlanHeader({
     required this.planName,
     required this.planIndex,
-    required this.planColor,
+    required this.color,
   });
 
   @override
@@ -906,7 +907,7 @@ class _PlanHeader extends StatelessWidget {
         style: GoogleFonts.jetBrainsMono(
           fontSize: 14,
           fontWeight: FontWeight.bold,
-          color: planColor,
+          color: color,
         ),
       ),
     );
