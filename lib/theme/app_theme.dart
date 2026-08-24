@@ -201,13 +201,33 @@ Color onAccentColor(BuildContext context) {
 /// The reviewed palette's fixed inputs — see `docs/color-study.html`. Neutrals
 /// grow from one pure-grey seed so both modes share a temperature (the old light
 /// mode tinted its background 60° against a neutral surface, which read as
-/// dirty). Separation is expressed as contrast *targets*, not eyeballed hexes,
-/// so a card can't fail to separate from its page.
+/// dirty), and the seed stays achromatic on purpose: dark mode is meant to read
+/// as black, so the accent is the only thing in the app carrying a hue.
 const Color _neutralSeed = Color(0xFF8A8A8A);
 const Color _bgDark = Color(0xFF0D0D0D);
 const Color _bgLight = Color(0xFFF7F7F6);
-const double _surfTargetDark = 1.45;
-const double _surfTargetLight = 1.20;
+
+/// How far a card's fill sits above (dark) or below (light) the page, as a step
+/// in OKLab lightness rather than a WCAG ratio — the one separation in this file
+/// that is deliberately *not* a contrast target.
+///
+/// WCAG's ratio is `(L + 0.05) / (L + 0.05)`, and against a near-black page the
+/// `+0.05` dominates: at `_bgDark`'s luminance of 0.004, a 1.45:1 card needs
+/// **seven times** the page's linear luminance — a lightness step of 0.146,
+/// where that same 1.45 costs only 0.061 in light mode. Asking both modes for
+/// the same *number* therefore hands dark mode a 2.4× bigger step, which is how
+/// a card meant to be quiet came out at `#2F2F2F`: a grey box on a black page,
+/// with the whole workout screen tiled in it.
+///
+/// So separation between two neutral *grounds* is stated perceptually, which is
+/// what the eye is judging. Contrast ratios stay the metric for everything that
+/// has to be **read** — text, borders, accents — because that is the question
+/// WCAG answers. The floor to respect is the bug this replaced: cards at 1.10:1
+/// were invisible, a step of 0.046. Both values below clear it with room, and
+/// `theme_contrast_test.dart` pins the floor so it cannot creep back.
+const double _surfLiftDark = 0.075;
+const double _surfLiftLight = 0.061;
+
 const double _borderTargetDark = 3.00;
 const double _borderTargetLight = 1.90;
 
@@ -234,13 +254,18 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
   final preferLighter = isDark;
   final background = isDark ? _bgDark : _bgLight;
 
-  // Neutrals. `ToneAnchor.ground` (the default): each must land *at* its target,
-  // because a surface that overshoots 1.45:1 is a mid-grey card, not a quiet one.
-  final surface = solveForContrast(
-    seed: _neutralSeed,
-    against: background,
-    target: isDark ? _surfTargetDark : _surfTargetLight,
-    preferLighter: preferLighter,
+  // Neutrals. The card's fill is a perceptual step off the page — see
+  // `_surfLiftDark` for why this one is not a ratio. Everything solved *against*
+  // that fill is still a contrast target, so darkening the card pulls the
+  // hairline and the secondary text down with it automatically: the border holds
+  // at exactly 3:1, which is what keeps an unfilled text field findable.
+  //
+  // Those solves pass `ToneAnchor.ground` (the default), so each lands *at* its
+  // target rather than past it — a border that overshoots 3:1 is a bright rule
+  // around a dark card, not an edge.
+  final surface = toneOf(
+    _neutralSeed,
+    oklchOf(background).l + (isDark ? _surfLiftDark : -_surfLiftLight),
   );
   final border = solveForContrast(
     seed: _neutralSeed,

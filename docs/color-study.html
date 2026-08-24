@@ -210,7 +210,8 @@ const DIRECTIONS = {
     chroma: 1.0,
     bg: { dark: '#0D0D0D', light: '#F7F7F6' },
     neutralSeed: '#8A8A8A',                       // pure neutral — no tint
-    surfTarget:   { dark: 1.45, light: 1.20 },
+    surfLift:     { dark: 0.075, light: 0.061 },
+    surfFloor:    { dark: 1.15,  light: 1.15  },
     borderTarget: { dark: 3.00, light: 1.90 },
   },
   B: {
@@ -219,7 +220,8 @@ const DIRECTIONS = {
     chroma: 0.76,
     bg: { dark: '#111010', light: '#F6F4F0' },
     neutralSeed: '#8B877F',                       // warm grey
-    surfTarget:   { dark: 1.50, light: 1.22 },
+    surfLift:     { dark: 0.085, light: 0.068 },
+    surfFloor:    { dark: 1.15,  light: 1.15  },
     borderTarget: { dark: 3.00, light: 2.00 },
   },
   C: {
@@ -228,18 +230,26 @@ const DIRECTIONS = {
     chroma: 1.0, reserved: true,
     bg: { dark: '#080808', light: '#F2F2F0' },
     neutralSeed: '#7F8480',                       // faintest cool-green cast
-    surfTarget:   { dark: 1.22, light: 1.12 },
+    surfLift:     { dark: 0.050, light: 0.040 },
+    surfFloor:    { dark: 1.10,  light: 1.10  },
     borderTarget: { dark: 3.60, light: 2.40 },
   },
 };
 
-/* Neutral ramp: every step solved to a target so separation is guaranteed
-   rather than eyeballed, and the tint comes from one seed so both modes agree. */
+/* Neutral ramp. Everything that has to be *read* — the border, both text tones —
+   is solved to a contrast target. The card's fill is not: it is a step in OKLab
+   lightness, because a WCAG ratio is a poor measure of separation near black. Its
+   `+0.05` term dominates at a near-black page's luminance, so asking dark and
+   light for the same ratio hands dark ~2.4x the perceptual step — which is how a
+   1.45:1 "quiet" card landed on #2F2F2F. `surfFloor` keeps the ratio as a floor,
+   since cards at 1.10:1 were the invisible-card bug this replaced. */
 function neutrals(mode, dir) {
   const up = mode === 'dark';                       // move away from the ground
   const bg = dir.bg[mode];
   const seed = dir.neutralSeed;
-  const surface       = solve(seed, bg,      dir.surfTarget[mode],   up, 'ground');
+  const { C, h } = hexToOklch(seed);
+  const surface       = oklchToHex(
+    hexToOklch(bg).L + dir.surfLift[mode] * (up ? 1 : -1), C, h);
   const border        = solve(seed, surface, dir.borderTarget[mode], up, 'ground');
   const textPrimary   = solve(seed, bg,      13.0,                   up, 'ground');
   const textSecondary = solve(seed, surface, 4.5,                    up, 'ground');
@@ -325,7 +335,7 @@ function swatchPanel(p, mode, dir) {
     <div class="note">traffic-light order kept; worst step ${badge(minRpe, AA_TEXT)}</div>
 
     <h4>Neutrals</h4>
-    <div class="sw"><div class="chip bordered" style="background:${p.surface};border-color:${p.border}"></div><span class="nm">surface vs bg</span>${badge(contrast(p.surface, p.bg), dir.surfTarget[mode])}</div>
+    <div class="sw"><div class="chip bordered" style="background:${p.surface};border-color:${p.border}"></div><span class="nm">surface vs bg</span>${badge(contrast(p.surface, p.bg), dir.surfFloor[mode])}</div>
     <div class="sw"><div class="chip" style="background:${p.border}"></div><span class="nm">border vs surface</span>${badge(contrast(p.border, p.surface), bt)}</div>
     <div class="sw"><div class="chip" style="background:${p.surface};color:${p.textSecondary}">ab</div><span class="nm">2° text vs surface</span>${badge(contrast(p.textSecondary, p.surface), AA_TEXT)}</div>
     <div class="note">Today: surface/bg <strong>${mode === 'dark' ? '1.10' : '1.08'}</strong>, border/surface <strong>${mode === 'dark' ? '1.21' : '1.31'}</strong> — cards you can only find by their stripe.

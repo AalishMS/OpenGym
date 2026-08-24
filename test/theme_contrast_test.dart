@@ -13,6 +13,7 @@
 library;
 
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -111,20 +112,60 @@ void main() {
       test('surface, border and text / ${brightness.name}', () {
         final scheme =
             deriveColorScheme(SettingsProvider.accents.first.seed, brightness);
+        final isDark = brightness == Brightness.dark;
 
-        // Cards used to sit at 1.10:1 dark / 1.08:1 light — invisible.
+        // A card's fill is a perceptual step off the page rather than a contrast
+        // target — see `_surfLiftDark` in app_theme.dart. Assert the step, since
+        // that is what the design actually specifies now.
+        final lift =
+            (oklchOf(scheme.surface).l - oklchOf(scheme.background).l).abs();
+        expect(
+          lift,
+          closeTo(isDark ? 0.075 : 0.061, 0.002),
+          reason: 'card fill sits ${lift.toStringAsFixed(3)} off the page in '
+              '${brightness.name} mode',
+        );
+
+        // …with a ratio floor underneath it regardless, because the bug this
+        // replaced was cards at 1.10:1 dark / 1.08:1 light — invisible. Keeping
+        // the old metric as a floor means no future change of metric can quietly
+        // land back there.
         _expectContrast(scheme.surface, scheme.background,
-            atLeast: brightness == Brightness.dark ? 1.45 : 1.20,
-            what: 'surface on background');
+            atLeast: 1.15, what: 'surface on background');
+
+        // The border is still solved as a ratio: it is a line to be *seen*, and
+        // at 3:1 it is also what makes an unfilled text field findable
+        // (WCAG 1.4.11), since `inputDecorationTheme` draws it.
         _expectContrast(scheme.border, scheme.surface,
-            atLeast: brightness == Brightness.dark ? 3.0 : 1.90,
-            what: 'border on surface');
+            atLeast: isDark ? 3.0 : 1.90, what: 'border on surface');
         _expectContrast(scheme.textPrimary, scheme.background,
             atLeast: 13.0, what: 'textPrimary on background');
         _expectContrast(scheme.textSecondary, scheme.surface,
             atLeast: 4.5, what: 'textSecondary on surface');
       });
     }
+
+    test('neither mode separates its cards much harder than the other', () {
+      // The defect that made dark mode read grey: both modes were handed a
+      // contrast *number* (1.45 dark, 1.20 light), and near black a number buys
+      // ~2.4× the perceptual step, so dark cards landed on #2F2F2F — a grey box
+      // on a black page, tiled across the whole workout screen. Whatever the
+      // targets become, the two modes have to stay comparable to the eye.
+      double liftFor(Brightness brightness) {
+        final scheme =
+            deriveColorScheme(SettingsProvider.accents.first.seed, brightness);
+        return (oklchOf(scheme.surface).l - oklchOf(scheme.background).l).abs();
+      }
+
+      final dark = liftFor(Brightness.dark);
+      final light = liftFor(Brightness.light);
+      expect(
+        math.max(dark, light) / math.min(dark, light),
+        lessThan(1.5),
+        reason: 'card lift is ${dark.toStringAsFixed(3)} dark vs '
+            '${light.toStringAsFixed(3)} light',
+      );
+    });
   });
 
   group('semantic colours are legible as text and as grounds', () {
