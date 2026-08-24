@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="logo/brandlogo.png">
-    <img src="logo/brandlogo.png" alt="OpenGym Logo" width="120" height="120">
-  </picture>
+  <img src="logo/applogo.png" alt="OpenGym Logo" width="120" height="120">
 </p>
 
 <h1 align="center">OpenGym</h1>
