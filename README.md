@@ -71,15 +71,13 @@
 ## Screenshots
 
 <p align="center">
-  <img src="screenshots/Screenshot_20260611-130716.png" alt="Home Screen" width="260">
-  <img src="screenshots/Screenshot_20260611-130724.png" alt="Workout Screen" width="260">
-  <img src="screenshots/Screenshot_20260611-130733.png" alt="Exercise Logging" width="260">
+  <img src="screenshots/plans.png" alt="Plans grid — colour-coded workout plans with exercise previews" width="330">
+  &nbsp;
+  <img src="screenshots/workout.png" alt="Workout screen — set logging with weight, reps, and RPE per set" width="330">
 </p>
 
 <p align="center">
-  <img src="screenshots/Screenshot_20260611-130743.png" alt="Statistics" width="260">
-  <img src="screenshots/Screenshot_20260611-130801.png" alt="History" width="260">
-  <img src="screenshots/Screenshot_20260611-130834.png" alt="Settings" width="260">
+  <sub>Plans grid · Set logging with RPE</sub>
 </p>
 
 ---
