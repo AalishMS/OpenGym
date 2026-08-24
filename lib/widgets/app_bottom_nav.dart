@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:provider/provider.dart';
-import '../providers/settings_provider.dart';
 import '../theme/app_theme.dart';
 
 class AppBottomNav extends StatelessWidget {
@@ -21,7 +19,7 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = context.watch<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     final textSecondary = textSecondaryColor(context);
 
     return Container(

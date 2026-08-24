@@ -8,8 +8,9 @@ import '../../theme/spacing.dart';
 /// GitHub-style contribution grid: one column per week, one square per day.
 ///
 /// Built by hand rather than with fl_chart — the cells are barely-rounded
-/// squares on a 1px grid at a size a chart library fights. Intensity is the
-/// accent at increasing alpha, so it recolours with the user's theme.
+/// squares on a 1px grid at a size a chart library fights. Intensity climbs the
+/// theme's opaque accent washes (see [heatmapSteps]), so it recolours with the
+/// user's accent.
 ///
 /// [HiveService.getWorkoutFrequency] is per-*week*, so this buckets raw
 /// sessions by calendar day instead.
@@ -33,7 +34,7 @@ class FrequencyHeatmap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor(context);
+    final steps = heatmapSteps(context);
     final border = borderColor(context);
     final textSecondary = textSecondaryColor(context);
 
@@ -98,7 +99,7 @@ class FrequencyHeatmap extends StatelessWidget {
                                 .add(Duration(days: d)),
                             today: today,
                             counts: counts,
-                            accent: accent,
+                            steps: steps,
                             border: border,
                           ),
                       ],
@@ -116,22 +117,25 @@ class FrequencyHeatmap extends StatelessWidget {
     required DateTime date,
     required DateTime today,
     required Map<DateTime, int> counts,
-    required Color accent,
+    required List<Color> steps,
     required Color border,
   }) {
     final future = date.isAfter(today);
     final count = counts[date] ?? 0;
 
-    // 0 → empty outline; 1/2/3+ → three accent steps.
+    // 0 → empty outline; 1/2/3+ → the three opaque accent washes. Opaque, not
+    // `accent.withAlpha(...)`: the alpha steps composited against whatever sat
+    // behind the cell, so the same count read as a different colour on a card
+    // than on the page. [steps] is the shared ramp the legend also draws.
     final Color fill;
     if (future || count == 0) {
       fill = Colors.transparent;
     } else if (count == 1) {
-      fill = accent.withAlpha(90);
+      fill = steps[1];
     } else if (count == 2) {
-      fill = accent.withAlpha(160);
+      fill = steps[2];
     } else {
-      fill = accent;
+      fill = steps[3];
     }
 
     return Padding(
@@ -157,21 +161,26 @@ class FrequencyHeatmap extends StatelessWidget {
   }
 }
 
+/// The four intensity steps of the heatmap, shared by [FrequencyHeatmap] and
+/// [HeatmapLegend] so the grid and its key can never drift apart. Step 0 is the
+/// empty-cell transparent; 1–3 are the theme's opaque accent washes, even
+/// perceptual steps from the background up to the full fill.
+List<Color> heatmapSteps(BuildContext context) => [
+      Colors.transparent,
+      accentMutedColor(context),
+      accentDimColor(context),
+      accentFillColor(context),
+    ];
+
 /// `LESS ▪▪▪▪ MORE` key for [FrequencyHeatmap].
 class HeatmapLegend extends StatelessWidget {
   const HeatmapLegend({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor(context);
     final textSecondary = textSecondaryColor(context);
     final style = GoogleFonts.jetBrainsMono(fontSize: 8, color: textSecondary);
-    final steps = [
-      Colors.transparent,
-      accent.withAlpha(90),
-      accent.withAlpha(160),
-      accent,
-    ];
+    final steps = heatmapSteps(context);
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.end,

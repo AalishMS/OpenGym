@@ -4,20 +4,23 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _refreshRateChannel = MethodChannel('com.aalishms.opengym/refresh_rate');
 
+/// A user-selectable accent, stored as a single **seed**.
+///
+/// There used to be a hand-picked `dark`/`light` pair here, and both were wrong
+/// often enough to matter: the light hexes were only reachable through
+/// `accentColorLight`, which one file read, so light mode drew the dark palette
+/// (CYAN at 1.79:1), and four of the seven intended light values missed 4.5:1
+/// anyway. A seed carries only hue and chroma; every *role* — the text accent,
+/// the fill, its label, the two washes — is solved per brightness against the
+/// real ground in `buildTheme`. There is no per-mode value left to get wrong.
 class AppAccent {
   final String name;
-  final Color dark;
-  final Color light;
 
-  const AppAccent({
-    required this.name,
-    required this.dark,
-    required this.light,
-  });
+  /// Hue and chroma. Its lightness is a starting point, not a promise: roles
+  /// move it as far as legibility demands and no further.
+  final Color seed;
 
-  Color forBrightness(Brightness brightness) {
-    return brightness == Brightness.dark ? dark : light;
-  }
+  const AppAccent({required this.name, required this.seed});
 }
 
 class SettingsProvider with ChangeNotifier {
@@ -27,22 +30,24 @@ class SettingsProvider with ChangeNotifier {
   static const String _autoFillKey = 'auto_fill_last';
   static const String _highRefreshRateKey = 'high_refresh_rate';
 
+  /// **Order is persisted.** `_accentIndex` is stored as an integer, so indices
+  /// 0–6 must keep the accent they have always named. GREEN is therefore
+  /// appended at 7 rather than slotted next to CYAN where it belongs visually —
+  /// reordering would silently repaint every existing user's app.
   static const List<AppAccent> accents = [
-    AppAccent(
-        name: 'ELECTRIC BLUE',
-        dark: Color(0xFF00A8FF),
-        light: Color(0xFF0077CC)),
-    AppAccent(
-        name: 'WARM AMBER', dark: Color(0xFFFF9500), light: Color(0xFFCC7700)),
-    AppAccent(
-        name: 'DEEP ORANGE', dark: Color(0xFFFF5722), light: Color(0xFFE64A19)),
-    AppAccent(
-        name: 'HOT PINK', dark: Color(0xFFFF1493), light: Color(0xFFCC1177)),
-    AppAccent(name: 'CYAN', dark: Color(0xFF00CED1), light: Color(0xFF00A5A8)),
-    AppAccent(
-        name: 'PURPLE', dark: Color(0xFF8B5CF6), light: Color(0xFF6D28D9)),
-    AppAccent(
-        name: 'STEEL GRAY', dark: Color(0xFFA0A0A0), light: Color(0xFF666666)),
+    AppAccent(name: 'ELECTRIC BLUE', seed: Color(0xFF00A8FF)),
+    AppAccent(name: 'WARM AMBER', seed: Color(0xFFFF9500)),
+    AppAccent(name: 'DEEP ORANGE', seed: Color(0xFFFF5722)),
+    AppAccent(name: 'HOT PINK', seed: Color(0xFFFF1493)),
+    AppAccent(name: 'CYAN', seed: Color(0xFF00CED1)),
+    AppAccent(name: 'PURPLE', seed: Color(0xFF8B5CF6)),
+    // A slate, not the old flat #A0A0A0. Zero chroma made it resolve to exactly
+    // textSecondary in light mode — the same grey as disabled text — so it needs
+    // just enough tint to stay a colour while still reading as grey.
+    AppAccent(name: 'STEEL GRAY', seed: Color(0xFF7C8AA0)),
+    // Fills the 146° gap the old set left between CYAN and WARM AMBER, and a
+    // gym app wants a green.
+    AppAccent(name: 'GREEN', seed: Color(0xFF22C55E)),
   ];
 
   ThemeMode _themeMode = ThemeMode.dark;
@@ -57,14 +62,18 @@ class SettingsProvider with ChangeNotifier {
   bool get autoFillLast => _autoFillLast;
   bool get highRefreshRate => _highRefreshRate;
 
-  Color get accentColor => accents[_accentIndex].dark;
-
-  Color accentColorFor(Brightness brightness) {
-    return accents[_accentIndex].forBrightness(brightness);
-  }
-
-  Color get accentColorDark => accents[_accentIndex].dark;
-  Color get accentColorLight => accents[_accentIndex].light;
+  /// The active accent's seed — the *only* accent value that leaves this
+  /// provider, and it exists for exactly one caller: `main.dart`, which hands it
+  /// to `buildTheme` once per brightness.
+  ///
+  /// Widgets must not read this. A seed is not a colour you can paint: it has no
+  /// mode and no guaranteed contrast. Use `accentColor(context)` (or
+  /// `accentFillColor` / `accentMutedColor` / `accentDimColor`) from
+  /// `theme/app_theme.dart`, which return tones already solved against the ground
+  /// they will actually be drawn on. The getter this replaces returned the dark
+  /// hex unconditionally, and twenty-six widgets read it — which is precisely how
+  /// light mode ended up unthemed.
+  Color get accentSeed => accents[_accentIndex].seed;
 
   SettingsProvider() {
     _loadSettings();

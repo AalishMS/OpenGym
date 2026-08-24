@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
-import '../providers/settings_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../repositories/stats_repository.dart';
@@ -33,7 +32,7 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = context.watch<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     final sessions = context.watch<WorkoutSessionProvider>().sessions;
     final plans = context.watch<WorkoutPlanProvider>().plans;
     final statsRepo = StatsRepository();
@@ -325,7 +324,7 @@ class _EmptyState extends StatelessWidget {
                     content: Text('> Sample data loaded!',
                         style: GoogleFonts.jetBrainsMono(
                             color: onAccentColor(context))),
-                    backgroundColor: accent,
+                    backgroundColor: accentFillColor(context),
                   ),
                 );
               },

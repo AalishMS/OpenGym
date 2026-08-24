@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
-import '../providers/settings_provider.dart';
 import '../providers/update_provider.dart';
 import '../services/update_service.dart';
 import '../theme/app_theme.dart';
@@ -30,7 +29,7 @@ class UpdateDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final updates = context.watch<UpdateProvider>();
-    final accent = context.watch<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     final surface = surfaceColor(context);
     final border = borderColor(context);
     final textPrimary = textPrimaryColor(context);
@@ -264,7 +263,7 @@ class _Actions extends StatelessWidget {
         ElevatedButton(
           onPressed: updates.startUpdate,
           style: ElevatedButton.styleFrom(
-            backgroundColor: accent,
+            backgroundColor: accentFillColor(context),
             foregroundColor: onAccentColor(context),
           ),
           child: Text(failed ? '[RETRY]' : '[UPDATE]',

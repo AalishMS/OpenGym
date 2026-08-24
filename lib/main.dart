@@ -123,14 +123,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       ],
       child: Consumer<SettingsProvider>(
         builder: (context, settings, child) {
-          final accentDark = settings.accentColorDark;
-          final accentLight = settings.accentColorLight;
+          // One seed, both themes. Each `buildTheme` call solves the seed into
+          // roles against its own brightness's ground, which is what makes light
+          // mode a real theme rather than the dark palette on a pale page.
+          final seed = settings.accentSeed;
 
           return MaterialApp(
             title: 'OpenGym',
             debugShowCheckedModeBanner: false,
-            theme: buildTheme(accentLight, Brightness.light),
-            darkTheme: buildTheme(accentDark, Brightness.dark),
+            theme: buildTheme(seed, Brightness.light),
+            darkTheme: buildTheme(seed, Brightness.dark),
             themeMode: settings.themeMode,
             home: const AuthGate(),
           );

@@ -45,7 +45,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
   bool get _isDirty => _signature() != _initialSignature;
 
   Color _planColor(BuildContext context) =>
-      _selectedColor != null ? Color(_selectedColor!) : accentColor(context);
+      planColorOf(_selectedColor, context);
 
   @override
   void initState() {
@@ -778,9 +778,12 @@ class _ColorPicker extends StatelessWidget {
     return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.sm,
-      children: kPlanColors.map((colorValue) {
-        final color = Color(colorValue);
-        final selected = selectedColor == colorValue;
+      children: List.generate(kPlanColors.length, (slot) {
+        final colorValue = kPlanColors[slot];
+        // Resolved swatch, slot-matched selection — see the home-screen picker.
+        final color = planSwatch(slot, context);
+        final selected = selectedColor != null &&
+            planSlotOf(selectedColor!) == slot;
         return InkWell(
           onTap: () => onChanged(colorValue),
           borderRadius: AppRadius.control,
@@ -801,7 +804,7 @@ class _ColorPicker extends StatelessWidget {
                 : null,
           ),
         );
-      }).toList(),
+      }),
     );
   }
 }
@@ -1367,7 +1370,7 @@ class _FullWidthButton extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 13),
         decoration: BoxDecoration(
-          color: filled ? accent : null,
+          color: filled ? accentFillColor(context) : null,
           border: Border.all(color: accent.withAlpha(filled ? 255 : 64)),
           borderRadius: AppRadius.button,
         ),
@@ -1384,7 +1387,7 @@ class _FullWidthButton extends StatelessWidget {
                 fontSize: 11,
                 fontWeight: FontWeight.bold,
                 letterSpacing: 0.1,
-                color: filled ? onColor(accent) : accent,
+                color: filled ? onAccentColor(context) : accent,
               ),
             ),
           ],

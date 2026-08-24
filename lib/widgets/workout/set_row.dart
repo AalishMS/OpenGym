@@ -189,7 +189,7 @@ class SetRow extends StatelessWidget {
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
                               height: 1.1,
-                              color: rpeColor(set.rpe!),
+                              color: rpeColor(set.rpe!, context),
                             ),
                           ),
                         if (hint != null)

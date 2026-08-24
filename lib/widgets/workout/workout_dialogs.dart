@@ -11,7 +11,7 @@ import '../../utils/format.dart';
 
 class WorkoutDialogs {
   static void showPRDialog(BuildContext context, List<PRResult> prs) {
-    final accent = context.read<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     showDialog(
       context: context,
       builder: (context) => Dialog(
@@ -59,7 +59,7 @@ class WorkoutDialogs {
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(context),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: accent,
+                      backgroundColor: accentFillColor(context),
                       foregroundColor: onAccentColor(context),
                     ),
                     child: Text('[ACKNOWLEDGE]',
@@ -78,7 +78,7 @@ class WorkoutDialogs {
     BuildContext context, {
     required void Function(String name) onAdd,
   }) {
-    final accent = context.read<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     final nameController = TextEditingController();
 
     showDialog(
@@ -150,7 +150,7 @@ class WorkoutDialogs {
                       onAdd(name);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: accent,
+                      backgroundColor: accentFillColor(context),
                       foregroundColor: onAccentColor(context),
                     ),
                     child: Text('[ADD]', style: GoogleFonts.jetBrainsMono()),
@@ -169,7 +169,7 @@ class WorkoutDialogs {
     required String currentName,
     required void Function(String name) onRename,
   }) {
-    final accent = context.read<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     final nameController = TextEditingController(text: currentName);
 
     showDialog(
@@ -241,7 +241,7 @@ class WorkoutDialogs {
                       onRename(name);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: accent,
+                      backgroundColor: accentFillColor(context),
                       foregroundColor: onAccentColor(context),
                     ),
                     child:
@@ -262,7 +262,7 @@ class WorkoutDialogs {
     required void Function(gym.Set newSet) onAdd,
   }) {
     final settings = context.read<SettingsProvider>();
-    final accent = settings.accentColor;
+    final accent = accentColor(context);
 
     final weightController = TextEditingController(
       text: lastSet?.weight.toString() ?? '',
@@ -412,7 +412,7 @@ class WorkoutDialogs {
                               onAdd(newSet);
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: accent,
+                              backgroundColor: accentFillColor(context),
                               foregroundColor: onAccentColor(context),
                             ),
                             child: Text('[ADD]',
@@ -437,8 +437,7 @@ class WorkoutDialogs {
     required void Function(gym.Set updatedSet) onSave,
     required VoidCallback onDelete,
   }) {
-    final settings = context.read<SettingsProvider>();
-    final accent = settings.accentColor;
+    final accent = accentColor(context);
 
     final weightController = TextEditingController(text: set.weight.toString());
     final repsController = TextEditingController(text: set.reps.toString());
@@ -595,7 +594,7 @@ class WorkoutDialogs {
                                   onSave(updatedSet);
                                 },
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: accent,
+                                  backgroundColor: accentFillColor(context),
                                   foregroundColor: onAccentColor(context),
                                 ),
                                 child: Text('[SAVE]',
@@ -622,7 +621,7 @@ class WorkoutDialogs {
     required void Function(String? note) onSave,
   }) {
     final noteController = TextEditingController(text: currentNote ?? '');
-    final accent = context.read<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
 
     showDialog(
       context: context,
@@ -675,7 +674,7 @@ class WorkoutDialogs {
                             : null);
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: accent,
+                        backgroundColor: accentFillColor(context),
                         foregroundColor: onAccentColor(context),
                       ),
                       child:
@@ -696,7 +695,7 @@ class WorkoutDialogs {
     required void Function() onRename,
     required void Function() onDelete,
   }) {
-    final accent = context.read<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     showModalBottomSheet(
       context: context,
       backgroundColor: surfaceColor(context),
@@ -733,7 +732,7 @@ class WorkoutDialogs {
     required int currentWeek,
     required void Function(int newWeek) onRename,
   }) {
-    final accent = context.read<SettingsProvider>().accentColor;
+    final accent = accentColor(context);
     final controller = TextEditingController(text: currentWeek.toString());
     showDialog(
       context: context,
@@ -787,7 +786,7 @@ class WorkoutDialogs {
                       }
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: accent,
+                      backgroundColor: accentFillColor(context),
                       foregroundColor: onAccentColor(context),
                     ),
                     child:
@@ -1151,8 +1150,8 @@ class WorkoutDialogs {
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: accent,
-                      foregroundColor: onColor(accent),
+                      backgroundColor: accentFillColor(context),
+                      foregroundColor: onAccentColor(context),
                     ),
                     child: Text('[SAVE]', style: GoogleFonts.jetBrainsMono()),
                   ),
