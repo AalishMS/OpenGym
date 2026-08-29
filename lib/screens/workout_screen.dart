@@ -792,17 +792,14 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               borderRadius: AppRadius.chip,
               child: SizedBox(
                 height: 48,
-                child: Container(
+                child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: accent),
-                    borderRadius: AppRadius.chip,
-                  ),
                   child: Center(
                     child: Text(
                       '+ WEEK ${_weeks.length + 1}',
                       style: GoogleFonts.jetBrainsMono(
-                        fontSize: 10,
+                        fontSize: 11,
+                        letterSpacing: 0.04,
                         color: accent,
                       ),
                     ),

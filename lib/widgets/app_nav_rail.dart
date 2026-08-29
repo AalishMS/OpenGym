@@ -93,33 +93,41 @@ class _RailItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = active ? accent : inactiveColor;
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: active ? accent.withAlpha(20) : null,
-          border: Border(
-            left: BorderSide(
-              color: active ? accent : Colors.transparent,
-              width: 2,
-            ),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 12),
-            Text(
-              label,
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 10,
-                letterSpacing: 0.08,
-                fontWeight: active ? FontWeight.bold : FontWeight.normal,
-                color: color,
+    return Semantics(
+      selected: active,
+      child: InkWell(
+        onTap: onTap,
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 48),
+          decoration: BoxDecoration(
+            color: active ? accent.withAlpha(20) : null,
+            border: Border(
+              left: BorderSide(
+                color: active ? accent : Colors.transparent,
+                width: 2,
               ),
             ),
-          ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 11,
+                    letterSpacing: 0.08,
+                    fontWeight: active ? FontWeight.bold : FontWeight.normal,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

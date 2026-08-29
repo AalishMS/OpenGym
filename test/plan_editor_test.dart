@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -158,28 +159,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('[DONE]'));
     await tester.pumpAndSettle();
-    expect(
-      tester
-          .getSize(
-            find.ancestor(
-              of: find.text('[+ ADD SET]'),
-              matching: find.byType(InkWell),
-            ),
-          )
-          .height,
-      greaterThanOrEqualTo(48),
-    );
-    expect(
-      tester
-          .getSize(
-            find.ancestor(
-              of: find.text('[DELETE]'),
-              matching: find.byType(InkWell),
-            ),
-          )
-          .height,
-      greaterThanOrEqualTo(48),
-    );
+    for (final label in ['Add set', 'Delete exercise']) {
+      expect(
+        tester.getSize(find.bySemanticsLabel(label)).height,
+        greaterThanOrEqualTo(48),
+      );
+    }
   });
 
   testWidgets('exercise picker tiles are at least 48 pixels high', (
@@ -230,10 +215,22 @@ void main() {
     await pumpEditor(tester);
     final save = tester.widget<InkWell>(
       find
-          .ancestor(of: find.text('[SAVE]'), matching: find.byType(InkWell))
+          .ancestor(of: find.text('SAVE'), matching: find.byType(InkWell))
           .first,
     );
     expect(save.onTap, isNull);
+  });
+
+  testWidgets('save control uses centered unbracketed text', (tester) async {
+    await pumpEditor(tester);
+    await tester.enterText(find.byType(TextField).first, 'Push Day');
+
+    final saveText = find.text('SAVE');
+    expect(saveText, findsOneWidget);
+    expect(find.text('[SAVE]'), findsNothing);
+
+    final button = find.ancestor(of: saveText, matching: find.byType(InkWell));
+    expect(tester.getCenter(saveText), tester.getCenter(button));
   });
 
   testWidgets('editor save and add exercise actions have 48 pixel targets', (
@@ -242,7 +239,7 @@ void main() {
     await pumpEditor(tester);
     await tester.enterText(find.byType(TextField).first, 'Push Day');
 
-    for (final label in ['[SAVE]', '[+ ADD EXERCISE]']) {
+    for (final label in ['SAVE', '[+ ADD EXERCISE]']) {
       final target = find.ancestor(
         of: find.text(label),
         matching: find.byType(InkWell),
@@ -346,11 +343,30 @@ void main() {
       title.style?.fontFamily,
       isNot(GoogleFonts.jetBrainsMono().fontFamily),
     );
-    expect(find.bySemanticsLabel('Decrease weight'), findsNWidgets(3));
+    expect(find.bySemanticsLabel('Decrease weight'), findsOneWidget);
     expect(
       tester.getSize(find.bySemanticsLabel('Decrease weight').first),
-        const Size(32, 32),
+      const Size(32, 32),
     );
+  });
+
+  testWidgets('new exercise starts with one set and icon footer actions', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    await tester.tap(find.text('[+ ADD EXERCISE]'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bench Press'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('[DONE]'));
+    await tester.pumpAndSettle();
+
+    expect(find.bySemanticsLabel('Decrease weight'), findsOneWidget);
+    expect(find.text('[+ ADD SET]'), findsNothing);
+    expect(find.text('[DELETE]'), findsNothing);
+    expect(find.bySemanticsLabel('Add set'), findsOneWidget);
+    expect(find.bySemanticsLabel('Delete exercise'), findsOneWidget);
+    expect(find.byIcon(LucideIcons.trash2), findsOneWidget);
   });
 
   testWidgets('editor remains renderable at compact width', (tester) async {
@@ -371,7 +387,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('[DONE]'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('[SAVE]'));
+    await tester.tap(find.text('SAVE'));
     await tester.pumpAndSettle();
     final saved = HiveService.getPlans();
     expect(saved, hasLength(1));

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import 'package:gymapp/models/exercise.dart';
@@ -114,6 +115,24 @@ void main() {
     final size = tester.getSize(find.byTooltip('Plan actions'));
     expect(size.width, greaterThanOrEqualTo(48));
     expect(size.height, greaterThanOrEqualTo(48));
+  });
+
+  testWidgets('create plan action is a compact bottom-right plus button', (
+    tester,
+  ) async {
+    await tester.pumpWidget(homeHost());
+
+    final fab = find.byType(FloatingActionButton);
+    expect(fab, findsOneWidget);
+    expect(
+      find.descendant(of: fab, matching: find.byIcon(Icons.add)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: fab, matching: find.byIcon(LucideIcons.plus)),
+      findsOneWidget,
+    );
+    expect(find.text('[+ NEW PLAN]'), findsNothing);
   });
 
   testWidgets('plan overflow hit region stays inside the card', (tester) async {

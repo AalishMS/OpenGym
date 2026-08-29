@@ -233,7 +233,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
         _EditorExercise(
           id: _nextExerciseId++,
           name: name,
-          sets: List.generate(3, (_) => ExerciseSetData(reps: 8, weight: 0)),
+          sets: [ExerciseSetData(reps: 8, weight: 0)],
           expanded: true,
         ),
       );
@@ -792,16 +792,18 @@ class _EditorHeader extends StatelessWidget {
                 color: canSave ? accentFillColor(context) : color.withAlpha(32),
                 borderRadius: AppRadius.button,
               ),
-              child: Text(
-                '[SAVE]',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  color:
-                      canSave
-                          ? onAccentColor(context)
-                          : textSecondaryColor(context).withAlpha(128),
-                  letterSpacing: 0.1,
+              child: Center(
+                child: Text(
+                  'SAVE',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color:
+                        canSave
+                            ? onAccentColor(context)
+                            : textSecondaryColor(context).withAlpha(128),
+                    letterSpacing: 0.1,
+                  ),
                 ),
               ),
             ),
@@ -1138,14 +1140,20 @@ class _ExerciseEditorCard extends StatelessWidget {
       decoration: BoxDecoration(border: Border(top: BorderSide(color: border))),
       child: Row(
         children: [
-          _FooterAction(label: '[+ ADD SET]', color: accent, onTap: onSetAdded),
+          _FooterIconAction(
+            semanticLabel: 'Add set',
+            icon: LucideIcons.plus,
+            color: accent,
+            onTap: onSetAdded,
+          ),
           const Spacer(),
           // Destructive, so it states its consequence in words down here rather
           // than sitting in the header as a grey glyph one thumb-width from the
           // chevron, where a mis-tap used to cost an exercise and all its sets.
-          _FooterAction(
-            label: '[DELETE]',
-            color: errorColor(context),
+          _FooterIconAction(
+            semanticLabel: 'Delete exercise',
+            icon: LucideIcons.trash2,
+            color: textSecondaryColor(context),
             onTap: onDelete,
           ),
         ],
@@ -1316,47 +1324,35 @@ class _IndexBadge extends StatelessWidget {
   }
 }
 
-/// A bracket-label action in an exercise card's footer.
-///
-/// Inset from the card's edge on purpose: it keeps each action's splash clear of
-/// the card's rounded bottom corners, which two full-bleed half-width rows would
-/// square off.
-class _FooterAction extends StatelessWidget {
-  final String label;
+/// An icon action in an exercise card's footer.
+class _FooterIconAction extends StatelessWidget {
+  final String semanticLabel;
+  final IconData icon;
   final Color color;
   final VoidCallback onTap;
 
-  const _FooterAction({
-    required this.label,
+  const _FooterIconAction({
+    required this.semanticLabel,
+    required this.icon,
     required this.color,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
+    return Semantics(
+      button: true,
+      label: semanticLabel,
       onTap: onTap,
-      borderRadius: AppRadius.button,
-      splashColor: color.withValues(alpha: 0.2),
-      highlightColor: color.withValues(alpha: 0.1),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: AppSpacing.sm,
-            ),
-            child: Text(
-              label,
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.08,
-                color: color,
-              ),
-            ),
-          ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadius.badge,
+        splashColor: color.withValues(alpha: 0.2),
+        highlightColor: color.withValues(alpha: 0.1),
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Icon(icon, size: 20, color: color),
         ),
       ),
     );

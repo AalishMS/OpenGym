@@ -17,6 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isSignUp = false;
   bool _loading = false;
+  bool _obscurePassword = true;
   String? _error;
 
   @override
@@ -30,7 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     if (email.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Email and password required');
+      setState(() => _error = 'Email and password required.');
       return;
     }
     setState(() {
@@ -60,7 +61,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final fg = textPrimaryColor(context);
     final muted = textSecondaryColor(context);
     final accent = accentColor(context);
-    final onAccent = onAccentColor(context);
     final mono = GoogleFonts.jetBrainsMono();
 
     return Scaffold(
@@ -71,76 +71,145 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text('> OPENGYM',
+              child: AutofillGroup(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      '> OPENGYM',
                       style: mono.copyWith(
-                          color: accent,
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Text(_isSignUp ? '// create account' : '// sign in',
-                      style: mono.copyWith(color: muted)),
-                  const SizedBox(height: 32),
-                  TextField(
-                    controller: _emailController,
-                    style: mono.copyWith(color: fg),
-                    keyboardType: TextInputType.emailAddress,
-                    autocorrect: false,
-                    decoration: _decoration('email', mono, muted, accent),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    style: mono.copyWith(color: fg),
-                    obscureText: true,
-                    decoration: _decoration('password', mono, muted, accent),
-                  ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(_error!,
-                        style: mono.copyWith(
-                            color: errorColor(context), fontSize: 13)),
-                  ],
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: _loading ? null : _submit,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentFillColor(context),
-                      foregroundColor: onAccent,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: const RoundedRectangleBorder(
-                          borderRadius: AppRadius.button),
+                        color: accent,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    child: _loading
-                        ? SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: onAccent))
-                        : Text(_isSignUp ? '[CREATE ACCOUNT]' : '[SIGN IN]',
-                            style: mono.copyWith(
-                                fontWeight: FontWeight.bold, color: onAccent)),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: _loading
-                        ? null
-                        : () => setState(() {
-                              _isSignUp = !_isSignUp;
-                              _error = null;
-                            }),
-                    child: Text(
+                    const SizedBox(height: 8),
+                    Text(
+                      _isSignUp ? 'Create account' : 'Sign in',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
                       _isSignUp
-                          ? 'Have an account? Sign in'
-                          : 'No account? Create one',
-                      style: mono.copyWith(color: accent, fontSize: 13),
+                          ? 'Sync your training across devices.'
+                          : 'Continue with your saved plans and history.',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(color: muted),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 32),
+                    TextField(
+                      controller: _emailController,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyLarge?.copyWith(color: fg),
+                      autofillHints: const [AutofillHints.email],
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      autocorrect: false,
+                      decoration: _decoration('Email', muted, accent),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: _passwordController,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyLarge?.copyWith(color: fg),
+                      autofillHints: [
+                        _isSignUp
+                            ? AutofillHints.newPassword
+                            : AutofillHints.password,
+                      ],
+                      keyboardType: TextInputType.visiblePassword,
+                      textInputAction: TextInputAction.done,
+                      autocorrect: false,
+                      enableSuggestions: false,
+                      obscureText: _obscurePassword,
+                      onSubmitted: _loading ? null : (_) => _submit(),
+                      decoration: _decoration(
+                        'Password',
+                        muted,
+                        accent,
+                        suffixIcon: IconButton(
+                          tooltip:
+                              _obscurePassword
+                                  ? 'Show password'
+                                  : 'Hide password',
+                          onPressed:
+                              () => setState(
+                                () => _obscurePassword = !_obscurePassword,
+                              ),
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 16),
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          _error!,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: errorColor(context)),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: _loading ? null : _submit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accentFillColor(context),
+                        elevation: 0,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: AppRadius.button,
+                        ),
+                      ),
+                      child:
+                          _loading
+                              ? SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: Semantics(
+                                  label:
+                                      _isSignUp
+                                          ? 'Creating account'
+                                          : 'Signing in',
+                                  value: 'In progress',
+                                  liveRegion: true,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: onAccentColor(context),
+                                  ),
+                                ),
+                              )
+                              : Text(
+                                _isSignUp ? '[CREATE ACCOUNT]' : '[SIGN IN]',
+                              ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed:
+                          _loading
+                              ? null
+                              : () => setState(() {
+                                _isSignUp = !_isSignUp;
+                                _error = null;
+                              }),
+                      child: Text(
+                        _isSignUp
+                            ? 'Have an account? Sign in'
+                            : 'No account? Create one',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -150,10 +219,17 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   InputDecoration _decoration(
-      String label, TextStyle mono, Color muted, Color accent) {
+    String label,
+    Color muted,
+    Color accent, {
+    Widget? suffixIcon,
+  }) {
     return InputDecoration(
       labelText: label,
-      labelStyle: mono.copyWith(color: muted),
+      labelStyle: Theme.of(
+        context,
+      ).textTheme.bodyMedium?.copyWith(color: muted),
+      suffixIcon: suffixIcon,
       enabledBorder: OutlineInputBorder(
         borderSide: BorderSide(color: borderColor(context)),
         borderRadius: AppRadius.field,

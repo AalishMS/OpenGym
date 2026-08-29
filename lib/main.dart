@@ -80,32 +80,38 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (!_initialized) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
-        home: Scaffold(
-          backgroundColor: const Color(0xFF0F0F0F),
-          body: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '> OPENGYM',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF00A8FF),
+        theme: buildTheme(SettingsProvider.accents.first.seed, Brightness.dark),
+        home: Builder(
+          builder:
+              (context) => Scaffold(
+                backgroundColor: backgroundColor(context),
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        '> OPENGYM',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: accentColor(context),
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      Semantics(
+                        label: 'Starting OpenGym',
+                        value: 'In progress',
+                        liveRegion: true,
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 32),
-                const SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Color(0xFF00A8FF),
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
         ),
       );
     }

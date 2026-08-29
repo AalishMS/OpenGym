@@ -30,6 +30,16 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: bg,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const PlanEditorScreen.create()),
+          );
+        },
+        tooltip: 'Create plan',
+        child: const Icon(LucideIcons.plus),
+      ),
       body: SafeArea(
         top: false,
         child: Column(
@@ -44,20 +54,6 @@ class HomeScreen extends StatelessWidget {
                   return _buildPlanSection(context, provider, accent);
                 },
               ),
-            ),
-            // Hidden while the list is empty: the empty state carries the same
-            // action as its primary button, and two `[+ NEW PLAN]`s on one
-            // screen make the reader pick between identical doors.
-            Consumer<WorkoutPlanProvider>(
-              builder: (context, provider, child) {
-                if (provider.plans.isEmpty) return const SizedBox.shrink();
-                return _CappedWidth(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: _buildNewPlanButton(context, accent),
-                  ),
-                );
-              },
             ),
           ],
         ),
@@ -128,25 +124,6 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: AppSpacing.xxl),
-            // The line above has always said "create your first workout plan",
-            // but the only button here seeded demo data — the one thing a
-            // first-run screen exists to start could not be started from it.
-            OutlinedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PlanEditorScreen.create(),
-                  ),
-                );
-              },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: accent,
-                side: BorderSide(color: accent, width: 1),
-              ),
-              child: Text('[+ NEW PLAN]', style: GoogleFonts.jetBrainsMono()),
-            ),
-            const SizedBox(height: AppSpacing.md),
             // Sample data stays reachable for someone who wants to look around
             // before committing to their own plan, at text weight so it reads
             // as the way out rather than the way in. It also lives in Settings.
@@ -414,42 +391,6 @@ class HomeScreen extends StatelessWidget {
                   : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
         )
         .join(' ');
-  }
-
-  Widget _buildNewPlanButton(BuildContext context, Color accent) {
-    final textSecondary = textSecondaryColor(context);
-    return InkWell(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (_) => const PlanEditorScreen.create()),
-        );
-      },
-      borderRadius: AppRadius.button,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        decoration: BoxDecoration(
-          border: Border.all(color: accent.withAlpha(60)),
-          borderRadius: AppRadius.button,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(LucideIcons.plus, size: 12, color: textSecondary),
-            const SizedBox(width: 8),
-            Text(
-              '[+ NEW PLAN]',
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 11,
-                letterSpacing: 0.1,
-                color: textSecondary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   void _showPlanOptions(

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../providers/workout_session_provider.dart';
 import '../repositories/stats_repository.dart';
-import '../repositories/workout_session_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
 import '../theme/radii.dart';
@@ -17,7 +18,6 @@ class StatsScreen extends StatefulWidget {
 
 class _StatsScreenState extends State<StatsScreen> {
   final StatsRepository _statsRepo = StatsRepository();
-  final WorkoutSessionRepository _sessionRepo = WorkoutSessionRepository();
   String? _selectedExercise;
   List<String> _exerciseNames = [];
   bool _showOverall = true;
@@ -38,9 +38,10 @@ class _StatsScreenState extends State<StatsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final sessions = context.watch<WorkoutSessionProvider>().sessions;
     final accent = accentColor(context);
     final frequency = _statsRepo.getWorkoutFrequency(8);
-    final totalWorkouts = _sessionRepo.getSessions().length;
+    final totalWorkouts = sessions.length;
     final workoutsThisWeek = _statsRepo.getWorkoutsThisWeek();
     final prs = _statsRepo.getAllExercisePRs();
     final totalPRs = prs.length;
@@ -50,9 +51,10 @@ class _StatsScreenState extends State<StatsScreen> {
       appBar: AppBar(
         backgroundColor: surfaceColor(context),
         title: Text(
-          '> STATISTICS',
-          style: GoogleFonts.jetBrainsMono(
-              fontSize: 16, fontWeight: FontWeight.bold, color: accent),
+          'STATISTICS',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(color: textPrimaryColor(context)),
         ),
         automaticallyImplyLeading: false,
       ),
@@ -61,30 +63,37 @@ class _StatsScreenState extends State<StatsScreen> {
           // With a sidebar taking 180px, the usable width at the 900px shell
           // breakpoint is ~720 — enough for two charts side by side, which
           // makes the [OVERALL]/[EXERCISE] toggle redundant.
-          final wide = constraints.maxWidth >= Breakpoints.medium - 180;
+          final wide =
+              constraints.maxWidth >= Breakpoints.medium - 180 &&
+              MediaQuery.textScalerOf(context).scale(1) <= 1.4;
           final chartHeight = wide ? 300.0 : 200.0;
 
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
               _buildSummaryCards(
-                  totalWorkouts, workoutsThisWeek, totalPRs, accent),
+                totalWorkouts,
+                workoutsThisWeek,
+                totalPRs,
+                accent,
+              ),
               const SizedBox(height: 24),
               if (wide) ...[
-                IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: _buildFrequencyChart(
-                            frequency, accent, chartHeight),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: _buildFrequencyChart(
+                        frequency,
+                        accent,
+                        chartHeight,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildProgressionChart(accent, chartHeight),
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildProgressionChart(accent, chartHeight),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 16),
                 if (_exerciseNames.isNotEmpty) _buildExerciseSelector(accent),
@@ -107,97 +116,85 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildSummaryCards(int total, int thisWeek, int prs, Color accent) {
+    final tiles = [
+      StatTile(label: 'TOTAL WORKOUTS', value: '$total', accent: accent),
+      StatTile(label: 'THIS WEEK', value: '$thisWeek', accent: accent),
+      StatTile(label: 'PRS TRACKED', value: '$prs', accent: accent),
+    ];
+    if (MediaQuery.textScalerOf(context).scale(1) > 1.2) {
+      return Column(
+        children: [
+          for (var i = 0; i < tiles.length; i++) ...[
+            if (i > 0) const SizedBox(height: 8),
+            tiles[i],
+          ],
+        ],
+      );
+    }
     return Row(
       children: [
-        Expanded(
-          child: StatTile(
-            label: 'TOTAL WORKOUTS',
-            value: '$total',
-            accent: accent,
-          ),
-        ),
+        Expanded(child: tiles[0]),
         const SizedBox(width: 8),
-        Expanded(
-          child: StatTile(
-            label: 'THIS WEEK',
-            value: '$thisWeek',
-            accent: accent,
-          ),
-        ),
+        Expanded(child: tiles[1]),
         const SizedBox(width: 8),
-        Expanded(
-          child: StatTile(
-            label: 'PRS TRACKED',
-            value: '$prs',
-            accent: accent,
-          ),
-        ),
+        Expanded(child: tiles[2]),
       ],
     );
   }
 
   Widget _buildViewToggle(Color accent) {
+    Widget button(String label, bool selected, VoidCallback onTap) {
+      return Semantics(
+        container: true,
+        label:
+            label == '[OVERALL]' ? 'Overall statistics' : 'Exercise statistics',
+        button: true,
+        selected: selected,
+        onTap: onTap,
+        child: ExcludeSemantics(
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: AppRadius.button,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 48),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: selected ? accentFillColor(context) : Colors.transparent,
+                border: Border.all(color: accent, width: 1),
+                borderRadius: AppRadius.button,
+              ),
+              child: Center(
+                child: Text(
+                  label,
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 12,
+                    color: selected ? onAccentColor(context) : accent,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final overall = button('[OVERALL]', _showOverall, () {
+      setState(() => _showOverall = true);
+    });
+    final exercise = button('[EXERCISE]', !_showOverall, () {
+      setState(() => _showOverall = false);
+    });
+    if (MediaQuery.textScalerOf(context).scale(1) > 1.2) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [overall, const SizedBox(height: 8), exercise],
+      );
+    }
     return Row(
       children: [
-        Expanded(
-          child: InkWell(
-            onTap: () {
-              setState(() {
-                _showOverall = true;
-              });
-            },
-            borderRadius: AppRadius.button,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                // `accentFill`, not `accent`: the label below is `onAccent`,
-                // which is solved against the fill. Painting it on the text
-                // accent instead is the pairing that scores 3.63:1 in light
-                // mode. The border stays `accent` — it is a line, not a ground.
-                color: _showOverall ? accentFillColor(context) : Colors.transparent,
-                border: Border.all(color: accent, width: 1),
-                borderRadius: AppRadius.button,
-              ),
-              child: Center(
-                child: Text(
-                  '[OVERALL]',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12,
-                    color: _showOverall ? onAccentColor(context) : accent,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+        Expanded(child: overall),
         const SizedBox(width: 8),
-        Expanded(
-          child: InkWell(
-            onTap: () {
-              setState(() {
-                _showOverall = false;
-              });
-            },
-            borderRadius: AppRadius.button,
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                color: !_showOverall ? accentFillColor(context) : Colors.transparent,
-                border: Border.all(color: accent, width: 1),
-                borderRadius: AppRadius.button,
-              ),
-              child: Center(
-                child: Text(
-                  '[EXERCISE]',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12,
-                    color: !_showOverall ? onAccentColor(context) : accent,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+        Expanded(child: exercise),
       ],
     );
   }
@@ -205,18 +202,24 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget _buildExerciseSelector(Color accent) {
     return DropdownButtonFormField<String>(
       initialValue: _selectedExercise,
+      isExpanded: true,
       decoration: const InputDecoration(
         labelText: 'SELECT EXERCISE',
         border: OutlineInputBorder(borderRadius: AppRadius.field),
       ),
-      items: _exerciseNames.map((name) {
-        final pr = _statsRepo.getExercisePR(name);
-        return DropdownMenuItem(
-          value: name,
-          child: Text('$name (PR: ${pr}kg)',
-              style: GoogleFonts.jetBrainsMono(fontSize: 12)),
-        );
-      }).toList(),
+      items:
+          _exerciseNames.map((name) {
+            final pr = _statsRepo.getExercisePR(name);
+            return DropdownMenuItem(
+              value: name,
+              child: Text(
+                '$name (PR: ${pr}kg)',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.jetBrainsMono(fontSize: 12),
+              ),
+            );
+          }).toList(),
       onChanged: (value) {
         setState(() {
           _selectedExercise = value;
@@ -226,10 +229,14 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildFrequencyChart(
-      Map<int, int> frequency, Color accent, double chartHeight) {
-    final maxY = frequency.values.isEmpty
-        ? 5.0
-        : (frequency.values.reduce((a, b) => a > b ? a : b) + 2).toDouble();
+    Map<int, int> frequency,
+    Color accent,
+    double chartHeight,
+  ) {
+    final maxY =
+        frequency.values.isEmpty
+            ? 5.0
+            : (frequency.values.reduce((a, b) => a > b ? a : b) + 2).toDouble();
 
     return Container(
       decoration: BoxDecoration(
@@ -245,19 +252,17 @@ class _StatsScreenState extends State<StatsScreen> {
             Row(
               children: [
                 Text(
-                  '> WORKOUT FREQUENCY',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: accent,
-                  ),
+                  'WORKOUT FREQUENCY',
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
               ],
             ),
             Text(
               'Last 8 Weeks',
               style: GoogleFonts.jetBrainsMono(
-                  fontSize: 10, color: textSecondaryColor(context)),
+                fontSize: 10,
+                color: textSecondaryColor(context),
+              ),
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -273,7 +278,9 @@ class _StatsScreenState extends State<StatsScreen> {
                         return BarTooltipItem(
                           'Week $week\n${rod.toY.toInt()} workouts',
                           GoogleFonts.jetBrainsMono(
-                              fontSize: 10, color: textPrimaryColor(context)),
+                            fontSize: 10,
+                            color: textPrimaryColor(context),
+                          ),
                         );
                       },
                     ),
@@ -308,9 +315,11 @@ class _StatsScreenState extends State<StatsScreen> {
                       ),
                     ),
                     topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
                     rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
                   ),
                   borderData: FlBorderData(show: false),
                   gridData: FlGridData(
@@ -360,8 +369,9 @@ class _StatsScreenState extends State<StatsScreen> {
           child: Center(
             child: Text(
               '> No exercise data available',
-              style:
-                  GoogleFonts.jetBrainsMono(color: textSecondaryColor(context)),
+              style: GoogleFonts.jetBrainsMono(
+                color: textSecondaryColor(context),
+              ),
             ),
           ),
         ),
@@ -385,7 +395,8 @@ class _StatsScreenState extends State<StatsScreen> {
                 Text(
                   '> No data for $_selectedExercise',
                   style: GoogleFonts.jetBrainsMono(
-                      color: textSecondaryColor(context)),
+                    color: textSecondaryColor(context),
+                  ),
                 ),
               ],
             ),
@@ -397,9 +408,13 @@ class _StatsScreenState extends State<StatsScreen> {
     final maxWeight = progression
         .map((p) => p['maxWeight'] as double)
         .reduce((a, b) => a > b ? a : b);
-    final spots = progression.asMap().entries.map((entry) {
-      return FlSpot(entry.key.toDouble(), entry.value['maxWeight'] as double);
-    }).toList();
+    final spots =
+        progression.asMap().entries.map((entry) {
+          return FlSpot(
+            entry.key.toDouble(),
+            entry.value['maxWeight'] as double,
+          );
+        }).toList();
 
     return Container(
       decoration: BoxDecoration(
@@ -412,18 +427,21 @@ class _StatsScreenState extends State<StatsScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '> ${_selectedExercise!.toUpperCase()} PROGRESSION',
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: accent,
+            SizedBox(
+              width: double.infinity,
+              child: Text(
+                '${_selectedExercise!.toUpperCase()} PROGRESSION',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
             Text(
               'Max Weight Over Time',
               style: GoogleFonts.jetBrainsMono(
-                  fontSize: 10, color: textSecondaryColor(context)),
+                fontSize: 10,
+                color: textSecondaryColor(context),
+              ),
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -481,9 +499,11 @@ class _StatsScreenState extends State<StatsScreen> {
                       ),
                     ),
                     topTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
                     rightTitles: const AxisTitles(
-                        sideTitles: SideTitles(showTitles: false)),
+                      sideTitles: SideTitles(showTitles: false),
+                    ),
                   ),
                   borderData: FlBorderData(show: false),
                   gridData: FlGridData(
@@ -521,8 +541,10 @@ class _StatsScreenState extends State<StatsScreen> {
               ),
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+            Wrap(
+              alignment: WrapAlignment.spaceAround,
+              spacing: 24,
+              runSpacing: 8,
               children: [
                 _StatItem(
                   label: 'CURRENT PR',
@@ -596,7 +618,9 @@ class _StatItem extends StatelessWidget {
         Text(
           label,
           style: GoogleFonts.jetBrainsMono(
-              fontSize: 10, color: textSecondaryColor(context)),
+            fontSize: 10,
+            color: textSecondaryColor(context),
+          ),
         ),
       ],
     );

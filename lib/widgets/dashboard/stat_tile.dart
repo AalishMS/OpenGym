@@ -38,7 +38,7 @@ class StatTile extends StatelessWidget {
           Text(
             value,
             style: GoogleFonts.jetBrainsMono(
-              fontSize: 24,
+              fontSize: 28,
               fontWeight: FontWeight.bold,
               color: valueColor,
             ),

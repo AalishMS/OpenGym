@@ -7,6 +7,7 @@ import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../screens/login_screen.dart';
 import '../app_shell.dart';
+import '../theme/app_theme.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -55,10 +56,15 @@ class _PostLoginGateState extends State<_PostLoginGate> {
       future: _ready,
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            backgroundColor: Color(0xFF0F0F0F),
+          return Scaffold(
+            backgroundColor: backgroundColor(context),
             body: Center(
-              child: CircularProgressIndicator(color: Color(0xFF00A8FF)),
+              child: Semantics(
+                label: 'Loading your data',
+                value: 'In progress',
+                liveRegion: true,
+                child: const CircularProgressIndicator(),
+              ),
             ),
           );
         }

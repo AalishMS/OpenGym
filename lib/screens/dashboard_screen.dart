@@ -41,16 +41,29 @@ class DashboardScreen extends StatelessWidget {
       backgroundColor: backgroundColor(context),
       appBar: AppBar(
         backgroundColor: surfaceColor(context),
-        title: Text(
-          '> DASHBOARD',
-          style: GoogleFonts.jetBrainsMono(
-              fontSize: 16, fontWeight: FontWeight.bold, color: accent),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'DASH',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: textPrimaryColor(context),
+              ),
+            ),
+            Text(
+              'BOARD',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: textPrimaryColor(context),
+              ),
+            ),
+          ],
         ),
         automaticallyImplyLeading: false,
       ),
-      body: plans.isEmpty && sessions.isEmpty
-          ? _EmptyState(accent: accent)
-          : _buildBody(context, sessions, plans, statsRepo),
+      body:
+          plans.isEmpty && sessions.isEmpty
+              ? _EmptyState(accent: accent)
+              : _buildBody(context, sessions, plans, statsRepo),
     );
   }
 
@@ -107,9 +120,10 @@ class DashboardScreen extends StatelessWidget {
                     right: DashboardPanel(
                       title: 'RECENT PRS',
                       caption: '${prEntries.length} TRACKED',
-                      child: prEntries.isEmpty
-                          ? const DashboardEmptyLine('> no records yet')
-                          : RecentPrsTile(entries: prEntries),
+                      child:
+                          prEntries.isEmpty
+                              ? const DashboardEmptyLine('> no records yet')
+                              : RecentPrsTile(entries: prEntries),
                     ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -118,16 +132,18 @@ class DashboardScreen extends StatelessWidget {
                     left: DashboardPanel(
                       title: 'PLANS',
                       caption: '${plans.length} TOTAL',
-                      child: planStats.isEmpty
-                          ? const DashboardEmptyLine('> no plans yet')
-                          : PlanStatusTile(
-                              stats: planStats,
-                              onOpen: (stat) => _openPlan(
-                                context,
-                                stat.planIndex,
-                                stat.plan,
+                      child:
+                          planStats.isEmpty
+                              ? const DashboardEmptyLine('> no plans yet')
+                              : PlanStatusTile(
+                                stats: planStats,
+                                onOpen:
+                                    (stat) => _openPlan(
+                                      context,
+                                      stat.planIndex,
+                                      stat.plan,
+                                    ),
                               ),
-                            ),
                     ),
                     right: _progressionPanel(context, sessions, statsRepo),
                   ),
@@ -156,13 +172,13 @@ class DashboardScreen extends StatelessWidget {
     ];
 
     Widget row(List<Widget> items) => Row(
-          children: [
-            for (var i = 0; i < items.length; i++) ...[
-              if (i > 0) const SizedBox(width: AppSpacing.sm),
-              Expanded(child: items[i]),
-            ],
-          ],
-        );
+      children: [
+        for (var i = 0; i < items.length; i++) ...[
+          if (i > 0) const SizedBox(width: AppSpacing.sm),
+          Expanded(child: items[i]),
+        ],
+      ],
+    );
 
     if (wide) return row(tiles);
 
@@ -177,7 +193,10 @@ class DashboardScreen extends StatelessWidget {
   }
 
   Widget _lastSessionPanel(
-      BuildContext context, WorkoutSession last, List<WorkoutPlan> plans) {
+    BuildContext context,
+    WorkoutSession last,
+    List<WorkoutPlan> plans,
+  ) {
     final index = plans.indexWhere(
       (p) => p.name.toLowerCase() == last.planName.toLowerCase(),
     );
@@ -241,11 +260,7 @@ class DashboardScreen extends StatelessWidget {
     if (!wide) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          left,
-          const SizedBox(height: AppSpacing.lg),
-          right,
-        ],
+        children: [left, const SizedBox(height: AppSpacing.lg), right],
       );
     }
     return Row(
@@ -285,14 +300,18 @@ class _EmptyState extends StatelessWidget {
           children: [
             Text(
               '> NO DATA',
-              style:
-                  GoogleFonts.jetBrainsMono(fontSize: 16, color: textSecondary),
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 16,
+                color: textSecondary,
+              ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'Create a plan and log a workout to fill this in',
-              style:
-                  GoogleFonts.jetBrainsMono(fontSize: 12, color: textSecondary),
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 12,
+                color: textSecondary,
+              ),
             ),
             const SizedBox(height: AppSpacing.xxl),
             // Same as the plans empty state: the copy asks for a plan, so the
@@ -303,7 +322,8 @@ class _EmptyState extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (_) => const PlanEditorScreen.create()),
+                    builder: (_) => const PlanEditorScreen.create(),
+                  ),
                 );
               },
               style: OutlinedButton.styleFrom(
@@ -321,16 +341,21 @@ class _EmptyState extends StatelessWidget {
                 context.read<WorkoutSessionProvider>().loadSessions();
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text('> Sample data loaded!',
-                        style: GoogleFonts.jetBrainsMono(
-                            color: onAccentColor(context))),
+                    content: Text(
+                      '> Sample data loaded!',
+                      style: GoogleFonts.jetBrainsMono(
+                        color: onAccentColor(context),
+                      ),
+                    ),
                     backgroundColor: accentFillColor(context),
                   ),
                 );
               },
               style: TextButton.styleFrom(foregroundColor: textSecondary),
-              child: Text('[LOAD SAMPLE DATA]',
-                  style: GoogleFonts.jetBrainsMono(fontSize: 11)),
+              child: Text(
+                '[LOAD SAMPLE DATA]',
+                style: GoogleFonts.jetBrainsMono(fontSize: 11),
+              ),
             ),
           ],
         ),

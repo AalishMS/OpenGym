@@ -74,7 +74,7 @@ class UnderlineTabStrip extends StatefulWidget {
     required this.color,
     required this.rule,
     this.trailing,
-    this.height = 44,
+    this.height = 48,
     this.maxLabelWidth = 160,
   });
 
@@ -153,6 +153,7 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
 
   @override
   Widget build(BuildContext context) {
+    final height = widget.height < 48 ? 48.0 : widget.height;
     // The mask is unconditional, and the stops do all the work. Wrapping the
     // scroll view only when a fade is needed would swap the widget type at that
     // slot, which discards the scroll view's element — and with it the
@@ -174,40 +175,44 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
             Colors.black,
             Colors.transparent,
           ],
-          stops: [
-            0.0,
-            _fadeStart ? ramp : 0.0,
-            _fadeEnd ? 1 - ramp : 1.0,
-            1.0,
-          ],
+          stops: [0.0, _fadeStart ? ramp : 0.0, _fadeEnd ? 1 - ramp : 1.0, 1.0],
         ).createShader(bounds);
       },
       blendMode: BlendMode.dstIn,
-      child: SingleChildScrollView(
-        controller: _controller,
-        scrollDirection: Axis.horizontal,
-        physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics()),
-        child: Row(
-          // Every tap target fills the strip's full height, so a 22px label
-          // does not mean a 22px hit box in a 44px bar.
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            for (var i = 0; i < widget.tabs.length; i++)
-              _UnderlineTab(
-                key: i == widget.selectedIndex ? _selectedTabKey : null,
-                data: widget.tabs[i],
-                selected: i == widget.selectedIndex,
-                color: widget.color,
-                maxLabelWidth: widget.maxLabelWidth,
+      child: LayoutBuilder(
+        builder:
+            (context, constraints) => SingleChildScrollView(
+              controller: _controller,
+              scrollDirection: Axis.horizontal,
+              physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics(),
               ),
-            if (widget.trailing != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                child: Center(child: widget.trailing!),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                child: Row(
+                  // Every tap target fills the strip's full height, so a 22px
+                  // label does not mean a 22px hit box in a 44px bar.
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < widget.tabs.length; i++)
+                      _UnderlineTab(
+                        key: i == widget.selectedIndex ? _selectedTabKey : null,
+                        data: widget.tabs[i],
+                        selected: i == widget.selectedIndex,
+                        color: widget.color,
+                        maxLabelWidth: widget.maxLabelWidth,
+                      ),
+                    if (widget.trailing != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                        ),
+                        child: Center(child: widget.trailing!),
+                      ),
+                  ],
+                ),
               ),
-          ],
-        ),
+            ),
       ),
     );
 
@@ -216,16 +221,16 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
     // bar's opaque ground and a tap looks like it did nothing.
     return Material(
       color: surfaceColor(context),
-      child: Container(
-        height: widget.height,
+      child: DecoratedBox(
         decoration: BoxDecoration(
           // A single-edge border is a rule, not a box: one unbroken hairline
           // across the full width, and it stays square.
-          border: widget.rule == StripRule.bottom
-              ? Border(bottom: BorderSide(color: borderColor(context)))
-              : Border(top: BorderSide(color: borderColor(context))),
+          border:
+              widget.rule == StripRule.bottom
+                  ? Border(bottom: BorderSide(color: borderColor(context)))
+                  : Border(top: BorderSide(color: borderColor(context))),
         ),
-        child: strip,
+        child: SizedBox(height: height, child: strip),
       ),
     );
   }
@@ -249,53 +254,59 @@ class _UnderlineTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final textSecondary = textSecondaryColor(context);
 
-    return InkWell(
-      onTap: data.onTap,
-      onLongPress: data.onLongPress,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        child: Center(
-          // The underline borders the label, not the full-height cell, so it
-          // spans exactly the text without any intrinsic-width work.
-          child: Container(
-            padding: const EdgeInsets.only(bottom: 6),
-            decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(
-                  color: selected ? color : Colors.transparent,
-                  width: 2,
+    return Semantics(
+      label: data.label,
+      selected: selected,
+      button: data.onTap != null,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: data.onTap,
+        onLongPress: data.onLongPress,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          child: Center(
+            // The underline borders the label, not the full-height cell, so it
+            // spans exactly the text without any intrinsic-width work.
+            child: Container(
+              padding: const EdgeInsets.only(bottom: 6),
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: selected ? color : Colors.transparent,
+                    width: 2,
+                  ),
                 ),
               ),
-            ),
-            child: Row(
-              children: [
-                if (data.index != null) ...[
-                  Text(
-                    data.index!,
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 9,
-                      letterSpacing: 0.08,
-                      color: textSecondary,
+              child: Row(
+                children: [
+                  if (data.index != null) ...[
+                    Text(
+                      data.index!,
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 9,
+                        letterSpacing: 0.08,
+                        color: textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: maxLabelWidth),
+                    child: Text(
+                      data.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11,
+                        letterSpacing: 0.04,
+                        fontWeight:
+                            selected ? FontWeight.bold : FontWeight.normal,
+                        color: selected ? color : textSecondary,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 6),
                 ],
-                ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxLabelWidth),
-                  child: Text(
-                    data.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 11,
-                      letterSpacing: 0.04,
-                      fontWeight:
-                          selected ? FontWeight.bold : FontWeight.normal,
-                      color: selected ? color : textSecondary,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),

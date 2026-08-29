@@ -86,22 +86,107 @@ void main() {
           // The text accent is solved against the worse of the two grounds, so
           // it has to clear 4.5:1 on *both*. This is the assertion light mode
           // used to fail outright: it drew the dark hexes, CYAN at 1.79:1.
-          _expectContrast(scheme.accent, scheme.background,
-              atLeast: 4.5, what: '${accent.name} accent on background');
-          _expectContrast(scheme.accent, scheme.surface,
-              atLeast: 4.5, what: '${accent.name} accent on surface');
+          _expectContrast(
+            scheme.accent,
+            scheme.background,
+            atLeast: 4.5,
+            what: '${accent.name} accent on background',
+          );
+          _expectContrast(
+            scheme.accent,
+            scheme.surface,
+            atLeast: 4.5,
+            what: '${accent.name} accent on surface',
+          );
 
           // A fill only needs its edge to read, but it must read on both grounds
           // too — a filled button sits on the page and inside cards.
-          _expectContrast(scheme.accentFill, scheme.background,
-              atLeast: 3.0, what: '${accent.name} accentFill on background');
+          _expectContrast(
+            scheme.accentFill,
+            scheme.background,
+            atLeast: 3.0,
+            what: '${accent.name} accentFill on background',
+          );
 
           // The pairing that broke on 10 of 14 legacy variants.
-          _expectContrast(scheme.onAccent, scheme.accentFill,
-              atLeast: 4.5, what: '${accent.name} onAccent on accentFill');
+          _expectContrast(
+            scheme.onAccent,
+            scheme.accentFill,
+            atLeast: 4.5,
+            what: '${accent.name} onAccent on accentFill',
+          );
         });
       }
     }
+
+    testWidgets('primary buttons use the solved fill pairing', (tester) async {
+      for (final brightness in Brightness.values) {
+        for (final accent in SettingsProvider.accents) {
+          final context = await _contextFor(tester, accent.seed, brightness);
+          final scheme = Theme.of(context).extension<AppColorScheme>()!;
+          final style = Theme.of(context).elevatedButtonTheme.style!;
+          final background = style.backgroundColor!.resolve({})!;
+          final foreground = style.foregroundColor!.resolve({})!;
+          final label = '${accent.name} / ${brightness.name}';
+
+          expect(
+            background,
+            scheme.accentFill,
+            reason: '$label: primary ground must use accentFill',
+          );
+          expect(
+            foreground,
+            scheme.onAccent,
+            reason: '$label: primary label must use onAccent',
+          );
+          _expectContrast(
+            foreground,
+            background,
+            atLeast: 4.5,
+            what: '$label primary label on ground',
+          );
+        }
+      }
+    });
+  });
+
+  group('header mesh', () {
+    testWidgets('tones are the accent plus two analogous neighbours', (
+      tester,
+    ) async {
+      for (final brightness in Brightness.values) {
+        for (final accent in SettingsProvider.accents) {
+          final context = await _contextFor(tester, accent.seed, brightness);
+          final tones = headerMeshTones(context);
+          final label = '${accent.name} / ${brightness.name}';
+
+          expect(
+            tones,
+            hasLength(3),
+            reason: '$label: accent + two neighbours',
+          );
+          expect(
+            tones.first,
+            accentMutedColor(context),
+            reason: '$label: mesh must use the solved accentMuted wash',
+          );
+
+          final baseChroma = oklchOf(tones.first).c;
+          for (final neighbour in tones.skip(1)) {
+            expect(
+              neighbour.a,
+              1.0,
+              reason: '$label: blob tones must be opaque',
+            );
+            expect(
+              oklchOf(neighbour).c,
+              lessThanOrEqualTo(baseChroma + 0.02),
+              reason: '$label: neighbour is more chromatic than the base',
+            );
+          }
+        }
+      }
+    });
   });
 
   group('neutrals separate', () {
@@ -110,8 +195,10 @@ void main() {
     // coupling. One representative accent is enough to state the targets.
     for (final brightness in Brightness.values) {
       test('surface, border and text / ${brightness.name}', () {
-        final scheme =
-            deriveColorScheme(SettingsProvider.accents.first.seed, brightness);
+        final scheme = deriveColorScheme(
+          SettingsProvider.accents.first.seed,
+          brightness,
+        );
         final isDark = brightness == Brightness.dark;
 
         // A card's fill is a perceptual step off the page rather than a contrast
@@ -122,7 +209,8 @@ void main() {
         expect(
           lift,
           closeTo(isDark ? 0.075 : 0.061, 0.002),
-          reason: 'card fill sits ${lift.toStringAsFixed(3)} off the page in '
+          reason:
+              'card fill sits ${lift.toStringAsFixed(3)} off the page in '
               '${brightness.name} mode',
         );
 
@@ -130,18 +218,34 @@ void main() {
         // replaced was cards at 1.10:1 dark / 1.08:1 light — invisible. Keeping
         // the old metric as a floor means no future change of metric can quietly
         // land back there.
-        _expectContrast(scheme.surface, scheme.background,
-            atLeast: 1.15, what: 'surface on background');
+        _expectContrast(
+          scheme.surface,
+          scheme.background,
+          atLeast: 1.15,
+          what: 'surface on background',
+        );
 
         // The border is still solved as a ratio: it is a line to be *seen*, and
         // at 3:1 it is also what makes an unfilled text field findable
         // (WCAG 1.4.11), since `inputDecorationTheme` draws it.
-        _expectContrast(scheme.border, scheme.surface,
-            atLeast: isDark ? 3.0 : 1.90, what: 'border on surface');
-        _expectContrast(scheme.textPrimary, scheme.background,
-            atLeast: 13.0, what: 'textPrimary on background');
-        _expectContrast(scheme.textSecondary, scheme.surface,
-            atLeast: 4.5, what: 'textSecondary on surface');
+        _expectContrast(
+          scheme.border,
+          scheme.surface,
+          atLeast: isDark ? 3.0 : 1.90,
+          what: 'border on surface',
+        );
+        _expectContrast(
+          scheme.textPrimary,
+          scheme.background,
+          atLeast: 13.0,
+          what: 'textPrimary on background',
+        );
+        _expectContrast(
+          scheme.textSecondary,
+          scheme.surface,
+          atLeast: 4.5,
+          what: 'textSecondary on surface',
+        );
       });
     }
 
@@ -152,8 +256,10 @@ void main() {
       // on a black page, tiled across the whole workout screen. Whatever the
       // targets become, the two modes have to stay comparable to the eye.
       double liftFor(Brightness brightness) {
-        final scheme =
-            deriveColorScheme(SettingsProvider.accents.first.seed, brightness);
+        final scheme = deriveColorScheme(
+          SettingsProvider.accents.first.seed,
+          brightness,
+        );
         return (oklchOf(scheme.surface).l - oklchOf(scheme.background).l).abs();
       }
 
@@ -162,7 +268,8 @@ void main() {
       expect(
         math.max(dark, light) / math.min(dark, light),
         lessThan(1.5),
-        reason: 'card lift is ${dark.toStringAsFixed(3)} dark vs '
+        reason:
+            'card lift is ${dark.toStringAsFixed(3)} dark vs '
             '${light.toStringAsFixed(3)} light',
       );
     });
@@ -171,20 +278,28 @@ void main() {
   group('semantic colours are legible as text and as grounds', () {
     for (final brightness in Brightness.values) {
       test('error and success / ${brightness.name}', () {
-        final scheme =
-            deriveColorScheme(SettingsProvider.accents.first.seed, brightness);
+        final scheme = deriveColorScheme(
+          SettingsProvider.accents.first.seed,
+          brightness,
+        );
 
-        for (final entry in {
-          'error': scheme.error,
-          'success': scheme.success,
-        }.entries) {
+        for (final entry
+            in {'error': scheme.error, 'success': scheme.success}.entries) {
           // Read as text on a card…
-          _expectContrast(entry.value, scheme.surface,
-              atLeast: 4.5, what: '${entry.key} on surface');
+          _expectContrast(
+            entry.value,
+            scheme.surface,
+            atLeast: 4.5,
+            what: '${entry.key} on surface',
+          );
           // …and carry a label when used as a ground, which both are (a filled
           // delete button, the [PR] badge).
-          _expectContrast(onColor(entry.value), entry.value,
-              atLeast: 4.5, what: 'onColor(${entry.key}) on ${entry.key}');
+          _expectContrast(
+            onColor(entry.value),
+            entry.value,
+            atLeast: 4.5,
+            what: 'onColor(${entry.key}) on ${entry.key}',
+          );
         }
       });
     }
@@ -209,7 +324,8 @@ void main() {
             expect(
               step,
               greaterThan(previous),
-              reason: '${accent.name} ${brightness.name}: heatmap step $i '
+              reason:
+                  '${accent.name} ${brightness.name}: heatmap step $i '
                   '(${step.toStringAsFixed(2)}:1) does not exceed step '
                   '${i - 1} (${previous.toStringAsFixed(2)}:1)',
             );
@@ -221,10 +337,14 @@ void main() {
 
   group('plan colours', () {
     for (final brightness in Brightness.values) {
-      testWidgets('all ${kPlanColors.length} slots / ${brightness.name}',
-          (tester) async {
+      testWidgets('all ${kPlanColors.length} slots / ${brightness.name}', (
+        tester,
+      ) async {
         final context = await _contextFor(
-            tester, SettingsProvider.accents.first.seed, brightness);
+          tester,
+          SettingsProvider.accents.first.seed,
+          brightness,
+        );
         final surface = surfaceColor(context);
 
         for (var slot = 0; slot < kPlanColors.length; slot++) {
@@ -232,25 +352,40 @@ void main() {
           // Plan colours label cards and draw stripes on them. All ten used to
           // score 1.53–3.44 on the light background because there were no light
           // variants at all.
-          _expectContrast(resolved, surface,
-              atLeast: 4.5, what: 'plan slot $slot on surface');
-          _expectContrast(onColor(resolved), resolved,
-              atLeast: 4.5, what: 'onColor(plan slot $slot) on itself');
+          _expectContrast(
+            resolved,
+            surface,
+            atLeast: 4.5,
+            what: 'plan slot $slot on surface',
+          );
+          _expectContrast(
+            onColor(resolved),
+            resolved,
+            atLeast: 4.5,
+            what: 'onColor(plan slot $slot) on itself',
+          );
         }
       });
 
-      testWidgets('stored values map back to a slot / ${brightness.name}',
-          (tester) async {
+      testWidgets('stored values map back to a slot / ${brightness.name}', (
+        tester,
+      ) async {
         final context = await _contextFor(
-            tester, SettingsProvider.accents.first.seed, brightness);
+          tester,
+          SettingsProvider.accents.first.seed,
+          brightness,
+        );
 
         // Plans persist a raw ARGB value, so a legacy hex has to land on the
         // nearest hue rather than needing a Hive migration. Every value the
         // picker can write must round-trip to the slot that wrote it, or the
         // picker stops highlighting the user's own choice.
         for (var slot = 0; slot < kPlanColors.length; slot++) {
-          expect(planSlotOf(kPlanColors[slot]), slot,
-              reason: 'slot $slot did not round-trip through planSlotOf');
+          expect(
+            planSlotOf(kPlanColors[slot]),
+            slot,
+            reason: 'slot $slot did not round-trip through planSlotOf',
+          );
         }
 
         // A null plan colour means "inherit the accent", not "transparent".
@@ -261,34 +396,47 @@ void main() {
 
   group('the RPE ramp', () {
     for (final brightness in Brightness.values) {
-      testWidgets('every step is legible / ${brightness.name}',
-          (tester) async {
+      testWidgets('every step is legible / ${brightness.name}', (tester) async {
         final context = await _contextFor(
-            tester, SettingsProvider.accents.first.seed, brightness);
+          tester,
+          SettingsProvider.accents.first.seed,
+          brightness,
+        );
         final surface = surfaceColor(context);
 
         // All six RPE values, not just the six distinct steps: the thresholds
         // are part of the contract.
         for (var rpe = 1; rpe <= 10; rpe++) {
-          _expectContrast(rpeColor(rpe, context), surface,
-              atLeast: 4.5, what: 'RPE $rpe on surface');
+          _expectContrast(
+            rpeColor(rpe, context),
+            surface,
+            atLeast: 4.5,
+            what: 'RPE $rpe on surface',
+          );
         }
       });
 
-      testWidgets('reads as a progression of hue / ${brightness.name}',
-          (tester) async {
+      testWidgets('reads as a progression of hue / ${brightness.name}', (
+        tester,
+      ) async {
         final context = await _contextFor(
-            tester, SettingsProvider.accents.first.seed, brightness);
+          tester,
+          SettingsProvider.accents.first.seed,
+          brightness,
+        );
 
         // The ramp's meaning is carried by hue. Distinct tones for distinct
         // bands is the minimum: six shades of pale (which is what light mode
         // used to show) conveys nothing.
         final distinct = {
           for (final rpe in [1, 3, 5, 7, 9, 10])
-            rpeColor(rpe, context).toARGB32()
+            rpeColor(rpe, context).toARGB32(),
         };
-        expect(distinct.length, 6,
-            reason: 'RPE bands collapsed into ${distinct.length} colours');
+        expect(
+          distinct.length,
+          6,
+          reason: 'RPE bands collapsed into ${distinct.length} colours',
+        );
       });
     }
   });
@@ -331,10 +479,14 @@ void main() {
         final scheme = deriveColorScheme(accent.seed, Brightness.light);
         final wrong = contrastRatio(scheme.onAccent, scheme.accent);
         final right = contrastRatio(scheme.onAccent, scheme.accentFill);
-        expect(wrong, lessThan(4.5),
-            reason: '${accent.name}: onAccent on accent scored '
-                '${wrong.toStringAsFixed(2)}:1 — if this now passes, the ban '
-                'below is obsolete and should be reconsidered, not deleted');
+        expect(
+          wrong,
+          lessThan(4.5),
+          reason:
+              '${accent.name}: onAccent on accent scored '
+              '${wrong.toStringAsFixed(2)}:1 — if this now passes, the ban '
+              'below is obsolete and should be reconsidered, not deleted',
+        );
         expect(right, greaterThan(wrong));
       }
     });
@@ -360,8 +512,9 @@ void main() {
           // it. Look ahead for the foreground the same widget declares — far
           // enough to clear a `BoxDecoration`'s border and radius, close enough
           // not to reach the next widget.
-          final window =
-              lines.sublist(i, (i + 12).clamp(0, lines.length)).join('\n');
+          final window = lines
+              .sublist(i, (i + 12).clamp(0, lines.length))
+              .join('\n');
           if (window.contains('onAccentColor(context)')) {
             offenders.add('${file.path}:${i + 1}: ${lines[i].trim()}');
           }
@@ -371,7 +524,8 @@ void main() {
       expect(
         offenders,
         isEmpty,
-        reason: 'These sites pair an `accent` ground with an `onAccent` '
+        reason:
+            'These sites pair an `accent` ground with an `onAccent` '
             'foreground. Use `accentFillColor(context)` as the ground:\n'
             '${offenders.join('\n')}',
       );
@@ -412,8 +566,11 @@ void main() {
         return false;
       }
 
-      expect(flags(violation), isTrue,
-          reason: 'the scan no longer detects the bug it was written for');
+      expect(
+        flags(violation),
+        isTrue,
+        reason: 'the scan no longer detects the bug it was written for',
+      );
       for (final source in allowed) {
         expect(flags(source), isFalse, reason: 'false positive on: $source');
       }
@@ -435,9 +592,10 @@ void main() {
     };
 
     /// The rule this replaced: white on anything darker than mid-luminance.
-    Color oldRule(Color ground) => ground.computeLuminance() > 0.5
-        ? const Color(0xFF000000)
-        : const Color(0xFFFFFFFF);
+    Color oldRule(Color ground) =>
+        ground.computeLuminance() > 0.5
+            ? const Color(0xFF000000)
+            : const Color(0xFFFFFFFF);
 
     test('never scores worse, and fixes 10 of the 14 variants', () {
       var improved = 0;
@@ -445,10 +603,14 @@ void main() {
         for (final variant in variants) {
           final now = contrastRatio(bestForeground(variant), variant);
           final before = contrastRatio(oldRule(variant), variant);
-          expect(now, greaterThanOrEqualTo(before),
-              reason: '$name ${variant.toARGB32().toRadixString(16)}: '
-                  'bestForeground (${now.toStringAsFixed(2)}) is worse than '
-                  'the old rule (${before.toStringAsFixed(2)})');
+          expect(
+            now,
+            greaterThanOrEqualTo(before),
+            reason:
+                '$name ${variant.toARGB32().toRadixString(16)}: '
+                'bestForeground (${now.toStringAsFixed(2)}) is worse than '
+                'the old rule (${before.toStringAsFixed(2)})',
+          );
           if (now > before) improved++;
         }
       });
@@ -477,8 +639,10 @@ void main() {
       // which is why `onColor` can be a total function with no fallback.
       for (var v = 0; v < 256; v += 5) {
         final grey = Color.fromARGB(255, v, v, v);
-        expect(contrastRatio(bestForeground(grey), grey),
-            greaterThanOrEqualTo(4.5));
+        expect(
+          contrastRatio(bestForeground(grey), grey),
+          greaterThanOrEqualTo(4.5),
+        );
       }
     });
   });

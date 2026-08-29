@@ -15,16 +15,15 @@ class HistoryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor(context);
-
     return Scaffold(
       backgroundColor: backgroundColor(context),
       appBar: AppBar(
         backgroundColor: surfaceColor(context),
         title: Text(
-          '> WORKOUT HISTORY',
-          style: GoogleFonts.jetBrainsMono(
-              fontSize: 16, fontWeight: FontWeight.bold, color: accent),
+          'WORKOUT HISTORY',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(color: textPrimaryColor(context)),
         ),
         automaticallyImplyLeading: false,
       ),
@@ -61,77 +60,89 @@ class HistoryScreen extends StatelessWidget {
             itemBuilder: (context, index) {
               final session = provider.sessions[index];
               return _SessionCard(
+                key: ValueKey(
+                  session.id ?? session.key ?? 'session-index-$index',
+                ),
                 session: session,
                 index: index,
                 onDelete: () {
                   showDialog(
                     context: context,
-                    builder: (ctx) => Dialog(
-                      backgroundColor: surfaceColor(context),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: AppRadius.card,
-                        side: BorderSide(color: borderColor(context), width: 1),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '> DELETE WORKOUT?',
-                              style: GoogleFonts.jetBrainsMono(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: errorColor(context),
-                              ),
+                    builder:
+                        (ctx) => Dialog(
+                          backgroundColor: surfaceColor(context),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: AppRadius.card,
+                            side: BorderSide(
+                              color: borderColor(context),
+                              width: 1,
                             ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'This will permanently delete this workout session.',
-                              style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 12,
-                                  color: textSecondaryColor(context)),
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx),
-                                  child: Text('[CANCEL]',
-                                      style: GoogleFonts.jetBrainsMono(
-                                          color: textSecondaryColor(context))),
-                                ),
-                                const SizedBox(width: 8),
-                                ElevatedButton(
-                                  onPressed: () {
-                                    provider.deleteSession(session.id!);
-                                    Navigator.pop(ctx);
-                                  },
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: errorColor(context),
-                                    foregroundColor:
-                                        onColor(errorColor(context)),
+                                Text(
+                                  '> DELETE WORKOUT?',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: errorColor(context),
                                   ),
-                                  child: Text('[DELETE]',
-                                      style: GoogleFonts.jetBrainsMono()),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'This will permanently delete this workout session.',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 12,
+                                    color: textSecondaryColor(context),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.end,
+                                  children: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: Text(
+                                        '[CANCEL]',
+                                        style: GoogleFonts.jetBrainsMono(
+                                          color: textSecondaryColor(context),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    ElevatedButton(
+                                      onPressed: () {
+                                        provider.deleteSession(session.id!);
+                                        Navigator.pop(ctx);
+                                      },
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: errorColor(context),
+                                        foregroundColor: onColor(
+                                          errorColor(context),
+                                        ),
+                                      ),
+                                      child: Text(
+                                        '[DELETE]',
+                                        style: GoogleFonts.jetBrainsMono(),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                    ),
                   );
                 },
                 onEdit: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => EditSessionScreen(
-                        session: session,
-                      ),
+                      builder: (_) => EditSessionScreen(session: session),
                     ),
                   );
                 },
@@ -151,6 +162,7 @@ class _SessionCard extends StatefulWidget {
   final VoidCallback onEdit;
 
   const _SessionCard({
+    super.key,
     required this.session,
     required this.index,
     required this.onDelete,
@@ -210,7 +222,9 @@ class _SessionCardState extends State<_SessionCard> {
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 2),
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           border: Border.all(color: accent),
                           borderRadius: AppRadius.chip,
@@ -218,14 +232,18 @@ class _SessionCardState extends State<_SessionCard> {
                         child: Text(
                           '${session.date.day}/${session.date.month}/${session.date.year}',
                           style: GoogleFonts.jetBrainsMono(
-                              fontSize: 10, color: accent),
+                            fontSize: 10,
+                            color: accent,
+                          ),
                         ),
                       ),
                       if (hasPR) ...[
                         const SizedBox(width: 8),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             // A PR is the log's one celebratory event — the
                             // "good" end of the semantic ramp, solved per mode,
@@ -236,33 +254,54 @@ class _SessionCardState extends State<_SessionCard> {
                           child: Text(
                             '[PR]',
                             style: GoogleFonts.jetBrainsMono(
-                                fontSize: 10,
-                                color: onColor(successColor(context))),
+                              fontSize: 10,
+                              color: onColor(successColor(context)),
+                            ),
                           ),
                         ),
                       ],
                       const Spacer(),
-                      InkWell(
-                        onTap: widget.onEdit,
-                        splashColor: accent.withValues(alpha: 0.2),
-                        highlightColor: accent.withValues(alpha: 0.1),
-                        child: Text('[EDIT]',
-                            style: GoogleFonts.jetBrainsMono(
-                                fontSize: 10, color: accent)),
-                      ),
-                      const SizedBox(width: 8),
-                      InkWell(
-                        onTap: widget.onDelete,
-                        splashColor: errorColor(context).withValues(alpha: 0.2),
-                        highlightColor:
-                            errorColor(context).withValues(alpha: 0.1),
-                        child: Text('[DEL]',
-                            style: GoogleFonts.jetBrainsMono(
-                                fontSize: 10, color: errorColor(context))),
+                      PopupMenuButton<String>(
+                        tooltip: 'Session actions',
+                        onSelected: (value) {
+                          if (value == 'edit') widget.onEdit();
+                          if (value == 'delete') widget.onDelete();
+                        },
+                        itemBuilder:
+                            (context) => [
+                              PopupMenuItem(
+                                value: 'edit',
+                                height: 48,
+                                child: Text(
+                                  '[EDIT]',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: accent,
+                                    letterSpacing: 0.06,
+                                  ),
+                                ),
+                              ),
+                              PopupMenuItem(
+                                value: 'delete',
+                                height: 48,
+                                child: Text(
+                                  '[DELETE]',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                    color: error,
+                                    letterSpacing: 0.06,
+                                  ),
+                                ),
+                              ),
+                            ],
                       ),
                       const SizedBox(width: 8),
                       Icon(
-                        _isExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
+                        _isExpanded
+                            ? LucideIcons.chevronUp
+                            : LucideIcons.chevronDown,
                         color: textSecondaryColor(context),
                         size: 20,
                       ),
@@ -271,14 +310,15 @@ class _SessionCardState extends State<_SessionCard> {
                   const SizedBox(height: 8),
                   Text(
                     session.planName.toUpperCase(),
-                    style: GoogleFonts.jetBrainsMono(
-                        fontSize: 14, fontWeight: FontWeight.bold),
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     'WEEK ${session.weekNumber}  •  ${session.exercises.length} EXERCISES  •  $totalSets SETS  •  ${totalVolume}KG',
                     style: GoogleFonts.jetBrainsMono(
-                        fontSize: 10, color: textSecondaryColor(context)),
+                      fontSize: 10,
+                      color: textSecondaryColor(context),
+                    ),
                   ),
                 ],
               ),
@@ -292,17 +332,20 @@ class _SessionCardState extends State<_SessionCard> {
   }
 
   Widget _buildExpandedContent(
-      WorkoutSession session, Color accent, Color border, Color textSecondary) {
+    WorkoutSession session,
+    Color accent,
+    Color border,
+    Color textSecondary,
+  ) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: border)),
-      ),
+      decoration: BoxDecoration(border: Border(top: BorderSide(color: border))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ...session.exercises.map((exercise) =>
-              _ExerciseSection(exercise: exercise, accent: accent)),
+          ...session.exercises.map(
+            (exercise) => _ExerciseSection(exercise: exercise, accent: accent),
+          ),
         ],
       ),
     );
@@ -328,13 +371,16 @@ class _ExerciseSection extends StatelessWidget {
                 child: Text(
                   exercise.name.toUpperCase(),
                   style: GoogleFonts.jetBrainsMono(
-                      fontSize: 12, fontWeight: FontWeight.bold),
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               if (exercise.note != null)
-                Text('[NOTE]',
-                    style:
-                        GoogleFonts.jetBrainsMono(fontSize: 10, color: accent)),
+                Text(
+                  '[NOTE]',
+                  style: GoogleFonts.jetBrainsMono(fontSize: 10, color: accent),
+                ),
             ],
           ),
           if (exercise.note != null)
@@ -343,7 +389,9 @@ class _ExerciseSection extends StatelessWidget {
               child: Text(
                 exercise.note!,
                 style: GoogleFonts.jetBrainsMono(
-                    fontSize: 10, color: textSecondaryColor(context)),
+                  fontSize: 10,
+                  color: textSecondaryColor(context),
+                ),
               ),
             ),
           const SizedBox(height: 8),
@@ -357,7 +405,9 @@ class _ExerciseSection extends StatelessWidget {
                   Text(
                     'SET ${setIndex + 1}:',
                     style: GoogleFonts.jetBrainsMono(
-                        fontSize: 10, color: textSecondaryColor(context)),
+                      fontSize: 10,
+                      color: textSecondaryColor(context),
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -368,7 +418,9 @@ class _ExerciseSection extends StatelessWidget {
                     const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 4, vertical: 1),
+                        horizontal: 4,
+                        vertical: 1,
+                      ),
                       decoration: BoxDecoration(
                         border: Border.all(color: borderColor(context)),
                         borderRadius: AppRadius.chip,
@@ -392,10 +444,7 @@ class _ExerciseSection extends StatelessWidget {
 class EditSessionScreen extends StatefulWidget {
   final WorkoutSession session;
 
-  const EditSessionScreen({
-    super.key,
-    required this.session,
-  });
+  const EditSessionScreen({super.key, required this.session});
 
   @override
   State<EditSessionScreen> createState() => _EditSessionScreenState();
@@ -432,8 +481,10 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
     Navigator.pop(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('> Workout updated!',
-            style: GoogleFonts.jetBrainsMono(color: onAccentColor(context))),
+        content: Text(
+          '> Workout updated!',
+          style: GoogleFonts.jetBrainsMono(color: onAccentColor(context)),
+        ),
         backgroundColor: accentFillColor(context),
       ),
     );
@@ -446,10 +497,14 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
       backgroundColor: backgroundColor(context),
       appBar: AppBar(
         backgroundColor: surfaceColor(context),
+        flexibleSpace: headerFlexibleSpace(context),
         title: Text(
           '> EDIT WORKOUT',
           style: GoogleFonts.jetBrainsMono(
-              fontSize: 16, fontWeight: FontWeight.bold, color: accent),
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: accent,
+          ),
         ),
         leading: IconButton(
           icon: Icon(LucideIcons.arrowLeft, color: accent),
@@ -460,8 +515,10 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
             onTap: _save,
             child: Container(
               padding: const EdgeInsets.all(12),
-              child: Text('[SAVE]',
-                  style: GoogleFonts.jetBrainsMono(color: accent)),
+              child: Text(
+                '[SAVE]',
+                style: GoogleFonts.jetBrainsMono(color: accent),
+              ),
             ),
           ),
         ],
@@ -480,7 +537,10 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
           Text(
             'EXERCISES',
             style: GoogleFonts.jetBrainsMono(
-                fontSize: 12, fontWeight: FontWeight.bold, color: accent),
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: accent,
+            ),
           ),
           const SizedBox(height: 8),
           ..._session.exercises.asMap().entries.map((entry) {
@@ -502,7 +562,9 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                       children: [
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 2),
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             border: Border.all(color: accent),
                             borderRadius: AppRadius.badge,
@@ -510,7 +572,9 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                           child: Text(
                             '[${index + 1}]',
                             style: GoogleFonts.jetBrainsMono(
-                                fontSize: 10, color: accent),
+                              fontSize: 10,
+                              color: accent,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -518,18 +582,26 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                           child: Text(
                             exercise.name.toUpperCase(),
                             style: GoogleFonts.jetBrainsMono(
-                                fontSize: 12, fontWeight: FontWeight.bold),
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         InkWell(
                           onTap: () => _removeExercise(index),
-                          splashColor:
-                              errorColor(context).withValues(alpha: 0.2),
-                          highlightColor:
-                              errorColor(context).withValues(alpha: 0.1),
-                          child: Text('[DEL]',
-                              style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 10, color: errorColor(context))),
+                          splashColor: errorColor(
+                            context,
+                          ).withValues(alpha: 0.2),
+                          highlightColor: errorColor(
+                            context,
+                          ).withValues(alpha: 0.1),
+                          child: Text(
+                            '[DEL]',
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 10,
+                              color: errorColor(context),
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -539,7 +611,9 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                         child: Text(
                           exercise.note!,
                           style: GoogleFonts.jetBrainsMono(
-                              fontSize: 10, color: textSecondaryColor(context)),
+                            fontSize: 10,
+                            color: textSecondaryColor(context),
+                          ),
                         ),
                       ),
                     const SizedBox(height: 8),
@@ -553,8 +627,9 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                             Text(
                               'SET ${setIndex + 1}:',
                               style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 10,
-                                  color: textSecondaryColor(context)),
+                                fontSize: 10,
+                                color: textSecondaryColor(context),
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Text(
@@ -563,13 +638,18 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                             ),
                             const Spacer(),
                             InkWell(
-                              onTap: () =>
-                                  _showEditSetDialog(index, setIndex, set),
+                              onTap:
+                                  () =>
+                                      _showEditSetDialog(index, setIndex, set),
                               splashColor: accent.withValues(alpha: 0.2),
                               highlightColor: accent.withValues(alpha: 0.1),
-                              child: Text('[EDIT]',
-                                  style: GoogleFonts.jetBrainsMono(
-                                      fontSize: 10, color: accent)),
+                              child: Text(
+                                '[EDIT]',
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 10,
+                                  color: accent,
+                                ),
+                              ),
                             ),
                           ],
                         ),
@@ -580,9 +660,13 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                       onTap: () => _showAddSetDialog(index, exercise),
                       splashColor: accent.withValues(alpha: 0.2),
                       highlightColor: accent.withValues(alpha: 0.1),
-                      child: Text('[+ ADD SET]',
-                          style: GoogleFonts.jetBrainsMono(
-                              fontSize: 10, color: accent)),
+                      child: Text(
+                        '[+ ADD SET]',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 10,
+                          color: accent,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -601,79 +685,92 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
 
     showDialog(
       context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context), width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> ADD SET',
-                style: GoogleFonts.jetBrainsMono(
-                    fontSize: 16, fontWeight: FontWeight.bold, color: accent),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: weightController,
-                decoration: const InputDecoration(labelText: 'Weight (kg)'),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: repsController,
-                decoration: const InputDecoration(labelText: 'Reps'),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+      builder:
+          (ctx) => Dialog(
+            backgroundColor: surfaceColor(context),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.card,
+              side: BorderSide(color: borderColor(context), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: Text('[CANCEL]',
-                        style: GoogleFonts.jetBrainsMono(
-                            color: textSecondaryColor(context))),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      final weight = double.tryParse(weightController.text);
-                      final reps = int.tryParse(repsController.text);
-                      if (weight != null && reps != null) {
-                        final newSet = gym.Set(reps: reps, weight: weight);
-                        final updatedExercises =
-                            List<Exercise>.from(_session.exercises);
-                        updatedExercises[exerciseIndex] = Exercise(
-                          name: exercise.name,
-                          sets: [...exercise.sets, newSet],
-                          note: exercise.note,
-                        );
-                        setState(() {
-                          _session =
-                              _session.copyWith(exercises: updatedExercises);
-                        });
-                        Navigator.pop(ctx);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentFillColor(context),
-                      foregroundColor: onAccentColor(context),
+                  Text(
+                    '> ADD SET',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: accent,
                     ),
-                    child: Text('[ADD]', style: GoogleFonts.jetBrainsMono()),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: weightController,
+                    decoration: const InputDecoration(labelText: 'Weight (kg)'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: repsController,
+                    decoration: const InputDecoration(labelText: 'Reps'),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: Text(
+                          '[CANCEL]',
+                          style: GoogleFonts.jetBrainsMono(
+                            color: textSecondaryColor(context),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          final weight = double.tryParse(weightController.text);
+                          final reps = int.tryParse(repsController.text);
+                          if (weight != null && reps != null) {
+                            final newSet = gym.Set(reps: reps, weight: weight);
+                            final updatedExercises = List<Exercise>.from(
+                              _session.exercises,
+                            );
+                            updatedExercises[exerciseIndex] = Exercise(
+                              name: exercise.name,
+                              sets: [...exercise.sets, newSet],
+                              note: exercise.note,
+                            );
+                            setState(() {
+                              _session = _session.copyWith(
+                                exercises: updatedExercises,
+                              );
+                            });
+                            Navigator.pop(ctx);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentFillColor(context),
+                          foregroundColor: onAccentColor(context),
+                        ),
+                        child: Text(
+                          '[ADD]',
+                          style: GoogleFonts.jetBrainsMono(),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 
@@ -685,114 +782,138 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
 
     showDialog(
       context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context), width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> EDIT SET',
-                style: GoogleFonts.jetBrainsMono(
-                    fontSize: 16, fontWeight: FontWeight.bold, color: accent),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: weightController,
-                decoration: const InputDecoration(labelText: 'Weight (kg)'),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: repsController,
-                decoration: const InputDecoration(labelText: 'Reps'),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: noteController,
-                decoration: const InputDecoration(labelText: 'Note'),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      builder:
+          (ctx) => Dialog(
+            backgroundColor: surfaceColor(context),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.card,
+              side: BorderSide(color: borderColor(context), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  TextButton(
-                    onPressed: () {
-                      final exercises = List<Exercise>.from(_session.exercises);
-                      final exercise = exercises[exerciseIndex];
-                      final sets = List<gym.Set>.from(exercise.sets)
-                        ..removeAt(setIndex);
-                      exercises[exerciseIndex] = Exercise(
-                          name: exercise.name, sets: sets, note: exercise.note);
-                      setState(() {
-                        _session = _session.copyWith(exercises: exercises);
-                      });
-                      Navigator.pop(ctx);
-                    },
-                    child: Text('[DELETE]',
-                        style: GoogleFonts.jetBrainsMono(
-                            color: errorColor(context))),
+                  Text(
+                    '> EDIT SET',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: accent,
+                    ),
                   ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: weightController,
+                    decoration: const InputDecoration(labelText: 'Weight (kg)'),
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: repsController,
+                    decoration: const InputDecoration(labelText: 'Reps'),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: noteController,
+                    decoration: const InputDecoration(labelText: 'Note'),
+                  ),
+                  const SizedBox(height: 16),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: Text('[CANCEL]',
-                            style: GoogleFonts.jetBrainsMono(
-                                color: textSecondaryColor(context))),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
                         onPressed: () {
-                          final weight = double.tryParse(weightController.text);
-                          final reps = int.tryParse(repsController.text);
-                          if (weight != null && reps != null) {
-                            final exercises =
-                                List<Exercise>.from(_session.exercises);
-                            final exercise = exercises[exerciseIndex];
-                            final sets = List<gym.Set>.from(exercise.sets);
-                            sets[setIndex] = gym.Set(
-                              reps: reps,
-                              weight: weight,
-                              rpe: set.rpe,
-                              note: noteController.text.isNotEmpty
-                                  ? noteController.text
-                                  : null,
-                            );
-                            exercises[exerciseIndex] = Exercise(
-                                name: exercise.name,
-                                sets: sets,
-                                note: exercise.note);
-                            setState(() {
-                              _session =
-                                  _session.copyWith(exercises: exercises);
-                            });
-                            Navigator.pop(ctx);
-                          }
+                          final exercises = List<Exercise>.from(
+                            _session.exercises,
+                          );
+                          final exercise = exercises[exerciseIndex];
+                          final sets = List<gym.Set>.from(exercise.sets)
+                            ..removeAt(setIndex);
+                          exercises[exerciseIndex] = Exercise(
+                            name: exercise.name,
+                            sets: sets,
+                            note: exercise.note,
+                          );
+                          setState(() {
+                            _session = _session.copyWith(exercises: exercises);
+                          });
+                          Navigator.pop(ctx);
                         },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accentFillColor(context),
-                          foregroundColor: onAccentColor(context),
+                        child: Text(
+                          '[DELETE]',
+                          style: GoogleFonts.jetBrainsMono(
+                            color: errorColor(context),
+                          ),
                         ),
-                        child:
-                            Text('[SAVE]', style: GoogleFonts.jetBrainsMono()),
+                      ),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: Text(
+                              '[CANCEL]',
+                              style: GoogleFonts.jetBrainsMono(
+                                color: textSecondaryColor(context),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () {
+                              final weight = double.tryParse(
+                                weightController.text,
+                              );
+                              final reps = int.tryParse(repsController.text);
+                              if (weight != null && reps != null) {
+                                final exercises = List<Exercise>.from(
+                                  _session.exercises,
+                                );
+                                final exercise = exercises[exerciseIndex];
+                                final sets = List<gym.Set>.from(exercise.sets);
+                                sets[setIndex] = gym.Set(
+                                  reps: reps,
+                                  weight: weight,
+                                  rpe: set.rpe,
+                                  note:
+                                      noteController.text.isNotEmpty
+                                          ? noteController.text
+                                          : null,
+                                );
+                                exercises[exerciseIndex] = Exercise(
+                                  name: exercise.name,
+                                  sets: sets,
+                                  note: exercise.note,
+                                );
+                                setState(() {
+                                  _session = _session.copyWith(
+                                    exercises: exercises,
+                                  );
+                                });
+                                Navigator.pop(ctx);
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: accentFillColor(context),
+                              foregroundColor: onAccentColor(context),
+                            ),
+                            child: Text(
+                              '[SAVE]',
+                              style: GoogleFonts.jetBrainsMono(),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 }
