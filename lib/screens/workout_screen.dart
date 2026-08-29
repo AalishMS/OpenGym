@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
+import '../data/plan_colors.dart';
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
 import '../models/exercise.dart';
@@ -34,6 +35,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   List<int> _weeks = [1];
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};
+  final Set<gym.Set> _touchedSets = {};
 
   @override
   void initState() {
@@ -58,10 +60,21 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   void _loadSessionForCurrentWeek() {
     final week = _weeks[_currentWeekIndex];
-    final existingSession =
-        HiveService.getSessionForPlanAndWeek(widget.plan.name, week);
+    final existingSession = HiveService.getSessionForPlanAndWeek(
+      widget.plan.name,
+      week,
+    );
     if (existingSession != null) {
       _weekSessions[week] = existingSession;
+      _reconcileTouched(existingSession);
+    }
+  }
+
+  void _reconcileTouched(WorkoutSession session) {
+    for (final exercise in session.exercises) {
+      for (final set in exercise.sets) {
+        if (set.reps != 0 || set.weight != 0) _touchedSets.add(set);
+      }
     }
   }
 
@@ -161,20 +174,26 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         return WorkoutSession(
           date: DateTime.now(),
           planName: widget.plan.name,
-          exercises: prevSession.exercises
-              .map((prevExercise) => Exercise(
-                    name: prevExercise.name,
-                    sets: prevExercise.sets
-                        .map((s) => gym.Set(
-                              reps: s.reps,
-                              weight: s.weight,
-                              rpe: s.rpe,
-                              note: s.note,
-                            ))
-                        .toList(),
-                    note: prevExercise.note,
-                  ))
-              .toList(),
+          exercises:
+              prevSession.exercises
+                  .map(
+                    (prevExercise) => Exercise(
+                      name: prevExercise.name,
+                      sets:
+                          prevExercise.sets
+                              .map(
+                                (s) => gym.Set(
+                                  reps: s.reps,
+                                  weight: s.weight,
+                                  rpe: s.rpe,
+                                  note: s.note,
+                                ),
+                              )
+                              .toList(),
+                      note: prevExercise.note,
+                    ),
+                  )
+                  .toList(),
           weekNumber: _currentWeek,
         );
       }
@@ -183,16 +202,19 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     return WorkoutSession(
       date: DateTime.now(),
       planName: widget.plan.name,
-      exercises: widget.plan.exercises
-          .map((template) => Exercise(
-                name: template.name,
-                sets: List.generate(
-                  template.sets,
-                  (_) => gym.Set(reps: 0, weight: 0),
+      exercises:
+          widget.plan.exercises
+              .map(
+                (template) => Exercise(
+                  name: template.name,
+                  sets: List.generate(
+                    template.sets,
+                    (_) => gym.Set(reps: 0, weight: 0),
+                  ),
+                  note: null,
                 ),
-                note: null,
-              ))
-          .toList(),
+              )
+              .toList(),
       weekNumber: _currentWeek,
     );
   }
@@ -266,6 +288,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       onSave: (updatedSet) {
         final updatedSets = List<gym.Set>.from(exercise.sets);
         updatedSets[setIndex] = updatedSet;
+        _touchedSets.remove(set);
+        _touchedSets.add(updatedSet);
         final updatedExercises = List<Exercise>.from(session.exercises);
         updatedExercises[exerciseIndex] = Exercise(
           name: exercise.name,
@@ -316,12 +340,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final set = exercise.sets[setIndex];
 
     final updatedSets = List<gym.Set>.from(exercise.sets);
-    updatedSets[setIndex] = gym.Set(
+    final updatedSet = gym.Set(
       reps: set.reps + 1,
       weight: set.weight,
       rpe: set.rpe,
       note: set.note,
     );
+    updatedSets[setIndex] = updatedSet;
+    _touchedSets.remove(set);
+    _touchedSets.add(updatedSet);
 
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(
@@ -342,12 +369,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     if (set.reps <= 0) return;
 
     final updatedSets = List<gym.Set>.from(exercise.sets);
-    updatedSets[setIndex] = gym.Set(
+    final updatedSet = gym.Set(
       reps: set.reps - 1,
       weight: set.weight,
       rpe: set.rpe,
       note: set.note,
     );
+    updatedSets[setIndex] = updatedSet;
+    _touchedSets.remove(set);
+    _touchedSets.add(updatedSet);
 
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(
@@ -366,12 +396,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final set = exercise.sets[setIndex];
 
     final updatedSets = List<gym.Set>.from(exercise.sets);
-    updatedSets[setIndex] = gym.Set(
+    final updatedSet = gym.Set(
       reps: set.reps,
       weight: set.weight + 2.5,
       rpe: set.rpe,
       note: set.note,
     );
+    updatedSets[setIndex] = updatedSet;
+    _touchedSets.remove(set);
+    _touchedSets.add(updatedSet);
 
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(
@@ -392,12 +425,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     if (set.weight <= 0) return;
 
     final updatedSets = List<gym.Set>.from(exercise.sets);
-    updatedSets[setIndex] = gym.Set(
+    final updatedSet = gym.Set(
       reps: set.reps,
       weight: set.weight - 2.5,
       rpe: set.rpe,
       note: set.note,
     );
+    updatedSets[setIndex] = updatedSet;
+    _touchedSets.remove(set);
+    _touchedSets.add(updatedSet);
 
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(
@@ -411,10 +447,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   void _reorderExercises(int oldIndex, int newIndex) {
+    final session = _getOrCreateSession();
+    final exerciseCount = session.exercises.length;
+    if (oldIndex < 0 || oldIndex >= exerciseCount) return;
     if (oldIndex < newIndex) {
       newIndex -= 1;
     }
-    final session = _getOrCreateSession();
+    if (newIndex < 0 || newIndex >= exerciseCount) return;
     final exercises = List<Exercise>.from(session.exercises);
     final exercise = exercises.removeAt(oldIndex);
     exercises.insert(newIndex, exercise);
@@ -438,8 +477,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         if (otherWeeks.contains(newWeek)) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('> Week number already exists',
-                  style: GoogleFonts.jetBrainsMono()),
+              content: Text(
+                '> Week number already exists',
+                style: GoogleFonts.jetBrainsMono(),
+              ),
               backgroundColor: errorColor(context),
             ),
           );
@@ -458,8 +499,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     if (_weeks.length == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('> Cannot delete the last week',
-              style: GoogleFonts.jetBrainsMono()),
+          content: Text(
+            '> Cannot delete the last week',
+            style: GoogleFonts.jetBrainsMono(),
+          ),
           backgroundColor: errorColor(context),
         ),
       );
@@ -502,6 +545,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   @override
   Widget build(BuildContext context) {
     final session = _getOrCreateSession();
+    _reconcileTouched(session);
     final accent = accentColor(context);
     final surface = surfaceColor(context);
 
@@ -516,6 +560,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         return widget.plan;
       },
     );
+    final planColor = planColorOf(activePlan.planColor, context);
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -525,6 +570,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.transparent,
+        flexibleSpace: headerFlexibleSpace(context, bottomInset: 48),
         toolbarHeight: 60,
         leading: IconButton(
           icon: Icon(LucideIcons.arrowLeft, color: accent),
@@ -534,9 +580,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           },
         ),
         title: _PlanHeader(
-          planName: activePlan.name,
-          planIndex: widget.planIndex,
-          color: accent,
+          plan: activePlan,
+          fallbackIndex: plans.indexWhere((plan) => plan.id == activePlan.id),
+          color: planColor,
         ),
         bottom: _buildPlanTabBar(accent, plans, activePlan),
       ),
@@ -544,15 +590,18 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         children: [
           Expanded(
             child: _GestureClaimingContainer(
-              onSwipeLeft: _currentWeekIndex < _weeks.length - 1
-                  ? () => _onWeekChanged(_currentWeekIndex + 1)
-                  : null,
-              onSwipeRight: _currentWeekIndex > 0
-                  ? () => _onWeekChanged(_currentWeekIndex - 1)
-                  : null,
+              onSwipeLeft:
+                  _currentWeekIndex < _weeks.length - 1
+                      ? () => _onWeekChanged(_currentWeekIndex + 1)
+                      : null,
+              onSwipeRight:
+                  _currentWeekIndex > 0
+                      ? () => _onWeekChanged(_currentWeekIndex - 1)
+                      : null,
               child: CustomScrollView(
                 physics: const BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics()),
+                  parent: AlwaysScrollableScrollPhysics(),
+                ),
                 slivers: [
                   // State the gutter once, on the sliver, rather than as a
                   // margin per item: the rounded cards need clearance from the
@@ -572,23 +621,22 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                       },
                       itemBuilder: (context, index) {
                         if (index == session.exercises.length) {
-                          return ReorderableDelayedDragStartListener(
+                          return InkWell(
                             key: const ValueKey('add_exercise_button'),
-                            index: index,
-                            child: InkWell(
-                              onTap: _addEmptyExercise,
-                              borderRadius: AppRadius.button,
-                              child: Container(
-                                padding: const EdgeInsets.all(AppSpacing.lg),
-                                decoration: BoxDecoration(
-                                  border: Border.all(color: accent, width: 1),
-                                  borderRadius: AppRadius.button,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '[+ ADD EXERCISE]',
-                                    style: GoogleFonts.jetBrainsMono(
-                                        color: accent),
+                            onTap: _addEmptyExercise,
+                            borderRadius: AppRadius.button,
+                            child: Container(
+                              constraints: const BoxConstraints(minHeight: 48),
+                              padding: const EdgeInsets.all(AppSpacing.lg),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: accent, width: 1),
+                                borderRadius: AppRadius.button,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '[+ ADD EXERCISE]',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    color: accent,
                                   ),
                                 ),
                               ),
@@ -599,15 +647,18 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                         final exercise = session.exercises[index];
 
                         return ReorderableDelayedDragStartListener(
-                          key: ValueKey(index),
+                          key: ObjectKey(exercise),
                           index: index,
                           child: Container(
-                            margin:
-                                const EdgeInsets.only(bottom: AppSpacing.sm),
+                            margin: const EdgeInsets.only(
+                              bottom: AppSpacing.sm,
+                            ),
                             decoration: BoxDecoration(
                               color: surfaceColor(context),
                               border: Border.all(
-                                  color: borderColor(context), width: 1),
+                                color: borderColor(context),
+                                width: 1,
+                              ),
                               borderRadius: AppRadius.card,
                             ),
                             child: ExerciseCard(
@@ -615,13 +666,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                               exerciseIndex: index,
                               accent: accent,
                               template: _templateFor(exercise.name),
+                              touchedSets: _touchedSets,
                               onIncrementReps: _incrementReps,
                               onDecrementReps: _decrementReps,
                               onIncrementWeight: _incrementWeight,
                               onDecrementWeight: _decrementWeight,
                               onAddSet: (i) => _addSet(i),
-                              onEditSet: (i, setIndex) =>
-                                  _editSet(i, setIndex),
+                              onEditSet: (i, setIndex) => _editSet(i, setIndex),
                               onAddNote: _addExerciseNote,
                               onRename: _showExerciseRenameDialog,
                               onDeleteExercise: _deleteExercise,
@@ -663,7 +714,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       return null;
     }
 
-    const double barHeight = 44;
+    const double barHeight = 48;
     final selectedIndex = plans.indexWhere((p) => p.id == activePlan.id);
 
     return PreferredSize(
@@ -680,19 +731,20 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               // [01] on the home cards.
               index: (index + 1).toString().padLeft(2, '0'),
               label: plans[index].name.toUpperCase(),
-              onTap: plans[index].id == activePlan.id
-                  ? null
-                  : () {
-                      Navigator.pushReplacement(
-                        context,
-                        FadePageRoute(
-                          page: WorkoutScreen(
-                            plan: plans[index],
-                            planIndex: index,
+              onTap:
+                  plans[index].id == activePlan.id
+                      ? null
+                      : () {
+                        Navigator.pushReplacement(
+                          context,
+                          FadePageRoute(
+                            page: WorkoutScreen(
+                              plan: plans[index],
+                              planIndex: index,
+                            ),
                           ),
-                        ),
-                      );
-                    },
+                        );
+                      },
             ),
         ],
       ),
@@ -714,6 +766,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         top: false,
         child: UnderlineTabStrip(
           rule: StripRule.top,
+          height: 48,
           color: accent,
           selectedIndex: _currentWeekIndex,
           tabs: [
@@ -723,27 +776,38 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 // Routed through _onWeekChanged, same as a swipe: tapping used
                 // to move the index without saving the week you were leaving or
                 // loading the one you arrived at.
-                onTap: index == _currentWeekIndex
-                    ? null
-                    : () => _onWeekChanged(index),
-                onLongPress: () =>
-                    _showWeekOptionsMenu(context, index, _weeks[index]),
+                onTap:
+                    index == _currentWeekIndex
+                        ? null
+                        : () => _onWeekChanged(index),
+                onLongPress:
+                    () => _showWeekOptionsMenu(context, index, _weeks[index]),
               ),
           ],
-          trailing: InkWell(
-            onTap: _addNewWeek,
-            borderRadius: AppRadius.chip,
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                border: Border.all(color: accent),
-                borderRadius: AppRadius.chip,
-              ),
-              child: Text(
-                '[+ WEEK ${_weeks.length + 1}]',
-                style:
-                    GoogleFonts.jetBrainsMono(fontSize: 10, color: accent),
+          trailing: Semantics(
+            button: true,
+            label: 'Add week',
+            child: InkWell(
+              onTap: _addNewWeek,
+              borderRadius: AppRadius.chip,
+              child: SizedBox(
+                height: 48,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: accent),
+                    borderRadius: AppRadius.chip,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '+ WEEK ${_weeks.length + 1}',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 10,
+                        color: accent,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -782,57 +846,57 @@ class _GestureClaimingContainerState extends State<_GestureClaimingContainer> {
       gestures: {
         _ExposingHorizontalDragGestureRecognizer:
             GestureRecognizerFactoryWithHandlers<
-                _ExposingHorizontalDragGestureRecognizer>(
-          () => _ExposingHorizontalDragGestureRecognizer(),
-          (_ExposingHorizontalDragGestureRecognizer instance) {
-            instance
-              ..dragStartBehavior = DragStartBehavior.down
-              ..supportedDevices = {
-                PointerDeviceKind.touch,
-                PointerDeviceKind.mouse
+              _ExposingHorizontalDragGestureRecognizer
+            >(() => _ExposingHorizontalDragGestureRecognizer(), (
+              _ExposingHorizontalDragGestureRecognizer instance,
+            ) {
+              instance
+                ..dragStartBehavior = DragStartBehavior.down
+                ..supportedDevices = {
+                  PointerDeviceKind.touch,
+                  PointerDeviceKind.mouse,
+                };
+              instance.onStart = (details) {
+                _dragAccumulator = 0;
+                _totalDx = 0;
+                _totalDy = 0;
+                _hasClaimedGesture = false;
+                _isHorizontalGesture = false;
               };
-            instance.onStart = (details) {
-              _dragAccumulator = 0;
-              _totalDx = 0;
-              _totalDy = 0;
-              _hasClaimedGesture = false;
-              _isHorizontalGesture = false;
-            };
-            instance.onUpdate = (details) {
-              _dragAccumulator += details.delta.dx;
-              _totalDx += details.delta.dx;
-              _totalDy += details.delta.dy;
+              instance.onUpdate = (details) {
+                _dragAccumulator += details.delta.dx;
+                _totalDx += details.delta.dx;
+                _totalDy += details.delta.dy;
 
-              final totalMovement = _totalDx.abs() + _totalDy.abs();
-              if (!_hasClaimedGesture && totalMovement > 10) {
-                if (_totalDy.abs() == 0) {
-                  instance.resolve(GestureDisposition.accepted);
-                  _hasClaimedGesture = true;
-                  _isHorizontalGesture = true;
-                } else if (_totalDx.abs() / _totalDy.abs() > 1.5) {
-                  instance.resolve(GestureDisposition.accepted);
-                  _hasClaimedGesture = true;
-                  _isHorizontalGesture = true;
-                } else if (_totalDy.abs() / _totalDx.abs() > 1.0) {
-                  instance.resolve(GestureDisposition.rejected);
-                  _hasClaimedGesture = true;
-                  _isHorizontalGesture = false;
+                final totalMovement = _totalDx.abs() + _totalDy.abs();
+                if (!_hasClaimedGesture && totalMovement > 10) {
+                  if (_totalDy.abs() == 0) {
+                    instance.resolve(GestureDisposition.accepted);
+                    _hasClaimedGesture = true;
+                    _isHorizontalGesture = true;
+                  } else if (_totalDx.abs() / _totalDy.abs() > 1.5) {
+                    instance.resolve(GestureDisposition.accepted);
+                    _hasClaimedGesture = true;
+                    _isHorizontalGesture = true;
+                  } else if (_totalDy.abs() / _totalDx.abs() > 1.0) {
+                    instance.resolve(GestureDisposition.rejected);
+                    _hasClaimedGesture = true;
+                    _isHorizontalGesture = false;
+                  }
                 }
-              }
-            };
-            instance.onEnd = (details) {
-              if (_isHorizontalGesture && _dragAccumulator.abs() > 40) {
-                if (_dragAccumulator < 0 && widget.onSwipeLeft != null) {
-                  widget.onSwipeLeft!();
-                } else if (_dragAccumulator > 0 &&
-                    widget.onSwipeRight != null) {
-                  widget.onSwipeRight!();
+              };
+              instance.onEnd = (details) {
+                if (_isHorizontalGesture && _dragAccumulator.abs() > 40) {
+                  if (_dragAccumulator < 0 && widget.onSwipeLeft != null) {
+                    widget.onSwipeLeft!();
+                  } else if (_dragAccumulator > 0 &&
+                      widget.onSwipeRight != null) {
+                    widget.onSwipeRight!();
+                  }
                 }
-              }
-              _dragAccumulator = 0;
-            };
-          },
-        ),
+                _dragAccumulator = 0;
+              };
+            }),
       },
       child: widget.child,
     );
@@ -848,18 +912,40 @@ class _ExposingHorizontalDragGestureRecognizer
 }
 
 class _PlanHeader extends StatelessWidget {
-  final String planName;
-  final int planIndex;
+  final WorkoutPlan plan;
+  final int fallbackIndex;
 
-  /// The global accent, matching the back arrow beside it. Deliberately not the
-  /// plan's own colour — see [_WorkoutScreenState._buildPlanTabBar].
+  /// The active plan's resolved colour, independent of the global accent.
   final Color color;
 
   const _PlanHeader({
-    required this.planName,
-    required this.planIndex,
+    required this.plan,
+    required this.fallbackIndex,
     required this.color,
   });
+
+  int _currentPlanIndex(List<WorkoutPlan> plans) {
+    final planKey = plan.key;
+    if (planKey != null) {
+      final keyIndex = plans.indexWhere(
+        (candidate) => candidate.key == planKey,
+      );
+      if (keyIndex >= 0) return keyIndex;
+    }
+
+    final id = plan.id;
+    if (id != null) {
+      final idIndex = plans.indexWhere((candidate) => candidate.id == id);
+      if (idIndex >= 0) return idIndex;
+    }
+
+    final identityIndex = plans.indexWhere(
+      (candidate) => identical(candidate, plan),
+    );
+    if (identityIndex >= 0) return identityIndex;
+
+    return fallbackIndex.clamp(0, plans.length - 1);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -868,6 +954,8 @@ class _PlanHeader extends StatelessWidget {
       onHorizontalDragEnd: (details) {
         final provider = context.read<WorkoutPlanProvider>();
         final plans = provider.plans;
+        if (plans.isEmpty) return;
+        final planIndex = _currentPlanIndex(plans);
         if (details.primaryVelocity != null) {
           if (details.primaryVelocity!.abs() > 250) {
             if (details.primaryVelocity! < 0) {
@@ -899,10 +987,10 @@ class _PlanHeader extends StatelessWidget {
         }
       },
       child: Text(
-        planName.toUpperCase(),
+        plan.name.toUpperCase(),
         overflow: TextOverflow.ellipsis,
         maxLines: 1,
-        style: GoogleFonts.jetBrainsMono(
+        style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.bold,
           color: color,
