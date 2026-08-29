@@ -42,9 +42,10 @@ class ProgressionSparkline extends StatelessWidget {
     final pad = (max - min) == 0 ? 5.0 : (max - min) * 0.15;
 
     final delta = values.last - values.first;
-    final deltaColor = delta > 0
-        ? successColor(context)
-        : delta < 0
+    final deltaColor =
+        delta > 0
+            ? successColor(context)
+            : delta < 0
             ? errorColor(context)
             : textSecondary;
 
@@ -93,14 +94,18 @@ class ProgressionSparkline extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
-        Row(
+        Wrap(
+          alignment: WrapAlignment.spaceBetween,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.xs,
           children: [
             Text(
               '${formatWeight(min)}KG → ${formatWeight(max)}KG',
-              style:
-                  GoogleFonts.jetBrainsMono(fontSize: 9, color: textSecondary),
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 9,
+                color: textSecondary,
+              ),
             ),
-            const Spacer(),
             Text(
               '${delta >= 0 ? '+' : ''}${formatWeight(delta)}KG',
               style: GoogleFonts.jetBrainsMono(

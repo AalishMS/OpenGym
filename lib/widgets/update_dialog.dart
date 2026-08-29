@@ -65,12 +65,10 @@ class UpdateDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              failed ? '> UPDATE FAILED' : '> UPDATE AVAILABLE',
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: failed ? error : accent,
-              ),
+              failed ? 'Update failed' : 'Update available',
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(color: failed ? error : accent),
             ),
             const SizedBox(height: 12),
             Row(
@@ -91,7 +89,9 @@ class UpdateDialog extends StatelessWidget {
                   Text(
                     size,
                     style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11, color: textSecondary),
+                      fontSize: 11,
+                      color: textSecondary,
+                    ),
                   ),
                 ],
               ],
@@ -164,7 +164,10 @@ class _Changelog extends StatelessWidget {
         child: Text(
           text,
           style: GoogleFonts.jetBrainsMono(
-              fontSize: 11, height: 1.5, color: textSecondary),
+            fontSize: 11,
+            height: 1.5,
+            color: textSecondary,
+          ),
         ),
       ),
     );
@@ -226,6 +229,28 @@ class _Actions extends StatelessWidget {
   final Color accent;
   final Color textSecondary;
 
+  Future<void> _runAction(
+    BuildContext context,
+    Future<void> Function() action,
+  ) async {
+    try {
+      await action();
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '> Update action failed: $e',
+            style: GoogleFonts.jetBrainsMono(
+              color: onColor(errorColor(context)),
+            ),
+          ),
+          backgroundColor: errorColor(context),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final status = updates.status;
@@ -240,34 +265,41 @@ class _Actions extends StatelessWidget {
       return Align(
         alignment: Alignment.centerRight,
         child: TextButton(
-          onPressed: updates.cancelUpdate,
-          child: Text('[CANCEL]',
-              style: GoogleFonts.jetBrainsMono(color: textSecondary)),
+          onPressed: () => _runAction(context, updates.cancelUpdate),
+          child: Text(
+            '[CANCEL]',
+            style: GoogleFonts.jetBrainsMono(color: textSecondary),
+          ),
         ),
       );
     }
 
     final failed = status == UpdateStatus.failed;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.end,
+    return Wrap(
+      alignment: WrapAlignment.end,
+      spacing: 8,
+      runSpacing: 4,
       children: [
         TextButton(
           onPressed: () {
             Navigator.pop(context);
             updates.dismiss();
           },
-          child: Text(failed ? '[CLOSE]' : '[LATER]',
-              style: GoogleFonts.jetBrainsMono(color: textSecondary)),
+          child: Text(
+            failed ? '[CLOSE]' : '[LATER]',
+            style: GoogleFonts.jetBrainsMono(color: textSecondary),
+          ),
         ),
-        const SizedBox(width: 8),
         ElevatedButton(
-          onPressed: updates.startUpdate,
+          onPressed: () => _runAction(context, updates.startUpdate),
           style: ElevatedButton.styleFrom(
             backgroundColor: accentFillColor(context),
             foregroundColor: onAccentColor(context),
           ),
-          child: Text(failed ? '[RETRY]' : '[UPDATE]',
-              style: GoogleFonts.jetBrainsMono()),
+          child: Text(
+            failed ? '[RETRY]' : '[UPDATE]',
+            style: GoogleFonts.jetBrainsMono(),
+          ),
         ),
       ],
     );

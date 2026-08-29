@@ -34,12 +34,7 @@ class LastSessionTile extends StatelessWidget {
       children: [
         Text(
           session.planName.toUpperCase(),
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            color: textPrimaryColor(context),
-            letterSpacing: 0.04,
-          ),
+          style: Theme.of(context).textTheme.titleMedium,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
@@ -79,6 +74,8 @@ class BracketButton extends StatelessWidget {
       splashColor: color.withAlpha(40),
       borderRadius: AppRadius.chip,
       child: Container(
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.sm,
           vertical: AppSpacing.xs,

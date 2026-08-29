@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+
 import '../theme/app_theme.dart';
 
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
-  const AppBottomNav({required this.currentIndex, required this.onTap, super.key});
+  const AppBottomNav({
+    required this.currentIndex,
+    required this.onTap,
+    super.key,
+  });
 
   static const _icons = [
     LucideIcons.clipboardList,
@@ -33,24 +38,39 @@ class AppBottomNav extends StatelessWidget {
           children: List.generate(4, (i) {
             final active = i == currentIndex;
             return Expanded(
-              child: InkWell(
-                onTap: () => onTap(i),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(_icons[i], size: 18, color: active ? accent : textSecondary),
-                      const SizedBox(height: 3),
-                      Text(
-                        _labels[i],
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 9,
-                          letterSpacing: 0.08,
-                          color: active ? accent : textSecondary,
-                        ),
+              child: Semantics(
+                selected: active,
+                child: InkWell(
+                  onTap: () => onTap(i),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _icons[i],
+                            size: 18,
+                            color: active ? accent : textSecondary,
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            _labels[i],
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 11,
+                              letterSpacing: 0.08,
+                              color: active ? accent : textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),

@@ -17,11 +17,11 @@ import '../../utils/format.dart';
 /// the same voice. Changing it here changes both screens, which is the point:
 /// the two used to drift.
 TextStyle setValueStyle(BuildContext context) => GoogleFonts.jetBrainsMono(
-      fontSize: 17,
-      fontWeight: FontWeight.bold,
-      height: 1.1,
-      color: textPrimaryColor(context),
-    );
+  fontSize: 17,
+  fontWeight: FontWeight.bold,
+  height: 1.1,
+  color: textPrimaryColor(context),
+);
 
 /// The units and separators sitting around [setValueStyle] — `kg`, ` x `, and
 /// the plan's target hint.
@@ -29,10 +29,10 @@ TextStyle setValueStyle(BuildContext context) => GoogleFonts.jetBrainsMono(
 /// These are not data. Dropping them back is what lets `70` and `8` carry the
 /// row without needing a bigger size still.
 TextStyle setUnitStyle(BuildContext context) => GoogleFonts.jetBrainsMono(
-      fontSize: 11,
-      fontWeight: FontWeight.normal,
-      color: textSecondaryColor(context),
-    );
+  fontSize: 11,
+  fontWeight: FontWeight.normal,
+  color: textSecondaryColor(context),
+);
 
 /// One `− +` stepper: two buttons sharing a square inner edge inside a single
 /// hairline box, so the pair reads as one control rather than two pills.
@@ -44,12 +44,16 @@ class StepperBox extends StatelessWidget {
   final VoidCallback onDecrement;
   final VoidCallback onIncrement;
   final Color accent;
+  final String label;
+  final double buttonSize;
 
   const StepperBox({
     super.key,
     required this.onDecrement,
     required this.onIncrement,
     required this.accent,
+    this.label = 'value',
+    this.buttonSize = 48,
   });
 
   @override
@@ -64,14 +68,18 @@ class StepperBox extends StatelessWidget {
         children: [
           _ControlButton(
             label: '−',
+            semanticLabel: 'Decrease $label',
             onTap: onDecrement,
             accent: accent,
+            size: buttonSize,
             borderRadius: AppRadius.leftCap,
           ),
           _ControlButton(
             label: '+',
+            semanticLabel: 'Increase $label',
             onTap: onIncrement,
             accent: accent,
+            size: buttonSize,
             borderRadius: AppRadius.rightCap,
           ),
         ],
@@ -92,6 +100,7 @@ class SetRow extends StatelessWidget {
   /// and never written into the session — a planned weight must not become a PR
   /// or count towards volume.
   final SetTemplate? target;
+  final bool touched;
 
   final VoidCallback onDecrementReps;
   final VoidCallback onIncrementReps;
@@ -106,6 +115,7 @@ class SetRow extends StatelessWidget {
     required this.exerciseIndex,
     required this.accent,
     this.target,
+    this.touched = false,
     required this.onDecrementReps,
     required this.onIncrementReps,
     required this.onDecrementWeight,
@@ -118,12 +128,12 @@ class SetRow extends StatelessWidget {
   ///
   /// Because it only shows on an untouched set, it can never share the row with
   /// a three-digit weight or an RPE: the live half is always the shortest it
-  /// gets (`0kg x 0`), so the hint cannot be what forces [FittedBox] to shrink
+  /// gets (`0kg x 0`), so the hint cannot be what forces the value to shrink.
   /// the numbers.
   String? get _targetHint {
     final t = target;
     if (t == null) return null;
-    if (set.weight != 0 || set.reps != 0) return null;
+    if (touched) return null;
     if (t.weight == 0 && t.reps == 0) return null;
     if (t.weight == 0) return '  → ${t.reps} reps';
     return '  → ${formatWeight(t.weight)}×${t.reps}';
@@ -164,38 +174,28 @@ class SetRow extends StatelessWidget {
               highlightColor: accent.withValues(alpha: 0.1),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                // One datum, one line. Left to wrap, a three-digit weight with
-                // an RPE dropped its `@8` onto a second line on a narrow phone
-                // and pushed every row below it down. scaleDown gives up a
-                // little size in that case instead, and nothing at all on a
-                // screen where the run already fits.
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: RichText(
-                    softWrap: false,
-                    text: TextSpan(
-                      style: numberStyle,
-                      children: [
-                        TextSpan(text: formatWeight(set.weight)),
-                        TextSpan(text: 'kg', style: unitStyle),
-                        TextSpan(text: ' x ', style: unitStyle),
-                        TextSpan(text: '${set.reps}'),
-                        if (set.rpe != null)
-                          TextSpan(
-                            // An annotation on the set, not a third number.
-                            text: ' @${set.rpe}',
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              height: 1.1,
-                              color: rpeColor(set.rpe!, context),
-                            ),
+                child: RichText(
+                  softWrap: false,
+                  text: TextSpan(
+                    style: numberStyle,
+                    children: [
+                      TextSpan(text: formatWeight(set.weight)),
+                      TextSpan(text: 'kg', style: unitStyle),
+                      TextSpan(text: ' x ', style: unitStyle),
+                      TextSpan(text: '${set.reps}'),
+                      if (set.rpe != null)
+                        TextSpan(
+                          // An annotation on the set, not a third number.
+                          text: ' @${set.rpe}',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            height: 1.1,
+                            color: rpeColor(set.rpe!, context),
                           ),
-                        if (hint != null)
-                          TextSpan(text: hint, style: unitStyle),
-                      ],
-                    ),
+                        ),
+                      if (hint != null) TextSpan(text: hint, style: unitStyle),
+                    ],
                   ),
                 ),
               ),
@@ -203,12 +203,14 @@ class SetRow extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           StepperBox(
+            label: 'weight',
             onDecrement: onDecrementWeight,
             onIncrement: onIncrementWeight,
             accent: accent,
           ),
           const SizedBox(width: 4),
           StepperBox(
+            label: 'reps',
             onDecrement: onDecrementReps,
             onIncrement: onIncrementReps,
             accent: accent,
@@ -219,22 +221,28 @@ class SetRow extends StatelessWidget {
   }
 }
 
-/// Width of one stepper box (two 32px buttons + 1px border each side).
+/// Width of one stepper box (two 48px buttons + 1px border each side).
 /// [SetHeaderRow] uses it to line its labels up with the boxes below.
-const double kStepperBoxWidth = 66;
+const double kStepperBoxWidth = 98;
 
 /// `WEIGHT` / `REPS` captions above the pair of [StepperBox]es in a set row.
 ///
 /// Without these the two identical `− +` boxes are ambiguous — one card-level
 /// header disambiguates both columns without repeating on every row.
 class SetHeaderRow extends StatelessWidget {
+  final double stepperBoxWidth;
+
   /// Width of the trailing column the rows below reserve past the second
   /// stepper, if any. The plan editor's rows end in a 28px delete button; the
   /// header has to reserve the same width or its captions sit 28px right of the
   /// boxes they label.
   final double trailingGap;
 
-  const SetHeaderRow({super.key, this.trailingGap = 0});
+  const SetHeaderRow({
+    super.key,
+    this.stepperBoxWidth = kStepperBoxWidth,
+    this.trailingGap = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -250,12 +258,12 @@ class SetHeaderRow extends StatelessWidget {
         children: [
           const Spacer(),
           SizedBox(
-            width: kStepperBoxWidth,
+            width: stepperBoxWidth,
             child: Text('WEIGHT', textAlign: TextAlign.center, style: style),
           ),
           const SizedBox(width: 4),
           SizedBox(
-            width: kStepperBoxWidth,
+            width: stepperBoxWidth,
             child: Text('REPS', textAlign: TextAlign.center, style: style),
           ),
           if (trailingGap > 0) SizedBox(width: trailingGap),
@@ -269,6 +277,8 @@ class _ControlButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final Color accent;
+  final String semanticLabel;
+  final double size;
 
   /// Which outer corners this segment caps off. The two buttons share a square
   /// inner edge so the pair reads as one control, not two pills.
@@ -278,31 +288,41 @@ class _ControlButton extends StatelessWidget {
     required this.label,
     required this.onTap,
     required this.accent,
+    required this.semanticLabel,
+    required this.size,
     this.borderRadius,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      borderRadius: borderRadius,
-      child: InkWell(
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Semantics(
+        button: true,
+        container: true,
+        label: semanticLabel,
         onTap: onTap,
-        borderRadius: borderRadius,
-        splashColor: accent.withValues(alpha: 0.2),
-        highlightColor: accent.withValues(alpha: 0.1),
-        child: Container(
-          width: 32,
-          height: 32,
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 15,
-              // A control, not a value: at 16/primary the two stepper boxes
-              // were the second-loudest thing in the row, right behind the
-              // numbers they adjust. The outline is what marks them tappable.
-              color: textSecondaryColor(context),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: borderRadius,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: borderRadius,
+            splashColor: accent.withValues(alpha: 0.2),
+            highlightColor: accent.withValues(alpha: 0.1),
+            child: Container(
+              alignment: Alignment.center,
+              child: Text(
+                label,
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 15,
+                  // A control, not a value: at 16/primary the two stepper boxes
+                  // were the second-loudest thing in the row, right behind the
+                  // numbers they adjust. The outline is what marks them tappable.
+                  color: textSecondaryColor(context),
+                ),
+              ),
             ),
           ),
         ),

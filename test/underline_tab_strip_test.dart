@@ -19,10 +19,7 @@ void main() {
               color: accent,
               tabs: [
                 for (var i = 0; i < count; i++)
-                  UnderlineTabData(
-                    label: 'WEEK ${i + 1}',
-                    onTap: () {},
-                  ),
+                  UnderlineTabData(label: 'WEEK ${i + 1}', onTap: () {}),
               ],
             ),
           ),
@@ -31,8 +28,9 @@ void main() {
     );
   }
 
-  testWidgets('marks only the selected tab, in the strip colour',
-      (tester) async {
+  testWidgets('marks only the selected tab, in the strip colour', (
+    tester,
+  ) async {
     await tester.pumpWidget(host(4, 2));
     await tester.pumpAndSettle();
 
@@ -51,13 +49,15 @@ void main() {
         .whereType<BoxDecoration>()
         .map((decoration) => decoration.border)
         .whereType<Border>()
-        .where((border) =>
-            border.bottom.width == 2 && border.bottom.color == accent);
+        .where(
+          (border) => border.bottom.width == 2 && border.bottom.color == accent,
+        );
     expect(marks, hasLength(1));
   });
 
-  testWidgets('lays out every tab, including those past the viewport',
-      (tester) async {
+  testWidgets('lays out every tab, including those past the viewport', (
+    tester,
+  ) async {
     await tester.pumpWidget(host(20, 0));
     await tester.pumpAndSettle();
 
@@ -65,6 +65,36 @@ void main() {
     // so there would be nothing for ensureVisible to measure.
     expect(find.text('WEEK 20'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('gives every tab a 48 pixel hit region', (tester) async {
+    await tester.pumpWidget(host(4, 0));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSize(find.byType(UnderlineTabStrip)).height,
+      greaterThanOrEqualTo(48),
+    );
+    for (final inkWell in find.byType(InkWell).evaluate()) {
+      expect(
+        tester.getSize(find.byWidget(inkWell.widget)).height,
+        greaterThanOrEqualTo(48),
+      );
+    }
+  });
+
+  testWidgets('short strips fill the viewport from the left', (tester) async {
+    await tester.pumpWidget(host(2, 0));
+    await tester.pumpAndSettle();
+
+    final viewport = tester.getRect(find.byType(UnderlineTabStrip));
+    final scrollable = tester.getRect(find.byType(Scrollable));
+    expect(scrollable.left, viewport.left);
+    expect(scrollable.right, viewport.right);
+    expect(
+      tester.state<ScrollableState>(find.byType(Scrollable)).position.pixels,
+      0,
+    );
   });
 
   testWidgets('scrolls a far-off selected tab into view', (tester) async {

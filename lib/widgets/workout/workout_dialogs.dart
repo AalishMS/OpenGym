@@ -14,63 +14,72 @@ class WorkoutDialogs {
     final accent = accentColor(context);
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context), width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '> NEW PR DETECTED!',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: accent,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ...prs.map((pr) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(pr.exerciseName,
-                              style: GoogleFonts.jetBrainsMono(
-                                  fontWeight: FontWeight.bold)),
-                          Text(
-                            '${pr.newPR}kg (Previous: ${pr.previousPR}kg)',
-                            style: GoogleFonts.jetBrainsMono(
-                                fontSize: 12,
-                                color: textSecondaryColor(context)),
-                          ),
-                        ],
+      builder:
+          (context) => Dialog(
+            backgroundColor: surfaceColor(context),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.card,
+              side: BorderSide(color: borderColor(context), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '> NEW PR DETECTED!',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: accent,
                       ),
-                    )),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentFillColor(context),
-                      foregroundColor: onAccentColor(context),
                     ),
-                    child: Text('[ACKNOWLEDGE]',
-                        style: GoogleFonts.jetBrainsMono()),
-                  ),
+                    const SizedBox(height: 12),
+                    ...prs.map(
+                      (pr) => Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              pr.exerciseName,
+                              style: GoogleFonts.jetBrainsMono(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              '${pr.newPR}kg (Previous: ${pr.previousPR}kg)',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 12,
+                                color: textSecondaryColor(context),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentFillColor(context),
+                          foregroundColor: onAccentColor(context),
+                        ),
+                        child: Text(
+                          '[ACKNOWLEDGE]',
+                          style: GoogleFonts.jetBrainsMono(),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
     );
   }
 
@@ -83,84 +92,95 @@ class WorkoutDialogs {
 
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context), width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> ADD EXERCISE',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: accent,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                autofocus: true,
-                style: GoogleFonts.jetBrainsMono(fontSize: 14),
-                decoration: InputDecoration(
-                  labelText: 'Exercise name',
-                  labelStyle: GoogleFonts.jetBrainsMono(fontSize: 12),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: AppRadius.field,
-                    borderSide:
-                        BorderSide(color: borderColor(context), width: 1),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: AppRadius.field,
-                    borderSide: BorderSide(color: accent, width: 1),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text('[CANCEL]',
-                        style: GoogleFonts.jetBrainsMono(
-                            color: textSecondaryColor(context))),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      final name = nameController.text.trim();
-                      if (name.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('> Enter exercise name',
-                                style: GoogleFonts.jetBrainsMono()),
-                            backgroundColor: errorColor(context),
-                          ),
-                        );
-                        return;
-                      }
-                      Navigator.pop(context);
-                      onAdd(name);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentFillColor(context),
-                      foregroundColor: onAccentColor(context),
+      builder:
+          (context) => Dialog(
+            backgroundColor: surfaceColor(context),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.card,
+              side: BorderSide(color: borderColor(context), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '> ADD EXERCISE',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: accent,
+                      ),
                     ),
-                    child: Text('[ADD]', style: GoogleFonts.jetBrainsMono()),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: nameController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        labelText: 'Exercise name',
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: AppRadius.field,
+                          borderSide: BorderSide(
+                            color: borderColor(context),
+                            width: 1,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: AppRadius.field,
+                          borderSide: BorderSide(color: accent, width: 1),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    OverflowBar(
+                      alignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text(
+                            '[CANCEL]',
+                            style: GoogleFonts.jetBrainsMono(
+                              color: textSecondaryColor(context),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            final name = nameController.text.trim();
+                            if (name.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '> Enter exercise name',
+                                    style: GoogleFonts.jetBrainsMono(),
+                                  ),
+                                  backgroundColor: errorColor(context),
+                                ),
+                              );
+                              return;
+                            }
+                            Navigator.pop(context);
+                            onAdd(name);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accentFillColor(context),
+                            foregroundColor: onAccentColor(context),
+                          ),
+                          child: Text(
+                            '[ADD]',
+                            style: GoogleFonts.jetBrainsMono(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 
@@ -174,85 +194,95 @@ class WorkoutDialogs {
 
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context), width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> RENAME EXERCISE',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: accent,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameController,
-                autofocus: true,
-                style: GoogleFonts.jetBrainsMono(fontSize: 14),
-                decoration: InputDecoration(
-                  labelText: 'Exercise name',
-                  labelStyle: GoogleFonts.jetBrainsMono(fontSize: 12),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: AppRadius.field,
-                    borderSide:
-                        BorderSide(color: borderColor(context), width: 1),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: AppRadius.field,
-                    borderSide: BorderSide(color: accent, width: 1),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text('[CANCEL]',
-                        style: GoogleFonts.jetBrainsMono(
-                            color: textSecondaryColor(context))),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      final name = nameController.text.trim();
-                      if (name.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('> Enter exercise name',
-                                style: GoogleFonts.jetBrainsMono()),
-                            backgroundColor: errorColor(context),
-                          ),
-                        );
-                        return;
-                      }
-                      Navigator.pop(context);
-                      onRename(name);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentFillColor(context),
-                      foregroundColor: onAccentColor(context),
+      builder:
+          (context) => Dialog(
+            backgroundColor: surfaceColor(context),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.card,
+              side: BorderSide(color: borderColor(context), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '> RENAME EXERCISE',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: accent,
+                      ),
                     ),
-                    child:
-                        Text('[RENAME]', style: GoogleFonts.jetBrainsMono()),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: nameController,
+                      autofocus: true,
+                      decoration: InputDecoration(
+                        labelText: 'Exercise name',
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: AppRadius.field,
+                          borderSide: BorderSide(
+                            color: borderColor(context),
+                            width: 1,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: AppRadius.field,
+                          borderSide: BorderSide(color: accent, width: 1),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    OverflowBar(
+                      alignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text(
+                            '[CANCEL]',
+                            style: GoogleFonts.jetBrainsMono(
+                              color: textSecondaryColor(context),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            final name = nameController.text.trim();
+                            if (name.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '> Enter exercise name',
+                                    style: GoogleFonts.jetBrainsMono(),
+                                  ),
+                                  backgroundColor: errorColor(context),
+                                ),
+                              );
+                              return;
+                            }
+                            Navigator.pop(context);
+                            onRename(name);
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accentFillColor(context),
+                            foregroundColor: onAccentColor(context),
+                          ),
+                          child: Text(
+                            '[RENAME]',
+                            style: GoogleFonts.jetBrainsMono(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 
@@ -306,7 +336,8 @@ class WorkoutDialogs {
                           hintText: 'e.g., 50',
                         ),
                         keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
+                          decimal: true,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       TextField(
@@ -318,43 +349,59 @@ class WorkoutDialogs {
                         keyboardType: TextInputType.number,
                       ),
                       const SizedBox(height: 12),
-                      Text('RPE (Rate of Perceived Exertion)',
-                          style: GoogleFonts.jetBrainsMono(fontSize: 12)),
+                      Text(
+                        'RPE (Rate of Perceived Exertion)',
+                        style: GoogleFonts.jetBrainsMono(fontSize: 12),
+                      ),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 4,
                         runSpacing: 4,
                         children: List.generate(10, (index) {
                           final rpe = index + 1;
-                          return InkWell(
+                          return Semantics(
+                            button: true,
+                            container: true,
+                            label: 'RPE $rpe',
+                            selected: selectedRpe == rpe,
                             onTap: () {
                               setDialogState(() {
                                 selectedRpe = selectedRpe == rpe ? null : rpe;
                               });
                             },
-                            borderRadius: AppRadius.chip,
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: selectedRpe == rpe
-                                    ? accent
-                                    : Colors.transparent,
-                                border: Border.all(
-                                  color: selectedRpe == rpe
-                                      ? accent
-                                      : borderColor(context),
+                            child: InkWell(
+                              onTap: () {
+                                setDialogState(() {
+                                  selectedRpe = selectedRpe == rpe ? null : rpe;
+                                });
+                              },
+                              borderRadius: AppRadius.chip,
+                              child: Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color:
+                                      selectedRpe == rpe
+                                          ? accentFillColor(context)
+                                          : Colors.transparent,
+                                  border: Border.all(
+                                    color:
+                                        selectedRpe == rpe
+                                            ? accentFillColor(context)
+                                            : borderColor(context),
+                                  ),
+                                  borderRadius: AppRadius.chip,
                                 ),
-                                borderRadius: AppRadius.chip,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '$rpe',
-                                  style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 12,
-                                    color: selectedRpe == rpe
-                                        ? onAccentColor(context)
-                                        : textPrimaryColor(context),
+                                child: Center(
+                                  child: Text(
+                                    '$rpe',
+                                    style: GoogleFonts.jetBrainsMono(
+                                      fontSize: 12,
+                                      color:
+                                          selectedRpe == rpe
+                                              ? onAccentColor(context)
+                                              : textPrimaryColor(context),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -363,27 +410,33 @@ class WorkoutDialogs {
                         }),
                       ),
                       const SizedBox(height: 12),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
+                      OverflowBar(
+                        alignment: MainAxisAlignment.end,
                         children: [
                           TextButton(
                             onPressed: () => Navigator.pop(context),
-                            child: Text('[CANCEL]',
-                                style: GoogleFonts.jetBrainsMono(
-                                    color: textSecondaryColor(context))),
+                            child: Text(
+                              '[CANCEL]',
+                              style: GoogleFonts.jetBrainsMono(
+                                color: textSecondaryColor(context),
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 8),
                           ElevatedButton(
                             onPressed: () {
-                              final weight =
-                                  double.tryParse(weightController.text);
+                              final weight = double.tryParse(
+                                weightController.text,
+                              );
                               final reps = int.tryParse(repsController.text);
 
                               if (weight == null || weight < 0) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('> Weight must be >= 0',
-                                        style: GoogleFonts.jetBrainsMono()),
+                                    content: Text(
+                                      '> Weight must be >= 0',
+                                      style: GoogleFonts.jetBrainsMono(),
+                                    ),
                                     backgroundColor: errorColor(context),
                                   ),
                                 );
@@ -393,8 +446,10 @@ class WorkoutDialogs {
                               if (reps == null || reps <= 0) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text('> Reps must be > 0',
-                                        style: GoogleFonts.jetBrainsMono()),
+                                    content: Text(
+                                      '> Reps must be > 0',
+                                      style: GoogleFonts.jetBrainsMono(),
+                                    ),
                                     backgroundColor: errorColor(context),
                                   ),
                                 );
@@ -415,8 +470,10 @@ class WorkoutDialogs {
                               backgroundColor: accentFillColor(context),
                               foregroundColor: onAccentColor(context),
                             ),
-                            child: Text('[ADD]',
-                                style: GoogleFonts.jetBrainsMono()),
+                            child: Text(
+                              '[ADD]',
+                              style: GoogleFonts.jetBrainsMono(),
+                            ),
                           ),
                         ],
                       ),
@@ -473,10 +530,12 @@ class WorkoutDialogs {
                       const SizedBox(height: 12),
                       TextField(
                         controller: weightController,
-                        decoration:
-                            const InputDecoration(labelText: 'Weight (kg)'),
+                        decoration: const InputDecoration(
+                          labelText: 'Weight (kg)',
+                        ),
                         keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true),
+                          decimal: true,
+                        ),
                       ),
                       const SizedBox(height: 12),
                       TextField(
@@ -485,43 +544,59 @@ class WorkoutDialogs {
                         keyboardType: TextInputType.number,
                       ),
                       const SizedBox(height: 12),
-                      Text('RPE',
-                          style: GoogleFonts.jetBrainsMono(fontSize: 12)),
+                      Text(
+                        'RPE',
+                        style: GoogleFonts.jetBrainsMono(fontSize: 12),
+                      ),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 4,
                         runSpacing: 4,
                         children: List.generate(10, (index) {
                           final rpe = index + 1;
-                          return InkWell(
+                          return Semantics(
+                            button: true,
+                            container: true,
+                            label: 'RPE $rpe',
+                            selected: selectedRpe == rpe,
                             onTap: () {
                               setDialogState(() {
                                 selectedRpe = selectedRpe == rpe ? null : rpe;
                               });
                             },
-                            borderRadius: AppRadius.chip,
-                            child: Container(
-                              width: 32,
-                              height: 32,
-                              decoration: BoxDecoration(
-                                color: selectedRpe == rpe
-                                    ? accent
-                                    : Colors.transparent,
-                                border: Border.all(
-                                  color: selectedRpe == rpe
-                                      ? accent
-                                      : borderColor(context),
+                            child: InkWell(
+                              onTap: () {
+                                setDialogState(() {
+                                  selectedRpe = selectedRpe == rpe ? null : rpe;
+                                });
+                              },
+                              borderRadius: AppRadius.chip,
+                              child: Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color:
+                                      selectedRpe == rpe
+                                          ? accentFillColor(context)
+                                          : Colors.transparent,
+                                  border: Border.all(
+                                    color:
+                                        selectedRpe == rpe
+                                            ? accentFillColor(context)
+                                            : borderColor(context),
+                                  ),
+                                  borderRadius: AppRadius.chip,
                                 ),
-                                borderRadius: AppRadius.chip,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  '$rpe',
-                                  style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 12,
-                                    color: selectedRpe == rpe
-                                        ? onAccentColor(context)
-                                        : textPrimaryColor(context),
+                                child: Center(
+                                  child: Text(
+                                    '$rpe',
+                                    style: GoogleFonts.jetBrainsMono(
+                                      fontSize: 12,
+                                      color:
+                                          selectedRpe == rpe
+                                              ? onAccentColor(context)
+                                              : textPrimaryColor(context),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -532,8 +607,9 @@ class WorkoutDialogs {
                       const SizedBox(height: 12),
                       TextField(
                         controller: noteController,
-                        decoration:
-                            const InputDecoration(labelText: 'Note (optional)'),
+                        decoration: const InputDecoration(
+                          labelText: 'Note (optional)',
+                        ),
                         maxLines: 2,
                       ),
                       const SizedBox(height: 12),
@@ -546,26 +622,34 @@ class WorkoutDialogs {
                               Navigator.pop(context);
                               onDelete();
                             },
-                            child: Text('[DELETE]',
-                                style: GoogleFonts.jetBrainsMono(
-                                    color: errorColor(context))),
+                            child: Text(
+                              '[DELETE]',
+                              style: GoogleFonts.jetBrainsMono(
+                                color: errorColor(context),
+                              ),
+                            ),
                           ),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
+                          OverflowBar(
+                            alignment: MainAxisAlignment.end,
                             children: [
                               TextButton(
                                 onPressed: () => Navigator.pop(context),
-                                child: Text('[CANCEL]',
-                                    style: GoogleFonts.jetBrainsMono(
-                                        color: textSecondaryColor(context))),
+                                child: Text(
+                                  '[CANCEL]',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    color: textSecondaryColor(context),
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 8),
                               ElevatedButton(
                                 onPressed: () {
-                                  final weight =
-                                      double.tryParse(weightController.text);
-                                  final reps =
-                                      int.tryParse(repsController.text);
+                                  final weight = double.tryParse(
+                                    weightController.text,
+                                  );
+                                  final reps = int.tryParse(
+                                    repsController.text,
+                                  );
 
                                   if (weight == null ||
                                       weight < 0 ||
@@ -573,8 +657,10 @@ class WorkoutDialogs {
                                       reps <= 0) {
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(
-                                        content: Text('> Invalid values',
-                                            style: GoogleFonts.jetBrainsMono()),
+                                        content: Text(
+                                          '> Invalid values',
+                                          style: GoogleFonts.jetBrainsMono(),
+                                        ),
                                         backgroundColor: errorColor(context),
                                       ),
                                     );
@@ -585,9 +671,10 @@ class WorkoutDialogs {
                                     reps: reps,
                                     weight: weight,
                                     rpe: selectedRpe,
-                                    note: noteController.text.isNotEmpty
-                                        ? noteController.text
-                                        : null,
+                                    note:
+                                        noteController.text.isNotEmpty
+                                            ? noteController.text
+                                            : null,
                                   );
 
                                   Navigator.pop(context);
@@ -597,8 +684,10 @@ class WorkoutDialogs {
                                   backgroundColor: accentFillColor(context),
                                   foregroundColor: onAccentColor(context),
                                 ),
-                                child: Text('[SAVE]',
-                                    style: GoogleFonts.jetBrainsMono()),
+                                child: Text(
+                                  '[SAVE]',
+                                  style: GoogleFonts.jetBrainsMono(),
+                                ),
                               ),
                             ],
                           ),
@@ -634,55 +723,64 @@ class WorkoutDialogs {
           ),
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '> NOTE',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: accent,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '> NOTE',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: accent,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: noteController,
-                  decoration: const InputDecoration(
-                    labelText: 'Note',
-                    hintText: 'Add a note...',
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: noteController,
+                    decoration: const InputDecoration(
+                      labelText: 'Note',
+                      hintText: 'Add a note...',
+                    ),
+                    maxLines: 3,
                   ),
-                  maxLines: 3,
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: Text('[CANCEL]',
+                  const SizedBox(height: 16),
+                  OverflowBar(
+                    alignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          '[CANCEL]',
                           style: GoogleFonts.jetBrainsMono(
-                              color: textSecondaryColor(context))),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        onSave(noteController.text.isNotEmpty
-                            ? noteController.text
-                            : null);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: accentFillColor(context),
-                        foregroundColor: onAccentColor(context),
+                            color: textSecondaryColor(context),
+                          ),
+                        ),
                       ),
-                      child:
-                          Text('[SAVE]', style: GoogleFonts.jetBrainsMono()),
-                    ),
-                  ],
-                ),
-              ],
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          onSave(
+                            noteController.text.isNotEmpty
+                                ? noteController.text
+                                : null,
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentFillColor(context),
+                          foregroundColor: onAccentColor(context),
+                        ),
+                        child: Text(
+                          '[SAVE]',
+                          style: GoogleFonts.jetBrainsMono(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -700,30 +798,35 @@ class WorkoutDialogs {
       context: context,
       backgroundColor: surfaceColor(context),
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
-      builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(LucideIcons.pencil, color: accent),
-              title: Text('RENAME', style: GoogleFonts.jetBrainsMono()),
-              onTap: () {
-                Navigator.pop(context);
-                onRename();
-              },
+      builder:
+          (context) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(LucideIcons.pencil, color: accent),
+                  title: Text('RENAME', style: GoogleFonts.jetBrainsMono()),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onRename();
+                  },
+                ),
+                ListTile(
+                  leading: Icon(LucideIcons.trash2, color: errorColor(context)),
+                  title: Text(
+                    'DELETE',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: errorColor(context),
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.pop(context);
+                    onDelete();
+                  },
+                ),
+              ],
             ),
-            ListTile(
-              leading: Icon(LucideIcons.trash2, color: errorColor(context)),
-              title: Text('DELETE',
-                  style: GoogleFonts.jetBrainsMono(color: errorColor(context))),
-              onTap: () {
-                Navigator.pop(context);
-                onDelete();
-              },
-            ),
-          ],
-        ),
-      ),
+          ),
     );
   }
 
@@ -736,68 +839,76 @@ class WorkoutDialogs {
     final controller = TextEditingController(text: currentWeek.toString());
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context), width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> RENAME WEEK',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: accent,
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  labelText: 'Week number',
-                  hintText: 'e.g., 1',
-                ),
-                keyboardType: TextInputType.number,
-                autofocus: true,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text('[CANCEL]',
-                        style: GoogleFonts.jetBrainsMono(
-                            color: textSecondaryColor(context))),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      final newWeek = int.tryParse(controller.text);
-                      if (newWeek != null && newWeek > 0) {
-                        Navigator.pop(context);
-                        onRename(newWeek);
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentFillColor(context),
-                      foregroundColor: onAccentColor(context),
+      builder:
+          (context) => Dialog(
+            backgroundColor: surfaceColor(context),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.card,
+              side: BorderSide(color: borderColor(context), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '> RENAME WEEK',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: accent,
+                      ),
                     ),
-                    child:
-                        Text('[RENAME]', style: GoogleFonts.jetBrainsMono()),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: controller,
+                      decoration: const InputDecoration(
+                        labelText: 'Week number',
+                        hintText: 'e.g., 1',
+                      ),
+                      keyboardType: TextInputType.number,
+                      autofocus: true,
+                    ),
+                    const SizedBox(height: 16),
+                    OverflowBar(
+                      alignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: Text(
+                            '[CANCEL]',
+                            style: GoogleFonts.jetBrainsMono(
+                              color: textSecondaryColor(context),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            final newWeek = int.tryParse(controller.text);
+                            if (newWeek != null && newWeek > 0) {
+                              Navigator.pop(context);
+                              onRename(newWeek);
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accentFillColor(context),
+                            foregroundColor: onAccentColor(context),
+                          ),
+                          child: Text(
+                            '[RENAME]',
+                            style: GoogleFonts.jetBrainsMono(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 
@@ -807,58 +918,68 @@ class WorkoutDialogs {
   }) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context), width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> DELETE WEEK?',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: errorColor(context),
+      builder:
+          (context) => Dialog(
+            backgroundColor: surfaceColor(context),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.card,
+              side: BorderSide(color: borderColor(context), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '> DELETE WEEK?',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: errorColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'This will permanently delete this week\'s workout data.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: textSecondaryColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    OverflowBar(
+                      alignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: Text(
+                            '[CANCEL]',
+                            style: GoogleFonts.jetBrainsMono(
+                              color: textSecondaryColor(context),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: errorColor(context),
+                            foregroundColor: onColor(errorColor(context)),
+                          ),
+                          child: Text(
+                            '[DELETE]',
+                            style: GoogleFonts.jetBrainsMono(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'This will permanently delete this week\'s workout data.',
-                style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12, color: textSecondaryColor(context)),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text('[CANCEL]',
-                        style: GoogleFonts.jetBrainsMono(
-                            color: textSecondaryColor(context))),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: errorColor(context),
-                      foregroundColor: onColor(errorColor(context)),
-                    ),
-                    child:
-                        Text('[DELETE]', style: GoogleFonts.jetBrainsMono()),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
     return result ?? false;
   }
@@ -869,58 +990,68 @@ class WorkoutDialogs {
   }) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context), width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> DELETE EXERCISE?',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: errorColor(context),
+      builder:
+          (context) => Dialog(
+            backgroundColor: surfaceColor(context),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.card,
+              side: BorderSide(color: borderColor(context), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '> DELETE EXERCISE?',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: errorColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'This will permanently delete "$exerciseName" and all its sets.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: textSecondaryColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    OverflowBar(
+                      alignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: Text(
+                            '[CANCEL]',
+                            style: GoogleFonts.jetBrainsMono(
+                              color: textSecondaryColor(context),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: errorColor(context),
+                            foregroundColor: onColor(errorColor(context)),
+                          ),
+                          child: Text(
+                            '[DELETE]',
+                            style: GoogleFonts.jetBrainsMono(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'This will permanently delete "$exerciseName" and all its sets.',
-                style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12, color: textSecondaryColor(context)),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text('[CANCEL]',
-                        style: GoogleFonts.jetBrainsMono(
-                            color: textSecondaryColor(context))),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: errorColor(context),
-                      foregroundColor: onColor(errorColor(context)),
-                    ),
-                    child:
-                        Text('[DELETE]', style: GoogleFonts.jetBrainsMono()),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
     return result ?? false;
   }
@@ -936,59 +1067,69 @@ class WorkoutDialogs {
   }) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context), width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> DELETE PLAN?',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: errorColor(context),
+      builder:
+          (context) => Dialog(
+            backgroundColor: surfaceColor(context),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.card,
+              side: BorderSide(color: borderColor(context), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '> DELETE PLAN?',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: errorColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Removes "$planName" from your plans. '
+                      'Logged sessions stay in History.',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 12,
+                        color: textSecondaryColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    OverflowBar(
+                      alignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: Text(
+                            '[CANCEL]',
+                            style: GoogleFonts.jetBrainsMono(
+                              color: textSecondaryColor(context),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: errorColor(context),
+                            foregroundColor: onColor(errorColor(context)),
+                          ),
+                          child: Text(
+                            '[DELETE]',
+                            style: GoogleFonts.jetBrainsMono(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Removes "$planName" from your plans. '
-                'Logged sessions stay in History.',
-                style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12, color: textSecondaryColor(context)),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text('[CANCEL]',
-                        style: GoogleFonts.jetBrainsMono(
-                            color: textSecondaryColor(context))),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: errorColor(context),
-                      foregroundColor: onColor(errorColor(context)),
-                    ),
-                    child:
-                        Text('[DELETE]', style: GoogleFonts.jetBrainsMono()),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
     return result ?? false;
   }
@@ -1001,58 +1142,68 @@ class WorkoutDialogs {
   static Future<bool> showDiscardChangesDialog(BuildContext context) async {
     final result = await showDialog<bool>(
       context: context,
-      builder: (context) => Dialog(
-        backgroundColor: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context), width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> DISCARD CHANGES?',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: errorColor(context),
+      builder:
+          (context) => Dialog(
+            backgroundColor: surfaceColor(context),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.card,
+              side: BorderSide(color: borderColor(context), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '> DISCARD CHANGES?',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: errorColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'This plan has unsaved edits. Leaving now throws them away.',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 12,
+                        color: textSecondaryColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    OverflowBar(
+                      alignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: Text(
+                            '[KEEP EDITING]',
+                            style: GoogleFonts.jetBrainsMono(
+                              color: textSecondaryColor(context),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: errorColor(context),
+                            foregroundColor: onColor(errorColor(context)),
+                          ),
+                          child: Text(
+                            '[DISCARD]',
+                            style: GoogleFonts.jetBrainsMono(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'This plan has unsaved edits. Leaving now throws them away.',
-                style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12, color: textSecondaryColor(context)),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context, false),
-                    child: Text('[KEEP EDITING]',
-                        style: GoogleFonts.jetBrainsMono(
-                            color: textSecondaryColor(context))),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context, true),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: errorColor(context),
-                      foregroundColor: onColor(errorColor(context)),
-                    ),
-                    child:
-                        Text('[DISCARD]', style: GoogleFonts.jetBrainsMono()),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
     return result ?? false;
   }
@@ -1076,91 +1227,101 @@ class WorkoutDialogs {
     required Color accent,
     required void Function(int reps, double weight) onSave,
   }) {
-    final weightController =
-        TextEditingController(text: formatWeight(weight));
+    final weightController = TextEditingController(text: formatWeight(weight));
     final repsController = TextEditingController(text: reps.toString());
 
     showDialog<void>(
       context: context,
-      builder: (dialogContext) => Dialog(
-        backgroundColor: surfaceColor(dialogContext),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(dialogContext), width: 1),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '> SET $setNumber',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: accent,
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: weightController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Weight (kg)',
-                  hintText: 'e.g., 70',
-                ),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: repsController,
-                decoration: const InputDecoration(
-                  labelText: 'Reps',
-                  hintText: 'e.g., 8',
-                ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(dialogContext),
-                    child: Text('[CANCEL]',
-                        style: GoogleFonts.jetBrainsMono(
-                            color: textSecondaryColor(dialogContext))),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton(
-                    onPressed: () {
-                      // An unparseable or blank field keeps what the set already
-                      // had, so a stray keystroke cannot silently zero a
-                      // prescription.
-                      final newWeight =
-                          double.tryParse(weightController.text.trim()) ??
-                              weight;
-                      final newReps =
-                          int.tryParse(repsController.text.trim()) ?? reps;
-                      Navigator.pop(dialogContext);
-                      onSave(
-                        newReps.clamp(1, 999),
-                        newWeight.clamp(0, 999).toDouble(),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentFillColor(context),
-                      foregroundColor: onAccentColor(context),
+      builder:
+          (dialogContext) => Dialog(
+            backgroundColor: surfaceColor(dialogContext),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.card,
+              side: BorderSide(color: borderColor(dialogContext), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '> SET $setNumber',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: accent,
+                      ),
                     ),
-                    child: Text('[SAVE]', style: GoogleFonts.jetBrainsMono()),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: weightController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Weight (kg)',
+                        hintText: 'e.g., 70',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: repsController,
+                      decoration: const InputDecoration(
+                        labelText: 'Reps',
+                        hintText: 'e.g., 8',
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                    const SizedBox(height: 12),
+                    OverflowBar(
+                      alignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(dialogContext),
+                          child: Text(
+                            '[CANCEL]',
+                            style: GoogleFonts.jetBrainsMono(
+                              color: textSecondaryColor(dialogContext),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () {
+                            // An unparseable or blank field keeps what the set already
+                            // had, so a stray keystroke cannot silently zero a
+                            // prescription.
+                            final newWeight =
+                                double.tryParse(weightController.text.trim()) ??
+                                weight;
+                            final newReps =
+                                int.tryParse(repsController.text.trim()) ??
+                                reps;
+                            Navigator.pop(dialogContext);
+                            onSave(
+                              newReps.clamp(1, 999),
+                              newWeight.clamp(0, 999).toDouble(),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: accentFillColor(context),
+                            foregroundColor: onAccentColor(context),
+                          ),
+                          child: Text(
+                            '[SAVE]',
+                            style: GoogleFonts.jetBrainsMono(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
-      ),
     );
   }
 }

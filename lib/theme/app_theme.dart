@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -85,7 +86,9 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
 
   @override
   ThemeExtension<AppColorScheme> lerp(
-      ThemeExtension<AppColorScheme>? other, double t) {
+    ThemeExtension<AppColorScheme>? other,
+    double t,
+  ) {
     if (other is! AppColorScheme) return this;
     return AppColorScheme(
       background: Color.lerp(background, other.background, t)!,
@@ -194,6 +197,93 @@ Color onAccentColor(BuildContext context) {
   return scheme?.onAccent ?? onColor(accentColor(context));
 }
 
+const double _meshHueSpread = 40 * math.pi / 180;
+const double _meshPeakDark = 0.85;
+const double _meshPeakLight = 0.14;
+
+List<Color> headerMeshTones(BuildContext context) {
+  final muted = accentMutedColor(context);
+  final o = oklchOf(muted);
+  return [
+    muted,
+    colorFromOklch(o.l, o.c, o.h + _meshHueSpread),
+    colorFromOklch(o.l, o.c, o.h - _meshHueSpread),
+  ];
+}
+
+Widget headerFlexibleSpace(BuildContext context, {double bottomInset = 0}) {
+  return Padding(
+    padding: EdgeInsets.only(bottom: bottomInset),
+    child: headerMesh(context),
+  );
+}
+
+Widget headerMesh(BuildContext context) {
+  final isDark = Theme.of(context).brightness == Brightness.dark;
+  return ClipRect(
+    child: ImageFiltered(
+      imageFilter: ui.ImageFilter.blur(
+        sigmaX: 18,
+        sigmaY: 18,
+        tileMode: TileMode.decal,
+      ),
+      child: SizedBox.expand(
+        child: CustomPaint(
+          painter: _HeaderMeshPainter(
+            tones: headerMeshTones(context),
+            peak: isDark ? _meshPeakDark : _meshPeakLight,
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class _HeaderMeshPainter extends CustomPainter {
+  _HeaderMeshPainter({required this.tones, required this.peak});
+
+  final List<Color> tones;
+  final double peak;
+
+  static const List<(double, double, double)> _blobs = [
+    (0.86, 0.08, 0.62),
+    (1.05, 0.90, 0.52),
+    (0.58, -0.12, 0.42),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    for (var i = 0; i < _blobs.length; i++) {
+      final (fx, fy, fr) = _blobs[i];
+      final center = Offset(fx * size.width, fy * size.height);
+      final radius = fr * size.width;
+      canvas.drawRect(
+        rect,
+        Paint()
+          ..shader = RadialGradient(
+            colors: [
+              tones[i % tones.length].withValues(alpha: peak),
+              tones[i % tones.length].withValues(alpha: 0),
+            ],
+          ).createShader(Rect.fromCircle(center: center, radius: radius)),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_HeaderMeshPainter old) =>
+      old.peak != peak || !_sameTones(old.tones, tones);
+
+  static bool _sameTones(List<Color> a, List<Color> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Derivation (direction A)
 // ---------------------------------------------------------------------------
@@ -290,9 +380,10 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
   // kept whenever it already reads and moved only when it doesn't — that single
   // rule is the fix for both the illegible dark-mode label and the dead light
   // mode, which used to draw dark hexes on a light page.
-  final worse = contrastRatio(seed, background) < contrastRatio(seed, surface)
-      ? background
-      : surface;
+  final worse =
+      contrastRatio(seed, background) < contrastRatio(seed, surface)
+          ? background
+          : surface;
   final accent = solveForContrast(
     seed: seed,
     against: worse,
@@ -312,9 +403,17 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
   // opaque — not `accent.withAlpha(...)`, which composited differently on every
   // ground and drifted the token between screens.
   final accentMuted = toneBetween(
-      seed: seed, from: background, to: accentFill, fraction: 1 / 3);
+    seed: seed,
+    from: background,
+    to: accentFill,
+    fraction: 1 / 3,
+  );
   final accentDim = toneBetween(
-      seed: seed, from: background, to: accentFill, fraction: 2 / 3);
+    seed: seed,
+    from: background,
+    to: accentFill,
+    fraction: 2 / 3,
+  );
 
   // Error and success are the two ends of the same traffic-light ramp the RPE
   // badges use — same hue, same chroma, same lightness seed (see
@@ -374,6 +473,13 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
   final accent = c.accent;
   final accentFill = c.accentFill;
   final onAccent = c.onAccent;
+  WidgetStateProperty<Color?> interactionOverlay(Color color) =>
+      WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.pressed)) return color.withAlpha(31);
+        if (states.contains(WidgetState.focused)) return color.withAlpha(26);
+        if (states.contains(WidgetState.hovered)) return color.withAlpha(20);
+        return null;
+      });
 
   return ThemeData(
     useMaterial3: true,
@@ -400,7 +506,7 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
       foregroundColor: textPrimary,
       elevation: 0,
       centerTitle: false,
-      titleTextStyle: GoogleFonts.jetBrainsMono(
+      titleTextStyle: TextStyle(
         fontSize: 16,
         fontWeight: FontWeight.bold,
         color: textPrimary,
@@ -416,42 +522,50 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
       ),
       margin: EdgeInsets.zero,
     ),
-    dividerTheme: DividerThemeData(
-      color: border,
-      thickness: 1,
-      space: 1,
-    ),
+    dividerTheme: DividerThemeData(color: border, thickness: 1, space: 1),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        // The app's own ground, not pure black: this is an accent-on-ground
-        // button with an accent hairline, and in light mode a black slab read
-        // as a hole punched in the page.
-        backgroundColor: background,
-        foregroundColor: accent,
+        backgroundColor: accentFill,
+        foregroundColor: onAccent,
+        disabledBackgroundColor: surface,
+        disabledForegroundColor: textSecondary,
+        minimumSize: const Size(48, 48),
+        visualDensity: VisualDensity.standard,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.button,
-          side: BorderSide(color: accent, width: 1),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        textStyle: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold),
-      ),
-    ),
-    outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        foregroundColor: accent,
-        side: BorderSide(color: accent, width: 1),
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         textStyle: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold),
-      ),
+      ).copyWith(overlayColor: interactionOverlay(onAccent)),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: textPrimary,
+        disabledForegroundColor: textSecondary,
+        minimumSize: const Size(48, 48),
+        visualDensity: VisualDensity.standard,
+        side: BorderSide(color: border, width: 1),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        textStyle: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold),
+      ).copyWith(overlayColor: interactionOverlay(textPrimary)),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: accent,
+        disabledForegroundColor: textSecondary,
+        minimumSize: const Size(48, 48),
+        visualDensity: VisualDensity.standard,
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
         textStyle: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold),
-      ),
+      ).copyWith(overlayColor: interactionOverlay(accent)),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        foregroundColor: accent,
+        disabledForegroundColor: textSecondary,
+        minimumSize: const Size(48, 48),
+        visualDensity: VisualDensity.standard,
+      ).copyWith(overlayColor: interactionOverlay(accent)),
     ),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
       backgroundColor: background,
@@ -480,8 +594,8 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
         borderRadius: AppRadius.field,
         borderSide: BorderSide(color: error, width: 1),
       ),
-      labelStyle: GoogleFonts.jetBrainsMono(color: textSecondary),
-      hintStyle: GoogleFonts.jetBrainsMono(color: textSecondary),
+      labelStyle: TextStyle(color: textSecondary),
+      hintStyle: TextStyle(color: textSecondary),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     ),
     chipTheme: ChipThemeData(
@@ -489,8 +603,8 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
       // A selected chip is a ground with a label on it, so it takes the fill
       // tone and the foreground solved against that fill.
       selectedColor: accentFill,
-      labelStyle: GoogleFonts.jetBrainsMono(color: textPrimary),
-      secondaryLabelStyle: GoogleFonts.jetBrainsMono(color: onAccent),
+      labelStyle: TextStyle(color: textPrimary),
+      secondaryLabelStyle: TextStyle(color: onAccent),
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.chip,
         side: BorderSide(color: border, width: 1),
@@ -528,16 +642,16 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
         borderRadius: AppRadius.card,
         side: BorderSide(color: border, width: 1),
       ),
-      titleTextStyle: GoogleFonts.jetBrainsMono(
+      titleTextStyle: TextStyle(
         fontSize: 18,
         fontWeight: FontWeight.bold,
         color: textPrimary,
       ),
-      contentTextStyle: GoogleFonts.jetBrainsMono(color: textPrimary),
+      contentTextStyle: TextStyle(color: textPrimary),
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: surface,
-      contentTextStyle: GoogleFonts.jetBrainsMono(color: textPrimary),
+      contentTextStyle: TextStyle(color: textPrimary),
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.button,
         side: BorderSide(color: border, width: 1),
@@ -547,8 +661,8 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
     tabBarTheme: TabBarThemeData(
       labelColor: accent,
       unselectedLabelColor: textSecondary,
-      labelStyle: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold),
-      unselectedLabelStyle: GoogleFonts.jetBrainsMono(),
+      labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+      unselectedLabelStyle: const TextStyle(),
       indicator: UnderlineTabIndicator(
         borderSide: BorderSide(color: accent, width: 2),
       ),
@@ -569,83 +683,71 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
         border: Border.all(color: border, width: 1),
         borderRadius: AppRadius.chip,
       ),
-      textStyle: GoogleFonts.jetBrainsMono(color: textPrimary),
+      textStyle: TextStyle(color: textPrimary),
     ),
   );
 }
 
 TextTheme _buildTextTheme(Color textPrimary, Color textSecondary) {
   return TextTheme(
-    displayLarge: GoogleFonts.jetBrainsMono(
+    displayLarge: TextStyle(
       fontSize: 32,
       fontWeight: FontWeight.bold,
       color: textPrimary,
     ),
-    displayMedium: GoogleFonts.jetBrainsMono(
+    displayMedium: TextStyle(
       fontSize: 28,
       fontWeight: FontWeight.bold,
       color: textPrimary,
     ),
-    displaySmall: GoogleFonts.jetBrainsMono(
+    displaySmall: TextStyle(
       fontSize: 24,
       fontWeight: FontWeight.bold,
       color: textPrimary,
     ),
-    headlineLarge: GoogleFonts.jetBrainsMono(
+    headlineLarge: TextStyle(
       fontSize: 22,
       fontWeight: FontWeight.bold,
       color: textPrimary,
     ),
-    headlineMedium: GoogleFonts.jetBrainsMono(
+    headlineMedium: TextStyle(
       fontSize: 20,
       fontWeight: FontWeight.bold,
       color: textPrimary,
     ),
-    headlineSmall: GoogleFonts.jetBrainsMono(
+    headlineSmall: TextStyle(
       fontSize: 18,
       fontWeight: FontWeight.bold,
       color: textPrimary,
     ),
-    titleLarge: GoogleFonts.jetBrainsMono(
+    titleLarge: TextStyle(
       fontSize: 16,
       fontWeight: FontWeight.bold,
       color: textPrimary,
     ),
-    titleMedium: GoogleFonts.jetBrainsMono(
+    titleMedium: TextStyle(
       fontSize: 14,
       fontWeight: FontWeight.bold,
       color: textPrimary,
     ),
-    titleSmall: GoogleFonts.jetBrainsMono(
+    titleSmall: TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.bold,
       color: textPrimary,
     ),
-    bodyLarge: GoogleFonts.jetBrainsMono(
-      fontSize: 16,
-      color: textPrimary,
-    ),
-    bodyMedium: GoogleFonts.jetBrainsMono(
-      fontSize: 14,
-      color: textPrimary,
-    ),
-    bodySmall: GoogleFonts.jetBrainsMono(
-      fontSize: 12,
-      color: textSecondary,
-    ),
-    labelLarge: GoogleFonts.jetBrainsMono(
+    bodyLarge: TextStyle(fontSize: 16, color: textPrimary),
+    bodyMedium: TextStyle(fontSize: 14, color: textPrimary),
+    bodySmall: TextStyle(fontSize: 12, color: textSecondary),
+    labelLarge: TextStyle(
       fontSize: 14,
       fontWeight: FontWeight.bold,
       color: textPrimary,
     ),
-    labelMedium: GoogleFonts.jetBrainsMono(
+    labelMedium: TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.bold,
       color: textPrimary,
     ),
-    labelSmall: GoogleFonts.jetBrainsMono(
-      fontSize: 10,
-      color: textSecondary,
-    ),
+    labelSmall: TextStyle(fontSize: 10, color: textSecondary),
   );
 }

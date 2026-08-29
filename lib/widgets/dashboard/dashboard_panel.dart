@@ -5,7 +5,7 @@ import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 
 /// The shared frame every dashboard tile sits in: 1px hairline box, a
-/// `> TITLE` header separated by a rule, and an optional muted caption on the
+/// sans title header separated by a rule, and an optional muted caption on the
 /// right of the header.
 class DashboardPanel extends StatelessWidget {
   final String title;
@@ -46,41 +46,70 @@ class DashboardPanel extends StatelessWidget {
             decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: border)),
             ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    '> $title',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: accentColor(context),
-                      letterSpacing: 0.06,
+            child:
+                MediaQuery.textScalerOf(context).scale(1) > 1.2
+                    ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleSmall,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (caption != null || action != null) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              if (caption != null)
+                                Flexible(
+                                  child: Text(
+                                    caption!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.jetBrainsMono(
+                                      fontSize: 9,
+                                      color: textSecondaryColor(context),
+                                      letterSpacing: 0.06,
+                                    ),
+                                  ),
+                                )
+                              else
+                                const SizedBox.shrink(),
+                              if (action != null) action!,
+                            ],
+                          ),
+                        ],
+                      ],
+                    )
+                    : Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: Theme.of(context).textTheme.titleSmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (caption != null)
+                          Text(
+                            caption!,
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 9,
+                              color: textSecondaryColor(context),
+                              letterSpacing: 0.06,
+                            ),
+                          ),
+                        if (action != null) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          action!,
+                        ],
+                      ],
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                if (caption != null)
-                  Text(
-                    caption!,
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 9,
-                      color: textSecondaryColor(context),
-                      letterSpacing: 0.06,
-                    ),
-                  ),
-                if (action != null) ...[
-                  const SizedBox(width: AppSpacing.sm),
-                  action!,
-                ],
-              ],
-            ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: child,
-          ),
+          Padding(padding: const EdgeInsets.all(AppSpacing.md), child: child),
         ],
       ),
     );
