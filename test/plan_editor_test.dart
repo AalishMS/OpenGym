@@ -89,7 +89,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await tester.enterText(
-      find.widgetWithText(TextField, 'Search exercises'),
+      find.widgetWithText(TextField, 'Search by exercise name'),
       'press',
     );
     await tester.pumpAndSettle();
@@ -129,6 +129,24 @@ void main() {
         hasSelectedState: true,
       ),
     );
+  });
+
+  testWidgets('exercise selection can be toggled off', (tester) async {
+    await pumpEditor(tester);
+    await tester.tap(find.text('[+ ADD EXERCISE]'));
+    await tester.pumpAndSettle();
+    expect(find.text('0 SELECTED'), findsOneWidget);
+
+    await tester.tap(find.text('Bench Press'));
+    await tester.pump();
+    expect(find.text('1 SELECTED'), findsOneWidget);
+    expect(find.text('REMOVE'), findsOneWidget);
+
+    await tester.tap(find.text('REMOVE'));
+    await tester.pump();
+    expect(find.text('0 SELECTED'), findsOneWidget);
+    expect(find.text('REMOVE'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('plan color selection exposes selected semantics', (
@@ -179,7 +197,7 @@ void main() {
     );
     expect(tester.getSize(tile).height, greaterThanOrEqualTo(48));
     await tester.enterText(
-      find.widgetWithText(TextField, 'Search exercises'),
+      find.widgetWithText(TextField, 'Search by exercise name'),
       'press',
     );
     await tester.pumpAndSettle();
@@ -255,7 +273,7 @@ void main() {
     await pumpEditor(tester);
     await tester.tap(find.text('[+ ADD EXERCISE]'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('[+ CUSTOM]'));
+    await tester.tap(find.text('CUSTOM EXERCISE'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, '   ');
     await tester.pump();
@@ -265,7 +283,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('[+ CUSTOM]'));
+    await tester.tap(find.text('CUSTOM EXERCISE'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, 'Bench Press');
     await tester.pump();

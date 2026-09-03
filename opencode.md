@@ -118,6 +118,10 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Improved the plan editor's add-exercise sheet:
+  - Exercise rows now toggle between add and remove, so a selection can be undone before closing the sheet
+  - Replaced the cramped two-column grid with full-width rows, a live selected count, clearer action labels, stronger typography, and a more legible search/category layout
+  - Added a widget regression test for selecting and unselecting an exercise
 - Added per-set plan targets:
   - New `SetTemplate` model (typeId: 5) holding prescribed `reps`/`weight`
   - `ExerciseTemplate.setTargets` is optional and read through `targetAt(index)`, so pre-existing plans need no migration

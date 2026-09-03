@@ -241,6 +241,25 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
     setSheetState?.call(() {});
   }
 
+  void _toggleExercise(String name, StateSetter setSheetState) {
+    final normalizedName = name.toLowerCase();
+    final isSelected = _exercises.any(
+      (exercise) => exercise.name.toLowerCase() == normalizedName,
+    );
+
+    if (isSelected) {
+      setState(() {
+        _exercises.removeWhere(
+          (exercise) => exercise.name.toLowerCase() == normalizedName,
+        );
+      });
+      setSheetState(() {});
+      return;
+    }
+
+    _addExercise(name, setSheetState);
+  }
+
   void _showAddExerciseSheet() {
     String selectedCategory = ExerciseLibrary.categoryNames.first;
     String query = '';
@@ -290,24 +309,37 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      child: Row(
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.lg,
+                        AppSpacing.md,
+                        AppSpacing.lg,
+                        AppSpacing.lg,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Expanded(
-                            child: Text(
-                              '> ADD EXERCISE',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: textPrimaryColor(context),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'ADD EXERCISES',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(letterSpacing: -0.3),
+                                ),
                               ),
-                            ),
+                              _SelectionCount(count: _exercises.length),
+                            ],
                           ),
+                          const SizedBox(height: AppSpacing.xs),
                           Text(
-                            '${_exercises.length} ADDED',
-                            style: Theme.of(context).textTheme.labelSmall
-                                ?.copyWith(color: textSecondaryColor(context)),
+                            'Tap an exercise to add or remove it from the plan.',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(height: 1.4),
                           ),
                         ],
                       ),
@@ -360,17 +392,13 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                                               vertical: AppSpacing.xs,
                                             ),
                                             decoration: BoxDecoration(
-                                              color:
-                                                  active
-                                                      ? accent
-                                                      : backgroundColor(
-                                                        context,
-                                                      ),
+                                              color: active
+                                                  ? accentFillColor(context)
+                                                  : backgroundColor(context),
                                               border: Border.all(
-                                                color:
-                                                    active
-                                                        ? accent
-                                                        : borderColor(context),
+                                                color: active
+                                                    ? accentFillColor(context)
+                                                    : borderColor(context),
                                               ),
                                               borderRadius: AppRadius.chip,
                                             ),
@@ -400,26 +428,22 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                       ),
                     const SizedBox(height: AppSpacing.md),
                     Expanded(
-                      child: GridView.builder(
+                      child: ListView.separated(
                         padding: const EdgeInsets.fromLTRB(
                           AppSpacing.lg,
                           0,
                           AppSpacing.lg,
                           AppSpacing.lg,
                         ),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: 2,
-                              mainAxisSpacing: AppSpacing.sm,
-                              crossAxisSpacing: AppSpacing.sm,
-                              mainAxisExtent: 48,
-                            ),
                         itemCount: exercises.length + 1,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(height: AppSpacing.sm),
                         itemBuilder: (context, index) {
-                          if (index == exercises.length) {
+                          if (index == 0) {
                             return _ExercisePickTile(
-                              label: '[+ CUSTOM]',
+                              label: 'CUSTOM EXERCISE',
                               accent: accent,
+                              isCustom: true,
                               onTap:
                                   () => _showCustomExerciseDialog(
                                     sheetContext,
@@ -428,7 +452,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                             );
                           }
 
-                          final name = exercises[index];
+                          final name = exercises[index - 1];
                           final added = selectedNames.contains(
                             name.toLowerCase(),
                           );
@@ -436,10 +460,8 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                             label: name,
                             accent: accent,
                             added: added,
-                            onTap:
-                                added
-                                    ? null
-                                    : () => _addExercise(name, setSheetState),
+                            onTap: () =>
+                                _toggleExercise(name, setSheetState),
                           );
                         },
                       ),
@@ -1366,34 +1388,57 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return TextField(
+      onChanged: onChanged,
+      textInputAction: TextInputAction.search,
+      style: Theme.of(context).textTheme.bodyMedium,
+      decoration: InputDecoration(
+        filled: true,
+        fillColor: backgroundColor(context),
+        prefixIcon: Icon(
+          LucideIcons.search,
+          size: 16,
+          color: textSecondaryColor(context),
+        ),
+        hintText: 'Search by exercise name',
+        hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: textSecondaryColor(context),
+            ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
+      ),
+    );
+  }
+}
+
+class _SelectionCount extends StatelessWidget {
+  final int count;
+
+  const _SelectionCount({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = accentColor(context);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
       decoration: BoxDecoration(
         color: backgroundColor(context),
-        border: Border.all(color: borderColor(context)),
-        borderRadius: AppRadius.field,
+        border: Border.all(color: accent),
+        borderRadius: AppRadius.badge,
       ),
-      child: TextField(
-        onChanged: onChanged,
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: textPrimaryColor(context)),
-        decoration: InputDecoration(
-          icon: Icon(
-            LucideIcons.search,
-            size: 14,
-            color: textSecondaryColor(context),
-          ),
-          hintText: 'Search exercises',
-          hintStyle: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: textSecondaryColor(context)),
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          errorBorder: InputBorder.none,
-          disabledBorder: InputBorder.none,
-        ),
+      child: Text(
+        '$count SELECTED',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: accent,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.5,
+            ),
       ),
     );
   }
@@ -1403,43 +1448,86 @@ class _ExercisePickTile extends StatelessWidget {
   final String label;
   final Color accent;
   final bool added;
+  final bool isCustom;
   final VoidCallback? onTap;
 
   const _ExercisePickTile({
     required this.label,
     required this.accent,
     this.added = false,
+    this.isCustom = false,
     this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.chip,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-        decoration: BoxDecoration(
-          color: added ? accent.withAlpha(32) : backgroundColor(context),
-          border: Border.all(color: added ? accent : borderColor(context)),
-          borderRadius: AppRadius.chip,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: added ? accent : textPrimaryColor(context),
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+    final accentFill = accentFillColor(context);
+    final statusLabel = added ? 'REMOVE' : (isCustom ? 'CREATE' : 'ADD');
+
+    return Semantics(
+      button: true,
+      selected: added,
+      label: '$label, $statusLabel',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadius.button,
+        splashColor: accent.withValues(alpha: 0.2),
+        highlightColor: accent.withValues(alpha: 0.1),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 54),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          decoration: BoxDecoration(
+            color: backgroundColor(context),
+            border: Border.all(
+              color: added ? accent : borderColor(context),
+              width: added ? 1.5 : 1,
             ),
-            if (added) Icon(LucideIcons.check, size: 12, color: accent),
-          ],
+            borderRadius: AppRadius.button,
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: added ? accentFill : surfaceColor(context),
+                  border: Border.all(
+                    color: added ? accentFill : borderColor(context),
+                  ),
+                  borderRadius: AppRadius.control,
+                ),
+                child: Icon(
+                  added ? LucideIcons.check : LucideIcons.plus,
+                  size: 14,
+                  color: added
+                      ? onAccentColor(context)
+                      : (isCustom ? accent : textSecondaryColor(context)),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  label,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight:
+                            added ? FontWeight.bold : FontWeight.w600,
+                        color: added ? accent : textPrimaryColor(context),
+                      ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                statusLabel,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: added ? accent : textSecondaryColor(context),
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.6,
+                    ),
+              ),
+            ],
+          ),
         ),
       ),
     );
