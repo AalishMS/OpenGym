@@ -31,6 +31,7 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: bg,
       floatingActionButton: FloatingActionButton(
+        backgroundColor: surfaceColor(context),
         onPressed: () {
           Navigator.push(
             context,

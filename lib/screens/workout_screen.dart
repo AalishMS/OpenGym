@@ -629,6 +629,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                               constraints: const BoxConstraints(minHeight: 48),
                               padding: const EdgeInsets.all(AppSpacing.lg),
                               decoration: BoxDecoration(
+                                color: surfaceColor(context),
                                 border: Border.all(color: accent, width: 1),
                                 borderRadius: AppRadius.button,
                               ),

@@ -50,6 +50,7 @@ void main() {
 
   Widget homeHost({
     Size size = const Size(390, 800),
+    Brightness brightness = Brightness.dark,
     List<WorkoutPlan> plans = const [],
     List<WorkoutSession> sessions = const [],
     List<NavigatorObserver> observers = const [],
@@ -65,7 +66,7 @@ void main() {
       ],
       child: MaterialApp(
         key: UniqueKey(),
-        theme: buildTheme(const Color(0xFF00A8FF), Brightness.dark),
+        theme: buildTheme(const Color(0xFF00A8FF), brightness),
         navigatorObservers: observers,
         home: Align(
           alignment: Alignment.topLeft,
@@ -120,19 +121,25 @@ void main() {
   testWidgets('create plan action is a compact bottom-right plus button', (
     tester,
   ) async {
-    await tester.pumpWidget(homeHost());
+    for (final brightness in Brightness.values) {
+      await tester.pumpWidget(homeHost(brightness: brightness));
 
-    final fab = find.byType(FloatingActionButton);
-    expect(fab, findsOneWidget);
-    expect(
-      find.descendant(of: fab, matching: find.byIcon(Icons.add)),
-      findsNothing,
-    );
-    expect(
-      find.descendant(of: fab, matching: find.byIcon(LucideIcons.plus)),
-      findsOneWidget,
-    );
-    expect(find.text('[+ NEW PLAN]'), findsNothing);
+      final fab = find.byType(FloatingActionButton);
+      expect(fab, findsOneWidget);
+      expect(
+        tester.widget<FloatingActionButton>(fab).backgroundColor,
+        surfaceColor(tester.element(find.byType(HomeScreen))),
+      );
+      expect(
+        find.descendant(of: fab, matching: find.byIcon(Icons.add)),
+        findsNothing,
+      );
+      expect(
+        find.descendant(of: fab, matching: find.byIcon(LucideIcons.plus)),
+        findsOneWidget,
+      );
+      expect(find.text('[+ NEW PLAN]'), findsNothing);
+    }
   });
 
   testWidgets('plan overflow hit region stays inside the card', (tester) async {
@@ -279,25 +286,42 @@ void main() {
   });
 
   testWidgets(
-    'workout add exercise is not draggable and has a 48 pixel target',
+    'workout add exercise uses the card surface and has a 48 pixel target',
     (tester) async {
-      final plan = populatedPlan();
-      await tester.pumpWidget(homeHost(plans: [plan]));
-      await tester.tap(find.text('Push Day'));
-      await tester.pumpAndSettle();
-      await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
-      await tester.pumpAndSettle();
+      for (final brightness in Brightness.values) {
+        final plan = populatedPlan();
+        await tester.pumpWidget(
+          homeHost(brightness: brightness, plans: [plan]),
+        );
+        await tester.tap(find.text('Push Day'));
+        await tester.pumpAndSettle();
+        await tester.drag(
+          find.byType(CustomScrollView),
+          const Offset(0, -1000),
+        );
+        await tester.pumpAndSettle();
 
-      final addTile = find.text('[+ ADD EXERCISE]');
-      expect(
-        find.ancestor(
+        final addTile = find.text('[+ ADD EXERCISE]');
+        expect(
+          find.ancestor(
+            of: addTile,
+            matching: find.byType(ReorderableDelayedDragStartListener),
+          ),
+          findsNothing,
+        );
+        final target = find.ancestor(
           of: addTile,
-          matching: find.byType(ReorderableDelayedDragStartListener),
-        ),
-        findsNothing,
-      );
-      final target = find.ancestor(of: addTile, matching: find.byType(InkWell));
-      expect(tester.getSize(target).height, greaterThanOrEqualTo(48));
+          matching: find.byType(InkWell),
+        );
+        final container = tester.widget<Container>(
+          find.descendant(of: target, matching: find.byType(Container)).first,
+        );
+        expect(
+          (container.decoration! as BoxDecoration).color,
+          surfaceColor(tester.element(find.byType(WorkoutScreen))),
+        );
+        expect(tester.getSize(target).height, greaterThanOrEqualTo(48));
+      }
     },
   );
 
