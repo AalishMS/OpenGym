@@ -24,6 +24,9 @@ class AppAccent {
 }
 
 class SettingsProvider with ChangeNotifier {
+  static const ThemeMode defaultThemeMode = ThemeMode.light;
+  static const int defaultAccentIndex = 4;
+
   static const String _themeKey = 'theme_mode';
   static const String _accentColorKey = 'accent_color';
   static const String _weightUnitKey = 'weight_unit';
@@ -50,8 +53,8 @@ class SettingsProvider with ChangeNotifier {
     AppAccent(name: 'GREEN', seed: Color(0xFF22C55E)),
   ];
 
-  ThemeMode _themeMode = ThemeMode.dark;
-  int _accentIndex = 0;
+  ThemeMode _themeMode = defaultThemeMode;
+  int _accentIndex = defaultAccentIndex;
   String _weightUnit = 'kg';
   bool _autoFillLast = true;
   bool _highRefreshRate = true;
@@ -82,12 +85,14 @@ class SettingsProvider with ChangeNotifier {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Dark-first: default to ThemeMode.dark (index 2) when unset, matching the
-    // field initializer and the terminal aesthetic. ThemeMode = {system, light, dark}.
-    final themeIndex = prefs.getInt(_themeKey) ?? 2;
+    // These fallbacks apply only when a preference has never been written, so
+    // existing users keep their chosen theme and accent.
+    final themeIndex =
+        prefs.getInt(_themeKey) ?? SettingsProvider.defaultThemeMode.index;
     _themeMode = ThemeMode.values[themeIndex];
 
-    final accentColorIndex = prefs.getInt(_accentColorKey) ?? 0;
+    final accentColorIndex =
+        prefs.getInt(_accentColorKey) ?? SettingsProvider.defaultAccentIndex;
     if (accentColorIndex >= 0 && accentColorIndex < accents.length) {
       _accentIndex = accentColorIndex;
     }

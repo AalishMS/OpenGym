@@ -118,6 +118,7 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Changed first-run appearance defaults to light mode with the cyan accent while preserving existing users' saved choices
 - Reduced plan-color noise with identity markers:
   - Home cards now use a compact colored rail beside the plan name instead of a full-width stripe and colored statistics
   - Workout titles return to the theme's primary text color and carry the same compact plan marker

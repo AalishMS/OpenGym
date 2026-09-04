@@ -80,7 +80,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (!_initialized) {
       return MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: buildTheme(SettingsProvider.accents.first.seed, Brightness.dark),
+        theme: buildTheme(
+          SettingsProvider.accents[SettingsProvider.defaultAccentIndex].seed,
+          Brightness.light,
+        ),
         home: Builder(
           builder:
               (context) => Scaffold(
