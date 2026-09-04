@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../providers/workout_session_provider.dart';
+import '../providers/split_provider.dart';
 import '../repositories/stats_repository.dart';
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
@@ -21,29 +22,35 @@ class _StatsScreenState extends State<StatsScreen> {
   String? _selectedExercise;
   List<String> _exerciseNames = [];
   bool _showOverall = true;
+  String? _activeSplitId;
+  bool _hasLoadedSplit = false;
 
   @override
   void initState() {
     super.initState();
-    _loadExerciseNames();
-  }
-
-  void _loadExerciseNames() {
-    _exerciseNames = _statsRepo.getAllExerciseNames();
-    if (_exerciseNames.isNotEmpty) {
-      _selectedExercise = _exerciseNames.first;
-    }
-    setState(() {});
+    // Exercise choices are loaded from the active split during build.
   }
 
   @override
   Widget build(BuildContext context) {
     final sessions = context.watch<WorkoutSessionProvider>().sessions;
+    final splitId =
+        context.watch<SplitProvider?>()?.activeSplitId ??
+        (sessions.isEmpty ? null : sessions.first.splitId);
+    if (!_hasLoadedSplit || _activeSplitId != splitId) {
+      _hasLoadedSplit = true;
+      _activeSplitId = splitId;
+      _exerciseNames = _statsRepo.getAllExerciseNames(splitId);
+      if (!_exerciseNames.contains(_selectedExercise)) {
+        _selectedExercise =
+            _exerciseNames.isEmpty ? null : _exerciseNames.first;
+      }
+    }
     final accent = accentColor(context);
-    final frequency = _statsRepo.getWorkoutFrequency(8);
+    final frequency = _statsRepo.getWorkoutFrequency(8, splitId);
     final totalWorkouts = sessions.length;
-    final workoutsThisWeek = _statsRepo.getWorkoutsThisWeek();
-    final prs = _statsRepo.getAllExercisePRs();
+    final workoutsThisWeek = _statsRepo.getWorkoutsThisWeek(splitId);
+    final prs = _statsRepo.getAllExercisePRs(splitId);
     final totalPRs = prs.length;
 
     return Scaffold(
@@ -209,7 +216,7 @@ class _StatsScreenState extends State<StatsScreen> {
       ),
       items:
           _exerciseNames.map((name) {
-            final pr = _statsRepo.getExercisePR(name);
+            final pr = _statsRepo.getExercisePR(name, _activeSplitId);
             return DropdownMenuItem(
               value: name,
               child: Text(
@@ -378,7 +385,10 @@ class _StatsScreenState extends State<StatsScreen> {
       );
     }
 
-    final progression = _statsRepo.getExerciseProgression(_selectedExercise!);
+    final progression = _statsRepo.getExerciseProgression(
+      _selectedExercise!,
+      _activeSplitId,
+    );
 
     if (progression.isEmpty) {
       return Container(

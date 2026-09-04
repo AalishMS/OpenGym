@@ -12,11 +12,13 @@ import '../providers/settings_provider.dart';
 import '../providers/update_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
+import '../providers/split_provider.dart';
 import '../services/backup_service.dart';
 import '../services/hive_service.dart';
 import '../services/sample_data_seeder.dart';
 import '../services/supabase_service.dart';
 import '../services/update_service.dart';
+import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../widgets/update_dialog.dart';
@@ -561,7 +563,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'This will clear all existing data and load fresh sample plans and workouts.',
+                      'This will replace workout data in the active split with fresh sample plans and workouts.',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 12,
                         color: textSecondary,
@@ -590,8 +592,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               if (widget.onLoadSampleData != null) {
                                 await widget.onLoadSampleData!();
                               } else {
-                                await SampleDataSeeder.clearAllData();
-                                await SampleDataSeeder.seedSampleData();
+                                final splitId =
+                                    context.read<SplitProvider>().activeSplitId;
+                                if (splitId == null) {
+                                  throw StateError(
+                                    'No active split available.',
+                                  );
+                                }
+                                await SampleDataSeeder.clearDataForSplit(
+                                  splitId,
+                                );
+                                await SampleDataSeeder.seedSampleData(
+                                  splitId: splitId,
+                                );
                               }
                             } catch (e) {
                               if (!context.mounted) return;
@@ -695,13 +708,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onPressed: () async {
                             Navigator.pop(ctx);
                             try {
-                              final planProvider =
-                                  context.read<WorkoutPlanProvider>();
-                              final sessionProvider =
-                                  context.read<WorkoutSessionProvider>();
+                              final splitProvider =
+                                  context.read<SplitProvider>();
+                              final activeSplitId = splitProvider.activeSplitId;
+                              if (activeSplitId == null) {
+                                throw StateError('No active split available.');
+                              }
                               final result = BackupService.exportData(
-                                plans: planProvider.plans,
-                                sessions: sessionProvider.sessions,
+                                splits: HiveService.getSplits(),
+                                activeSplitId: activeSplitId,
+                                plans: HiveService.getPlans(),
+                                sessions: HiveService.getSessions(),
                                 settings: {
                                   'themeMode': settings.themeMode.index,
                                   'accentIndex': settings.accentIndex,
@@ -784,7 +801,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
       if (!context.mounted) return;
 
-      final importResult = BackupService.importData(jsonString);
+      final userId = SupabaseService.currentUserId ?? 'local';
+      final importResult = BackupService.importData(jsonString, userId: userId);
       if (!importResult.success) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -873,12 +891,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   context.read<WorkoutPlanProvider>();
                               final sessionProvider =
                                   context.read<WorkoutSessionProvider>();
+                              final splitProvider =
+                                  context.read<SplitProvider>();
                               try {
-                                await HiveService.replaceAllPlans(
-                                  importResult.plans!,
-                                );
-                                await HiveService.replaceAllSessions(
-                                  importResult.sessions!,
+                                await HiveService.replaceAllWorkoutData(
+                                  userId: userId,
+                                  splits: importResult.splits!,
+                                  activeSplitId: importResult.activeSplitId!,
+                                  plans: importResult.plans!,
+                                  sessions: importResult.sessions!,
                                 );
                                 if (!context.mounted) return;
                                 final s = importResult.settings!;
@@ -898,8 +919,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                   s['highRefreshRate'] as bool,
                                 );
                                 if (!context.mounted) return;
+                                splitProvider.loadSplits();
                                 planProvider.loadPlans();
                                 sessionProvider.loadSessions();
+                                SyncService.instance.scheduleSync();
                                 if (context.mounted) {
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(

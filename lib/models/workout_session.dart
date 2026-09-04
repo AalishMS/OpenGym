@@ -36,6 +36,9 @@ class WorkoutSession extends HiveObject {
   @HiveField(9)
   bool? dirty;
 
+  @HiveField(10)
+  String? splitId;
+
   WorkoutSession({
     required this.date,
     required this.planName,
@@ -47,35 +50,41 @@ class WorkoutSession extends HiveObject {
     this.updatedAt,
     this.deletedAt,
     this.dirty,
+    this.splitId,
   });
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'date': date.toIso8601String(),
-        'planName': planName,
-        'planId': planId,
-        'weekNumber': weekNumber,
-        'exercises': exercises.map((e) => e.toJson()).toList(),
-        'updatedAt': updatedAt?.toIso8601String(),
-        'deletedAt': deletedAt?.toIso8601String(),
-      };
+    'id': id,
+    'date': date.toIso8601String(),
+    'planName': planName,
+    'planId': planId,
+    'weekNumber': weekNumber,
+    'exercises': exercises.map((e) => e.toJson()).toList(),
+    'updatedAt': updatedAt?.toIso8601String(),
+    'deletedAt': deletedAt?.toIso8601String(),
+    'splitId': splitId,
+  };
 
   factory WorkoutSession.fromJson(Map<String, dynamic> json) => WorkoutSession(
-        id: json['id'] as String?,
-        date: DateTime.parse(json['date'] as String),
-        planName: json['planName'] as String,
-        planId: json['planId'] as String?,
-        weekNumber: json['weekNumber'] as int? ?? 1,
-        exercises: (json['exercises'] as List)
+    id: json['id'] as String?,
+    date: DateTime.parse(json['date'] as String),
+    planName: json['planName'] as String,
+    planId: json['planId'] as String?,
+    weekNumber: json['weekNumber'] as int? ?? 1,
+    exercises:
+        (json['exercises'] as List)
             .map((e) => Exercise.fromJson(e as Map<String, dynamic>))
             .toList(),
-        updatedAt: json['updatedAt'] != null
+    updatedAt:
+        json['updatedAt'] != null
             ? DateTime.parse(json['updatedAt'] as String)
             : null,
-        deletedAt: json['deletedAt'] != null
+    deletedAt:
+        json['deletedAt'] != null
             ? DateTime.parse(json['deletedAt'] as String)
             : null,
-      );
+    splitId: json['splitId'] as String?,
+  );
 
   WorkoutSession copyWith({
     DateTime? date,
@@ -88,6 +97,7 @@ class WorkoutSession extends HiveObject {
     DateTime? updatedAt,
     DateTime? deletedAt,
     bool? dirty,
+    String? splitId,
   }) {
     return WorkoutSession(
       date: date ?? this.date,
@@ -100,6 +110,7 @@ class WorkoutSession extends HiveObject {
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,
       dirty: dirty ?? this.dirty,
+      splitId: splitId ?? this.splitId,
     );
   }
 }

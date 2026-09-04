@@ -6,6 +6,7 @@ import 'providers/workout_session_provider.dart';
 import 'providers/progression_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/update_provider.dart';
+import 'providers/split_provider.dart';
 import 'services/hive_service.dart';
 import 'services/supabase_service.dart';
 import 'services/sync_service.dart';
@@ -38,6 +39,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late WorkoutSessionProvider _workoutSessionProvider;
   late ProgressionProvider _progressionProvider;
   late SettingsProvider _settingsProvider;
+  late SplitProvider _splitProvider;
 
   @override
   void initState() {
@@ -61,9 +63,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   Future<void> _initialize() async {
-    _workoutPlanProvider = WorkoutPlanProvider();
-    _workoutSessionProvider = WorkoutSessionProvider();
-    _progressionProvider = ProgressionProvider();
+    _splitProvider = SplitProvider();
+    _workoutPlanProvider = WorkoutPlanProvider(_splitProvider);
+    _workoutSessionProvider = WorkoutSessionProvider(_splitProvider);
+    _progressionProvider = ProgressionProvider(_splitProvider);
     _settingsProvider = SettingsProvider();
 
     await Future.delayed(const Duration(milliseconds: 100));
@@ -105,7 +108,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                         label: 'Starting OpenGym',
                         value: 'In progress',
                         liveRegion: true,
-                        child: SizedBox(
+                        child: const SizedBox(
                           width: 24,
                           height: 24,
                           child: CircularProgressIndicator(strokeWidth: 2),
@@ -121,6 +124,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider.value(value: _splitProvider),
         ChangeNotifierProvider.value(value: _workoutPlanProvider),
         ChangeNotifierProvider.value(value: _workoutSessionProvider),
         ChangeNotifierProvider.value(value: _progressionProvider),

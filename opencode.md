@@ -118,6 +118,13 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Added the Stage B data foundation for split-scoped workspaces:
+  - `Split` (Hive typeId 6) and account-wide `SplitPreference` (typeId 7) are cached locally and synchronized with Supabase
+  - Plans and sessions carry `splitId`; legacy local records are backed up and assigned to the deterministic `My Split` after authentication
+  - Sync pulls split metadata first, pushes active parent splits before plans/sessions, pushes preferences before deleted splits, and retains tombstones
+  - Plan/session providers reload when the active split changes; stats, PRs, progression, history lookups, and active workouts are split-scoped
+  - Backup format v3 includes every split and the active selection; v1/v2 imports are upgraded into `My Split`
+  - Clear-all preserves split profiles, while sample data replaces data only in the active split and links sessions to their sample plans
 - Changed first-run appearance defaults to light mode with the cyan accent while preserving existing users' saved choices
 - Reduced plan-color noise with identity markers:
   - Home cards now use a compact colored rail beside the plan name instead of a full-width stripe and colored statistics

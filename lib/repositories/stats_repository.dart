@@ -1,27 +1,30 @@
 import '../services/hive_service.dart';
 
 class StatsRepository {
-  double getExercisePR(String exerciseName) {
-    return HiveService.getExercisePR(exerciseName);
+  double getExercisePR(String exerciseName, String? splitId) {
+    return HiveService.getExercisePR(exerciseName, splitId);
   }
 
-  List<String> getAllExerciseNames() {
-    return HiveService.getAllExerciseNames();
+  List<String> getAllExerciseNames(String? splitId) {
+    return HiveService.getAllExerciseNames(splitId);
   }
 
-  Map<String, double> getAllExercisePRs() {
-    return HiveService.getAllExercisePRs();
+  Map<String, double> getAllExercisePRs(String? splitId) {
+    return HiveService.getAllExercisePRs(splitId);
   }
 
-  List<Map<String, dynamic>> getExerciseProgression(String exerciseName) {
-    return HiveService.getExerciseProgression(exerciseName);
+  List<Map<String, dynamic>> getExerciseProgression(
+    String exerciseName,
+    String? splitId,
+  ) {
+    return HiveService.getExerciseProgression(exerciseName, splitId);
   }
 
-  int getWorkoutsThisWeek() {
-    return HiveService.getWorkoutsThisWeek();
+  int getWorkoutsThisWeek(String? splitId) {
+    return HiveService.getWorkoutsThisWeek(splitId);
   }
 
-  Map<int, int> getWorkoutFrequency(int weeksBack) {
-    return HiveService.getWorkoutFrequency(weeksBack);
+  Map<int, int> getWorkoutFrequency(int weeksBack, String? splitId) {
+    return HiveService.getWorkoutFrequency(weeksBack, splitId);
   }
 }

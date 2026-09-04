@@ -2,12 +2,23 @@ import 'package:flutter/foundation.dart';
 import '../models/set.dart' as gym;
 import '../models/exercise.dart';
 import '../repositories/workout_session_repository.dart';
+import '../services/hive_service.dart';
+import 'split_provider.dart';
 
 class ProgressionProvider with ChangeNotifier {
   final WorkoutSessionRepository _repository = WorkoutSessionRepository();
+  final SplitProvider? _splitProvider;
+
+  ProgressionProvider([this._splitProvider]) {
+    _splitProvider?.addListener(notifyListeners);
+  }
 
   String getSuggestion(String exerciseName, int targetReps) {
-    final lastSession = _repository.getLastSessionForExercise(exerciseName);
+    final splitId = _splitProvider?.activeSplitId;
+    final lastSession =
+        splitId == null
+            ? HiveService.getLastSessionForExercise(exerciseName, null)
+            : _repository.getLastSessionForExercise(exerciseName, splitId);
 
     if (lastSession == null) {
       return 'No previous data';
@@ -50,5 +61,11 @@ class ProgressionProvider with ChangeNotifier {
 
   String _formatSets(List<gym.Set> sets) {
     return sets.map((s) => '${s.weight}kg x ${s.reps}').join(', ');
+  }
+
+  @override
+  void dispose() {
+    _splitProvider?.removeListener(notifyListeners);
+    super.dispose();
   }
 }

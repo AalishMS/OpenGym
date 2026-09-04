@@ -5,6 +5,7 @@ import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
+import '../providers/split_provider.dart';
 import '../repositories/stats_repository.dart';
 import '../services/sample_data_seeder.dart';
 import '../theme/app_theme.dart';
@@ -36,6 +37,9 @@ class DashboardScreen extends StatelessWidget {
     final sessions = context.watch<WorkoutSessionProvider>().sessions;
     final plans = context.watch<WorkoutPlanProvider>().plans;
     final statsRepo = StatsRepository();
+    final splitId =
+        context.watch<SplitProvider?>()?.activeSplitId ??
+        (sessions.isEmpty ? null : sessions.first.splitId);
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -63,7 +67,7 @@ class DashboardScreen extends StatelessWidget {
       body:
           plans.isEmpty && sessions.isEmpty
               ? _EmptyState(accent: accent)
-              : _buildBody(context, sessions, plans, statsRepo),
+              : _buildBody(context, sessions, plans, statsRepo, splitId),
     );
   }
 
@@ -72,6 +76,7 @@ class DashboardScreen extends StatelessWidget {
     List<WorkoutSession> sessions,
     List<WorkoutPlan> plans,
     StatsRepository statsRepo,
+    String? splitId,
   ) {
     final prEntries = PrEntry.fromSessions(sessions);
     final planStats = PlanStat.compute(plans, sessions);
@@ -94,8 +99,8 @@ class DashboardScreen extends StatelessWidget {
                     context,
                     wide: wide,
                     totalWorkouts: sessions.length,
-                    thisWeek: statsRepo.getWorkoutsThisWeek(),
-                    prsTracked: statsRepo.getAllExercisePRs().length,
+                    thisWeek: statsRepo.getWorkoutsThisWeek(splitId),
+                    prsTracked: statsRepo.getAllExercisePRs(splitId).length,
                     totalPlans: plans.length,
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -145,7 +150,12 @@ class DashboardScreen extends StatelessWidget {
                                     ),
                               ),
                     ),
-                    right: _progressionPanel(context, sessions, statsRepo),
+                    right: _progressionPanel(
+                      context,
+                      sessions,
+                      statsRepo,
+                      splitId,
+                    ),
                   ),
                 ],
               ),
@@ -218,6 +228,7 @@ class DashboardScreen extends StatelessWidget {
     BuildContext context,
     List<WorkoutSession> sessions,
     StatsRepository statsRepo,
+    String? splitId,
   ) {
     // Plot whichever exercise has the most logged sessions — the one with the
     // most signal. Counted from the sessions already in memory so this costs a
@@ -242,7 +253,7 @@ class DashboardScreen extends StatelessWidget {
     final topKey =
         counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
     final name = display[topKey]!;
-    final progression = statsRepo.getExerciseProgression(name);
+    final progression = statsRepo.getExerciseProgression(name, splitId);
     final values = progression.map((p) => p['maxWeight'] as double).toList();
 
     return DashboardPanel(

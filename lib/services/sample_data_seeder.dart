@@ -6,21 +6,23 @@ import '../models/set.dart';
 import '../models/set_template.dart';
 import '../data/plan_colors.dart';
 import '../services/hive_service.dart';
+import '../services/sync_service.dart';
 
 class SampleDataSeeder {
-  static Future<void> seedIfEmpty() async {
-    final plans = HiveService.getPlans();
+  static Future<void> seedIfEmpty({String? splitId}) async {
+    final plans = HiveService.getPlans(splitId: splitId);
     if (plans.isNotEmpty) return;
 
-    await seedSampleData();
+    await seedSampleData(splitId: splitId);
   }
 
-  static Future<void> seedSampleData() async {
-    await _createSamplePlans();
-    await _createSampleSessions();
+  static Future<void> seedSampleData({String? splitId}) async {
+    final planIds = await _createSamplePlans(splitId);
+    await _createSampleSessions(splitId, planIds);
+    SyncService.instance.scheduleSync();
   }
 
-  static Future<void> _createSamplePlans() async {
+  static Future<Map<String, String>> _createSamplePlans(String? splitId) async {
     final plans = [
       WorkoutPlan(
         name: 'Push Day',
@@ -87,8 +89,13 @@ class SampleDataSeeder {
     ];
 
     for (var plan in plans) {
+      plan.splitId = splitId;
       await HiveService.addPlan(plan);
     }
+    return {
+      for (final plan in plans)
+        if (plan.id != null) plan.name.toLowerCase(): plan.id!,
+    };
   }
 
   /// An [ExerciseTemplate] whose every set carries the same prescribed target.
@@ -101,12 +108,17 @@ class SampleDataSeeder {
     return ExerciseTemplate(
       name: name,
       sets: sets,
-      setTargets:
-          List.generate(sets, (_) => SetTemplate(reps: reps, weight: weight)),
+      setTargets: List.generate(
+        sets,
+        (_) => SetTemplate(reps: reps, weight: weight),
+      ),
     );
   }
 
-  static Future<void> _createSampleSessions() async {
+  static Future<void> _createSampleSessions(
+    String? splitId,
+    Map<String, String> planIds,
+  ) async {
     final now = DateTime.now();
 
     final sessions = [
@@ -116,36 +128,54 @@ class SampleDataSeeder {
         planName: 'Push Day',
         weekNumber: 1,
         exercises: [
-          Exercise(name: 'Bench Press', sets: [
-            Set(reps: 8, weight: 60, rpe: 7, note: 'First workout back'),
-            Set(reps: 8, weight: 60, rpe: 7),
-            Set(reps: 8, weight: 60, rpe: 8),
-            Set(reps: 7, weight: 60, rpe: 9),
-          ]),
-          Exercise(name: 'Incline Dumbbell Press', sets: [
-            Set(reps: 10, weight: 24, rpe: 7),
-            Set(reps: 10, weight: 24, rpe: 8),
-            Set(reps: 9, weight: 24, rpe: 9),
-          ]),
-          Exercise(name: 'Overhead Press', sets: [
-            Set(reps: 8, weight: 40, rpe: 7),
-            Set(reps: 8, weight: 40, rpe: 8),
-            Set(reps: 7, weight: 40, rpe: 9),
-          ]),
-          Exercise(name: 'Lateral Raise', sets: [
-            Set(reps: 12, weight: 8, rpe: 7),
-            Set(reps: 12, weight: 8, rpe: 8),
-            Set(reps: 11, weight: 8, rpe: 9),
-          ]),
-          Exercise(name: 'Tricep Pushdown', sets: [
-            Set(reps: 12, weight: 25, rpe: 6),
-            Set(reps: 12, weight: 25, rpe: 7),
-            Set(reps: 11, weight: 25, rpe: 8),
-          ]),
-          Exercise(name: 'Dumbbell Fly', sets: [
-            Set(reps: 12, weight: 16, rpe: 7),
-            Set(reps: 12, weight: 16, rpe: 8),
-          ]),
+          Exercise(
+            name: 'Bench Press',
+            sets: [
+              Set(reps: 8, weight: 60, rpe: 7, note: 'First workout back'),
+              Set(reps: 8, weight: 60, rpe: 7),
+              Set(reps: 8, weight: 60, rpe: 8),
+              Set(reps: 7, weight: 60, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Incline Dumbbell Press',
+            sets: [
+              Set(reps: 10, weight: 24, rpe: 7),
+              Set(reps: 10, weight: 24, rpe: 8),
+              Set(reps: 9, weight: 24, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Overhead Press',
+            sets: [
+              Set(reps: 8, weight: 40, rpe: 7),
+              Set(reps: 8, weight: 40, rpe: 8),
+              Set(reps: 7, weight: 40, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Lateral Raise',
+            sets: [
+              Set(reps: 12, weight: 8, rpe: 7),
+              Set(reps: 12, weight: 8, rpe: 8),
+              Set(reps: 11, weight: 8, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Tricep Pushdown',
+            sets: [
+              Set(reps: 12, weight: 25, rpe: 6),
+              Set(reps: 12, weight: 25, rpe: 7),
+              Set(reps: 11, weight: 25, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Dumbbell Fly',
+            sets: [
+              Set(reps: 12, weight: 16, rpe: 7),
+              Set(reps: 12, weight: 16, rpe: 8),
+            ],
+          ),
         ],
       ),
       WorkoutSession(
@@ -153,42 +183,63 @@ class SampleDataSeeder {
         planName: 'Pull Day',
         weekNumber: 1,
         exercises: [
-          Exercise(name: 'Deadlift', sets: [
-            Set(reps: 5, weight: 100, rpe: 7),
-            Set(reps: 5, weight: 100, rpe: 8),
-            Set(reps: 5, weight: 100, rpe: 9),
-            Set(reps: 4, weight: 100, rpe: 10),
-          ]),
-          Exercise(name: 'Barbell Row', sets: [
-            Set(reps: 8, weight: 60, rpe: 7),
-            Set(reps: 8, weight: 60, rpe: 8),
-            Set(reps: 7, weight: 60, rpe: 9),
-            Set(reps: 7, weight: 60, rpe: 9),
-          ]),
-          Exercise(name: 'Lat Pulldown', sets: [
-            Set(reps: 10, weight: 50, rpe: 7),
-            Set(reps: 10, weight: 50, rpe: 7),
-            Set(reps: 9, weight: 50, rpe: 8),
-          ]),
-          Exercise(name: 'Seated Cable Row', sets: [
-            Set(reps: 10, weight: 45, rpe: 7),
-            Set(reps: 10, weight: 45, rpe: 8),
-            Set(reps: 9, weight: 45, rpe: 8),
-          ]),
-          Exercise(name: 'Face Pull', sets: [
-            Set(reps: 15, weight: 15, rpe: 6),
-            Set(reps: 15, weight: 15, rpe: 6),
-            Set(reps: 15, weight: 15, rpe: 7),
-          ]),
-          Exercise(name: 'Bicep Curl', sets: [
-            Set(reps: 12, weight: 12, rpe: 7),
-            Set(reps: 12, weight: 12, rpe: 7),
-            Set(reps: 11, weight: 12, rpe: 8),
-          ]),
-          Exercise(name: 'Hammer Curl', sets: [
-            Set(reps: 10, weight: 10, rpe: 7),
-            Set(reps: 10, weight: 10, rpe: 7),
-          ]),
+          Exercise(
+            name: 'Deadlift',
+            sets: [
+              Set(reps: 5, weight: 100, rpe: 7),
+              Set(reps: 5, weight: 100, rpe: 8),
+              Set(reps: 5, weight: 100, rpe: 9),
+              Set(reps: 4, weight: 100, rpe: 10),
+            ],
+          ),
+          Exercise(
+            name: 'Barbell Row',
+            sets: [
+              Set(reps: 8, weight: 60, rpe: 7),
+              Set(reps: 8, weight: 60, rpe: 8),
+              Set(reps: 7, weight: 60, rpe: 9),
+              Set(reps: 7, weight: 60, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Lat Pulldown',
+            sets: [
+              Set(reps: 10, weight: 50, rpe: 7),
+              Set(reps: 10, weight: 50, rpe: 7),
+              Set(reps: 9, weight: 50, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Seated Cable Row',
+            sets: [
+              Set(reps: 10, weight: 45, rpe: 7),
+              Set(reps: 10, weight: 45, rpe: 8),
+              Set(reps: 9, weight: 45, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Face Pull',
+            sets: [
+              Set(reps: 15, weight: 15, rpe: 6),
+              Set(reps: 15, weight: 15, rpe: 6),
+              Set(reps: 15, weight: 15, rpe: 7),
+            ],
+          ),
+          Exercise(
+            name: 'Bicep Curl',
+            sets: [
+              Set(reps: 12, weight: 12, rpe: 7),
+              Set(reps: 12, weight: 12, rpe: 7),
+              Set(reps: 11, weight: 12, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Hammer Curl',
+            sets: [
+              Set(reps: 10, weight: 10, rpe: 7),
+              Set(reps: 10, weight: 10, rpe: 7),
+            ],
+          ),
         ],
       ),
       WorkoutSession(
@@ -196,43 +247,64 @@ class SampleDataSeeder {
         planName: 'Leg Day',
         weekNumber: 1,
         exercises: [
-          Exercise(name: 'Squat', sets: [
-            Set(reps: 6, weight: 80, rpe: 7),
-            Set(reps: 6, weight: 80, rpe: 8),
-            Set(reps: 6, weight: 80, rpe: 9),
-            Set(reps: 5, weight: 80, rpe: 9),
-          ]),
-          Exercise(name: 'Romanian Deadlift', sets: [
-            Set(reps: 8, weight: 60, rpe: 7),
-            Set(reps: 8, weight: 60, rpe: 8),
-            Set(reps: 7, weight: 60, rpe: 9),
-          ]),
-          Exercise(name: 'Leg Press', sets: [
-            Set(reps: 10, weight: 120, rpe: 7),
-            Set(reps: 10, weight: 120, rpe: 8),
-            Set(reps: 9, weight: 120, rpe: 9),
-          ]),
-          Exercise(name: 'Leg Extension', sets: [
-            Set(reps: 12, weight: 40, rpe: 7),
-            Set(reps: 12, weight: 40, rpe: 7),
-            Set(reps: 11, weight: 40, rpe: 8),
-          ]),
-          Exercise(name: 'Leg Curl', sets: [
-            Set(reps: 12, weight: 30, rpe: 6),
-            Set(reps: 12, weight: 30, rpe: 7),
-            Set(reps: 11, weight: 30, rpe: 7),
-          ]),
-          Exercise(name: 'Calf Raise', sets: [
-            Set(reps: 15, weight: 60, rpe: 7),
-            Set(reps: 15, weight: 60, rpe: 7),
-            Set(reps: 15, weight: 60, rpe: 8),
-            Set(reps: 14, weight: 60, rpe: 8),
-          ]),
-          Exercise(name: 'Hip Thrust', sets: [
-            Set(reps: 10, weight: 80, rpe: 7),
-            Set(reps: 10, weight: 80, rpe: 7),
-            Set(reps: 10, weight: 80, rpe: 8),
-          ]),
+          Exercise(
+            name: 'Squat',
+            sets: [
+              Set(reps: 6, weight: 80, rpe: 7),
+              Set(reps: 6, weight: 80, rpe: 8),
+              Set(reps: 6, weight: 80, rpe: 9),
+              Set(reps: 5, weight: 80, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Romanian Deadlift',
+            sets: [
+              Set(reps: 8, weight: 60, rpe: 7),
+              Set(reps: 8, weight: 60, rpe: 8),
+              Set(reps: 7, weight: 60, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Leg Press',
+            sets: [
+              Set(reps: 10, weight: 120, rpe: 7),
+              Set(reps: 10, weight: 120, rpe: 8),
+              Set(reps: 9, weight: 120, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Leg Extension',
+            sets: [
+              Set(reps: 12, weight: 40, rpe: 7),
+              Set(reps: 12, weight: 40, rpe: 7),
+              Set(reps: 11, weight: 40, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Leg Curl',
+            sets: [
+              Set(reps: 12, weight: 30, rpe: 6),
+              Set(reps: 12, weight: 30, rpe: 7),
+              Set(reps: 11, weight: 30, rpe: 7),
+            ],
+          ),
+          Exercise(
+            name: 'Calf Raise',
+            sets: [
+              Set(reps: 15, weight: 60, rpe: 7),
+              Set(reps: 15, weight: 60, rpe: 7),
+              Set(reps: 15, weight: 60, rpe: 8),
+              Set(reps: 14, weight: 60, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Hip Thrust',
+            sets: [
+              Set(reps: 10, weight: 80, rpe: 7),
+              Set(reps: 10, weight: 80, rpe: 7),
+              Set(reps: 10, weight: 80, rpe: 8),
+            ],
+          ),
         ],
       ),
       // Week 2 sessions
@@ -241,36 +313,54 @@ class SampleDataSeeder {
         planName: 'Push Day',
         weekNumber: 2,
         exercises: [
-          Exercise(name: 'Bench Press', sets: [
-            Set(reps: 8, weight: 62.5, rpe: 7),
-            Set(reps: 8, weight: 62.5, rpe: 8),
-            Set(reps: 7, weight: 62.5, rpe: 9),
-            Set(reps: 6, weight: 62.5, rpe: 9, note: 'Getting stronger'),
-          ]),
-          Exercise(name: 'Incline Dumbbell Press', sets: [
-            Set(reps: 10, weight: 26, rpe: 7),
-            Set(reps: 10, weight: 26, rpe: 8),
-            Set(reps: 9, weight: 26, rpe: 9),
-          ]),
-          Exercise(name: 'Overhead Press', sets: [
-            Set(reps: 8, weight: 42.5, rpe: 7),
-            Set(reps: 8, weight: 42.5, rpe: 8),
-            Set(reps: 7, weight: 42.5, rpe: 9),
-          ]),
-          Exercise(name: 'Lateral Raise', sets: [
-            Set(reps: 12, weight: 10, rpe: 7),
-            Set(reps: 12, weight: 10, rpe: 8),
-            Set(reps: 11, weight: 10, rpe: 9),
-          ]),
-          Exercise(name: 'Tricep Pushdown', sets: [
-            Set(reps: 12, weight: 27.5, rpe: 7),
-            Set(reps: 12, weight: 27.5, rpe: 7),
-            Set(reps: 12, weight: 27.5, rpe: 8),
-          ]),
-          Exercise(name: 'Dumbbell Fly', sets: [
-            Set(reps: 12, weight: 18, rpe: 7),
-            Set(reps: 12, weight: 18, rpe: 8),
-          ]),
+          Exercise(
+            name: 'Bench Press',
+            sets: [
+              Set(reps: 8, weight: 62.5, rpe: 7),
+              Set(reps: 8, weight: 62.5, rpe: 8),
+              Set(reps: 7, weight: 62.5, rpe: 9),
+              Set(reps: 6, weight: 62.5, rpe: 9, note: 'Getting stronger'),
+            ],
+          ),
+          Exercise(
+            name: 'Incline Dumbbell Press',
+            sets: [
+              Set(reps: 10, weight: 26, rpe: 7),
+              Set(reps: 10, weight: 26, rpe: 8),
+              Set(reps: 9, weight: 26, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Overhead Press',
+            sets: [
+              Set(reps: 8, weight: 42.5, rpe: 7),
+              Set(reps: 8, weight: 42.5, rpe: 8),
+              Set(reps: 7, weight: 42.5, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Lateral Raise',
+            sets: [
+              Set(reps: 12, weight: 10, rpe: 7),
+              Set(reps: 12, weight: 10, rpe: 8),
+              Set(reps: 11, weight: 10, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Tricep Pushdown',
+            sets: [
+              Set(reps: 12, weight: 27.5, rpe: 7),
+              Set(reps: 12, weight: 27.5, rpe: 7),
+              Set(reps: 12, weight: 27.5, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Dumbbell Fly',
+            sets: [
+              Set(reps: 12, weight: 18, rpe: 7),
+              Set(reps: 12, weight: 18, rpe: 8),
+            ],
+          ),
         ],
       ),
       WorkoutSession(
@@ -278,42 +368,63 @@ class SampleDataSeeder {
         planName: 'Pull Day',
         weekNumber: 2,
         exercises: [
-          Exercise(name: 'Deadlift', sets: [
-            Set(reps: 5, weight: 105, rpe: 7, note: 'PR attempt'),
-            Set(reps: 5, weight: 105, rpe: 8),
-            Set(reps: 5, weight: 105, rpe: 9),
-            Set(reps: 4, weight: 105, rpe: 10),
-          ]),
-          Exercise(name: 'Barbell Row', sets: [
-            Set(reps: 8, weight: 62.5, rpe: 7),
-            Set(reps: 8, weight: 62.5, rpe: 8),
-            Set(reps: 7, weight: 62.5, rpe: 9),
-            Set(reps: 7, weight: 62.5, rpe: 9),
-          ]),
-          Exercise(name: 'Lat Pulldown', sets: [
-            Set(reps: 10, weight: 52.5, rpe: 7),
-            Set(reps: 10, weight: 52.5, rpe: 8),
-            Set(reps: 9, weight: 52.5, rpe: 8),
-          ]),
-          Exercise(name: 'Seated Cable Row', sets: [
-            Set(reps: 10, weight: 47.5, rpe: 7),
-            Set(reps: 10, weight: 47.5, rpe: 8),
-            Set(reps: 9, weight: 47.5, rpe: 8),
-          ]),
-          Exercise(name: 'Face Pull', sets: [
-            Set(reps: 15, weight: 17.5, rpe: 6),
-            Set(reps: 15, weight: 17.5, rpe: 6),
-            Set(reps: 15, weight: 17.5, rpe: 7),
-          ]),
-          Exercise(name: 'Bicep Curl', sets: [
-            Set(reps: 12, weight: 14, rpe: 7),
-            Set(reps: 12, weight: 14, rpe: 7),
-            Set(reps: 11, weight: 14, rpe: 8),
-          ]),
-          Exercise(name: 'Hammer Curl', sets: [
-            Set(reps: 10, weight: 12, rpe: 7),
-            Set(reps: 10, weight: 12, rpe: 7),
-          ]),
+          Exercise(
+            name: 'Deadlift',
+            sets: [
+              Set(reps: 5, weight: 105, rpe: 7, note: 'PR attempt'),
+              Set(reps: 5, weight: 105, rpe: 8),
+              Set(reps: 5, weight: 105, rpe: 9),
+              Set(reps: 4, weight: 105, rpe: 10),
+            ],
+          ),
+          Exercise(
+            name: 'Barbell Row',
+            sets: [
+              Set(reps: 8, weight: 62.5, rpe: 7),
+              Set(reps: 8, weight: 62.5, rpe: 8),
+              Set(reps: 7, weight: 62.5, rpe: 9),
+              Set(reps: 7, weight: 62.5, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Lat Pulldown',
+            sets: [
+              Set(reps: 10, weight: 52.5, rpe: 7),
+              Set(reps: 10, weight: 52.5, rpe: 8),
+              Set(reps: 9, weight: 52.5, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Seated Cable Row',
+            sets: [
+              Set(reps: 10, weight: 47.5, rpe: 7),
+              Set(reps: 10, weight: 47.5, rpe: 8),
+              Set(reps: 9, weight: 47.5, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Face Pull',
+            sets: [
+              Set(reps: 15, weight: 17.5, rpe: 6),
+              Set(reps: 15, weight: 17.5, rpe: 6),
+              Set(reps: 15, weight: 17.5, rpe: 7),
+            ],
+          ),
+          Exercise(
+            name: 'Bicep Curl',
+            sets: [
+              Set(reps: 12, weight: 14, rpe: 7),
+              Set(reps: 12, weight: 14, rpe: 7),
+              Set(reps: 11, weight: 14, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Hammer Curl',
+            sets: [
+              Set(reps: 10, weight: 12, rpe: 7),
+              Set(reps: 10, weight: 12, rpe: 7),
+            ],
+          ),
         ],
       ),
       WorkoutSession(
@@ -321,43 +432,64 @@ class SampleDataSeeder {
         planName: 'Leg Day',
         weekNumber: 2,
         exercises: [
-          Exercise(name: 'Squat', sets: [
-            Set(reps: 6, weight: 85, rpe: 7),
-            Set(reps: 6, weight: 85, rpe: 8),
-            Set(reps: 6, weight: 85, rpe: 9),
-            Set(reps: 5, weight: 85, rpe: 9),
-          ]),
-          Exercise(name: 'Romanian Deadlift', sets: [
-            Set(reps: 8, weight: 65, rpe: 7),
-            Set(reps: 8, weight: 65, rpe: 8),
-            Set(reps: 7, weight: 65, rpe: 9),
-          ]),
-          Exercise(name: 'Leg Press', sets: [
-            Set(reps: 10, weight: 130, rpe: 7),
-            Set(reps: 10, weight: 130, rpe: 8),
-            Set(reps: 9, weight: 130, rpe: 9),
-          ]),
-          Exercise(name: 'Leg Extension', sets: [
-            Set(reps: 12, weight: 45, rpe: 7),
-            Set(reps: 12, weight: 45, rpe: 7),
-            Set(reps: 11, weight: 45, rpe: 8),
-          ]),
-          Exercise(name: 'Leg Curl', sets: [
-            Set(reps: 12, weight: 32.5, rpe: 6),
-            Set(reps: 12, weight: 32.5, rpe: 7),
-            Set(reps: 11, weight: 32.5, rpe: 7),
-          ]),
-          Exercise(name: 'Calf Raise', sets: [
-            Set(reps: 15, weight: 65, rpe: 7),
-            Set(reps: 15, weight: 65, rpe: 7),
-            Set(reps: 15, weight: 65, rpe: 8),
-            Set(reps: 14, weight: 65, rpe: 8),
-          ]),
-          Exercise(name: 'Hip Thrust', sets: [
-            Set(reps: 10, weight: 90, rpe: 7),
-            Set(reps: 10, weight: 90, rpe: 7),
-            Set(reps: 10, weight: 90, rpe: 8),
-          ]),
+          Exercise(
+            name: 'Squat',
+            sets: [
+              Set(reps: 6, weight: 85, rpe: 7),
+              Set(reps: 6, weight: 85, rpe: 8),
+              Set(reps: 6, weight: 85, rpe: 9),
+              Set(reps: 5, weight: 85, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Romanian Deadlift',
+            sets: [
+              Set(reps: 8, weight: 65, rpe: 7),
+              Set(reps: 8, weight: 65, rpe: 8),
+              Set(reps: 7, weight: 65, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Leg Press',
+            sets: [
+              Set(reps: 10, weight: 130, rpe: 7),
+              Set(reps: 10, weight: 130, rpe: 8),
+              Set(reps: 9, weight: 130, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Leg Extension',
+            sets: [
+              Set(reps: 12, weight: 45, rpe: 7),
+              Set(reps: 12, weight: 45, rpe: 7),
+              Set(reps: 11, weight: 45, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Leg Curl',
+            sets: [
+              Set(reps: 12, weight: 32.5, rpe: 6),
+              Set(reps: 12, weight: 32.5, rpe: 7),
+              Set(reps: 11, weight: 32.5, rpe: 7),
+            ],
+          ),
+          Exercise(
+            name: 'Calf Raise',
+            sets: [
+              Set(reps: 15, weight: 65, rpe: 7),
+              Set(reps: 15, weight: 65, rpe: 7),
+              Set(reps: 15, weight: 65, rpe: 8),
+              Set(reps: 14, weight: 65, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Hip Thrust',
+            sets: [
+              Set(reps: 10, weight: 90, rpe: 7),
+              Set(reps: 10, weight: 90, rpe: 7),
+              Set(reps: 10, weight: 90, rpe: 8),
+            ],
+          ),
         ],
       ),
       // Week 3 sessions
@@ -366,36 +498,54 @@ class SampleDataSeeder {
         planName: 'Push Day',
         weekNumber: 3,
         exercises: [
-          Exercise(name: 'Bench Press', sets: [
-            Set(reps: 8, weight: 65, rpe: 7, note: 'New PR!'),
-            Set(reps: 8, weight: 65, rpe: 8),
-            Set(reps: 7, weight: 65, rpe: 9),
-            Set(reps: 6, weight: 65, rpe: 10),
-          ]),
-          Exercise(name: 'Incline Dumbbell Press', sets: [
-            Set(reps: 10, weight: 28, rpe: 7),
-            Set(reps: 10, weight: 28, rpe: 8),
-            Set(reps: 9, weight: 28, rpe: 9),
-          ]),
-          Exercise(name: 'Overhead Press', sets: [
-            Set(reps: 8, weight: 45, rpe: 7),
-            Set(reps: 8, weight: 45, rpe: 8),
-            Set(reps: 7, weight: 45, rpe: 9),
-          ]),
-          Exercise(name: 'Lateral Raise', sets: [
-            Set(reps: 12, weight: 10, rpe: 8),
-            Set(reps: 12, weight: 10, rpe: 8),
-            Set(reps: 10, weight: 10, rpe: 9),
-          ]),
-          Exercise(name: 'Tricep Pushdown', sets: [
-            Set(reps: 12, weight: 30, rpe: 7),
-            Set(reps: 12, weight: 30, rpe: 7),
-            Set(reps: 12, weight: 30, rpe: 8),
-          ]),
-          Exercise(name: 'Dumbbell Fly', sets: [
-            Set(reps: 12, weight: 20, rpe: 7),
-            Set(reps: 12, weight: 20, rpe: 8),
-          ]),
+          Exercise(
+            name: 'Bench Press',
+            sets: [
+              Set(reps: 8, weight: 65, rpe: 7, note: 'New PR!'),
+              Set(reps: 8, weight: 65, rpe: 8),
+              Set(reps: 7, weight: 65, rpe: 9),
+              Set(reps: 6, weight: 65, rpe: 10),
+            ],
+          ),
+          Exercise(
+            name: 'Incline Dumbbell Press',
+            sets: [
+              Set(reps: 10, weight: 28, rpe: 7),
+              Set(reps: 10, weight: 28, rpe: 8),
+              Set(reps: 9, weight: 28, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Overhead Press',
+            sets: [
+              Set(reps: 8, weight: 45, rpe: 7),
+              Set(reps: 8, weight: 45, rpe: 8),
+              Set(reps: 7, weight: 45, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Lateral Raise',
+            sets: [
+              Set(reps: 12, weight: 10, rpe: 8),
+              Set(reps: 12, weight: 10, rpe: 8),
+              Set(reps: 10, weight: 10, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Tricep Pushdown',
+            sets: [
+              Set(reps: 12, weight: 30, rpe: 7),
+              Set(reps: 12, weight: 30, rpe: 7),
+              Set(reps: 12, weight: 30, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Dumbbell Fly',
+            sets: [
+              Set(reps: 12, weight: 20, rpe: 7),
+              Set(reps: 12, weight: 20, rpe: 8),
+            ],
+          ),
         ],
       ),
       WorkoutSession(
@@ -403,42 +553,63 @@ class SampleDataSeeder {
         planName: 'Pull Day',
         weekNumber: 3,
         exercises: [
-          Exercise(name: 'Deadlift', sets: [
-            Set(reps: 5, weight: 110, rpe: 8, note: 'New PR!'),
-            Set(reps: 5, weight: 110, rpe: 8),
-            Set(reps: 4, weight: 110, rpe: 9),
-            Set(reps: 3, weight: 110, rpe: 10),
-          ]),
-          Exercise(name: 'Barbell Row', sets: [
-            Set(reps: 8, weight: 65, rpe: 7),
-            Set(reps: 8, weight: 65, rpe: 8),
-            Set(reps: 7, weight: 65, rpe: 9),
-            Set(reps: 6, weight: 65, rpe: 9),
-          ]),
-          Exercise(name: 'Lat Pulldown', sets: [
-            Set(reps: 10, weight: 55, rpe: 7),
-            Set(reps: 10, weight: 55, rpe: 8),
-            Set(reps: 9, weight: 55, rpe: 8),
-          ]),
-          Exercise(name: 'Seated Cable Row', sets: [
-            Set(reps: 10, weight: 50, rpe: 7),
-            Set(reps: 10, weight: 50, rpe: 8),
-            Set(reps: 9, weight: 50, rpe: 8),
-          ]),
-          Exercise(name: 'Face Pull', sets: [
-            Set(reps: 15, weight: 20, rpe: 6),
-            Set(reps: 15, weight: 20, rpe: 7),
-            Set(reps: 15, weight: 20, rpe: 7),
-          ]),
-          Exercise(name: 'Bicep Curl', sets: [
-            Set(reps: 12, weight: 14, rpe: 7),
-            Set(reps: 12, weight: 14, rpe: 8),
-            Set(reps: 10, weight: 14, rpe: 9),
-          ]),
-          Exercise(name: 'Hammer Curl', sets: [
-            Set(reps: 10, weight: 12, rpe: 7),
-            Set(reps: 10, weight: 12, rpe: 8),
-          ]),
+          Exercise(
+            name: 'Deadlift',
+            sets: [
+              Set(reps: 5, weight: 110, rpe: 8, note: 'New PR!'),
+              Set(reps: 5, weight: 110, rpe: 8),
+              Set(reps: 4, weight: 110, rpe: 9),
+              Set(reps: 3, weight: 110, rpe: 10),
+            ],
+          ),
+          Exercise(
+            name: 'Barbell Row',
+            sets: [
+              Set(reps: 8, weight: 65, rpe: 7),
+              Set(reps: 8, weight: 65, rpe: 8),
+              Set(reps: 7, weight: 65, rpe: 9),
+              Set(reps: 6, weight: 65, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Lat Pulldown',
+            sets: [
+              Set(reps: 10, weight: 55, rpe: 7),
+              Set(reps: 10, weight: 55, rpe: 8),
+              Set(reps: 9, weight: 55, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Seated Cable Row',
+            sets: [
+              Set(reps: 10, weight: 50, rpe: 7),
+              Set(reps: 10, weight: 50, rpe: 8),
+              Set(reps: 9, weight: 50, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Face Pull',
+            sets: [
+              Set(reps: 15, weight: 20, rpe: 6),
+              Set(reps: 15, weight: 20, rpe: 7),
+              Set(reps: 15, weight: 20, rpe: 7),
+            ],
+          ),
+          Exercise(
+            name: 'Bicep Curl',
+            sets: [
+              Set(reps: 12, weight: 14, rpe: 7),
+              Set(reps: 12, weight: 14, rpe: 8),
+              Set(reps: 10, weight: 14, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Hammer Curl',
+            sets: [
+              Set(reps: 10, weight: 12, rpe: 7),
+              Set(reps: 10, weight: 12, rpe: 8),
+            ],
+          ),
         ],
       ),
       // Week 4 sessions
@@ -447,36 +618,54 @@ class SampleDataSeeder {
         planName: 'Push Day',
         weekNumber: 4,
         exercises: [
-          Exercise(name: 'Bench Press', sets: [
-            Set(reps: 8, weight: 67.5, rpe: 7, note: 'Felt amazing'),
-            Set(reps: 8, weight: 67.5, rpe: 8),
-            Set(reps: 7, weight: 67.5, rpe: 9),
-            Set(reps: 6, weight: 67.5, rpe: 9),
-          ]),
-          Exercise(name: 'Incline Dumbbell Press', sets: [
-            Set(reps: 10, weight: 30, rpe: 7),
-            Set(reps: 10, weight: 30, rpe: 8),
-            Set(reps: 8, weight: 30, rpe: 9),
-          ]),
-          Exercise(name: 'Overhead Press', sets: [
-            Set(reps: 8, weight: 47.5, rpe: 7),
-            Set(reps: 8, weight: 47.5, rpe: 8),
-            Set(reps: 6, weight: 47.5, rpe: 9),
-          ]),
-          Exercise(name: 'Lateral Raise', sets: [
-            Set(reps: 12, weight: 12, rpe: 7),
-            Set(reps: 12, weight: 12, rpe: 8),
-            Set(reps: 10, weight: 12, rpe: 9),
-          ]),
-          Exercise(name: 'Tricep Pushdown', sets: [
-            Set(reps: 12, weight: 32.5, rpe: 7),
-            Set(reps: 12, weight: 32.5, rpe: 7),
-            Set(reps: 11, weight: 32.5, rpe: 8),
-          ]),
-          Exercise(name: 'Dumbbell Fly', sets: [
-            Set(reps: 12, weight: 20, rpe: 7),
-            Set(reps: 12, weight: 20, rpe: 8),
-          ]),
+          Exercise(
+            name: 'Bench Press',
+            sets: [
+              Set(reps: 8, weight: 67.5, rpe: 7, note: 'Felt amazing'),
+              Set(reps: 8, weight: 67.5, rpe: 8),
+              Set(reps: 7, weight: 67.5, rpe: 9),
+              Set(reps: 6, weight: 67.5, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Incline Dumbbell Press',
+            sets: [
+              Set(reps: 10, weight: 30, rpe: 7),
+              Set(reps: 10, weight: 30, rpe: 8),
+              Set(reps: 8, weight: 30, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Overhead Press',
+            sets: [
+              Set(reps: 8, weight: 47.5, rpe: 7),
+              Set(reps: 8, weight: 47.5, rpe: 8),
+              Set(reps: 6, weight: 47.5, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Lateral Raise',
+            sets: [
+              Set(reps: 12, weight: 12, rpe: 7),
+              Set(reps: 12, weight: 12, rpe: 8),
+              Set(reps: 10, weight: 12, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Tricep Pushdown',
+            sets: [
+              Set(reps: 12, weight: 32.5, rpe: 7),
+              Set(reps: 12, weight: 32.5, rpe: 7),
+              Set(reps: 11, weight: 32.5, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Dumbbell Fly',
+            sets: [
+              Set(reps: 12, weight: 20, rpe: 7),
+              Set(reps: 12, weight: 20, rpe: 8),
+            ],
+          ),
         ],
       ),
       WorkoutSession(
@@ -484,43 +673,64 @@ class SampleDataSeeder {
         planName: 'Leg Day',
         weekNumber: 4,
         exercises: [
-          Exercise(name: 'Squat', sets: [
-            Set(reps: 6, weight: 90, rpe: 8, note: 'Almost hit PR'),
-            Set(reps: 6, weight: 90, rpe: 8),
-            Set(reps: 5, weight: 90, rpe: 9),
-            Set(reps: 4, weight: 90, rpe: 10),
-          ]),
-          Exercise(name: 'Romanian Deadlift', sets: [
-            Set(reps: 8, weight: 70, rpe: 7),
-            Set(reps: 8, weight: 70, rpe: 8),
-            Set(reps: 6, weight: 70, rpe: 9),
-          ]),
-          Exercise(name: 'Leg Press', sets: [
-            Set(reps: 10, weight: 140, rpe: 7),
-            Set(reps: 10, weight: 140, rpe: 8),
-            Set(reps: 8, weight: 140, rpe: 9),
-          ]),
-          Exercise(name: 'Leg Extension', sets: [
-            Set(reps: 12, weight: 50, rpe: 7),
-            Set(reps: 12, weight: 50, rpe: 7),
-            Set(reps: 10, weight: 50, rpe: 8),
-          ]),
-          Exercise(name: 'Leg Curl', sets: [
-            Set(reps: 12, weight: 35, rpe: 6),
-            Set(reps: 12, weight: 35, rpe: 7),
-            Set(reps: 10, weight: 35, rpe: 7),
-          ]),
-          Exercise(name: 'Calf Raise', sets: [
-            Set(reps: 15, weight: 70, rpe: 7),
-            Set(reps: 15, weight: 70, rpe: 7),
-            Set(reps: 15, weight: 70, rpe: 8),
-            Set(reps: 13, weight: 70, rpe: 8),
-          ]),
-          Exercise(name: 'Hip Thrust', sets: [
-            Set(reps: 10, weight: 100, rpe: 7),
-            Set(reps: 10, weight: 100, rpe: 7),
-            Set(reps: 10, weight: 100, rpe: 8),
-          ]),
+          Exercise(
+            name: 'Squat',
+            sets: [
+              Set(reps: 6, weight: 90, rpe: 8, note: 'Almost hit PR'),
+              Set(reps: 6, weight: 90, rpe: 8),
+              Set(reps: 5, weight: 90, rpe: 9),
+              Set(reps: 4, weight: 90, rpe: 10),
+            ],
+          ),
+          Exercise(
+            name: 'Romanian Deadlift',
+            sets: [
+              Set(reps: 8, weight: 70, rpe: 7),
+              Set(reps: 8, weight: 70, rpe: 8),
+              Set(reps: 6, weight: 70, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Leg Press',
+            sets: [
+              Set(reps: 10, weight: 140, rpe: 7),
+              Set(reps: 10, weight: 140, rpe: 8),
+              Set(reps: 8, weight: 140, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Leg Extension',
+            sets: [
+              Set(reps: 12, weight: 50, rpe: 7),
+              Set(reps: 12, weight: 50, rpe: 7),
+              Set(reps: 10, weight: 50, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Leg Curl',
+            sets: [
+              Set(reps: 12, weight: 35, rpe: 6),
+              Set(reps: 12, weight: 35, rpe: 7),
+              Set(reps: 10, weight: 35, rpe: 7),
+            ],
+          ),
+          Exercise(
+            name: 'Calf Raise',
+            sets: [
+              Set(reps: 15, weight: 70, rpe: 7),
+              Set(reps: 15, weight: 70, rpe: 7),
+              Set(reps: 15, weight: 70, rpe: 8),
+              Set(reps: 13, weight: 70, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Hip Thrust',
+            sets: [
+              Set(reps: 10, weight: 100, rpe: 7),
+              Set(reps: 10, weight: 100, rpe: 7),
+              Set(reps: 10, weight: 100, rpe: 8),
+            ],
+          ),
         ],
       ),
       WorkoutSession(
@@ -528,27 +738,39 @@ class SampleDataSeeder {
         planName: 'Pull Day',
         weekNumber: 4,
         exercises: [
-          Exercise(name: 'Deadlift', sets: [
-            Set(reps: 5, weight: 115, rpe: 8),
-            Set(reps: 5, weight: 115, rpe: 8),
-            Set(reps: 4, weight: 115, rpe: 9),
-            Set(reps: 3, weight: 115, rpe: 10),
-          ]),
-          Exercise(name: 'Barbell Row', sets: [
-            Set(reps: 8, weight: 67.5, rpe: 7),
-            Set(reps: 8, weight: 67.5, rpe: 8),
-            Set(reps: 6, weight: 67.5, rpe: 9),
-          ]),
-          Exercise(name: 'Lat Pulldown', sets: [
-            Set(reps: 10, weight: 57.5, rpe: 7),
-            Set(reps: 10, weight: 57.5, rpe: 8),
-            Set(reps: 8, weight: 57.5, rpe: 9),
-          ]),
-          Exercise(name: 'Bicep Curl', sets: [
-            Set(reps: 12, weight: 16, rpe: 7),
-            Set(reps: 12, weight: 16, rpe: 8),
-            Set(reps: 10, weight: 16, rpe: 9),
-          ]),
+          Exercise(
+            name: 'Deadlift',
+            sets: [
+              Set(reps: 5, weight: 115, rpe: 8),
+              Set(reps: 5, weight: 115, rpe: 8),
+              Set(reps: 4, weight: 115, rpe: 9),
+              Set(reps: 3, weight: 115, rpe: 10),
+            ],
+          ),
+          Exercise(
+            name: 'Barbell Row',
+            sets: [
+              Set(reps: 8, weight: 67.5, rpe: 7),
+              Set(reps: 8, weight: 67.5, rpe: 8),
+              Set(reps: 6, weight: 67.5, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Lat Pulldown',
+            sets: [
+              Set(reps: 10, weight: 57.5, rpe: 7),
+              Set(reps: 10, weight: 57.5, rpe: 8),
+              Set(reps: 8, weight: 57.5, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Bicep Curl',
+            sets: [
+              Set(reps: 12, weight: 16, rpe: 7),
+              Set(reps: 12, weight: 16, rpe: 8),
+              Set(reps: 10, weight: 16, rpe: 9),
+            ],
+          ),
         ],
       ),
       // Week 5 sessions
@@ -557,36 +779,54 @@ class SampleDataSeeder {
         planName: 'Push Day',
         weekNumber: 5,
         exercises: [
-          Exercise(name: 'Bench Press', sets: [
-            Set(reps: 8, weight: 70, rpe: 8, note: 'New PR!'),
-            Set(reps: 8, weight: 70, rpe: 8),
-            Set(reps: 7, weight: 70, rpe: 9),
-            Set(reps: 5, weight: 70, rpe: 10),
-          ]),
-          Exercise(name: 'Incline Dumbbell Press', sets: [
-            Set(reps: 10, weight: 32, rpe: 7),
-            Set(reps: 10, weight: 32, rpe: 8),
-            Set(reps: 8, weight: 32, rpe: 9),
-          ]),
-          Exercise(name: 'Overhead Press', sets: [
-            Set(reps: 8, weight: 50, rpe: 7),
-            Set(reps: 8, weight: 50, rpe: 8),
-            Set(reps: 6, weight: 50, rpe: 9),
-          ]),
-          Exercise(name: 'Lateral Raise', sets: [
-            Set(reps: 12, weight: 12, rpe: 7),
-            Set(reps: 12, weight: 12, rpe: 8),
-            Set(reps: 10, weight: 12, rpe: 9),
-          ]),
-          Exercise(name: 'Tricep Pushdown', sets: [
-            Set(reps: 12, weight: 35, rpe: 7),
-            Set(reps: 12, weight: 35, rpe: 7),
-            Set(reps: 12, weight: 35, rpe: 8),
-          ]),
-          Exercise(name: 'Dumbbell Fly', sets: [
-            Set(reps: 12, weight: 22, rpe: 7),
-            Set(reps: 12, weight: 22, rpe: 8),
-          ]),
+          Exercise(
+            name: 'Bench Press',
+            sets: [
+              Set(reps: 8, weight: 70, rpe: 8, note: 'New PR!'),
+              Set(reps: 8, weight: 70, rpe: 8),
+              Set(reps: 7, weight: 70, rpe: 9),
+              Set(reps: 5, weight: 70, rpe: 10),
+            ],
+          ),
+          Exercise(
+            name: 'Incline Dumbbell Press',
+            sets: [
+              Set(reps: 10, weight: 32, rpe: 7),
+              Set(reps: 10, weight: 32, rpe: 8),
+              Set(reps: 8, weight: 32, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Overhead Press',
+            sets: [
+              Set(reps: 8, weight: 50, rpe: 7),
+              Set(reps: 8, weight: 50, rpe: 8),
+              Set(reps: 6, weight: 50, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Lateral Raise',
+            sets: [
+              Set(reps: 12, weight: 12, rpe: 7),
+              Set(reps: 12, weight: 12, rpe: 8),
+              Set(reps: 10, weight: 12, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Tricep Pushdown',
+            sets: [
+              Set(reps: 12, weight: 35, rpe: 7),
+              Set(reps: 12, weight: 35, rpe: 7),
+              Set(reps: 12, weight: 35, rpe: 8),
+            ],
+          ),
+          Exercise(
+            name: 'Dumbbell Fly',
+            sets: [
+              Set(reps: 12, weight: 22, rpe: 7),
+              Set(reps: 12, weight: 22, rpe: 8),
+            ],
+          ),
         ],
       ),
       WorkoutSession(
@@ -594,26 +834,38 @@ class SampleDataSeeder {
         planName: 'Pull Day',
         weekNumber: 5,
         exercises: [
-          Exercise(name: 'Deadlift', sets: [
-            Set(reps: 5, weight: 120, rpe: 8, note: 'New PR!'),
-            Set(reps: 5, weight: 120, rpe: 9),
-            Set(reps: 3, weight: 120, rpe: 10),
-          ]),
-          Exercise(name: 'Barbell Row', sets: [
-            Set(reps: 8, weight: 70, rpe: 7),
-            Set(reps: 8, weight: 70, rpe: 8),
-            Set(reps: 6, weight: 70, rpe: 9),
-          ]),
-          Exercise(name: 'Lat Pulldown', sets: [
-            Set(reps: 10, weight: 60, rpe: 7),
-            Set(reps: 10, weight: 60, rpe: 8),
-            Set(reps: 8, weight: 60, rpe: 9),
-          ]),
-          Exercise(name: 'Bicep Curl', sets: [
-            Set(reps: 12, weight: 16, rpe: 7),
-            Set(reps: 12, weight: 16, rpe: 8),
-            Set(reps: 10, weight: 16, rpe: 9),
-          ]),
+          Exercise(
+            name: 'Deadlift',
+            sets: [
+              Set(reps: 5, weight: 120, rpe: 8, note: 'New PR!'),
+              Set(reps: 5, weight: 120, rpe: 9),
+              Set(reps: 3, weight: 120, rpe: 10),
+            ],
+          ),
+          Exercise(
+            name: 'Barbell Row',
+            sets: [
+              Set(reps: 8, weight: 70, rpe: 7),
+              Set(reps: 8, weight: 70, rpe: 8),
+              Set(reps: 6, weight: 70, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Lat Pulldown',
+            sets: [
+              Set(reps: 10, weight: 60, rpe: 7),
+              Set(reps: 10, weight: 60, rpe: 8),
+              Set(reps: 8, weight: 60, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Bicep Curl',
+            sets: [
+              Set(reps: 12, weight: 16, rpe: 7),
+              Set(reps: 12, weight: 16, rpe: 8),
+              Set(reps: 10, weight: 16, rpe: 9),
+            ],
+          ),
         ],
       ),
       WorkoutSession(
@@ -621,37 +873,56 @@ class SampleDataSeeder {
         planName: 'Leg Day',
         weekNumber: 5,
         exercises: [
-          Exercise(name: 'Squat', sets: [
-            Set(reps: 6, weight: 95, rpe: 8, note: 'New PR!'),
-            Set(reps: 6, weight: 95, rpe: 9),
-            Set(reps: 4, weight: 95, rpe: 10),
-          ]),
-          Exercise(name: 'Romanian Deadlift', sets: [
-            Set(reps: 8, weight: 75, rpe: 7),
-            Set(reps: 8, weight: 75, rpe: 8),
-            Set(reps: 6, weight: 75, rpe: 9),
-          ]),
-          Exercise(name: 'Leg Press', sets: [
-            Set(reps: 10, weight: 150, rpe: 7),
-            Set(reps: 10, weight: 150, rpe: 8),
-            Set(reps: 8, weight: 150, rpe: 9),
-          ]),
-          Exercise(name: 'Calf Raise', sets: [
-            Set(reps: 15, weight: 75, rpe: 7),
-            Set(reps: 15, weight: 75, rpe: 7),
-            Set(reps: 15, weight: 75, rpe: 8),
-          ]),
+          Exercise(
+            name: 'Squat',
+            sets: [
+              Set(reps: 6, weight: 95, rpe: 8, note: 'New PR!'),
+              Set(reps: 6, weight: 95, rpe: 9),
+              Set(reps: 4, weight: 95, rpe: 10),
+            ],
+          ),
+          Exercise(
+            name: 'Romanian Deadlift',
+            sets: [
+              Set(reps: 8, weight: 75, rpe: 7),
+              Set(reps: 8, weight: 75, rpe: 8),
+              Set(reps: 6, weight: 75, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Leg Press',
+            sets: [
+              Set(reps: 10, weight: 150, rpe: 7),
+              Set(reps: 10, weight: 150, rpe: 8),
+              Set(reps: 8, weight: 150, rpe: 9),
+            ],
+          ),
+          Exercise(
+            name: 'Calf Raise',
+            sets: [
+              Set(reps: 15, weight: 75, rpe: 7),
+              Set(reps: 15, weight: 75, rpe: 7),
+              Set(reps: 15, weight: 75, rpe: 8),
+            ],
+          ),
         ],
       ),
     ];
 
     for (var session in sessions) {
+      session.splitId = splitId;
+      session.planId = planIds[session.planName.toLowerCase()];
       await HiveService.addSession(session);
     }
   }
 
   static Future<void> clearAllData() async {
-    await HiveService.clearAllPlans();
-    await HiveService.clearAllSessions();
+    await HiveService.softDeleteAllWorkoutData();
+    SyncService.instance.scheduleSync();
+  }
+
+  static Future<void> clearDataForSplit(String splitId) async {
+    await HiveService.softDeleteWorkoutDataForSplit(splitId);
+    SyncService.instance.scheduleSync();
   }
 }

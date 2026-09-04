@@ -179,7 +179,10 @@ class _SessionCardState extends State<_SessionCard> {
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
-    final prs = PRTrackingService.checkForNewPRs(session.exercises);
+    final prs = PRTrackingService.checkForNewPRs(
+      session.exercises,
+      session.splitId,
+    );
     final hasPR = prs.isNotEmpty;
     final accent = accentColor(context);
     final border = borderColor(context);

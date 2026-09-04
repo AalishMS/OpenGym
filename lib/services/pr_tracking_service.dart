@@ -22,23 +22,29 @@ class PRResult {
 class PRTrackingService {
   static final StatsRepository _statsRepo = StatsRepository();
 
-  static List<PRResult> checkForNewPRs(List<Exercise> exercises) {
+  static List<PRResult> checkForNewPRs(
+    List<Exercise> exercises,
+    String? splitId,
+  ) {
     final results = <PRResult>[];
 
     for (var exercise in exercises) {
       if (exercise.sets.isEmpty) continue;
 
       for (var set in exercise.sets) {
-        final currentPR = _statsRepo.getExercisePR(exercise.name);
+        if (splitId == null) continue;
+        final currentPR = _statsRepo.getExercisePR(exercise.name, splitId);
 
         if (set.weight > currentPR) {
-          results.add(PRResult(
-            exerciseName: exercise.name,
-            previousPR: currentPR,
-            newPR: set.weight,
-            reps: set.reps,
-            isWeightPR: true,
-          ));
+          results.add(
+            PRResult(
+              exerciseName: exercise.name,
+              previousPR: currentPR,
+              newPR: set.weight,
+              reps: set.reps,
+              isWeightPR: true,
+            ),
+          );
         }
       }
     }

@@ -34,6 +34,9 @@ class WorkoutPlan extends HiveObject {
   @HiveField(8)
   bool? dirty;
 
+  @HiveField(9)
+  String? splitId;
+
   WorkoutPlan({
     required this.name,
     required this.exercises,
@@ -43,6 +46,7 @@ class WorkoutPlan extends HiveObject {
     this.updatedAt,
     this.deletedAt,
     this.dirty,
+    this.splitId,
   });
 
   WorkoutPlan copyWith({
@@ -54,39 +58,45 @@ class WorkoutPlan extends HiveObject {
     DateTime? updatedAt,
     DateTime? deletedAt,
     bool? dirty,
-  }) =>
-      WorkoutPlan(
-        name: name ?? this.name,
-        exercises: exercises ?? this.exercises,
-        planColor: planColor ?? this.planColor,
-        id: id ?? this.id,
-        userId: userId ?? this.userId,
-        updatedAt: updatedAt ?? this.updatedAt,
-        deletedAt: deletedAt ?? this.deletedAt,
-        dirty: dirty ?? this.dirty,
-      );
+    String? splitId,
+  }) => WorkoutPlan(
+    name: name ?? this.name,
+    exercises: exercises ?? this.exercises,
+    planColor: planColor ?? this.planColor,
+    id: id ?? this.id,
+    userId: userId ?? this.userId,
+    updatedAt: updatedAt ?? this.updatedAt,
+    deletedAt: deletedAt ?? this.deletedAt,
+    dirty: dirty ?? this.dirty,
+    splitId: splitId ?? this.splitId,
+  );
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'exercises': exercises.map((e) => e.toJson()).toList(),
-        'planColor': planColor,
-        'updatedAt': updatedAt?.toIso8601String(),
-        'deletedAt': deletedAt?.toIso8601String(),
-      };
+    'id': id,
+    'name': name,
+    'exercises': exercises.map((e) => e.toJson()).toList(),
+    'planColor': planColor,
+    'updatedAt': updatedAt?.toIso8601String(),
+    'deletedAt': deletedAt?.toIso8601String(),
+    'splitId': splitId,
+  };
 
   factory WorkoutPlan.fromJson(Map<String, dynamic> json) => WorkoutPlan(
-        id: json['id'] as String?,
-        name: json['name'] as String,
-        exercises: (json['exercises'] as List)
+    id: json['id'] as String?,
+    name: json['name'] as String,
+    exercises:
+        (json['exercises'] as List)
             .map((e) => ExerciseTemplate.fromJson(e as Map<String, dynamic>))
             .toList(),
-        planColor: json['planColor'] as int?,
-        updatedAt: json['updatedAt'] != null
+    planColor: json['planColor'] as int?,
+    updatedAt:
+        json['updatedAt'] != null
             ? DateTime.parse(json['updatedAt'] as String)
             : null,
-        deletedAt: json['deletedAt'] != null
+    deletedAt:
+        json['deletedAt'] != null
             ? DateTime.parse(json['deletedAt'] as String)
             : null,
-      );
+    splitId: json['splitId'] as String?,
+  );
 }

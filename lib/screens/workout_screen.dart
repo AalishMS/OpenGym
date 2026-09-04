@@ -44,7 +44,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   void _loadWeeks() {
-    final existingWeeks = HiveService.getWeeksForPlan(widget.plan.name);
+    final existingWeeks = HiveService.getWeeksForPlan(
+      widget.plan.name,
+      widget.plan.splitId,
+    );
     if (existingWeeks.isEmpty) {
       _weeks = [1];
     } else {
@@ -63,6 +66,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final existingSession = HiveService.getSessionForPlanAndWeek(
       widget.plan.name,
       week,
+      widget.plan.splitId,
     );
     if (existingSession != null) {
       _weekSessions[week] = existingSession;
@@ -84,6 +88,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       final prevWeekSession = HiveService.getSessionForPlanAndWeek(
         widget.plan.name,
         currentWeek - 1,
+        widget.plan.splitId,
       );
       if (prevWeekSession != null) {
         for (var exercise in prevWeekSession.exercises) {
@@ -94,7 +99,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         }
       }
     }
-    return HiveService.getLastSetForExercise(exerciseName);
+    return HiveService.getLastSetForExercise(exerciseName, widget.plan.splitId);
   }
 
   /// The plan entry matching [exerciseName], for target hints only.
@@ -134,7 +139,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final hasSets = session.exercises.any((e) => e.sets.isNotEmpty);
 
     if (hasSets) {
-      final prs = PRTrackingService.checkForNewPRs(session.exercises);
+      final prs = PRTrackingService.checkForNewPRs(
+        session.exercises,
+        widget.plan.splitId,
+      );
 
       // Stamp identity so repeated autosaves upsert ONE row per (plan, week).
       // upsertSession assigns a UUID on first save and reuses it thereafter.
@@ -142,6 +150,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         planId: widget.plan.id,
         planName: widget.plan.name,
         weekNumber: _currentWeek,
+        splitId: widget.plan.splitId,
       );
       _weekSessions[_currentWeek] = session; // keep the id-stamped instance
       await context.read<WorkoutSessionProvider>().upsertSession(session);
@@ -168,6 +177,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       final prevSession = HiveService.getSessionForPlanAndWeek(
         widget.plan.name,
         prevWeek,
+        widget.plan.splitId,
       );
       if (prevSession != null &&
           prevSession.exercises.any((e) => e.sets.isNotEmpty)) {
@@ -195,6 +205,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   )
                   .toList(),
           weekNumber: _currentWeek,
+          splitId: widget.plan.splitId,
         );
       }
     }
@@ -216,6 +227,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               )
               .toList(),
       weekNumber: _currentWeek,
+      splitId: widget.plan.splitId,
     );
   }
 
@@ -489,7 +501,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         setState(() {
           _weeks[index] = newWeek;
         });
-        await HiveService.renameSessionWeek(widget.plan.name, week, newWeek);
+        await HiveService.renameSessionWeek(
+          widget.plan.name,
+          week,
+          newWeek,
+          widget.plan.splitId,
+        );
       },
     );
   }
@@ -515,7 +532,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
 
     if (confirmed) {
-      await HiveService.deleteSessionForPlanAndWeek(widget.plan.name, week);
+      await HiveService.deleteSessionForPlanAndWeek(
+        widget.plan.name,
+        week,
+        widget.plan.splitId,
+      );
       setState(() {
         _weeks.removeAt(index);
         if (_currentWeekIndex >= _weeks.length) {

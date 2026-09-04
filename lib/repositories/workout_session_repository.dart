@@ -2,7 +2,8 @@ import '../models/workout_session.dart';
 import '../services/hive_service.dart';
 
 class WorkoutSessionRepository {
-  List<WorkoutSession> getSessions() => HiveService.getSessions();
+  List<WorkoutSession> getSessions(String splitId) =>
+      HiveService.getSessions(splitId: splitId);
 
   WorkoutSession? getSessionById(String id) => HiveService.getSessionById(id);
 
@@ -12,15 +13,20 @@ class WorkoutSessionRepository {
   Future<void> softDeleteSession(String id) =>
       HiveService.softDeleteSession(id);
 
-  List<WorkoutSession> getSessionsForPlan(String planName) =>
-      HiveService.getSessionsForPlan(planName);
+  List<WorkoutSession> getSessionsForPlan(String planName, String splitId) =>
+      HiveService.getSessionsForPlan(planName, splitId);
 
-  List<int> getWeeksForPlan(String planName) =>
-      HiveService.getWeeksForPlan(planName);
+  List<int> getWeeksForPlan(String planName, String splitId) =>
+      HiveService.getWeeksForPlan(planName, splitId);
 
-  WorkoutSession? getSessionForPlanAndWeek(String planName, int weekNumber) =>
-      HiveService.getSessionForPlanAndWeek(planName, weekNumber);
+  WorkoutSession? getSessionForPlanAndWeek(
+    String planName,
+    int weekNumber,
+    String splitId,
+  ) => HiveService.getSessionForPlanAndWeek(planName, weekNumber, splitId);
 
-  WorkoutSession? getLastSessionForExercise(String exerciseName) =>
-      HiveService.getLastSessionForExercise(exerciseName);
+  WorkoutSession? getLastSessionForExercise(
+    String exerciseName,
+    String splitId,
+  ) => HiveService.getLastSessionForExercise(exerciseName, splitId);
 }

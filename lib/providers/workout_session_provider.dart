@@ -1,10 +1,13 @@
 import 'package:flutter/foundation.dart';
 import '../models/workout_session.dart';
 import '../repositories/workout_session_repository.dart';
+import '../services/hive_service.dart';
 import '../services/sync_service.dart';
+import 'split_provider.dart';
 
 class WorkoutSessionProvider with ChangeNotifier {
   final WorkoutSessionRepository _repository = WorkoutSessionRepository();
+  final SplitProvider? _splitProvider;
   List<WorkoutSession> _sessions = [];
   WorkoutSession? _currentSession;
   int _currentWeek = 1;
@@ -13,12 +16,17 @@ class WorkoutSessionProvider with ChangeNotifier {
   WorkoutSession? get currentSession => _currentSession;
   int get currentWeek => _currentWeek;
 
-  WorkoutSessionProvider() {
+  WorkoutSessionProvider([this._splitProvider]) {
+    _splitProvider?.addListener(loadSessions);
     loadSessions();
   }
 
   void loadSessions() {
-    _sessions = _repository.getSessions();
+    final splitId = _splitProvider?.activeSplitId;
+    _sessions =
+        splitId == null
+            ? HiveService.getSessions()
+            : _repository.getSessions(splitId);
     notifyListeners();
   }
 
@@ -31,6 +39,7 @@ class WorkoutSessionProvider with ChangeNotifier {
   /// autosaves of the same (plan, week) session replace ONE row instead of
   /// appending new ones. The session carries its own stable id.
   Future<void> upsertSession(WorkoutSession session) async {
+    if (_splitProvider != null) session.splitId ??= _requireActiveSplit();
     await _repository.upsertSession(session);
     loadSessions();
     SyncService.instance.scheduleSync();
@@ -38,6 +47,7 @@ class WorkoutSessionProvider with ChangeNotifier {
 
   /// Kept for API symmetry with the History edit screen.
   Future<void> updateSession(WorkoutSession session) async {
+    if (_splitProvider != null) session.splitId ??= _requireActiveSplit();
     await _repository.upsertSession(session);
     loadSessions();
     SyncService.instance.scheduleSync();
@@ -50,8 +60,28 @@ class WorkoutSessionProvider with ChangeNotifier {
   }
 
   List<int> getWeeksForPlan(String planName) =>
-      _repository.getWeeksForPlan(planName);
+      _splitProvider == null
+          ? HiveService.getWeeksForPlan(planName, null)
+          : _repository.getWeeksForPlan(planName, _requireActiveSplit());
 
   WorkoutSession? getSessionForPlanAndWeek(String planName, int week) =>
-      _repository.getSessionForPlanAndWeek(planName, week);
+      _splitProvider == null
+          ? HiveService.getSessionForPlanAndWeek(planName, week, null)
+          : _repository.getSessionForPlanAndWeek(
+            planName,
+            week,
+            _requireActiveSplit(),
+          );
+
+  String _requireActiveSplit() {
+    final splitId = _splitProvider?.activeSplitId;
+    if (splitId == null) throw StateError('No active split is available.');
+    return splitId;
+  }
+
+  @override
+  void dispose() {
+    _splitProvider?.removeListener(loadSessions);
+    super.dispose();
+  }
 }

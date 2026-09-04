@@ -5,6 +5,7 @@ import '../services/supabase_service.dart';
 import '../services/adopt_local_data.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
+import '../providers/split_provider.dart';
 import '../screens/login_screen.dart';
 import '../app_shell.dart';
 import '../theme/app_theme.dart';
@@ -46,6 +47,7 @@ class _PostLoginGateState extends State<_PostLoginGate> {
   Future<void> _adoptThenReload() async {
     await AdoptLocalData.run();
     if (!mounted) return;
+    context.read<SplitProvider>().loadSplits();
     context.read<WorkoutPlanProvider>().loadPlans();
     context.read<WorkoutSessionProvider>().loadSessions();
   }

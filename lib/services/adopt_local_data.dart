@@ -27,6 +27,9 @@ class AdoptLocalData {
       // locally cached rows and their pull cursors before syncing.
       await HiveService.clearAllPlans();
       await HiveService.clearAllSessions();
+      await HiveService.clearSplitData();
+      await prefs.remove('splits_last_pulled');
+      await prefs.remove('split_preferences_last_pulled');
       await prefs.remove('plans_last_pulled');
       await prefs.remove('sessions_last_pulled');
     }
@@ -41,6 +44,10 @@ class AdoptLocalData {
     }
 
     try {
+      // The sync cycle pulls split metadata first, then creates/reuses the
+      // deterministic My Split and assigns any legacy local rows to it.
+      await SyncService.instance.syncNow();
+
       // Stamp every local record for this user and mark dirty. If we cleared
       // above (userChanged), these lists are empty and this is a no-op.
       final now = DateTime.now();
@@ -57,8 +64,7 @@ class AdoptLocalData {
         await HiveService.putSessionRaw(s);
       }
 
-      // Pull-before-push: merge anything the account already has (other
-      // devices) so we don't clobber it, then push our now-dirty local data.
+      // Push adopted ownership and pull any changes made during adoption.
       await SyncService.instance.syncNow();
 
       await prefs.setBool(adoptedKey, true);

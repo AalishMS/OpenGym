@@ -2,7 +2,8 @@ import '../models/workout_plan.dart';
 import '../services/hive_service.dart';
 
 class WorkoutPlanRepository {
-  List<WorkoutPlan> getPlans() => HiveService.getPlans();
+  List<WorkoutPlan> getPlans(String splitId) =>
+      HiveService.getPlans(splitId: splitId);
 
   WorkoutPlan? getPlanById(String id) => HiveService.getPlanById(id);
 
