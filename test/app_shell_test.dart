@@ -93,7 +93,7 @@ void main() {
 
     expect(find.byType(AppBottomNav), findsOneWidget);
     expect(find.byType(AppNavRail), findsNothing);
-    for (final label in ['PLANS', 'HISTORY', 'STATS', 'SETTINGS']) {
+    for (final label in ['Plans', 'History', 'Stats', 'Settings']) {
       expect(
         find.descendant(
           of: find.byType(AppBottomNav),
@@ -102,7 +102,7 @@ void main() {
         findsOneWidget,
       );
     }
-    expect(find.text('DASHBOARD'), findsNothing);
+    expect(find.text('Dashboard'), findsNothing);
   });
 
   testWidgets('medium shell exposes the desktop rail and dashboard', (
@@ -116,7 +116,7 @@ void main() {
     expect(
       find.descendant(
         of: find.byType(AppNavRail),
-        matching: find.text('DASHBOARD'),
+        matching: find.text('Dashboard'),
       ),
       findsOneWidget,
     );
@@ -127,9 +127,9 @@ void main() {
 
     await tester.pumpWidget(bottomNavHost());
     expect(
-      tester.getSemantics(find.text('PLANS')),
+      tester.getSemantics(find.text('Plans')),
       matchesSemantics(
-        label: 'PLANS',
+        label: 'Plans',
         isSelected: true,
         hasSelectedState: true,
         isFocusable: true,
@@ -140,10 +140,14 @@ void main() {
 
     await tester.pumpWidget(shellHost(Breakpoints.medium));
     await tester.pumpAndSettle();
+    final dashboardDestination = find.descendant(
+      of: find.byType(AppNavRail),
+      matching: find.text('Dashboard'),
+    );
     expect(
-      tester.getSemantics(find.text('DASHBOARD')),
+      tester.getSemantics(dashboardDestination),
       matchesSemantics(
-        label: 'DASHBOARD',
+        label: 'Dashboard',
         isSelected: true,
         hasSelectedState: true,
         isFocusable: true,
@@ -153,6 +157,20 @@ void main() {
     );
 
     semantics.dispose();
+  });
+
+  testWidgets('selected destination uses restrained accent emphasis', (
+    tester,
+  ) async {
+    await tester.pumpWidget(bottomNavHost());
+    final context = tester.element(find.byType(AppBottomNav));
+    final selected = tester.widget<Text>(find.text('Plans')).style!;
+    final unselected = tester.widget<Text>(find.text('History')).style!;
+
+    expect(selected.color, accentColor(context));
+    expect(selected.fontWeight, FontWeight.w700);
+    expect(unselected.color, textSecondaryColor(context));
+    expect(unselected.fontWeight, FontWeight.w500);
   });
 
   testWidgets('every navigation destination is at least 48 pixels high', (

@@ -205,10 +205,10 @@ void main() {
     await tester.tap(find.byTooltip('Plan actions'));
     await tester.pumpAndSettle();
     for (final label in [
-      'CHANGE COLOR',
-      'DUPLICATE PLAN',
-      'EDIT PLAN',
-      'DELETE PLAN',
+      'Change color',
+      'Duplicate plan',
+      'Edit plan',
+      'Delete plan',
     ]) {
       final target = find.ancestor(
         of: find.text(label),
@@ -233,7 +233,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.longPress(find.text('Push Day'));
     await tester.pumpAndSettle();
-    expect(find.text('CHANGE COLOR'), findsOneWidget);
+    expect(find.text('Change color'), findsOneWidget);
   });
 
   testWidgets('plan color is limited to identity markers', (tester) async {
@@ -407,7 +407,7 @@ void main() {
     );
     await tester.tap(find.byTooltip('Plan actions'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('CHANGE COLOR'));
+    await tester.tap(find.text('Change color'));
     await tester.pumpAndSettle();
     final choices = find.bySemanticsLabel(RegExp(r'^Plan color \d+$'));
     expect(choices, findsWidgets);

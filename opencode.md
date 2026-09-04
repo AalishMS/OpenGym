@@ -128,6 +128,17 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Added the first visual-identity foundation milestone:
+  - Centralized a Manrope interface type scale and kept JetBrains Mono behind a
+    training-data helper for aligned numerical values
+  - Added shared primary, secondary, text, destructive, and accessible icon
+    action components; retired the dashboard's bracket-decorated button
+  - Consolidated the exact `> OpenGym` wordmark across startup, login, the Home
+    header, and desktop navigation
+  - Updated bottom and side navigation labels to sentence case while preserving
+    destinations, responsive switching, touch targets, and selected semantics
+  - Verified the login surface visually in light and dark themes and expanded
+    typography, button, wordmark, navigation, and contrast coverage
 - Modernized the complete split interface without changing split behavior:
   - Replaced the Home header's outlined split control with a larger plain-text
     split name and chevron

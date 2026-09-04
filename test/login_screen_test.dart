@@ -39,19 +39,22 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(loginHost());
-    await tester.tap(find.text('[SIGN IN]'));
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Sign in'));
     await tester.pump();
     expect(find.text('Email and password required.'), findsOneWidget);
   });
 
   testWidgets('mode switch updates heading and primary action', (tester) async {
     await tester.pumpWidget(loginHost());
-    expect(find.text('Sign in'), findsOneWidget);
-    expect(find.text('[SIGN IN]'), findsOneWidget);
+    expect(find.text('Sign in'), findsWidgets);
+    expect(find.widgetWithText(ElevatedButton, 'Sign in'), findsOneWidget);
     await tester.tap(find.text('No account? Create one'));
     await tester.pump();
-    expect(find.text('Create account'), findsOneWidget);
-    expect(find.text('[CREATE ACCOUNT]'), findsOneWidget);
+    expect(find.text('Create account'), findsWidgets);
+    expect(
+      find.widgetWithText(ElevatedButton, 'Create account'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('credentials expose autofill and suitable input types', (
@@ -95,7 +98,7 @@ void main() {
       find.widgetWithText(TextField, 'Password'),
       'password123',
     );
-    await tester.tap(find.text('[SIGN IN]'));
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Sign in'));
     await tester.pump();
     expect(
       tester.widget<ElevatedButton>(find.byType(ElevatedButton)).onPressed,
@@ -139,7 +142,7 @@ void main() {
       find.widgetWithText(TextField, 'Password'),
       'password123',
     );
-    await tester.tap(find.text('[SIGN IN]'));
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Sign in'));
     await tester.pump();
 
     final spinner = tester.widget<CircularProgressIndicator>(

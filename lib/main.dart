@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'providers/workout_plan_provider.dart';
 import 'providers/workout_session_provider.dart';
@@ -12,6 +11,7 @@ import 'services/supabase_service.dart';
 import 'services/sync_service.dart';
 import 'auth/auth_gate.dart';
 import 'theme/app_theme.dart';
+import 'widgets/app_wordmark.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -95,14 +95,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text(
-                        '> OPENGYM',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 28,
-                          fontWeight: FontWeight.bold,
-                          color: accentColor(context),
-                        ),
-                      ),
+                      const AppWordmark(fontSize: 28),
                       const SizedBox(height: 32),
                       Semantics(
                         label: 'Starting OpenGym',

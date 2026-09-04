@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_wordmark.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -61,7 +63,6 @@ class _LoginScreenState extends State<LoginScreen> {
     final fg = textPrimaryColor(context);
     final muted = textSecondaryColor(context);
     final accent = accentColor(context);
-    final mono = GoogleFonts.jetBrainsMono();
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -76,14 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text(
-                      '> OPENGYM',
-                      style: mono.copyWith(
-                        color: accent,
-                        fontSize: 28,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
+                    const AppWordmark(fontSize: 28),
                     const SizedBox(height: 8),
                     Text(
                       _isSignUp ? 'Create account' : 'Sign in',
@@ -160,16 +154,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                     const SizedBox(height: 24),
-                    ElevatedButton(
+                    AppButton.primary(
+                      label: _isSignUp ? 'Create account' : 'Sign in',
                       onPressed: _loading ? null : _submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: accentFillColor(context),
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: AppRadius.button,
-                        ),
-                      ),
                       child:
                           _loading
                               ? SizedBox(
@@ -188,9 +175,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                   ),
                                 ),
                               )
-                              : Text(
-                                _isSignUp ? '[CREATE ACCOUNT]' : '[SIGN IN]',
-                              ),
+                              : null,
                     ),
                     const SizedBox(height: 16),
                     TextButton(

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'app_typography.dart';
 import 'radii.dart';
 import 'tones.dart';
 
@@ -473,6 +474,7 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
   final accent = c.accent;
   final accentFill = c.accentFill;
   final onAccent = c.onAccent;
+  final textTheme = AppTypography.textTheme(textPrimary, textSecondary);
   WidgetStateProperty<Color?> interactionOverlay(Color color) =>
       WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.pressed)) return color.withAlpha(31);
@@ -500,17 +502,14 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
       onSurface: textPrimary,
     ),
     extensions: [c],
-    textTheme: _buildTextTheme(textPrimary, textSecondary),
+    fontFamily: GoogleFonts.manrope().fontFamily,
+    textTheme: textTheme,
     appBarTheme: AppBarTheme(
       backgroundColor: surface,
       foregroundColor: textPrimary,
       elevation: 0,
       centerTitle: false,
-      titleTextStyle: TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.bold,
-        color: textPrimary,
-      ),
+      titleTextStyle: textTheme.titleLarge,
       iconTheme: IconThemeData(color: accent),
     ),
     cardTheme: CardThemeData(
@@ -534,7 +533,7 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
         elevation: 0,
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        textStyle: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold),
+        textStyle: textTheme.labelLarge,
       ).copyWith(overlayColor: interactionOverlay(onAccent)),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
@@ -546,7 +545,7 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
         side: BorderSide(color: border, width: 1),
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        textStyle: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold),
+        textStyle: textTheme.labelLarge,
       ).copyWith(overlayColor: interactionOverlay(textPrimary)),
     ),
     textButtonTheme: TextButtonThemeData(
@@ -556,7 +555,7 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
         minimumSize: const Size(48, 48),
         visualDensity: VisualDensity.standard,
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
-        textStyle: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold),
+        textStyle: textTheme.labelLarge,
       ).copyWith(overlayColor: interactionOverlay(accent)),
     ),
     iconButtonTheme: IconButtonThemeData(
@@ -594,8 +593,8 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
         borderRadius: AppRadius.field,
         borderSide: BorderSide(color: error, width: 1),
       ),
-      labelStyle: TextStyle(color: textSecondary),
-      hintStyle: TextStyle(color: textSecondary),
+      labelStyle: textTheme.bodyMedium?.copyWith(color: textSecondary),
+      hintStyle: textTheme.bodyMedium?.copyWith(color: textSecondary),
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
     ),
     chipTheme: ChipThemeData(
@@ -603,8 +602,8 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
       // A selected chip is a ground with a label on it, so it takes the fill
       // tone and the foreground solved against that fill.
       selectedColor: accentFill,
-      labelStyle: TextStyle(color: textPrimary),
-      secondaryLabelStyle: TextStyle(color: onAccent),
+      labelStyle: textTheme.labelMedium?.copyWith(color: textPrimary),
+      secondaryLabelStyle: textTheme.labelMedium?.copyWith(color: onAccent),
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.chip,
         side: BorderSide(color: border, width: 1),
@@ -642,16 +641,12 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
         borderRadius: AppRadius.card,
         side: BorderSide(color: border, width: 1),
       ),
-      titleTextStyle: TextStyle(
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-        color: textPrimary,
-      ),
-      contentTextStyle: TextStyle(color: textPrimary),
+      titleTextStyle: textTheme.headlineSmall,
+      contentTextStyle: textTheme.bodyMedium,
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: surface,
-      contentTextStyle: TextStyle(color: textPrimary),
+      contentTextStyle: textTheme.bodyMedium?.copyWith(color: textPrimary),
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.button,
         side: BorderSide(color: border, width: 1),
@@ -661,8 +656,8 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
     tabBarTheme: TabBarThemeData(
       labelColor: accent,
       unselectedLabelColor: textSecondary,
-      labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-      unselectedLabelStyle: const TextStyle(),
+      labelStyle: textTheme.labelLarge,
+      unselectedLabelStyle: textTheme.labelLarge,
       indicator: UnderlineTabIndicator(
         borderSide: BorderSide(color: accent, width: 2),
       ),
@@ -683,71 +678,7 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
         border: Border.all(color: border, width: 1),
         borderRadius: AppRadius.chip,
       ),
-      textStyle: TextStyle(color: textPrimary),
+      textStyle: textTheme.bodySmall?.copyWith(color: textPrimary),
     ),
-  );
-}
-
-TextTheme _buildTextTheme(Color textPrimary, Color textSecondary) {
-  return TextTheme(
-    displayLarge: TextStyle(
-      fontSize: 32,
-      fontWeight: FontWeight.bold,
-      color: textPrimary,
-    ),
-    displayMedium: TextStyle(
-      fontSize: 28,
-      fontWeight: FontWeight.bold,
-      color: textPrimary,
-    ),
-    displaySmall: TextStyle(
-      fontSize: 24,
-      fontWeight: FontWeight.bold,
-      color: textPrimary,
-    ),
-    headlineLarge: TextStyle(
-      fontSize: 22,
-      fontWeight: FontWeight.bold,
-      color: textPrimary,
-    ),
-    headlineMedium: TextStyle(
-      fontSize: 20,
-      fontWeight: FontWeight.bold,
-      color: textPrimary,
-    ),
-    headlineSmall: TextStyle(
-      fontSize: 18,
-      fontWeight: FontWeight.bold,
-      color: textPrimary,
-    ),
-    titleLarge: TextStyle(
-      fontSize: 16,
-      fontWeight: FontWeight.bold,
-      color: textPrimary,
-    ),
-    titleMedium: TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.bold,
-      color: textPrimary,
-    ),
-    titleSmall: TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.bold,
-      color: textPrimary,
-    ),
-    bodyLarge: TextStyle(fontSize: 16, color: textPrimary),
-    bodyMedium: TextStyle(fontSize: 14, color: textPrimary),
-    bodySmall: TextStyle(fontSize: 12, color: textSecondary),
-    labelLarge: TextStyle(
-      fontSize: 14,
-      fontWeight: FontWeight.bold,
-      color: textPrimary,
-    ),
-    labelMedium: TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.bold,
-      color: textPrimary,
-    ),
-    labelSmall: TextStyle(fontSize: 10, color: textSecondary),
   );
 }

@@ -174,7 +174,7 @@ void main() {
           ),
         );
         await tester.pump();
-        expect(find.text('DASH'), findsOneWidget);
+        expect(find.text('Dashboard'), findsOneWidget);
         expect(find.text('> DASHBOARD'), findsNothing);
         expectNoOverflow(tester, 'dashboard $brightness ${scale}x');
       }
@@ -264,8 +264,8 @@ void main() {
       );
       await tester.pump();
       expect(
-        tester.widget<Text>(find.text('DASH')).style?.color,
-        textPrimaryColor(tester.element(find.text('DASH'))),
+        tester.widget<Text>(find.text('Dashboard')).style?.color,
+        textPrimaryColor(tester.element(find.text('Dashboard'))),
       );
     }
   });

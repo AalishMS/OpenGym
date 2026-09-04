@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/widgets/app_button.dart';
+import 'package:gymapp/widgets/app_wordmark.dart';
 
 Future<ThemeData> _themeFor(WidgetTester tester) async {
   late ThemeData theme;
@@ -23,45 +25,44 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   GoogleFonts.config.allowRuntimeFetching = false;
 
-  testWidgets(
-    'interface typography uses sans roles and mono bracket controls',
-    (tester) async {
-      final theme = await _themeFor(tester);
-      final interfaceStyles = <TextStyle?>[
-        theme.textTheme.headlineLarge,
-        theme.textTheme.headlineMedium,
-        theme.textTheme.headlineSmall,
-        theme.textTheme.titleLarge,
-        theme.textTheme.titleMedium,
-        theme.textTheme.titleSmall,
-        theme.textTheme.bodyLarge,
-        theme.textTheme.bodyMedium,
-        theme.textTheme.bodySmall,
-        theme.appBarTheme.titleTextStyle,
-        theme.dialogTheme.titleTextStyle,
-        theme.dialogTheme.contentTextStyle,
-        theme.snackBarTheme.contentTextStyle,
-        theme.tooltipTheme.textStyle,
-      ];
+  testWidgets('interface typography and controls use Manrope roles', (
+    tester,
+  ) async {
+    final theme = await _themeFor(tester);
+    final interfaceStyles = <TextStyle?>[
+      theme.textTheme.headlineLarge,
+      theme.textTheme.headlineMedium,
+      theme.textTheme.headlineSmall,
+      theme.textTheme.titleLarge,
+      theme.textTheme.titleMedium,
+      theme.textTheme.titleSmall,
+      theme.textTheme.bodyLarge,
+      theme.textTheme.bodyMedium,
+      theme.textTheme.bodySmall,
+      theme.appBarTheme.titleTextStyle,
+      theme.dialogTheme.titleTextStyle,
+      theme.dialogTheme.contentTextStyle,
+      theme.snackBarTheme.contentTextStyle,
+      theme.tooltipTheme.textStyle,
+    ];
 
-      for (final style in interfaceStyles) {
-        expect(style?.fontFamily, isNot(startsWith('JetBrainsMono')));
-      }
+    for (final style in interfaceStyles) {
+      expect(style?.fontFamily, startsWith('Manrope'));
+    }
 
-      expect(
-        theme.elevatedButtonTheme.style?.textStyle?.resolve({})?.fontFamily,
-        startsWith('JetBrainsMono'),
-      );
-      expect(
-        theme.outlinedButtonTheme.style?.textStyle?.resolve({})?.fontFamily,
-        startsWith('JetBrainsMono'),
-      );
-      expect(
-        theme.textButtonTheme.style?.textStyle?.resolve({})?.fontFamily,
-        startsWith('JetBrainsMono'),
-      );
-    },
-  );
+    expect(
+      theme.elevatedButtonTheme.style?.textStyle?.resolve({})?.fontFamily,
+      startsWith('Manrope'),
+    );
+    expect(
+      theme.outlinedButtonTheme.style?.textStyle?.resolve({})?.fontFamily,
+      startsWith('Manrope'),
+    );
+    expect(
+      theme.textButtonTheme.style?.textStyle?.resolve({})?.fontFamily,
+      startsWith('Manrope'),
+    );
+  });
 
   testWidgets('buttons provide primary secondary and tertiary hierarchy', (
     tester,
@@ -133,17 +134,17 @@ void main() {
               ElevatedButton(
                 key: keys[0],
                 onPressed: () {},
-                child: const Text('[GO]'),
+                child: const Text('Go'),
               ),
               OutlinedButton(
                 key: keys[1],
                 onPressed: () {},
-                child: const Text('[GO]'),
+                child: const Text('Go'),
               ),
               TextButton(
                 key: keys[2],
                 onPressed: () {},
-                child: const Text('[GO]'),
+                child: const Text('Go'),
               ),
               IconButton(
                 key: keys[3],
@@ -161,5 +162,70 @@ void main() {
       expect(size.width, greaterThanOrEqualTo(48), reason: '$key width');
       expect(size.height, greaterThanOrEqualTo(48), reason: '$key height');
     }
+  });
+
+  for (final brightness in Brightness.values) {
+    testWidgets('wordmark and shared buttons render in $brightness', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(const Color(0xFF00A8FF), brightness),
+          home: Scaffold(
+            body: Column(
+              children: [
+                const AppWordmark(),
+                AppButton.primary(label: 'Save', onPressed: () {}),
+                AppButton.secondary(label: 'Cancel', onPressed: () {}),
+                AppButton.text(label: 'New plan', onPressed: () {}),
+                AppButton.destructive(label: 'Delete', onPressed: () {}),
+              ],
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('> OpenGym'), findsOneWidget);
+      for (final label in ['Save', 'Cancel', 'New plan', 'Delete']) {
+        expect(find.text(label), findsOneWidget);
+        expect(find.text('[$label]'), findsNothing);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('destructive and icon actions expose all interaction states', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(const Color(0xFF00A8FF), Brightness.light),
+        home: Scaffold(
+          body: Row(
+            children: [
+              AppButton.destructive(label: 'Delete', onPressed: () {}),
+              AppIconButton(
+                label: 'More options',
+                icon: Icons.more_horiz,
+                onPressed: () {},
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final destructive = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Delete'),
+    );
+    for (final state in [
+      WidgetState.focused,
+      WidgetState.hovered,
+      WidgetState.pressed,
+    ]) {
+      expect(destructive.style?.overlayColor?.resolve({state}), isNotNull);
+    }
+    expect(find.byTooltip('More options'), findsOneWidget);
+    expect(tester.getSize(find.byTooltip('More options')).height, 48);
   });
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
@@ -19,6 +18,7 @@ import '../widgets/dashboard/plan_status_tile.dart';
 import '../widgets/dashboard/progression_sparkline.dart';
 import '../widgets/dashboard/recent_prs_tile.dart';
 import '../widgets/dashboard/stat_tile.dart';
+import '../widgets/app_button.dart';
 import 'plan_editor_screen.dart';
 import 'workout_screen.dart';
 
@@ -33,7 +33,6 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor(context);
     final sessions = context.watch<WorkoutSessionProvider>().sessions;
     final plans = context.watch<WorkoutPlanProvider>().plans;
     final statsRepo = StatsRepository();
@@ -45,28 +44,17 @@ class DashboardScreen extends StatelessWidget {
       backgroundColor: backgroundColor(context),
       appBar: AppBar(
         backgroundColor: surfaceColor(context),
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'DASH',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: textPrimaryColor(context),
-              ),
-            ),
-            Text(
-              'BOARD',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: textPrimaryColor(context),
-              ),
-            ),
-          ],
+        title: Text(
+          'Dashboard',
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(color: textPrimaryColor(context)),
         ),
         automaticallyImplyLeading: false,
       ),
       body:
           plans.isEmpty && sessions.isEmpty
-              ? _EmptyState(accent: accent)
+              ? const _EmptyState()
               : _buildBody(context, sessions, plans, statsRepo, splitId),
     );
   }
@@ -127,7 +115,7 @@ class DashboardScreen extends StatelessWidget {
                       caption: '${prEntries.length} TRACKED',
                       child:
                           prEntries.isEmpty
-                              ? const DashboardEmptyLine('> no records yet')
+                              ? const DashboardEmptyLine('No records yet')
                               : RecentPrsTile(entries: prEntries),
                     ),
                   ),
@@ -139,7 +127,7 @@ class DashboardScreen extends StatelessWidget {
                       caption: '${plans.length} TOTAL',
                       child:
                           planStats.isEmpty
-                              ? const DashboardEmptyLine('> no plans yet')
+                              ? const DashboardEmptyLine('No plans yet')
                               : PlanStatusTile(
                                 stats: planStats,
                                 onOpen:
@@ -215,9 +203,9 @@ class DashboardScreen extends StatelessWidget {
       title: 'LAST SESSION',
       // A deleted or renamed plan can't be reopened — the button greys out
       // rather than disappearing, so the row keeps its shape.
-      action: BracketButton(
-        label: 'RESUME',
-        onTap:
+      action: AppButton.secondary(
+        label: 'Resume',
+        onPressed:
             index >= 0 ? () => _openPlan(context, index, plans[index]) : null,
       ),
       child: LastSessionTile(session: last),
@@ -246,7 +234,7 @@ class DashboardScreen extends StatelessWidget {
     if (counts.isEmpty) {
       return const DashboardPanel(
         title: 'PROGRESSION',
-        child: DashboardEmptyLine('> no exercise data yet'),
+        child: DashboardEmptyLine('No exercise data yet'),
       );
     }
 
@@ -295,9 +283,7 @@ class DashboardScreen extends StatelessWidget {
 }
 
 class _EmptyState extends StatelessWidget {
-  final Color accent;
-
-  const _EmptyState({required this.accent});
+  const _EmptyState();
 
   @override
   Widget build(BuildContext context) {
@@ -309,26 +295,20 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              '> NO DATA',
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 16,
-                color: textSecondary,
-              ),
-            ),
+            Text('No data yet', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'Create a plan and log a workout to fill this in',
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 12,
-                color: textSecondary,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: textSecondary),
             ),
             const SizedBox(height: AppSpacing.xxl),
             // Same as the plans empty state: the copy asks for a plan, so the
             // button makes one. Seeding demo data filled the dashboard without
             // ever getting the reader closer to their own numbers.
-            OutlinedButton(
+            AppButton.secondary(
+              label: 'New plan',
               onPressed: () {
                 Navigator.push(
                   context,
@@ -337,14 +317,10 @@ class _EmptyState extends StatelessWidget {
                   ),
                 );
               },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: accent,
-                side: BorderSide(color: accent, width: 1),
-              ),
-              child: Text('[+ NEW PLAN]', style: GoogleFonts.jetBrainsMono()),
             ),
             const SizedBox(height: AppSpacing.md),
-            TextButton(
+            AppButton.text(
+              label: 'Load sample data',
               onPressed: () async {
                 await SampleDataSeeder.seedSampleData();
                 if (!context.mounted) return;
@@ -353,8 +329,8 @@ class _EmptyState extends StatelessWidget {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      '> Sample data loaded!',
-                      style: GoogleFonts.jetBrainsMono(
+                      'Sample data loaded',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: onAccentColor(context),
                       ),
                     ),
@@ -362,11 +338,6 @@ class _EmptyState extends StatelessWidget {
                   ),
                 );
               },
-              style: TextButton.styleFrom(foregroundColor: textSecondary),
-              child: Text(
-                '[LOAD SAMPLE DATA]',
-                style: GoogleFonts.jetBrainsMono(fontSize: 11),
-              ),
             ),
           ],
         ),

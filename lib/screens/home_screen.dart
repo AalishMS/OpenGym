@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../providers/workout_plan_provider.dart';
@@ -10,6 +9,7 @@ import '../models/exercise_template.dart';
 import '../models/set_template.dart';
 import '../data/plan_colors.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_typography.dart';
 import '../theme/breakpoints.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
@@ -17,6 +17,8 @@ import '../utils/format.dart';
 import '../utils/plan_stats.dart';
 import '../widgets/workout/workout_dialogs.dart';
 import '../widgets/splits/split_switcher.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_wordmark.dart';
 import 'plan_editor_screen.dart';
 import 'workout_screen.dart';
 import '../services/sample_data_seeder.dart';
@@ -47,12 +49,12 @@ class HomeScreen extends StatelessWidget {
         top: false,
         child: Column(
           children: [
-            _buildHeader(context, accent, border),
+            _buildHeader(context, border),
             Expanded(
               child: Consumer<WorkoutPlanProvider>(
                 builder: (context, provider, child) {
                   if (provider.plans.isEmpty) {
-                    return _buildEmptyState(context, provider, accent);
+                    return _buildEmptyState(context, provider);
                   }
                   return _buildPlanSection(context, provider, accent);
                 },
@@ -64,7 +66,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildHeader(BuildContext context, Color accent, Color border) {
+  Widget _buildHeader(BuildContext context, Color border) {
     final splitProvider = context.watch<SplitProvider?>();
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -81,16 +83,11 @@ class HomeScreen extends StatelessWidget {
               child: _CappedWidth(
                 child: Row(
                   children: [
-                    Expanded(
-                      child: Text(
-                        '> OPENGYM',
+                    const Expanded(
+                      child: AppWordmark(
+                        fontSize: 18,
                         maxLines: 1,
                         overflow: TextOverflow.clip,
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: accent,
-                        ),
                       ),
                     ),
                     if (splitProvider != null) ...[
@@ -107,11 +104,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyState(
-    BuildContext context,
-    WorkoutPlanProvider provider,
-    Color accent,
-  ) {
+  Widget _buildEmptyState(BuildContext context, WorkoutPlanProvider provider) {
     final textSecondary = textSecondaryColor(context);
 
     return Center(
@@ -121,25 +114,24 @@ class HomeScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              '> NO PLANS FOUND',
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 16,
-                color: textSecondary,
+              'No plans yet',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                color: textPrimaryColor(context),
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
               'Create your first workout plan',
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 12,
-                color: textSecondary,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: textSecondary),
             ),
             const SizedBox(height: AppSpacing.xxl),
             // Sample data stays reachable for someone who wants to look around
             // before committing to their own plan, at text weight so it reads
             // as the way out rather than the way in. It also lives in Settings.
-            TextButton(
+            AppButton.text(
+              label: 'Load sample data',
               onPressed: () async {
                 final splitId = context.read<SplitProvider?>()?.activeSplitId;
                 await SampleDataSeeder.seedSampleData(splitId: splitId);
@@ -148,8 +140,8 @@ class HomeScreen extends StatelessWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        '> Sample data loaded!',
-                        style: GoogleFonts.jetBrainsMono(
+                        'Sample data loaded',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: onAccentColor(context),
                         ),
                       ),
@@ -158,11 +150,6 @@ class HomeScreen extends StatelessWidget {
                   );
                 }
               },
-              style: TextButton.styleFrom(foregroundColor: textSecondary),
-              child: Text(
-                '[LOAD SAMPLE DATA]',
-                style: GoogleFonts.jetBrainsMono(fontSize: 11),
-              ),
             ),
           ],
         ),
@@ -294,8 +281,8 @@ class HomeScreen extends StatelessWidget {
                                   textBaseline: TextBaseline.alphabetic,
                                   children: [
                                     Text(
-                                      '[${(index + 1).toString().padLeft(2, '0')}]',
-                                      style: GoogleFonts.jetBrainsMono(
+                                      (index + 1).toString().padLeft(2, '0'),
+                                      style: AppTypography.trainingData(
                                         fontSize: 9,
                                         color: textSecondary,
                                         letterSpacing: 0.08,
@@ -305,12 +292,10 @@ class HomeScreen extends StatelessWidget {
                                     Expanded(
                                       child: Text(
                                         _titleCase(plan.name),
-                                        style: GoogleFonts.jetBrainsMono(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.bold,
-                                          color: textPrimary,
-                                          letterSpacing: 0.04,
-                                        ),
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall
+                                            ?.copyWith(color: textPrimary),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -347,7 +332,7 @@ class HomeScreen extends StatelessWidget {
                     Text(
                       '${plan.exercises.length} exercises  ·  '
                       '${_lastTrainedLabel(stat)}',
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppTypography.trainingData(
                         fontSize: 9,
                         color: textSecondary,
                       ),
@@ -358,11 +343,9 @@ class HomeScreen extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
                         child: Text(
                           '· $name',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 9,
-                            color: textSecondary,
-                            letterSpacing: 0.02,
-                          ),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: textSecondary),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -373,7 +356,7 @@ class HomeScreen extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
                         child: Text(
                           '+${exerciseNames.length - 3} more',
-                          style: GoogleFonts.jetBrainsMono(
+                          style: AppTypography.trainingData(
                             fontSize: 9,
                             color: textSecondary.withAlpha(128),
                           ),
@@ -382,7 +365,7 @@ class HomeScreen extends StatelessWidget {
                     const Spacer(),
                     Text(
                       _planFooter(plan, stat),
-                      style: GoogleFonts.jetBrainsMono(
+                      style: AppTypography.trainingData(
                         fontSize: 9,
                         color: textSecondary,
                         letterSpacing: 0.06,
@@ -490,19 +473,15 @@ class HomeScreen extends StatelessWidget {
                                   _titleCase(plan.name),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: textPrimary,
-                                    letterSpacing: 0.04,
-                                  ),
+                                  style: Theme.of(context).textTheme.titleSmall
+                                      ?.copyWith(color: textPrimary),
                                 ),
                                 const SizedBox(height: AppSpacing.xxs),
                                 Text(
                                   _planFooter(plan, stat),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.jetBrainsMono(
+                                  style: AppTypography.trainingData(
                                     fontSize: 9,
                                     color: textSecondary,
                                     letterSpacing: 0.06,
@@ -517,7 +496,7 @@ class HomeScreen extends StatelessWidget {
                     Divider(height: 1, thickness: 1, color: border),
                     _PlanActionRow(
                       icon: LucideIcons.paintbrush,
-                      label: 'CHANGE COLOR',
+                      label: 'Change color',
                       color: textPrimary,
                       // Shows the current value without opening the picker.
                       trailing: Container(
@@ -535,7 +514,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     _PlanActionRow(
                       icon: LucideIcons.copy,
-                      label: 'DUPLICATE PLAN',
+                      label: 'Duplicate plan',
                       color: textPrimary,
                       onTap: () {
                         Navigator.pop(ctx);
@@ -565,10 +544,9 @@ class HomeScreen extends StatelessWidget {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text(
-                              '> Plan copied!',
-                              style: GoogleFonts.jetBrainsMono(
-                                color: onAccentColor(context),
-                              ),
+                              'Plan copied',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(color: onAccentColor(context)),
                             ),
                             backgroundColor: accentFillColor(context),
                           ),
@@ -577,7 +555,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                     _PlanActionRow(
                       icon: LucideIcons.pencil,
-                      label: 'EDIT PLAN',
+                      label: 'Edit plan',
                       color: textPrimary,
                       onTap: () {
                         Navigator.pop(ctx);
@@ -594,7 +572,7 @@ class HomeScreen extends StatelessWidget {
                     Divider(height: 1, thickness: 1, color: border),
                     _PlanActionRow(
                       icon: LucideIcons.trash2,
-                      label: 'DELETE PLAN',
+                      label: 'Delete plan',
                       color: errorColor(context),
                       onTap: () async {
                         Navigator.pop(ctx);
@@ -647,20 +625,15 @@ class HomeScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '> ${_titleCase(plan.name)} — COLOR',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: accent,
-                      ),
+                      '${_titleCase(plan.name)} color',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'SELECT PLAN COLOR',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 10,
-                        color: textSecondary,
-                      ),
+                      'Select plan color',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: textSecondary),
                     ),
                     const SizedBox(height: 12),
                     Wrap(
@@ -715,17 +688,13 @@ class HomeScreen extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        TextButton(
+                        AppButton.text(
+                          label: 'Cancel',
                           onPressed: () => Navigator.pop(ctx),
-                          child: Text(
-                            '[CANCEL]',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: textSecondary,
-                            ),
-                          ),
                         ),
                         const SizedBox(width: 8),
-                        ElevatedButton(
+                        AppButton.primary(
+                          label: 'Save',
                           onPressed: () {
                             final updated = plan.copyWith(
                               planColor: selectedColor,
@@ -735,18 +704,6 @@ class HomeScreen extends StatelessWidget {
                             );
                             Navigator.pop(ctx);
                           },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accentFillColor(context),
-                            foregroundColor: onAccentColor(context),
-                            elevation: 0,
-                            shape: const RoundedRectangleBorder(
-                              borderRadius: AppRadius.button,
-                            ),
-                          ),
-                          child: Text(
-                            '[SAVE]',
-                            style: GoogleFonts.jetBrainsMono(),
-                          ),
                         ),
                       ],
                     ),
@@ -823,11 +780,9 @@ class _PlanActionRow extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12,
-                    color: color,
-                    letterSpacing: 0.06,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: color),
                 ),
               ),
               if (trailing != null) trailing!,

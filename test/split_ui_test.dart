@@ -69,7 +69,7 @@ void main() {
     expect(find.text('PPL'), findsOneWidget);
     expect(find.text('[PPL]'), findsNothing);
     final switcherText = tester.widget<Text>(find.text('PPL'));
-    expect(switcherText.style?.fontSize, 16);
+    expect(switcherText.style?.fontSize, 17);
     final switcherContent = tester.widget<Container>(
       find.byKey(const ValueKey('split-switcher-content')),
     );

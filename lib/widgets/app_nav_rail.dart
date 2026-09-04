@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
-import '../theme/app_theme.dart';
 
-/// Desktop sidebar navigation. A custom vertical rail (not Material's
-/// [NavigationRail]) so it matches the app's flat terminal look — the active
-/// item is marked by a left accent bar + tinted ground rather than Material's
-/// rounded indicator pill. Mirrors [AppBottomNav]'s styling.
+import '../theme/app_theme.dart';
+import 'app_wordmark.dart';
+
+/// Desktop sidebar navigation. The active item uses a restrained accent rail
+/// and quiet tint while preserving the same destinations as [AppBottomNav].
 class AppNavRail extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -27,7 +26,7 @@ class AppNavRail extends StatelessWidget {
     LucideIcons.settings2,
   ];
 
-  static const _labels = ['DASHBOARD', 'PLANS', 'HISTORY', 'STATS', 'SETTINGS'];
+  static const _labels = ['Dashboard', 'Plans', 'History', 'Stats', 'Settings'];
 
   @override
   Widget build(BuildContext context) {
@@ -45,17 +44,9 @@ class AppNavRail extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 22, 16, 22),
-              child: Text(
-                '> OPENGYM',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  color: accent,
-                  letterSpacing: 0.06,
-                ),
-              ),
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 22, 16, 22),
+              child: AppWordmark(fontSize: 15),
             ),
             for (int i = 0; i < _labels.length; i++)
               _RailItem(
@@ -118,9 +109,7 @@ class _RailItem extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 11,
-                    letterSpacing: 0.08,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     fontWeight: active ? FontWeight.bold : FontWeight.normal,
                     color: color,
                   ),

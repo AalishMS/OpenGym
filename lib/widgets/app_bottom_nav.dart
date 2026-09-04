@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme/app_theme.dart';
@@ -20,7 +19,7 @@ class AppBottomNav extends StatelessWidget {
     LucideIcons.settings2,
   ];
 
-  static const _labels = ['PLANS', 'HISTORY', 'STATS', 'SETTINGS'];
+  static const _labels = ['Plans', 'History', 'Stats', 'Settings'];
 
   @override
   Widget build(BuildContext context) {
@@ -62,9 +61,11 @@ class AppBottomNav extends StatelessWidget {
                             _labels[i],
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 11,
-                              letterSpacing: 0.08,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.labelSmall?.copyWith(
+                              fontWeight:
+                                  active ? FontWeight.w700 : FontWeight.w500,
                               color: active ? accent : textSecondary,
                             ),
                           ),
