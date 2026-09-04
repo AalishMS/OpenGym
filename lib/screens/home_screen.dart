@@ -95,12 +95,6 @@ class HomeScreen extends StatelessWidget {
                     ),
                     if (splitProvider != null) ...[
                       const SizedBox(width: AppSpacing.sm),
-                      SizedBox(
-                        width: 1,
-                        height: 20,
-                        child: ColoredBox(color: border),
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
                       const Flexible(child: SplitSwitcher()),
                     ],
                   ],

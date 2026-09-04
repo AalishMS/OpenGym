@@ -131,8 +131,8 @@ Repository layer wrapping HiveService for clean architecture:
 - Refined the Home header hierarchy:
   - Reduced the active split from the page-title role to the compact secondary
     title role and scaled its chevron to match
-  - Tightened vertical spacing, capped long split names sooner, and added a
-    quiet divider so the `> OpenGym` wordmark remains the clear visual anchor
+  - Tightened vertical spacing and capped long split names sooner so the
+    `> OpenGym` wordmark remains the clear visual anchor
 - Added the first visual-identity foundation milestone:
   - Centralized a Manrope interface type scale and kept JetBrains Mono behind a
     training-data helper for aligned numerical values
