@@ -166,6 +166,18 @@ Repository layer wrapping HiveService for clean architecture:
   - Plan/session providers reload when the active split changes; stats, PRs, progression, history lookups, and active workouts are split-scoped
   - Backup format v3 includes every split and the active selection; v1/v2 imports are upgraded into `My Split`
   - Clear-all preserves split profiles, while sample data replaces data only in the active split and links sessions to their sample plans
+- Improved numeric set entry and initial workout prescriptions:
+  - Plan and active-workout rep fields now request integer numeric keyboards;
+    weight fields request decimal numeric keyboards, and shared numeric inputs
+    select their existing value on first focus without disrupting later cursor
+    edits
+  - Saving a plan-set dialog no longer restores focus to the off-screen plan
+    name, so create/edit plan editors retain their scroll position
+  - A genuinely new Week 1 session now starts with every plan `SetTemplate`
+    value (including decimal weights); existing sessions are never replaced,
+    legacy plans fall back to zero values, and Week 2+ behavior is unchanged
+  - Unmodified Week 1 prescriptions are neither autosaved nor considered for
+    personal-record detection merely by opening and leaving the workout
 - Changed first-run appearance defaults to light mode with the cyan accent while preserving existing users' saved choices
 - Reduced plan-color noise with identity markers:
   - Home cards now use a compact colored rail beside the plan name instead of a full-width stripe and colored statistics

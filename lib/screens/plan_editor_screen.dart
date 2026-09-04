@@ -1235,15 +1235,21 @@ class _EditorSetRow extends StatelessWidget {
           Expanded(
             child: InkWell(
               // Stepping from 0 to 70kg is 28 taps. Tapping the number types it.
-              onTap:
-                  () => WorkoutDialogs.showEditPlanSetDialog(
-                    context,
-                    setNumber: setIndex + 1,
-                    reps: set.reps,
-                    weight: set.weight,
-                    accent: accent,
-                    onSave: onChanged,
-                  ),
+              onTap: () {
+                // The plan name may still own focus after the editor was
+                // scrolled. If it remains the route's previous focus, closing
+                // the dialog restores it and Scrollable.ensureVisible jumps
+                // back to the top.
+                FocusManager.instance.primaryFocus?.unfocus();
+                WorkoutDialogs.showEditPlanSetDialog(
+                  context,
+                  setNumber: setIndex + 1,
+                  reps: set.reps,
+                  weight: set.weight,
+                  accent: accent,
+                  onSave: onChanged,
+                );
+              },
               borderRadius: AppRadius.chip,
               splashColor: accent.withValues(alpha: 0.2),
               highlightColor: accent.withValues(alpha: 0.1),

@@ -8,6 +8,7 @@ import '../../services/pr_tracking_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../utils/format.dart';
+import '../numeric_text_field.dart';
 
 class WorkoutDialogs {
   static void showPRDialog(BuildContext context, List<PRResult> prs) {
@@ -329,24 +330,22 @@ class WorkoutDialogs {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      TextField(
+                      NumericTextField(
                         controller: weightController,
+                        valueType: NumericValueType.decimal,
                         decoration: const InputDecoration(
                           labelText: 'Weight (kg)',
                           hintText: 'e.g., 50',
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
                       ),
                       const SizedBox(height: 12),
-                      TextField(
+                      NumericTextField(
                         controller: repsController,
+                        valueType: NumericValueType.integer,
                         decoration: const InputDecoration(
                           labelText: 'Reps',
                           hintText: 'e.g., 8',
                         ),
-                        keyboardType: TextInputType.number,
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -528,20 +527,18 @@ class WorkoutDialogs {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      TextField(
+                      NumericTextField(
                         controller: weightController,
+                        valueType: NumericValueType.decimal,
                         decoration: const InputDecoration(
                           labelText: 'Weight (kg)',
                         ),
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
                       ),
                       const SizedBox(height: 12),
-                      TextField(
+                      NumericTextField(
                         controller: repsController,
+                        valueType: NumericValueType.integer,
                         decoration: const InputDecoration(labelText: 'Reps'),
-                        keyboardType: TextInputType.number,
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -1255,25 +1252,23 @@ class WorkoutDialogs {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
+                    NumericTextField(
                       controller: weightController,
+                      valueType: NumericValueType.decimal,
                       autofocus: true,
                       decoration: const InputDecoration(
                         labelText: 'Weight (kg)',
                         hintText: 'e.g., 70',
                       ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
+                    NumericTextField(
                       controller: repsController,
+                      valueType: NumericValueType.integer,
                       decoration: const InputDecoration(
                         labelText: 'Reps',
                         hintText: 'e.g., 8',
                       ),
-                      keyboardType: TextInputType.number,
                     ),
                     const SizedBox(height: 12),
                     OverflowBar(
@@ -1300,6 +1295,7 @@ class WorkoutDialogs {
                             final newReps =
                                 int.tryParse(repsController.text.trim()) ??
                                 reps;
+                            FocusScope.of(dialogContext).unfocus();
                             Navigator.pop(dialogContext);
                             onSave(
                               newReps.clamp(1, 999),

@@ -363,6 +363,63 @@ void main() {
     );
   });
 
+  testWidgets('saving a scrolled set edit does not refocus the plan name', (
+    tester,
+  ) async {
+    final plan = WorkoutPlan(
+      name: 'Long Plan',
+      exercises: List.generate(
+        10,
+        (index) => ExerciseTemplate(
+          name: 'Exercise $index',
+          sets: 1,
+          setTargets: [SetTemplate(reps: 8, weight: 50 + index.toDouble())],
+        ),
+      ),
+    );
+    await pumpEditorWithPlan(tester, plan, size: const Size(400, 700));
+
+    final planName = find.widgetWithText(TextField, 'Long Plan');
+    await tester.tap(planName);
+    await tester.enterText(planName, 'Long Plan Updated');
+    final scrollable = find.byType(Scrollable).first;
+    await tester.scrollUntilVisible(
+      find.text('Exercise 9'),
+      250,
+      scrollable: scrollable,
+    );
+    await tester.tap(find.text('Exercise 9'));
+    await tester.pumpAndSettle();
+    final setValue = find.textContaining('59kg x 8', findRichText: true);
+    await tester.scrollUntilVisible(setValue, 150, scrollable: scrollable);
+    final before = tester.state<ScrollableState>(scrollable).position.pixels;
+
+    await tester.tap(setValue);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Weight (kg)'),
+      '61.5',
+    );
+    await tester.tap(find.text('[SAVE]'));
+    await tester.pumpAndSettle();
+
+    final after = tester.state<ScrollableState>(scrollable).position.pixels;
+    expect(after, closeTo(before, 20));
+    final nameField = find.byType(TextField).first;
+    final nameEditable = find.descendant(
+      of: nameField,
+      matching: find.byType(EditableText),
+    );
+    expect(
+      tester.widget<EditableText>(nameEditable).focusNode.hasFocus,
+      isFalse,
+    );
+    expect(
+      find.textContaining('61.5kg x 8', findRichText: true),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('editor controls expose 48 pixel targets and set semantics', (
     tester,
   ) async {

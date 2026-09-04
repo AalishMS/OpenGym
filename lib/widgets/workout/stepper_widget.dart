@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../theme/radii.dart';
+import '../numeric_text_field.dart';
 
 class StepperWidget extends StatefulWidget {
   final double value;
@@ -105,10 +106,13 @@ class _StepperWidgetState extends State<StepperWidget> {
             child: SizedBox(
               width: 30,
               height: 24,
-              child: TextField(
+              child: NumericTextField(
                 controller: _controller,
                 focusNode: _focusNode,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                valueType:
+                    widget.step == widget.step.roundToDouble()
+                        ? NumericValueType.integer
+                        : NumericValueType.decimal,
                 textAlign: TextAlign.center,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _commitValue(),
