@@ -8,6 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
@@ -249,6 +250,22 @@ void main() {
 
     final button = find.ancestor(of: saveText, matching: find.byType(InkWell));
     expect(tester.getCenter(saveText), tester.getCenter(button));
+  });
+
+  testWidgets('save control uses the selected plan color', (tester) async {
+    await pumpEditor(tester);
+    await tester.enterText(find.byType(TextField).first, 'Push Day');
+    await tester.pump();
+
+    final saveText = find.text('SAVE');
+    final button = find.ancestor(of: saveText, matching: find.byType(InkWell));
+    final container = tester.widget<Container>(
+      find.descendant(of: button, matching: find.byType(Container)).first,
+    );
+    final decoration = container.decoration! as BoxDecoration;
+    final context = tester.element(find.byType(PlanEditorScreen));
+
+    expect(decoration.color, planColorOf(kPlanColors[0], context));
   });
 
   testWidgets('editor save and add exercise actions have 48 pixel targets', (

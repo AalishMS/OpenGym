@@ -811,7 +811,7 @@ class _EditorHeader extends StatelessWidget {
                 vertical: AppSpacing.sm,
               ),
               decoration: BoxDecoration(
-                color: canSave ? accentFillColor(context) : color.withAlpha(32),
+                color: canSave ? color : color.withAlpha(32),
                 borderRadius: AppRadius.button,
               ),
               child: Center(
@@ -822,7 +822,7 @@ class _EditorHeader extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                     color:
                         canSave
-                            ? onAccentColor(context)
+                            ? onColor(color)
                             : textSecondaryColor(context).withAlpha(128),
                     letterSpacing: 0.1,
                   ),
