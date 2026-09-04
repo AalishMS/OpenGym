@@ -121,7 +121,9 @@ import '../services/hive_service.dart';
 Action labels should say what happens in familiar, concise language:
 
 - Use sentence case such as `Save`, `Cancel`, `New plan`, and `Add set`
-- Do not add command-line prefixes, square brackets, or all-uppercase styling
+- Preserve the `> OpenGym` wordmark as the brand signature, but do not repeat
+  the `>` symbol across unrelated labels or controls
+- Do not add square brackets or all-uppercase styling to general interface copy
 - Prefer a clear word or a familiar icon with an accessible label over an
   unexplained glyph
 - Use `Delete` unless space forces a shorter label, and keep destructive actions

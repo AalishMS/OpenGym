@@ -13,7 +13,8 @@ backup and cross-device sync.
 OpenGym is made for anyone who wants a dependable record of their training. It
 should feel clear on first use and efficient on the hundredth workout. The app's
 identity comes from its measured use of color, compact training data, and a few
-recognizable details rather than a theme that users need to understand.
+recognizable details rather than a theme that users need to understand. The
+`> OpenGym` wordmark remains a deliberate link to the app's original character.
 
 ## Product Principles
 
@@ -176,15 +177,17 @@ signature:
 - Dark and light themes share the same semantic color helpers.
 - User-selectable accents, compact plan markers, and focused data highlights
   carry the app's character.
+- The `> OpenGym` wordmark serves as the main brand signature. Keep it consistent
+  and give it room instead of repeating the prompt symbol elsewhere.
 - Familiar labels and icons make actions understandable outside a technical
   audience.
 - Pressed, focused, disabled, loading, empty, and error states should feel like
   parts of the same system.
 
-Monospaced type, command-line symbols, square-bracket labels, and all-uppercase
-copy are not part of the product identity. A monospaced face may still serve a
-specific data-alignment need, but it should not define a screen or the app's
-voice.
+Broad monospaced typography, square-bracket labels, and all-uppercase copy are
+not part of the product identity. A monospaced face may still serve a specific
+data-alignment need. The `>` symbol is reserved for the OpenGym wordmark rather
+than used as a general interface decoration.
 
 UI code should use theme helpers from `lib/theme/app_theme.dart` instead of
 hardcoded black or white colors, and corner radii from `lib/theme/radii.dart`

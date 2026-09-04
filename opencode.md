@@ -8,9 +8,10 @@ offline first and supports account-based sync across devices.
 
 The product is designed for a broad gym audience. Its visual identity comes
 from clear hierarchy, calm surfaces, restrained color, and small recognizable
-details. Terminal styling, command-line symbols, bracketed actions, and
-technical-insider language are no longer part of the direction. See `DESIGN.md`
-for the current product and visual principles.
+details. The `> OpenGym` wordmark remains the core brand signature. Broad
+terminal styling, bracketed actions, and technical-insider language are no
+longer part of the direction. See `DESIGN.md` for the current product and visual
+principles.
 
 ## Architecture
 - **State Management**: Provider pattern with ChangeNotifier
@@ -139,6 +140,7 @@ Repository layer wrapping HiveService for clean architecture:
     audience
   - Replaced the terminal motif with a quiet visual direction built around
     clarity, restrained color, and focused training data
+  - Preserved the `> OpenGym` wordmark as the app's main visual signature
   - Updated contributor guidance so future UI work uses familiar labels and
     approachable interaction patterns
 - Added the Stage B data foundation for split-scoped workspaces:

@@ -30,7 +30,8 @@
 OpenGym covers the essentials without turning every workout into a data-entry
 session. Its interface uses calm surfaces, clear hierarchy, and small flashes of
 color to make plans and progress easy to recognize. The personality is in the
-details; the workout stays at the center.
+details, including the familiar `> OpenGym` wordmark; the workout stays at the
+center.
 
 ---
 
