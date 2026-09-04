@@ -114,7 +114,7 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
             highlightColor: accent.withAlpha(18),
             child: Container(
               key: const ValueKey('split-switcher-content'),
-              constraints: const BoxConstraints(minHeight: 48, maxWidth: 220),
+              constraints: const BoxConstraints(minHeight: 48, maxWidth: 180),
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
               alignment: Alignment.center,
               child: Row(
@@ -142,8 +142,9 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
                         key: ValueKey(active.id),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: textPrimaryColor(context),
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
@@ -157,7 +158,7 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
                             : const Duration(milliseconds: 150),
                     child: Icon(
                       LucideIcons.chevronDown,
-                      size: 20,
+                      size: 16,
                       color: accent,
                     ),
                   ),

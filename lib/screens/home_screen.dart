@@ -79,7 +79,10 @@ class HomeScreen extends StatelessWidget {
           Padding(
             padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.sm,
+              ),
               child: _CappedWidth(
                 child: Row(
                   children: [
@@ -92,6 +95,12 @@ class HomeScreen extends StatelessWidget {
                     ),
                     if (splitProvider != null) ...[
                       const SizedBox(width: AppSpacing.sm),
+                      SizedBox(
+                        width: 1,
+                        height: 20,
+                        child: ColoredBox(color: border),
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
                       const Flexible(child: SplitSwitcher()),
                     ],
                   ],
