@@ -912,7 +912,7 @@ class _PlanHeader extends StatelessWidget {
   final WorkoutPlan plan;
   final int fallbackIndex;
 
-  /// The active plan's resolved colour, independent of the global accent.
+  /// The active plan's resolved identity-marker colour.
   final Color color;
 
   const _PlanHeader({
@@ -983,15 +983,34 @@ class _PlanHeader extends StatelessWidget {
           }
         }
       },
-      child: Text(
-        plan.name.toUpperCase(),
-        overflow: TextOverflow.ellipsis,
-        maxLines: 1,
-        style: TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.bold,
-          color: color,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            label: '${plan.name} plan marker',
+            child: Container(
+              width: 3,
+              height: 20,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: AppRadius.micro,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Flexible(
+            child: Text(
+              plan.name.toUpperCase(),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: textPrimaryColor(context),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

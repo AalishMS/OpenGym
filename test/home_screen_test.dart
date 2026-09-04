@@ -229,11 +229,25 @@ void main() {
     expect(find.text('CHANGE COLOR'), findsOneWidget);
   });
 
-  testWidgets('workout app bar title uses the active plan color', (
-    tester,
-  ) async {
+  testWidgets('plan color is limited to identity markers', (tester) async {
     final plan = populatedPlan();
     await tester.pumpWidget(homeHost(plans: [plan]));
+
+    final homeContext = tester.element(find.byType(HomeScreen));
+    final expectedHomeColor = planColorOf(plan.planColor, homeContext);
+    final homeMarker = find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics &&
+          widget.properties.label == 'Push Day plan marker',
+    );
+    expect(homeMarker, findsOneWidget);
+    final homeMarkerContainer = tester.widget<Container>(
+      find.descendant(of: homeMarker, matching: find.byType(Container)),
+    );
+    expect(
+      (homeMarkerContainer.decoration! as BoxDecoration).color,
+      expectedHomeColor,
+    );
 
     await tester.tap(find.text('Push Day'));
     await tester.pumpAndSettle();
@@ -247,7 +261,21 @@ void main() {
       ),
     );
     final context = tester.element(find.byType(WorkoutScreen));
-    expect(title.style?.color, planColorOf(plan.planColor, context));
+    expect(title.style?.color, textPrimaryColor(context));
+
+    final workoutMarker = find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics &&
+          widget.properties.label == 'Push Day plan marker',
+    );
+    expect(workoutMarker, findsOneWidget);
+    final workoutMarkerContainer = tester.widget<Container>(
+      find.descendant(of: workoutMarker, matching: find.byType(Container)),
+    );
+    expect(
+      (workoutMarkerContainer.decoration! as BoxDecoration).color,
+      planColorOf(plan.planColor, context),
+    );
   });
 
   testWidgets(

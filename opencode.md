@@ -118,6 +118,10 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Reduced plan-color noise with identity markers:
+  - Home cards now use a compact colored rail beside the plan name instead of a full-width stripe and colored statistics
+  - Workout titles return to the theme's primary text color and carry the same compact plan marker
+  - Added widget coverage for marker colors, neutral title treatment, and responsive card layout
 - Improved the plan editor's add-exercise sheet:
   - Exercise rows now toggle between add and remove, so a selection can be undone before closing the sheet
   - Replaced the cramped two-column grid with full-width rows, a live selected count, clearer action labels, stronger typography, and a more legible search/category layout

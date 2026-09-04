@@ -242,7 +242,6 @@ class HomeScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(height: 2, color: planColor),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
@@ -257,36 +256,55 @@ class HomeScreen extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.only(right: 48),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
                             children: [
-                              Text(
-                                '[${(index + 1).toString().padLeft(2, '0')}]',
-                                style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 9,
-                                  color: textSecondary,
-                                  letterSpacing: 0.08,
+                              Semantics(
+                                label: '${_titleCase(plan.name)} plan marker',
+                                child: Container(
+                                  width: 3,
+                                  height: 28,
+                                  decoration: BoxDecoration(
+                                    color: planColor,
+                                    borderRadius: AppRadius.micro,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: AppSpacing.sm),
                               Expanded(
-                                child: Text(
-                                  _titleCase(plan.name),
-                                  style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.bold,
-                                    color: textPrimary,
-                                    letterSpacing: 0.04,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.baseline,
+                                  textBaseline: TextBaseline.alphabetic,
+                                  children: [
+                                    Text(
+                                      '[${(index + 1).toString().padLeft(2, '0')}]',
+                                      style: GoogleFonts.jetBrainsMono(
+                                        fontSize: 9,
+                                        color: textSecondary,
+                                        letterSpacing: 0.08,
+                                      ),
+                                    ),
+                                    const SizedBox(width: AppSpacing.sm),
+                                    Expanded(
+                                      child: Text(
+                                        _titleCase(plan.name),
+                                        style: GoogleFonts.jetBrainsMono(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: textPrimary,
+                                          letterSpacing: 0.04,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ],
                           ),
                         ),
                         Positioned(
-                          top: -14,
+                          top: -13,
                           right: 0,
                           child: IconButton(
                             tooltip: 'Plan actions',
@@ -348,7 +366,7 @@ class HomeScreen extends StatelessWidget {
                       _planFooter(plan, stat),
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 9,
-                        color: planColor,
+                        color: textSecondary,
                         letterSpacing: 0.06,
                       ),
                       maxLines: 1,
