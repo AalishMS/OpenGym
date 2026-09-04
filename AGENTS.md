@@ -112,23 +112,20 @@ import '../services/hive_service.dart';
 ### Widgets
 - Use `const` constructors where possible
 - Extract widgets into separate files in `lib/widgets/workout/` subdirectory
-- Use terminal-style UI with JetBrains Mono font (`GoogleFonts.jetBrainsMono()`)
+- Follow the clean, approachable product direction in `DESIGN.md`
+- Prioritize readable hierarchy and familiar controls for a broad gym audience
+- Keep personality restrained: use plan markers, accent details, and data
+  emphasis instead of decorative themes
 
-### Bracket Labels
-Actionable text wears square brackets - it is the app's button vocabulary.
-One rule, no exceptions:
+### Interface Copy
+Action labels should say what happens in familiar, concise language:
 
-- `[LABEL]` - no padding inside the brackets, and the label is uppercase:
-  `[SAVE]`, `[CANCEL]`, `[LOAD SAMPLE DATA]`. Never `[ SAVE ]`
-- `[+ LABEL]` - a leading glyph binds to the opening bracket, one space
-  before the label: `[+ NEW PLAN]`, `[+ ADD SET]`. Never `[ + ADD SET ]`
-- `[+]` - a bare glyph when the target is too small for words
-- `[01]` - zero-padded index pills, on cards and tabs
-- Passing a label to a wrapper that adds the brackets itself (`BracketButton`)
-  means passing `'RESUME'`, not `' RESUME '`
-
-Reach for `[DEL]` over `[DELETE]` only where the row is genuinely too tight
-for the full word - the abbreviation is a space decision, not a style.
+- Use sentence case such as `Save`, `Cancel`, `New plan`, and `Add set`
+- Do not add command-line prefixes, square brackets, or all-uppercase styling
+- Prefer a clear word or a familiar icon with an accessible label over an
+  unexplained glyph
+- Use `Delete` unless space forces a shorter label, and keep destructive actions
+  visually distinct
 
 ### Theme & Colors
 - Use theme-aware color functions from `app_theme.dart`:

@@ -1,5 +1,9 @@
 ﻿# Export/Import (Backup) Feature
 
+> [!NOTE]
+> This plan is retained as implementation history. Its sample widget styling is
+> not current design guidance; use `DESIGN.md` for new UI work.
+
 ## Date: 2026-06-13
 
 ## Summary

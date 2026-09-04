@@ -8,7 +8,7 @@
   :root { color-scheme: dark; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
     background: #050505; color: #d8d8d8; line-height: 1.5; padding: 24px 20px 80px;
   }
   h1 { font-size: 20px; letter-spacing: .04em; margin-bottom: 4px; }
@@ -225,7 +225,7 @@ const DIRECTIONS = {
     borderTarget: { dark: 3.00, light: 2.00 },
   },
   C: {
-    title: 'C — Truer terminal',
+    title: 'C — Higher contrast',
     desc: 'Near-true-black ground, and separation carried by a stronger hairline border rather than a lifted card fill. Accent is reserved as phosphor emphasis — one filled element per screen, everything else outlined, so the accent means something again.',
     chroma: 1.0, reserved: true,
     bg: { dark: '#080808', light: '#F2F2F0' },
@@ -369,7 +369,7 @@ function plansFrame(p, mode, dir) {
   return `
   <div class="phone" style="background:${p.bg}">
     <div class="scr">
-      <div class="appbar" style="color:${p.accent}">&gt; OPENGYM</div>
+      <div class="appbar" style="color:${p.accent}">OpenGym</div>
       <div class="plans">${cards}</div>
       ${buttons}
     </div>

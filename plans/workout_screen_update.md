@@ -1,5 +1,9 @@
 # Workout Screen Header Update Implementation Plan
 
+> [!NOTE]
+> This plan is retained as implementation history. Its UI examples describe the
+> app at that time; use `DESIGN.md` for current product direction.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Move the active workout plan name into the top AppBar beside the back button, remove the leading `>` prefix, color the title with the plan's custom color, and prevent the AppBar/header color from changing while scrolling.

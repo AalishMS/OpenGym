@@ -196,8 +196,9 @@ class AuthGate extends StatelessWidget {
 
 ## Step 1.5 — New file `lib/screens/login_screen.dart`
 
-Email/password sign in + sign up in the app's terminal aesthetic (JetBrains Mono, dark). Adjust
-colors to match your theme constants if you have them; the structure is what matters.
+Email/password sign in and sign up using the app's shared typography, colors,
+spacing, and controls. Keep the screen clear for a first-time user; the structure
+below matters more than the historical styling in the sample.
 
 ```dart
 import 'package:flutter/material.dart';

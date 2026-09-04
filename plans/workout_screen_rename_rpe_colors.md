@@ -1,12 +1,16 @@
 # Workout Screen Rename And RPE Colors Implementation Plan
 
+> [!NOTE]
+> This plan is retained as implementation history. Its typography references
+> describe the app at that time; use `DESIGN.md` for current product direction.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Update workout screen exercise renaming to happen on tap instead of long press, and color-code only the displayed RPE value in set rows.
 
 **Architecture:** Keep the existing workout screen structure unchanged. Make the smallest UI-only changes in `ExerciseCard` and `SetRow`, without changing Hive models, providers, dialogs, or reorder behavior.
 
-**Tech Stack:** Flutter, Dart, Provider, Hive, Material widgets, GoogleFonts JetBrains Mono.
+**Tech Stack at implementation time:** Flutter, Dart, Provider, Hive, Material widgets, and Google Fonts.
 
 ---
 

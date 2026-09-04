@@ -1,7 +1,16 @@
-# Gym Tracker - Project Documentation
+# OpenGym Project Documentation
 
 ## Project Overview
-A mobile gym tracking app built with Flutter that allows users to create workout plans, log exercises with sets/reps/weight, track personal records, and view workout statistics. Designed for gym-goers who want to track their training progress over time.
+OpenGym is a clean, focused gym tracker built with Flutter. It helps people
+create workout plans, log sets, reps, weight, RPE, and notes, then use history,
+personal records, and charts to understand their progress. The app works
+offline first and supports account-based sync across devices.
+
+The product is designed for a broad gym audience. Its visual identity comes
+from clear hierarchy, calm surfaces, restrained color, and small recognizable
+details. Terminal styling, command-line symbols, bracketed actions, and
+technical-insider language are no longer part of the direction. See `DESIGN.md`
+for the current product and visual principles.
 
 ## Architecture
 - **State Management**: Provider pattern with ChangeNotifier
@@ -118,6 +127,13 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Refreshed the app identity in project documentation:
+  - Positioned OpenGym as a simple, clean, and capable gym tracker for a broad
+    audience
+  - Replaced the terminal motif with a quiet visual direction built around
+    clarity, restrained color, and focused training data
+  - Updated contributor guidance so future UI work uses familiar labels and
+    approachable interaction patterns
 - Added the Stage B data foundation for split-scoped workspaces:
   - `Split` (Hive typeId 6) and account-wide `SplitPreference` (typeId 7) are cached locally and synchronized with Supabase
   - Plans and sessions carry `splitId`; legacy local records are backed up and assigned to the deterministic `My Split` after authentication
@@ -166,10 +182,10 @@ Repository layer wrapping HiveService for clean architecture:
   - Resolved active plan by `plan.key` instead of fragile index, with safe fallbacks
 
 ## Recent Changes (Previous)
-- Fixed light mode: Replaced hardcoded terminalX constants with theme-aware functions across ALL screens and widgets:
+- Fixed light mode: Replaced legacy theme constants with theme-aware functions across all screens and widgets:
   - screen files: create_plan_screen, edit_plan_screen, history_screen, settings_screen  
   - widget files: workout/exercise_card, workout/workout_dialogs
-  - Replaced: terminalSurface→surfaceColor, terminalBorder→borderColor, terminalTextSecondary→textSecondaryColor, terminalError→errorColor, terminalBackground→backgroundColor
+  - Mapped the old surface, border, secondary text, error, and background constants to their theme-aware equivalents
   - All screens now respect light/dark theme setting
 - Fixed week tab navbar scroll position: Added ScrollController to jump to selected week on initial load (WidgetsBinding.instance.addPostFrameCallback in initState)
 - Fixed gesture conflicts in workout_screen.dart:

@@ -1,5 +1,10 @@
 ﻿# UI/UX Fixes — Create Plan + Edit Plan Screens (REVISED)
 
+> [!NOTE]
+> This is a historical implementation plan. Any theme or typography references
+> describe the interface at that time. Use `DESIGN.md` for current product
+> direction.
+
 **Date**: 2026-06-19
 **Goal**: Fix 4 issues in Create Plan screen (and Edit Plan screen), with proper handling of shared state, gesture conflicts, and data integrity.
 
@@ -362,7 +367,7 @@ void _onReorder(int oldIndex, int newIndex) {
 This name-based approach is simpler, correct, and immune to off-by-one errors in index arithmetic. Use this version.
 
 **f) Custom proxy decorator for drag feedback:**
-Match the app's terminal theme (flat surfaces, no shadows, colored borders):
+Match the app theme used at the time (flat surfaces, no shadows, colored borders):
 ```dart
 Widget _buildReorderProxyDecorator(Widget child, int index, Animation<double> animation) {
   return AnimatedBuilder(

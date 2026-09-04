@@ -97,7 +97,7 @@ app can never hold it).
 |---|---|
 | `lib/services/update_service.dart` | **new** — `ReleaseInfo`/`AppVersion`, pure tag-parse + compare statics, `fetchLatest()`, download/install delegation |
 | `lib/providers/update_provider.dart` | **new** — `ChangeNotifier` status machine, throttle, progress |
-| `lib/widgets/update_dialog.dart` | **new** — terminal-styled prompt + progress |
+| `lib/widgets/update_dialog.dart` | **new** — themed update prompt and progress |
 | `lib/app_shell.dart` | startup trigger, post-first-frame |
 | `lib/screens/settings_screen.dart` | `UPDATES` section; replace hardcoded `'1.0.0'` |
 | `lib/main.dart` | register `UpdateProvider` |

@@ -10,12 +10,20 @@ The app favors fast local use in the gym over server-first workflows. Local Hive
 storage is the primary runtime data source; Supabase is used for account-based
 backup and cross-device sync.
 
+OpenGym is made for anyone who wants a dependable record of their training. It
+should feel clear on first use and efficient on the hundredth workout. The app's
+identity comes from its measured use of color, compact training data, and a few
+recognizable details rather than a theme that users need to understand.
+
 ## Product Principles
 
 - Offline use must remain reliable.
 - Logging a workout should require minimal navigation and minimal typing.
 - Data ownership stays local first, with explicit export/import support.
-- The UI should feel terminal-inspired without sacrificing readability.
+- A new user should understand the main actions without learning a visual motif.
+- Training information should lead; decoration should stay quiet.
+- Color and small signature details should add character without competing with
+  the workout.
 - Sync must be resilient: failed network work should retry later, not block local
   training logs.
 
@@ -30,7 +38,7 @@ backup and cross-device sync.
 | Settings storage | SharedPreferences |
 | Charts | `fl_chart` |
 | Auth and cloud sync | Supabase |
-| Typography | JetBrains Mono via `google_fonts` |
+| Typography | Readable app typography via `google_fonts` |
 
 ## Runtime Architecture
 
@@ -157,21 +165,33 @@ opened from the main flow.
 
 ## UI Design
 
-The visual language is terminal-inspired:
+OpenGym uses a clean, practical visual language with a restrained personal
+signature:
 
-- JetBrains Mono typography.
-- Rounded corners on a size-graduated scale, and one-pixel borders.
-- Dark and light themes backed by the same semantic color helpers.
-- User-selectable accent colors.
-- Minimal elevation.
-- Clear pressed and splash states for interactive elements.
+- Clear type hierarchy keeps workout names, values, units, and supporting text
+  distinct at a glance.
+- Calm backgrounds and surfaces give dense training data room to breathe.
+- Rounded corners follow a size-graduated scale, with borders and elevation used
+  only when they clarify grouping.
+- Dark and light themes share the same semantic color helpers.
+- User-selectable accents, compact plan markers, and focused data highlights
+  carry the app's character.
+- Familiar labels and icons make actions understandable outside a technical
+  audience.
+- Pressed, focused, disabled, loading, empty, and error states should feel like
+  parts of the same system.
+
+Monospaced type, command-line symbols, square-bracket labels, and all-uppercase
+copy are not part of the product identity. A monospaced face may still serve a
+specific data-alignment need, but it should not define a screen or the app's
+voice.
 
 UI code should use theme helpers from `lib/theme/app_theme.dart` instead of
 hardcoded black or white colors, and corner radii from `lib/theme/radii.dart`
-instead of literal `BorderRadius` values. Radii are graduated by element size —
-cards and dialogs are the roundest, badges barely — so the same roundness reads
-correctly on a 148px card and a 20px badge. Retuning the whole app means editing
-the six scale constants in that one file.
+instead of literal `BorderRadius` values. Radii are graduated by element size:
+cards and dialogs are the roundest, while badges use a smaller radius, so the
+same roundness reads correctly on a 148px card and a 20px badge. Retuning the
+whole app means editing the six scale constants in that one file.
 
 ## Backup And Import
 

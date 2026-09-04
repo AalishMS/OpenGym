@@ -1,16 +1,11 @@
-<p align="center">
-  <img src="logo/applogo.png" alt="OpenGym Logo" width="120" height="120">
-</p>
-
 <h1 align="center">OpenGym</h1>
 
 <p align="center">
-  <em>A terminal-style workout tracking app <strong>vibecoded</strong> with the help of <a href="https://opencode.ai"><strong>Opencode</strong></a></em>
+  <em>A clean, focused gym tracker for planning workouts, logging lifts, and seeing progress.</em>
 </p>
 
 <p align="center">
   <a href="#features">Features</a> •
-  <a href="#screenshots">Screenshots</a> •
   <a href="#tech-stack">Tech Stack</a> •
   <a href="#getting-started">Getting Started</a> •
   <a href="#project-structure">Structure</a> •
@@ -27,7 +22,15 @@
 
 <br>
 
-> **OpenGym** is an offline-first workout tracker built with Flutter. Log sets, reps, and weights through a terminal-inspired interface. Track personal records, view progress over time, and manage training plans on your device, with cloud sync across devices when you sign in.
+> **OpenGym** keeps workout tracking simple. Build training plans, log sets
+> without breaking your flow, and see how your lifts develop over time. Your
+> data stays available on your device, with optional account-based sync when
+> you want it on more than one device.
+
+OpenGym covers the essentials without turning every workout into a data-entry
+session. Its interface uses calm surfaces, clear hierarchy, and small flashes of
+color to make plans and progress easy to recognize. The personality is in the
+details; the workout stays at the center.
 
 ---
 
@@ -51,10 +54,11 @@
 
 ### Customization
 - **Dark / Light / System Theme** : Automatic or manual theming
-- **12 Accent Colors** : Electric Blue, Warm Amber, Deep Orange, Hot Pink, Cyan, Purple, Steel Gray, and more
+- **12 Accent Colors** : Choose a color that makes the app feel like yours
 - **Weight Units** : Switch between kg and lbs on the fly
 - **High Refresh Rate** : 90/120Hz display support
-- **JetBrains Mono** : Terminal-inspired monospace typography throughout
+- **Focused Visual Design** : Clear information, quiet surfaces, and restrained
+  plan-color details
 
 ### Sync
 - **Supabase Backend** : Email auth, Postgres tables, and row-level security scoped to your account
@@ -68,20 +72,6 @@
 
 ---
 
-## Screenshots
-
-<p align="center">
-  <img src="screenshots/plans.png" alt="Plans grid — colour-coded workout plans with exercise previews" width="330">
-  &nbsp;
-  <img src="screenshots/workout.png" alt="Workout screen — set logging with weight, reps, and RPE per set" width="330">
-</p>
-
-<p align="center">
-  <sub>Plans grid · Set logging with RPE</sub>
-</p>
-
----
-
 ## Tech Stack
 
 | Technology | Purpose |
@@ -91,7 +81,7 @@
 | [Provider](https://pub.dev/packages/provider) | State management (ChangeNotifier) |
 | [Hive](https://pub.dev/packages/hive) | Local NoSQL database |
 | [fl_chart](https://pub.dev/packages/fl_chart) | Interactive charts |
-| [Google Fonts](https://pub.dev/packages/google_fonts) | JetBrains Mono typeface |
+| [Google Fonts](https://pub.dev/packages/google_fonts) | App typography |
 | [SharedPreferences](https://pub.dev/packages/shared_preferences) | Settings persistence |
 | [Supabase](https://supabase.com) | Auth, Postgres, and RLS for cloud sync |
 
@@ -105,7 +95,7 @@ lib/
 ├── services/      → Business logic (HiveService, SyncService, PR Tracking)
 ├── screens/       → 7 UI screens (Home, Workout, Stats, etc.)
 ├── widgets/       → Reusable components (SetRow, ExerciseCard, Dialogs)
-├── theme/         → Terminal-style theme with 12 accent colors
+├── theme/         → Color, typography, spacing, and shape system
 ├── data/          → Exercise library (65+ exercises)
 └── utils/         → Animations and helpers
 ```

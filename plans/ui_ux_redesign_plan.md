@@ -1,5 +1,10 @@
 # UI/UX Redesign Plan — Home + Create Plan Screens
 
+> [!NOTE]
+> This is a historical implementation plan. Its typography, labels, and visual
+> examples record an earlier interface and do not define OpenGym's current
+> identity. Use `DESIGN.md` for current product direction.
+
 **Date**: 2026-06-19
 **Goal**: Improve Home screen and Create Plan screen UI/UX following Figma prototype design, keeping existing theme/color system intact.
 
