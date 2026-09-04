@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -73,7 +72,7 @@ class _SplitNameDialogState extends State<_SplitNameDialog> {
       Navigator.pop(context);
       _showSuccess(
         hostContext,
-        _isRename ? '> Split renamed' : '> Split created and selected',
+        _isRename ? 'Split renamed' : 'Split created and selected',
       );
     } catch (error) {
       if (!mounted) return;
@@ -103,20 +102,17 @@ class _SplitNameDialogState extends State<_SplitNameDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                _isRename ? '> RENAME SPLIT' : '> NEW SPLIT',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: accent,
-                ),
+                _isRename ? 'Rename split' : 'New split',
+                style: Theme.of(
+                  context,
+                ).textTheme.headlineSmall?.copyWith(color: accent),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
                 _isRename
                     ? 'Change this workspace name. Its plans and history stay together.'
                     : 'Start an empty training workspace with its own plans, history, and records.',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 11,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: textSecondary,
                   height: 1.45,
                 ),
@@ -133,10 +129,10 @@ class _SplitNameDialogState extends State<_SplitNameDialog> {
                   if (_error != null) setState(() => _error = null);
                 },
                 onSubmitted: (_) => _save(),
-                style: GoogleFonts.jetBrainsMono(fontSize: 13),
+                style: Theme.of(context).textTheme.bodyMedium,
                 decoration: InputDecoration(
-                  labelText: 'SPLIT NAME',
-                  helperText: '1–24 CHARACTERS',
+                  labelText: 'Split name',
+                  helperText: '1–24 characters',
                   errorText: _error,
                   counterText: '',
                   border: const OutlineInputBorder(
@@ -150,10 +146,7 @@ class _SplitNameDialogState extends State<_SplitNameDialog> {
                 children: [
                   TextButton(
                     onPressed: _saving ? null : () => Navigator.pop(context),
-                    child: Text(
-                      '[CANCEL]',
-                      style: GoogleFonts.jetBrainsMono(color: textSecondary),
-                    ),
+                    child: const Text('Cancel'),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   ElevatedButton(
@@ -166,10 +159,7 @@ class _SplitNameDialogState extends State<_SplitNameDialog> {
                         borderRadius: AppRadius.button,
                       ),
                     ),
-                    child: Text(
-                      _isRename ? '[SAVE]' : '[CREATE]',
-                      style: GoogleFonts.jetBrainsMono(),
-                    ),
+                    child: Text(_isRename ? 'Save' : 'Create'),
                   ),
                 ],
               ),
@@ -207,21 +197,17 @@ class _ManageSplitsDialog extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '> MANAGE SPLITS',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: accent,
-                    ),
+                    'Manage splits',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.headlineSmall?.copyWith(color: accent),
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    '${provider.splits.length}/${SplitProvider.maxSplits} WORKSPACES',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 10,
-                      color: textSecondary,
-                      letterSpacing: 0.08,
-                    ),
+                    '${provider.splits.length} of ${SplitProvider.maxSplits} workspaces',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: textSecondary),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   Flexible(
@@ -264,10 +250,7 @@ class _ManageSplitsDialog extends StatelessWidget {
                     alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: Text(
-                        '[DONE]',
-                        style: GoogleFonts.jetBrainsMono(color: accent),
-                      ),
+                      child: const Text('Done'),
                     ),
                   ),
                 ],
@@ -331,20 +314,16 @@ class _ManageSplitRow extends StatelessWidget {
                   split.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: textPrimary,
-                  ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium?.copyWith(color: textPrimary),
                 ),
                 if (isActive)
                   Text(
-                    '[ACTIVE]',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 9,
-                      color: accent,
-                      letterSpacing: 0.08,
-                    ),
+                    'Active',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: accent),
                   ),
               ],
             ),
@@ -402,7 +381,7 @@ class _DeleteSplitDialogState extends State<_DeleteSplitDialog> {
       await provider.deleteSplit(widget.split.id, replacement);
       if (!mounted || !hostContext.mounted) return;
       Navigator.pop(context);
-      _showSuccess(hostContext, '> Split permanently deleted');
+      _showSuccess(hostContext, 'Split permanently deleted');
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -437,12 +416,10 @@ class _DeleteSplitDialogState extends State<_DeleteSplitDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '> DELETE SPLIT?',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: error,
-                ),
+                'Delete split?',
+                style: Theme.of(
+                  context,
+                ).textTheme.headlineSmall?.copyWith(color: error),
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
@@ -450,8 +427,7 @@ class _DeleteSplitDialogState extends State<_DeleteSplitDialog> {
                 '${usage.plans == 1 ? 'plan' : 'plans'} and ${usage.sessions} '
                 '${usage.sessions == 1 ? 'session' : 'sessions'}. '
                 'This cannot be undone.',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 11,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   height: 1.5,
                   color: textSecondary,
                 ),
@@ -459,12 +435,9 @@ class _DeleteSplitDialogState extends State<_DeleteSplitDialog> {
               if (isActive) ...[
                 const SizedBox(height: AppSpacing.lg),
                 Text(
-                  'SELECT REPLACEMENT',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+                  'Select replacement',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
                     color: textPrimaryColor(context),
-                    letterSpacing: 0.08,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -486,7 +459,9 @@ class _DeleteSplitDialogState extends State<_DeleteSplitDialog> {
                 const SizedBox(height: AppSpacing.md),
                 Text(
                   _error!,
-                  style: GoogleFonts.jetBrainsMono(fontSize: 10, color: error),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: error),
                 ),
               ],
               const SizedBox(height: AppSpacing.lg),
@@ -495,10 +470,7 @@ class _DeleteSplitDialogState extends State<_DeleteSplitDialog> {
                 children: [
                   TextButton(
                     onPressed: _deleting ? null : () => Navigator.pop(context),
-                    child: Text(
-                      '[CANCEL]',
-                      style: GoogleFonts.jetBrainsMono(color: textSecondary),
-                    ),
+                    child: const Text('Cancel'),
                   ),
                   const SizedBox(width: AppSpacing.sm),
                   ElevatedButton(
@@ -514,7 +486,7 @@ class _DeleteSplitDialogState extends State<_DeleteSplitDialog> {
                         borderRadius: AppRadius.button,
                       ),
                     ),
-                    child: Text('[DELETE]', style: GoogleFonts.jetBrainsMono()),
+                    child: const Text('Delete'),
                   ),
                 ],
               ),
@@ -563,19 +535,20 @@ class _ReplacementRow extends StatelessWidget {
                   split.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: textPrimaryColor(context),
                   ),
                 ),
               ),
-              Text(
-                selected ? '[SELECTED]' : '[SELECT]',
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 9,
-                  color: selected ? accent : textSecondaryColor(context),
+              if (selected)
+                Icon(LucideIcons.check, size: 18, color: accent)
+              else
+                Text(
+                  'Select',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: textSecondaryColor(context),
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -591,7 +564,9 @@ void _showSuccess(BuildContext context, String message) {
     SnackBar(
       content: Text(
         message,
-        style: GoogleFonts.jetBrainsMono(color: onAccentColor(context)),
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: onAccentColor(context)),
       ),
       backgroundColor: accentFillColor(context),
     ),

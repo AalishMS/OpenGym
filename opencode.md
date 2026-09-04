@@ -127,6 +127,13 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Modernized the complete split interface without changing split behavior:
+  - Replaced the Home header's outlined split control with a larger plain-text
+    split name and chevron
+  - Removed terminal prefixes, brackets, forced uppercase, and monospaced type
+    from split menus, dialogs, actions, statuses, and feedback
+  - Preserved switching, validation, split limits, rename/delete safeguards,
+    accessibility semantics, reduced motion, and responsive behavior
 - Refreshed the app identity in project documentation:
   - Positioned OpenGym as a simple, clean, and capable gym tracker for a broad
     audience

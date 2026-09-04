@@ -66,7 +66,15 @@ void main() {
     final semantics = tester.ensureSemantics();
 
     await tester.pumpWidget(harness.host(const HomeScreen()));
-    expect(find.text('[PPL]'), findsOneWidget);
+    expect(find.text('PPL'), findsOneWidget);
+    expect(find.text('[PPL]'), findsNothing);
+    final switcherText = tester.widget<Text>(find.text('PPL'));
+    expect(switcherText.style?.fontSize, 16);
+    final switcherContent = tester.widget<Container>(
+      find.byKey(const ValueKey('split-switcher-content')),
+    );
+    expect(switcherContent.color, isNull);
+    expect(switcherContent.decoration, isNull);
     expect(find.text('Ppl Plan'), findsOneWidget);
     expect(find.text('Ul Plan'), findsNothing);
     expect(
@@ -90,7 +98,8 @@ void main() {
 
     await tester.tap(find.text('UL'));
     await tester.pumpAndSettle();
-    expect(find.text('[UL]'), findsOneWidget);
+    expect(find.text('UL'), findsOneWidget);
+    expect(find.text('[UL]'), findsNothing);
     expect(find.text('Ppl Plan'), findsNothing);
     expect(find.text('Ul Plan'), findsOneWidget);
     expect(harness.sessions.sessions.single.splitId, 'ul');
@@ -124,15 +133,15 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('[+ NEW SPLIT]'));
+    await tester.tap(find.text('New split'));
     await tester.pumpAndSettle();
-    expect(find.text('> NEW SPLIT'), findsOneWidget);
+    expect(find.text('New split'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const ValueKey('split-name-field')),
       'ppl',
     );
-    await tester.tap(find.text('[CREATE]'));
+    await tester.tap(find.text('Create'));
     await tester.pump();
     expect(find.text('A split with that name already exists.'), findsOneWidget);
 
@@ -140,10 +149,11 @@ void main() {
       find.byKey(const ValueKey('split-name-field')),
       ' Full Body ',
     );
-    await tester.tap(find.text('[CREATE]'));
+    await tester.tap(find.text('Create'));
     await tester.pumpAndSettle();
     expect(harness.splits.activeSplit?.name, 'Full Body');
-    expect(find.text('[FULL BODY]'), findsOneWidget);
+    expect(find.text('Full Body'), findsOneWidget);
+    expect(find.text('[FULL BODY]'), findsNothing);
     expect(harness.plans.plans, isEmpty);
   });
 
@@ -161,7 +171,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('LIMIT REACHED · 5/5 ACTIVE'), findsOneWidget);
+    expect(find.text('Limit reached · 5 of 5 active'), findsOneWidget);
     final action = tester.widget<InkWell>(
       find.descendant(
         of: find.byKey(const ValueKey('new-split-action')),
@@ -181,9 +191,9 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('[MANAGE SPLITS]'));
+    await tester.tap(find.text('Manage splits'));
     await tester.pumpAndSettle();
-    expect(find.text('> MANAGE SPLITS'), findsOneWidget);
+    expect(find.text('Manage splits'), findsOneWidget);
 
     await tester.tap(find.byTooltip('Rename PPL'));
     await tester.pumpAndSettle();
@@ -191,26 +201,24 @@ void main() {
       find.byKey(const ValueKey('split-name-field')),
       'Push Pull Legs',
     );
-    await tester.tap(find.text('[SAVE]'));
+    await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
-    expect(find.text('Push Pull Legs'), findsOneWidget);
+    expect(find.text('Push Pull Legs'), findsNWidgets(2));
 
     await tester.tap(find.byTooltip('Delete Push Pull Legs'));
     await tester.pumpAndSettle();
-    expect(find.text('> DELETE SPLIT?'), findsOneWidget);
+    expect(find.text('Delete split?'), findsOneWidget);
     expect(find.textContaining('removes 1 plan and 1 session'), findsOneWidget);
     expect(
       tester
-          .widget<ElevatedButton>(
-            find.widgetWithText(ElevatedButton, '[DELETE]'),
-          )
+          .widget<ElevatedButton>(find.widgetWithText(ElevatedButton, 'Delete'))
           .onPressed,
       isNull,
     );
 
-    await tester.tap(find.text('[SELECT]'));
+    await tester.tap(find.text('Select'));
     await tester.pump();
-    await tester.tap(find.text('[DELETE]'));
+    await tester.tap(find.text('Delete'));
     await tester.pumpAndSettle();
     expect(harness.splits.splits.map((split) => split.name), ['UL']);
     expect(harness.splits.activeSplitId, 'ul');

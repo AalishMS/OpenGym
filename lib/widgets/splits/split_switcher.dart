@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -64,8 +63,8 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
-                      '> Could not switch splits',
-                      style: GoogleFonts.jetBrainsMono(
+                      'Could not switch splits',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: onColor(errorColor(context)),
                       ),
                     ),
@@ -114,69 +113,55 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
             splashColor: accent.withAlpha(36),
             highlightColor: accent.withAlpha(18),
             child: Container(
+              key: const ValueKey('split-switcher-content'),
               constraints: const BoxConstraints(minHeight: 48, maxWidth: 220),
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
               alignment: Alignment.center,
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: surfaceColor(context).withAlpha(204),
-                  border: Border.all(color: accent.withAlpha(160)),
-                  borderRadius: AppRadius.control,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.sm,
-                  vertical: AppSpacing.xs,
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(
-                      child: AnimatedSwitcher(
-                        duration:
-                            disableAnimations
-                                ? Duration.zero
-                                : const Duration(milliseconds: 150),
-                        transitionBuilder:
-                            (child, animation) => FadeTransition(
-                              opacity: animation,
-                              child: ScaleTransition(
-                                scale: Tween<double>(
-                                  begin: 0.98,
-                                  end: 1,
-                                ).animate(animation),
-                                child: child,
-                              ),
-                            ),
-                        child: Text(
-                          '[${active.name.toUpperCase()}]',
-                          key: ValueKey(active.id),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: accent,
-                            letterSpacing: 0.04,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.xs),
-                    AnimatedRotation(
-                      turns: _isOpen ? 0.5 : 0,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: AnimatedSwitcher(
                       duration:
                           disableAnimations
                               ? Duration.zero
                               : const Duration(milliseconds: 150),
-                      child: Icon(
-                        LucideIcons.chevronDown,
-                        size: 14,
-                        color: accent,
+                      transitionBuilder:
+                          (child, animation) => FadeTransition(
+                            opacity: animation,
+                            child: ScaleTransition(
+                              scale: Tween<double>(
+                                begin: 0.98,
+                                end: 1,
+                              ).animate(animation),
+                              child: child,
+                            ),
+                          ),
+                      child: Text(
+                        active.name,
+                        key: ValueKey(active.id),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: textPrimaryColor(context),
+                        ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  AnimatedRotation(
+                    turns: _isOpen ? 0.5 : 0,
+                    duration:
+                        disableAnimations
+                            ? Duration.zero
+                            : const Duration(milliseconds: 150),
+                    child: Icon(
+                      LucideIcons.chevronDown,
+                      size: 20,
+                      color: accent,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -355,21 +340,17 @@ class _SplitMenu extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        '> TRAINING SPLIT',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
+                        'Training split',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           color: accentColor(context),
-                          letterSpacing: 0.08,
                         ),
                       ),
                     ),
                     Text(
-                      '${provider.splits.length}/${SplitProvider.maxSplits}',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 9,
-                        color: textSecondary,
-                      ),
+                      '${provider.splits.length} of ${SplitProvider.maxSplits}',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: textSecondary),
                     ),
                   ],
                 ),
@@ -386,18 +367,18 @@ class _SplitMenu extends StatelessWidget {
               ),
               _SplitMenuAction(
                 key: const ValueKey('new-split-action'),
-                label: '[+ NEW SPLIT]',
+                label: 'New split',
                 caption:
                     provider.canCreate
-                        ? 'EMPTY WORKSPACE'
-                        : 'LIMIT REACHED · 5/5 ACTIVE',
+                        ? 'Empty workspace'
+                        : 'Limit reached · 5 of 5 active',
                 enabled: provider.canCreate,
                 onTap: onCreate,
               ),
               _SplitMenuAction(
                 key: const ValueKey('manage-splits-action'),
-                label: '[MANAGE SPLITS]',
-                caption: 'RENAME OR DELETE',
+                label: 'Manage splits',
+                caption: 'Rename or delete',
                 onTap: onManage,
               ),
             ],
@@ -452,8 +433,7 @@ class _SplitMenuRow extends StatelessWidget {
                   split.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontWeight: selected ? FontWeight.bold : FontWeight.normal,
                     color:
                         selected
@@ -462,15 +442,7 @@ class _SplitMenuRow extends StatelessWidget {
                   ),
                 ),
               ),
-              if (selected)
-                Text(
-                  '[ACTIVE]',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 9,
-                    color: accent,
-                    letterSpacing: 0.06,
-                  ),
-                ),
+              if (selected) Icon(LucideIcons.check, size: 18, color: accent),
             ],
           ),
         ),
@@ -502,7 +474,7 @@ class _SplitMenuAction extends StatelessWidget {
     return Semantics(
       button: true,
       enabled: enabled,
-      label: label.replaceAll(RegExp(r'[\[\]+]'), '').trim(),
+      label: label,
       child: InkWell(
         onTap: enabled ? onTap : null,
         borderRadius: AppRadius.control,
@@ -515,11 +487,9 @@ class _SplitMenuAction extends StatelessWidget {
                 Expanded(
                   child: Text(
                     label,
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: foreground,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelLarge?.copyWith(color: foreground),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.sm),
@@ -529,8 +499,7 @@ class _SplitMenuAction extends StatelessWidget {
                     textAlign: TextAlign.right,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 10,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       height: 1.3,
                       color: textSecondaryColor(
                         context,

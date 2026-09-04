@@ -8,8 +8,8 @@ previous-set lookups are always scoped to the active split.
 
 - Open the split control in the top-right of the Home header to switch
   workspaces.
-- Select `[+ NEW SPLIT]` to create an empty workspace.
-- Select `[MANAGE SPLITS]` to rename or permanently delete a split.
+- Select `New split` to create an empty workspace.
+- Select `Manage splits` to rename or permanently delete a split.
 - Up to five active splits are supported. Names are 1–24 characters and must be
   unique for the account, ignoring letter case.
 - Deleting the active split requires choosing its replacement first. The dialog
