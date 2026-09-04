@@ -37,8 +37,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};
   final Set<gym.Set> _touchedSets = {};
-  final Set<gym.Set> _prescribedSeedSets = {};
-  final Set<int> _unmodifiedSeedWeeks = {};
 
   @override
   void initState() {
@@ -141,20 +139,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     var session = _getOrCreateSession();
     final hasSets = session.exercises.any((e) => e.sets.isNotEmpty);
 
-    if (hasSets && !_unmodifiedSeedWeeks.contains(_currentWeek)) {
-      final prExercises =
-          session.exercises
-              .map(
-                (exercise) => exercise.copyWith(
-                  sets:
-                      exercise.sets
-                          .where((set) => !_prescribedSeedSets.contains(set))
-                          .toList(),
-                ),
-              )
-              .toList();
+    if (hasSets) {
       final prs = PRTrackingService.checkForNewPRs(
-        prExercises,
+        session.exercises,
         widget.plan.splitId,
       );
 
@@ -207,25 +194,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
     final session = initialization.session;
     _weekSessions[_currentWeek] = session;
-    if (initialization.seededFromPlan) {
-      _unmodifiedSeedWeeks.add(_currentWeek);
-      for (final exercise in session.exercises) {
-        _prescribedSeedSets.addAll(exercise.sets);
-      }
-    }
     return session;
   }
 
   void _updateSession(WorkoutSession session) {
     _weekSessions[_currentWeek] = session;
-    _unmodifiedSeedWeeks.remove(_currentWeek);
     setState(() {});
-  }
-
-  void _markSetTouched(gym.Set oldSet, gym.Set newSet) {
-    _prescribedSeedSets.remove(oldSet);
-    _touchedSets.remove(oldSet);
-    _touchedSets.add(newSet);
   }
 
   void _addEmptyExercise() {
@@ -292,7 +266,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       onSave: (updatedSet) {
         final updatedSets = List<gym.Set>.from(exercise.sets);
         updatedSets[setIndex] = updatedSet;
-        _markSetTouched(set, updatedSet);
+        _touchedSets.remove(set);
+        _touchedSets.add(updatedSet);
         final updatedExercises = List<Exercise>.from(session.exercises);
         updatedExercises[exerciseIndex] = Exercise(
           name: exercise.name,
@@ -350,7 +325,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       note: set.note,
     );
     updatedSets[setIndex] = updatedSet;
-    _markSetTouched(set, updatedSet);
+    _touchedSets.remove(set);
+    _touchedSets.add(updatedSet);
 
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(
@@ -378,7 +354,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       note: set.note,
     );
     updatedSets[setIndex] = updatedSet;
-    _markSetTouched(set, updatedSet);
+    _touchedSets.remove(set);
+    _touchedSets.add(updatedSet);
 
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(
@@ -404,7 +381,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       note: set.note,
     );
     updatedSets[setIndex] = updatedSet;
-    _markSetTouched(set, updatedSet);
+    _touchedSets.remove(set);
+    _touchedSets.add(updatedSet);
 
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(
@@ -432,7 +410,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       note: set.note,
     );
     updatedSets[setIndex] = updatedSet;
-    _markSetTouched(set, updatedSet);
+    _touchedSets.remove(set);
+    _touchedSets.add(updatedSet);
 
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(

@@ -176,8 +176,8 @@ Repository layer wrapping HiveService for clean architecture:
   - A genuinely new Week 1 session now starts with every plan `SetTemplate`
     value (including decimal weights); existing sessions are never replaced,
     legacy plans fall back to zero values, and Week 2+ behavior is unchanged
-  - Unmodified Week 1 prescriptions are neither autosaved nor considered for
-    personal-record detection merely by opening and leaving the workout
+  - Week 1 prescriptions behave like ordinary workout values: the existing
+    autosave and personal-record flows treat them as completed data
 - Changed first-run appearance defaults to light mode with the cyan accent while preserving existing users' saved choices
 - Reduced plan-color noise with identity markers:
   - Home cards now use a compact colored rail beside the plan name instead of a full-width stripe and colored statistics
