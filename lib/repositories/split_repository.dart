@@ -22,4 +22,10 @@ class SplitRepository {
     splitId: splitId,
     replacementSplitId: replacementSplitId,
   );
+
+  int getPlanCount(String splitId) =>
+      HiveService.getPlans(splitId: splitId).length;
+
+  int getSessionCount(String splitId) =>
+      HiveService.getSessions(splitId: splitId).length;
 }

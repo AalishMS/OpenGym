@@ -13,12 +13,17 @@ class SplitProvider with ChangeNotifier {
   static const Uuid _uuid = Uuid();
 
   final SplitRepository _repository;
+  final String? Function() _userIdProvider;
   List<Split> _splits = [];
   String? _activeSplitId;
   late final StreamSubscription<void> _syncSubscription;
 
-  SplitProvider({SplitRepository? repository})
-    : _repository = repository ?? SplitRepository() {
+  SplitProvider({
+    SplitRepository? repository,
+    String? Function()? userIdProvider,
+  }) : _repository = repository ?? SplitRepository(),
+       _userIdProvider =
+           userIdProvider ?? (() => SupabaseService.currentUserId) {
     _syncSubscription = SyncService.instance.changes.listen(
       (_) => loadSplits(),
     );
@@ -36,9 +41,27 @@ class SplitProvider with ChangeNotifier {
 
   bool get canCreate => _splits.length < maxSplits;
 
+  SplitUsage usageFor(String splitId) => SplitUsage(
+    plans: _repository.getPlanCount(splitId),
+    sessions: _repository.getSessionCount(splitId),
+  );
+
+  String? nameError(String value, {String? exceptId}) {
+    final name = value.trim();
+    if (name.isEmpty) return 'Enter a split name.';
+    if (name.length > 24) return 'Use 24 characters or fewer.';
+    final normalized = name.toLowerCase();
+    if (_splits.any(
+      (split) => split.id != exceptId && split.name.toLowerCase() == normalized,
+    )) {
+      return 'A split with that name already exists.';
+    }
+    return null;
+  }
+
   void loadSplits() {
     _splits = _repository.getSplits();
-    final userId = SupabaseService.currentUserId;
+    final userId = _userIdProvider();
     final preferred =
         userId == null
             ? null
@@ -52,9 +75,10 @@ class SplitProvider with ChangeNotifier {
 
   Future<void> createSplit(String rawName) async {
     final userId = _requireUser();
-    final name = _validateName(rawName);
+    final name = rawName.trim();
     if (!canCreate) throw StateError('You can have at most five splits.');
-    _ensureUnique(name);
+    final validationError = nameError(rawName);
+    if (validationError != null) throw ArgumentError(validationError);
     final now = DateTime.now();
     final split = Split(
       id: _uuid.v4(),
@@ -71,8 +95,9 @@ class SplitProvider with ChangeNotifier {
   }
 
   Future<void> renameSplit(String id, String rawName) async {
-    final name = _validateName(rawName);
-    _ensureUnique(name, exceptId: id);
+    final name = rawName.trim();
+    final validationError = nameError(rawName, exceptId: id);
+    if (validationError != null) throw ArgumentError(validationError);
     Split? current;
     for (final split in _splits) {
       if (split.id == id) current = split;
@@ -101,25 +126,8 @@ class SplitProvider with ChangeNotifier {
     SyncService.instance.scheduleSync();
   }
 
-  String _validateName(String value) {
-    final name = value.trim();
-    if (name.isEmpty || name.length > 24) {
-      throw ArgumentError('Split names must be 1–24 characters.');
-    }
-    return name;
-  }
-
-  void _ensureUnique(String name, {String? exceptId}) {
-    final normalized = name.toLowerCase();
-    if (_splits.any(
-      (split) => split.id != exceptId && split.name.toLowerCase() == normalized,
-    )) {
-      throw ArgumentError('A split with that name already exists.');
-    }
-  }
-
   String _requireUser() {
-    final userId = SupabaseService.currentUserId;
+    final userId = _userIdProvider();
     if (userId == null) throw StateError('Sign in to manage splits.');
     return userId;
   }
@@ -129,4 +137,11 @@ class SplitProvider with ChangeNotifier {
     _syncSubscription.cancel();
     super.dispose();
   }
+}
+
+class SplitUsage {
+  final int plans;
+  final int sessions;
+
+  const SplitUsage({required this.plans, required this.sessions});
 }

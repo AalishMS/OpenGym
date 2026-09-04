@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
+import '../providers/split_provider.dart';
 import '../models/workout_plan.dart';
 import '../models/exercise_template.dart';
 import '../models/set_template.dart';
@@ -15,6 +16,7 @@ import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../utils/plan_stats.dart';
 import '../widgets/workout/workout_dialogs.dart';
+import '../widgets/splits/split_switcher.dart';
 import 'plan_editor_screen.dart';
 import 'workout_screen.dart';
 import '../services/sample_data_seeder.dart';
@@ -63,6 +65,7 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context, Color accent, Color border) {
+    final splitProvider = context.watch<SplitProvider?>();
     return DecoratedBox(
       decoration: BoxDecoration(
         color: surfaceColor(context),
@@ -78,14 +81,22 @@ class HomeScreen extends StatelessWidget {
               child: _CappedWidth(
                 child: Row(
                   children: [
-                    Text(
-                      '> OPENGYM',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: accent,
+                    Expanded(
+                      child: Text(
+                        '> OPENGYM',
+                        maxLines: 1,
+                        overflow: TextOverflow.clip,
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: accent,
+                        ),
                       ),
                     ),
+                    if (splitProvider != null) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      const Flexible(child: SplitSwitcher()),
+                    ],
                   ],
                 ),
               ),
@@ -130,7 +141,8 @@ class HomeScreen extends StatelessWidget {
             // as the way out rather than the way in. It also lives in Settings.
             TextButton(
               onPressed: () async {
-                await SampleDataSeeder.seedSampleData();
+                final splitId = context.read<SplitProvider?>()?.activeSplitId;
+                await SampleDataSeeder.seedSampleData(splitId: splitId);
                 provider.loadPlans();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -170,6 +182,8 @@ class HomeScreen extends StatelessWidget {
       for (final stat in PlanStat.compute(provider.plans, sessions))
         stat.planIndex: stat,
     };
+    final textScale = MediaQuery.textScalerOf(context).scale(1);
+    final usesLargeText = textScale > 1.3;
 
     return _CappedWidth(
       child: GridView.builder(
@@ -184,9 +198,12 @@ class HomeScreen extends StatelessWidget {
         // `mainAxisExtent` replaces `childAspectRatio` — the old ratio made
         // cards as tall as the column was wide, which on desktop meant two
         // enormous, mostly-empty boxes.
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 260,
-          mainAxisExtent: 220,
+        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+          // Large accessibility text needs a wider card and more vertical
+          // breathing room. On compact phones this intentionally becomes one
+          // column instead of squeezing the card controls into two.
+          maxCrossAxisExtent: usesLargeText ? 340 : 260,
+          mainAxisExtent: usesLargeText ? 260 : 220,
           crossAxisSpacing: 10,
           mainAxisSpacing: 10,
         ),
