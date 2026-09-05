@@ -128,6 +128,10 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Fixed three workout-screen interaction and layout regressions:
+  - RPE 10 now stays on one line inside the set-details action
+  - Week swipes continue across completed sessions while retaining vertical-scroll disambiguation
+  - Long plan names sit farther left and no longer collide with the centered timer
 - Added an explicit draft-to-completed workout lifecycle:
   - Autosaved sessions and copied prescriptions are drafts and are excluded
     from History, PRs, progression, previous results, heatmaps, and totals

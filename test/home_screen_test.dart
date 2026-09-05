@@ -20,6 +20,8 @@ import 'package:gymapp/screens/home_screen.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/theme/spacing.dart';
+import 'package:gymapp/widgets/underline_tab_strip.dart';
 
 void main() {
   late Directory hiveDirectory;
@@ -395,6 +397,117 @@ void main() {
       ),
       findsOneWidget,
     );
+  });
+
+  testWidgets('week swipe continues across consecutive completed sessions', (
+    tester,
+  ) async {
+    final plan = populatedPlan();
+    final sessions = [
+      for (var week = 1; week <= 3; week++)
+        WorkoutSession(
+          id: 'session-$week',
+          planId: plan.id,
+          planName: plan.name,
+          date: DateTime(2026, 9, week),
+          exercises: const [],
+          weekNumber: week,
+          isCompleted: week < 3,
+        ),
+    ];
+    await tester.runAsync(() async {
+      for (final session in sessions) {
+        await Hive.box<WorkoutSession>(
+          HiveService.sessionsBox,
+        ).put(session.id, session);
+      }
+    });
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<WorkoutPlanProvider>.value(
+            value: _PlanProvider([plan]),
+          ),
+          ChangeNotifierProvider<WorkoutSessionProvider>(
+            create: (_) => _SessionProvider(sessions),
+          ),
+        ],
+        child: MaterialApp(
+          theme: buildTheme(const Color(0xFF00A8FF), Brightness.dark),
+          home: WorkoutScreen(plan: plan, planIndex: 0),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    int selectedWeek() =>
+        tester
+            .widget<UnderlineTabStrip>(
+              find.byWidgetPredicate(
+                (widget) =>
+                    widget is UnderlineTabStrip && widget.rule == StripRule.top,
+              ),
+            )
+            .selectedIndex;
+
+    expect(selectedWeek(), 2);
+    for (final expected in [1, 0]) {
+      await tester.flingFrom(
+        const Offset(200, 330),
+        const Offset(100, 0),
+        1000,
+      );
+      await tester.pumpAndSettle();
+      expect(selectedWeek(), expected);
+    }
+    for (final expected in [1, 2]) {
+      await tester.flingFrom(
+        const Offset(200, 330),
+        const Offset(-100, 0),
+        1000,
+      );
+      await tester.pumpAndSettle();
+      expect(selectedWeek(), expected);
+    }
+  });
+
+  testWidgets('long workout title stays clear of the centered timer', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 800);
+    addTearDown(tester.view.reset);
+    final plan = populatedPlan().copyWith(name: 'UPPER BODY');
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<WorkoutPlanProvider>.value(
+            value: _PlanProvider([plan]),
+          ),
+          ChangeNotifierProvider<WorkoutSessionProvider>(
+            create: (_) => _SessionProvider(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: buildTheme(const Color(0xFF00A8FF), Brightness.dark),
+          home: WorkoutScreen(plan: plan, planIndex: 0),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final title = find.text('UPPER BODY').first;
+    final timer = find.byKey(const ValueKey('workout_elapsed_time'));
+    final appBar = tester.widget<AppBar>(find.byType(AppBar));
+
+    expect(appBar.titleSpacing, AppSpacing.sm);
+    expect(
+      tester.getRect(title).right + AppSpacing.sm,
+      lessThanOrEqualTo(tester.getRect(timer).left),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('plan color choices are selected and at least 48 square', (

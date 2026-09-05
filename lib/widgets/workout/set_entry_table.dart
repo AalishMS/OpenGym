@@ -93,6 +93,7 @@ class SetEntryTable extends StatelessWidget {
                 trailing:
                     onDetails != null || onDelete != null
                         ? IconButton(
+                          iconSize: 32,
                           tooltip:
                               onDelete != null ? 'Delete set' : 'Set details',
                           onPressed: () => (onDelete ?? onDetails)!(index),
@@ -132,11 +133,16 @@ TextStyle _quiet(BuildContext context) =>
 Widget _effort(BuildContext context, int rpe) => Semantics(
   label: 'RPE $rpe',
   excludeSemantics: true,
-  child: Text(
-    '@$rpe',
-    style: Theme.of(context).textTheme.labelLarge!.copyWith(
-      fontWeight: FontWeight.w700,
-      color: rpeColor(rpe, context),
+  child: FittedBox(
+    fit: BoxFit.scaleDown,
+    child: Text(
+      '@$rpe',
+      maxLines: 1,
+      softWrap: false,
+      style: Theme.of(context).textTheme.labelLarge!.copyWith(
+        fontWeight: FontWeight.w700,
+        color: rpeColor(rpe, context),
+      ),
     ),
   ),
 );

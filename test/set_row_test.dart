@@ -50,6 +50,7 @@ void main() {
     void Function(int, double, int) onChanged, {
     Brightness brightness = Brightness.light,
     double scale = 1,
+    bool showDetails = false,
   }) => MaterialApp(
     theme: buildTheme(const Color(0xFF00BCD4), brightness),
     builder:
@@ -67,6 +68,7 @@ void main() {
           exerciseName: 'Bench Press',
           sets: entries,
           onChanged: onChanged,
+          onDetails: showDetails ? (_) {} : null,
         ),
       ),
     ),
@@ -120,6 +122,44 @@ void main() {
         expect(find.byType(EditableText), findsNothing);
         expect(tester.testTextInput.isVisible, isFalse);
         await tap(tester, 'Close');
+      }
+    }
+  });
+
+  testWidgets('RPE 10 stays on one line inside the 48 pixel details action', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    for (final width in [320.0, 360.0]) {
+      for (final scale in [1.0, 2.0]) {
+        tester.view.physicalSize = Size(width, 800);
+        await tester.pumpWidget(
+          host(
+            const [SetEntry(weight: 100, reps: 10, rpe: 10)],
+            (_, __, ___) {},
+            scale: scale,
+            showDetails: true,
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final effort = find.text('@10');
+        final effortText = tester.widget<Text>(effort);
+        final action = find.ancestor(
+          of: effort,
+          matching: find.byType(IconButton),
+        );
+
+        expect(effortText.maxLines, 1);
+        expect(effortText.softWrap, isFalse);
+        expect(tester.getSize(action), const Size(48, 48));
+        expect(
+          tester.getRect(action).contains(tester.getRect(effort).center),
+          isTrue,
+        );
+        expect(tester.takeException(), isNull);
       }
     }
   });

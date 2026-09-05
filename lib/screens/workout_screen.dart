@@ -660,6 +660,25 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
     final planColor = planColorOf(activePlan.planColor, context);
     final elapsed = formatDuration(session.elapsedSeconds());
+    final timerStyle = GoogleFonts.jetBrainsMono(
+      fontSize: 15,
+      fontWeight: FontWeight.w700,
+      color: textPrimaryColor(context),
+    );
+    final timerPainter = TextPainter(
+      text: TextSpan(text: elapsed, style: timerStyle),
+      maxLines: 1,
+      textDirection: Directionality.of(context),
+    )..layout();
+    // The title starts after the standard leading slot and our title spacing.
+    // Cap it at the timer's left edge so long names ellipsize before the two
+    // independently positioned AppBar elements can touch.
+    final planHeaderMaxWidth =
+        MediaQuery.sizeOf(context).width / 2 -
+        timerPainter.width / 2 -
+        AppSpacing.md -
+        kToolbarHeight -
+        AppSpacing.sm;
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -689,11 +708,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                       child: Text(
                         elapsed,
                         key: const ValueKey('workout_elapsed_time'),
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: textPrimaryColor(context),
-                        ),
+                        style: timerStyle,
                       ),
                     ),
                   ),
@@ -703,6 +718,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           ],
         ),
         toolbarHeight: 60,
+        titleSpacing: AppSpacing.sm,
         leading: IconButton(
           icon: Icon(LucideIcons.arrowLeft, color: accent),
           onPressed: () {
@@ -710,10 +726,15 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             Navigator.pop(context);
           },
         ),
-        title: _PlanHeader(
-          plan: activePlan,
-          fallbackIndex: plans.indexWhere((plan) => plan.id == activePlan.id),
-          color: planColor,
+        title: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: planHeaderMaxWidth.clamp(0, double.infinity),
+          ),
+          child: _PlanHeader(
+            plan: activePlan,
+            fallbackIndex: plans.indexWhere((plan) => plan.id == activePlan.id),
+            color: planColor,
+          ),
         ),
         actions: [
           if (!session.isCompleted) ...[
@@ -1035,6 +1056,7 @@ class _GestureClaimingContainerState extends State<_GestureClaimingContainer> {
   @override
   Widget build(BuildContext context) {
     return RawGestureDetector(
+      behavior: HitTestBehavior.opaque,
       gestures: {
         _ExposingHorizontalDragGestureRecognizer:
             GestureRecognizerFactoryWithHandlers<
