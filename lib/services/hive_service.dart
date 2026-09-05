@@ -347,6 +347,21 @@ class HiveService {
           .toList()
         ..sort((a, b) => b.date.compareTo(a.date));
 
+  /// User-facing history. Drafts remain available through [getSessions] for
+  /// sync, backup, restoration, and split cleanup.
+  static List<WorkoutSession> getCompletedSessions({String? splitId}) =>
+      getSessions(
+        splitId: splitId,
+      ).where((session) => session.isCompleted).toList();
+
+  /// There may be only one running timer account-wide, across all splits.
+  static WorkoutSession? getRunningSession({String? excludingId}) {
+    for (final session in getSessions()) {
+      if (session.id != excludingId && session.isTimerRunning) return session;
+    }
+    return null;
+  }
+
   static WorkoutSession? getSessionById(String id) => _sessionsBox.get(id);
 
   static Future<void> addSession(WorkoutSession session) =>
@@ -410,14 +425,14 @@ class HiveService {
   }
 
   // ---------------------------------------------------------------------------
-  // Analytics / name-based helpers — UNCHANGED logic (all read via getSessions
-  // which now filters tombstones). Signatures preserved.
+  // Historical analytics read completed sessions only. Plan/week restoration
+  // below intentionally keeps using the all-session query so drafts reopen.
   // ---------------------------------------------------------------------------
   static WorkoutSession? getLastSessionForExercise(
     String exerciseName,
     String? splitId,
   ) {
-    final sessions = getSessions(splitId: splitId);
+    final sessions = getCompletedSessions(splitId: splitId);
     for (var session in sessions) {
       for (var exercise in session.exercises) {
         if (exercise.name.toLowerCase() == exerciseName.toLowerCase()) {
@@ -476,7 +491,7 @@ class HiveService {
   }
 
   static double getExercisePR(String exerciseName, String? splitId) {
-    final sessions = getSessions(splitId: splitId);
+    final sessions = getCompletedSessions(splitId: splitId);
     double maxWeight = 0;
     for (var session in sessions) {
       for (var exercise in session.exercises) {
@@ -493,7 +508,7 @@ class HiveService {
   }
 
   static List<String> getAllExerciseNames(String? splitId) {
-    final sessions = getSessions(splitId: splitId);
+    final sessions = getCompletedSessions(splitId: splitId);
     final names = <String>{};
     for (var session in sessions) {
       for (var exercise in session.exercises) {
@@ -516,7 +531,7 @@ class HiveService {
     String exerciseName,
     String? splitId,
   ) {
-    final sessions = getSessions(splitId: splitId);
+    final sessions = getCompletedSessions(splitId: splitId);
     final progression = <Map<String, dynamic>>[];
 
     for (var session in sessions) {
@@ -553,7 +568,7 @@ class HiveService {
       startOfWeek.day,
     );
 
-    return getSessions(
+    return getCompletedSessions(
       splitId: splitId,
     ).where((s) => s.date.isAfter(startDate)).length;
   }
@@ -566,7 +581,7 @@ class HiveService {
       frequency[i] = 0;
     }
 
-    for (var session in getSessions(splitId: splitId)) {
+    for (var session in getCompletedSessions(splitId: splitId)) {
       final daysDiff = now.difference(session.date).inDays;
       final weekIndex = daysDiff ~/ 7;
       if (weekIndex < weeksBack) {

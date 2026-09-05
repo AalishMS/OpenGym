@@ -25,7 +25,7 @@ class WorkoutSessionProvider with ChangeNotifier {
     final splitId = _splitProvider?.activeSplitId;
     _sessions =
         splitId == null
-            ? HiveService.getSessions()
+            ? HiveService.getCompletedSessions()
             : _repository.getSessions(splitId);
     notifyListeners();
   }

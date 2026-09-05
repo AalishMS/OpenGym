@@ -15,6 +15,7 @@ List<gym.Set> previousExerciseSets(
   final eligible =
       sessions.where((session) {
           if (session.deletedAt != null) return false;
+          if (!session.isCompleted) return false;
           if (splitId != null && session.splitId != splitId) return false;
           if (planName != null &&
               (planId != null && session.planId != null

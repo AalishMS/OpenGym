@@ -7,6 +7,7 @@ import '../models/workout_session.dart';
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
 import '../services/pr_tracking_service.dart';
+import '../services/hive_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../utils/set_history.dart';
@@ -158,6 +159,15 @@ class HistoryScreen extends StatelessWidget {
   }
 }
 
+String _historyDuration(int totalSeconds) {
+  final hours = totalSeconds ~/ 3600;
+  final minutes = (totalSeconds % 3600) ~/ 60;
+  final seconds = totalSeconds % 60;
+  final mm = minutes.toString().padLeft(2, '0');
+  final ss = seconds.toString().padLeft(2, '0');
+  return hours == 0 ? '$mm:$ss' : '$hours:$mm:$ss';
+}
+
 class _SessionCard extends StatefulWidget {
   final WorkoutSession session;
   final int index;
@@ -182,9 +192,11 @@ class _SessionCardState extends State<_SessionCard> {
   @override
   Widget build(BuildContext context) {
     final session = widget.session;
-    final prs = PRTrackingService.checkForNewPRs(
+    final prs = PRTrackingService.checkAgainstHistory(
       session.exercises,
-      session.splitId,
+      HiveService.getCompletedSessions(
+        splitId: session.splitId,
+      ).where((candidate) => candidate.id != session.id),
     );
     final hasPR = prs.isNotEmpty;
     final accent = accentColor(context);
@@ -320,7 +332,8 @@ class _SessionCardState extends State<_SessionCard> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'WEEK ${session.weekNumber}  •  ${session.exercises.length} EXERCISES  •  $totalSets SETS  •  ${totalVolume}KG',
+                    'WEEK ${session.weekNumber}  •  ${session.exercises.length} EXERCISES  •  $totalSets SETS  •  ${totalVolume}KG'
+                    '${session.durationSeconds == null ? '' : '  •  ${_historyDuration(session.durationSeconds!)}'}',
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 10,
                       color: textSecondaryColor(context),
@@ -481,17 +494,29 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
     });
   }
 
-  void _save() {
+  Future<void> _save() async {
     _session = _session.copyWith(planName: _planNameController.text);
-    context.read<WorkoutSessionProvider>().updateSession(_session);
+    final history = HiveService.getCompletedSessions(
+      splitId: _session.splitId,
+    ).where((candidate) => candidate.id != _session.id);
+    final prs = PRTrackingService.checkAgainstHistory(
+      _session.exercises,
+      history,
+    );
+    await context.read<WorkoutSessionProvider>().updateSession(_session);
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final foreground = onAccentColor(context);
+    final background = accentFillColor(context);
+    final message =
+        prs.isEmpty
+            ? 'Workout updated'
+            : 'Workout updated · ${prs.length} personal record${prs.length == 1 ? '' : 's'}';
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
+    messenger.showSnackBar(
       SnackBar(
-        content: Text(
-          '> Workout updated!',
-          style: GoogleFonts.jetBrainsMono(color: onAccentColor(context)),
-        ),
-        backgroundColor: accentFillColor(context),
+        content: Text(message, style: TextStyle(color: foreground)),
+        backgroundColor: background,
       ),
     );
   }

@@ -192,6 +192,29 @@ void main() {
     expect(imported.plans?.map((plan) => plan.splitId), ['ppl', 'ul']);
     expect(imported.sessions?.single.splitId, 'ul');
   });
+
+  test(
+    'drafts persist for sync but are excluded from history and stats',
+    () async {
+      final completed = _session('complete', 'ppl', 80);
+      final running = _session('draft', 'ppl', 120).copyWith(
+        isCompleted: false,
+        startedAt: DateTime(2026, 9, 5, 10),
+        timerStartedAt: DateTime(2026, 9, 5, 10),
+        durationSeconds: 15,
+      );
+      await HiveService.putSessionRaw(completed);
+      await HiveService.putSessionRaw(running);
+
+      expect(HiveService.getSessions(splitId: 'ppl'), hasLength(2));
+      expect(
+        HiveService.getCompletedSessions(splitId: 'ppl').single.id,
+        'complete',
+      );
+      expect(HiveService.getExercisePR('Bench Press', 'ppl'), 80);
+      expect(HiveService.getRunningSession()?.id, 'draft');
+    },
+  );
 }
 
 WorkoutSession _session(String id, String splitId, double weight) =>
@@ -201,9 +224,6 @@ WorkoutSession _session(String id, String splitId, double weight) =>
       date: DateTime(2026),
       planName: 'Plan',
       exercises: [
-        Exercise(
-          name: 'Bench Press',
-          sets: [Set(reps: 5, weight: weight)],
-        ),
+        Exercise(name: 'Bench Press', sets: [Set(reps: 5, weight: weight)]),
       ],
     );

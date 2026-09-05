@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../theme/radii.dart';
+import '../numeric_text_field.dart';
 
 class StepperWidget extends StatefulWidget {
   final double value;
@@ -105,10 +106,13 @@ class _StepperWidgetState extends State<StepperWidget> {
             child: SizedBox(
               width: 30,
               height: 24,
-              child: TextField(
+              child: NumericTextField(
                 controller: _controller,
                 focusNode: _focusNode,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                valueType:
+                    widget.step == widget.step.roundToDouble()
+                        ? NumericValueType.integer
+                        : NumericValueType.decimal,
                 textAlign: TextAlign.center,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _commitValue(),
@@ -132,7 +136,10 @@ class _StepperWidgetState extends State<StepperWidget> {
       mainAxisSize: MainAxisSize.min,
       children: [
         InkWell(
-          onTap: () => widget.onChanged((_currentValue - widget.step).clamp(widget.min, widget.max)),
+          onTap:
+              () => widget.onChanged(
+                (_currentValue - widget.step).clamp(widget.min, widget.max),
+              ),
           borderRadius: AppRadius.leftCap,
           child: Container(
             width: 30,
@@ -145,8 +152,13 @@ class _StepperWidgetState extends State<StepperWidget> {
               borderRadius: AppRadius.leftCap,
             ),
             child: Center(
-              child: Text('−',
-                  style: TextStyle(fontSize: 16, color: widget.textSecondaryColor)),
+              child: Text(
+                '−',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: widget.textSecondaryColor,
+                ),
+              ),
             ),
           ),
         ),
@@ -187,8 +199,10 @@ class _StepperWidgetState extends State<StepperWidget> {
               borderRadius: AppRadius.rightCap,
             ),
             child: Center(
-              child: Text('+',
-                  style: TextStyle(fontSize: 16, color: widget.accent)),
+              child: Text(
+                '+',
+                style: TextStyle(fontSize: 16, color: widget.accent),
+              ),
             ),
           ),
         ),

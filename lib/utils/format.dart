@@ -18,6 +18,17 @@ String formatVolume(num kg) {
 /// `d/m` — matches the terse date style already used in History.
 String formatShortDate(DateTime date) => '${date.day}/${date.month}';
 
+/// Stopwatch-style elapsed time, expanding to hours only when needed.
+String formatDuration(int totalSeconds) {
+  final safe = totalSeconds < 0 ? 0 : totalSeconds;
+  final hours = safe ~/ 3600;
+  final minutes = (safe % 3600) ~/ 60;
+  final seconds = safe % 60;
+  final mm = minutes.toString().padLeft(2, '0');
+  final ss = seconds.toString().padLeft(2, '0');
+  return hours == 0 ? '$mm:$ss' : '$hours:$mm:$ss';
+}
+
 /// Human-readable recency: `TODAY`, `YESTERDAY`, `3D AGO`, then a date.
 String formatRelativeDay(DateTime date) {
   final now = DateTime.now();

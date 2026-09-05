@@ -39,6 +39,20 @@ class WorkoutSession extends HiveObject {
   @HiveField(10)
   String? splitId;
 
+  /// Missing values belong to sessions written before drafts existed.
+  @HiveField(11, defaultValue: true)
+  final bool isCompleted;
+
+  @HiveField(12)
+  final DateTime? startedAt;
+
+  @HiveField(13)
+  final DateTime? timerStartedAt;
+
+  /// Null means that a legacy completed session has no recorded duration.
+  @HiveField(14)
+  final int? durationSeconds;
+
   WorkoutSession({
     required this.date,
     required this.planName,
@@ -51,7 +65,23 @@ class WorkoutSession extends HiveObject {
     this.deletedAt,
     this.dirty,
     this.splitId,
+    this.isCompleted = true,
+    this.startedAt,
+    this.timerStartedAt,
+    this.durationSeconds,
   });
+
+  bool get isTimerRunning => !isCompleted && timerStartedAt != null;
+
+  bool get hasStarted => startedAt != null;
+
+  int elapsedSeconds([DateTime? now]) {
+    final accumulated = durationSeconds ?? 0;
+    final runningSince = timerStartedAt;
+    if (runningSince == null) return accumulated;
+    final delta = (now ?? DateTime.now()).difference(runningSince).inSeconds;
+    return accumulated + (delta < 0 ? 0 : delta);
+  }
 
   Map<String, dynamic> toJson() => {
     'id': id,
@@ -63,6 +93,10 @@ class WorkoutSession extends HiveObject {
     'updatedAt': updatedAt?.toIso8601String(),
     'deletedAt': deletedAt?.toIso8601String(),
     'splitId': splitId,
+    'isCompleted': isCompleted,
+    'startedAt': startedAt?.toIso8601String(),
+    'timerStartedAt': timerStartedAt?.toIso8601String(),
+    'durationSeconds': durationSeconds,
   };
 
   factory WorkoutSession.fromJson(Map<String, dynamic> json) => WorkoutSession(
@@ -84,6 +118,16 @@ class WorkoutSession extends HiveObject {
             ? DateTime.parse(json['deletedAt'] as String)
             : null,
     splitId: json['splitId'] as String?,
+    isCompleted: json['isCompleted'] as bool? ?? true,
+    startedAt:
+        json['startedAt'] == null
+            ? null
+            : DateTime.parse(json['startedAt'] as String),
+    timerStartedAt:
+        json['timerStartedAt'] == null
+            ? null
+            : DateTime.parse(json['timerStartedAt'] as String),
+    durationSeconds: json['durationSeconds'] as int?,
   );
 
   WorkoutSession copyWith({
@@ -98,6 +142,10 @@ class WorkoutSession extends HiveObject {
     DateTime? deletedAt,
     bool? dirty,
     String? splitId,
+    bool? isCompleted,
+    Object? startedAt = _notProvided,
+    Object? timerStartedAt = _notProvided,
+    Object? durationSeconds = _notProvided,
   }) {
     return WorkoutSession(
       date: date ?? this.date,
@@ -111,6 +159,21 @@ class WorkoutSession extends HiveObject {
       deletedAt: deletedAt ?? this.deletedAt,
       dirty: dirty ?? this.dirty,
       splitId: splitId ?? this.splitId,
+      isCompleted: isCompleted ?? this.isCompleted,
+      startedAt:
+          identical(startedAt, _notProvided)
+              ? this.startedAt
+              : startedAt as DateTime?,
+      timerStartedAt:
+          identical(timerStartedAt, _notProvided)
+              ? this.timerStartedAt
+              : timerStartedAt as DateTime?,
+      durationSeconds:
+          identical(durationSeconds, _notProvided)
+              ? this.durationSeconds
+              : durationSeconds as int?,
     );
   }
 }
+
+const Object _notProvided = Object();

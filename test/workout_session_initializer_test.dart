@@ -35,12 +35,14 @@ void main() {
     );
 
     expect(session.splitId, 'split-a');
+    expect(session.isCompleted, isFalse);
+    expect(session.durationSeconds, 0);
     expect(session.exercises, hasLength(2));
     expect(session.exercises[0].sets, hasLength(2));
-    expect(
-      session.exercises[0].sets.map((set) => (set.reps, set.weight)),
-      [(5, 100.5), (6, 102.25)],
-    );
+    expect(session.exercises[0].sets.map((set) => (set.reps, set.weight)), [
+      (5, 100.5),
+      (6, 102.25),
+    ]);
     expect(session.exercises[1].sets.single.weight, 42.5);
   });
 

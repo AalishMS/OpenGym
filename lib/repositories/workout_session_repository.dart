@@ -3,7 +3,7 @@ import '../services/hive_service.dart';
 
 class WorkoutSessionRepository {
   List<WorkoutSession> getSessions(String splitId) =>
-      HiveService.getSessions(splitId: splitId);
+      HiveService.getCompletedSessions(splitId: splitId);
 
   WorkoutSession? getSessionById(String id) => HiveService.getSessionById(id);
 

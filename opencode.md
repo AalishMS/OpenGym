@@ -128,6 +128,21 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Added an explicit draft-to-completed workout lifecycle:
+  - Autosaved sessions and copied prescriptions are drafts and are excluded
+    from History, PRs, progression, previous results, heatmaps, and totals
+  - A persisted play/pause timer remains accurate across navigation and app
+    suspension, with one running timer allowed account-wide
+  - Stop is the sole logging action and finalizes with one upsert after a
+    self-excluding PR comparison; completed workouts reopen read-only
+  - Running or paused drafts can be discarded through synchronized tombstones,
+    then restart from a clean prescription for the same week
+  - Timer metadata remains backward-compatible in Hive, JSON sync, and backups
+    without a Supabase migration or backup version bump
+  - History summaries show recorded durations and completed-history edits
+    recalculate their PR contribution
+- Restored the shared integer/decimal numeric text field and first-focus
+  select-all behavior while retaining the custom workout keypad flow.
 - Prefilled genuinely new Week 1 workouts from their plan prescriptions:
   - Creates the planned number of sets with each `SetTemplate` rep and weight
     value, including decimal weights

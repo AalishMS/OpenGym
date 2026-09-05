@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -14,10 +16,12 @@ import '../providers/workout_session_provider.dart';
 import '../services/hive_service.dart';
 import '../services/pr_tracking_service.dart';
 import '../services/workout_session_initializer.dart';
+import '../services/workout_completion_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/fade_page_route.dart';
+import '../utils/format.dart';
 import '../utils/set_history.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
@@ -38,6 +42,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};
   final Set<gym.Set> _touchedSets = {};
+  Timer? _ticker;
 
   @override
   void initState() {
@@ -45,7 +50,17 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     _loadWeeks();
   }
 
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
   void _loadWeeks() {
+    final planSessions = HiveService.getSessionsForPlan(
+      widget.plan.name,
+      widget.plan.splitId,
+    );
     final existingWeeks = HiveService.getWeeksForPlan(
       widget.plan.name,
       widget.plan.splitId,
@@ -54,12 +69,16 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       _weeks = [1];
     } else {
       _weeks = existingWeeks;
-      int maxWeek = _weeks.reduce((a, b) => a > b ? a : b);
-      if (!_weeks.contains(maxWeek + 1)) {
-        _weeks.add(maxWeek + 1);
+      final drafts = planSessions.where((session) => !session.isCompleted);
+      if (drafts.isEmpty) {
+        final maxWeek = _weeks.reduce((a, b) => a > b ? a : b);
+        if (!_weeks.contains(maxWeek + 1)) _weeks.add(maxWeek + 1);
+        _currentWeekIndex = _weeks.length - 1;
+      } else {
+        final draft = drafts.reduce((a, b) => a.date.isAfter(b.date) ? a : b);
+        _currentWeekIndex = _weeks.indexOf(draft.weekNumber);
       }
     }
-    _currentWeekIndex = _weeks.length - 1;
     _loadSessionForCurrentWeek();
   }
 
@@ -73,6 +92,21 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     if (existingSession != null) {
       _weekSessions[week] = existingSession;
       _reconcileTouched(existingSession);
+      _syncTicker(existingSession);
+    } else {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  void _syncTicker(WorkoutSession session) {
+    if (session.isTimerRunning) {
+      _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    } else {
+      _ticker?.cancel();
+      _ticker = null;
     }
   }
 
@@ -138,14 +172,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   Future<void> _autoSave() async {
     var session = _getOrCreateSession();
+    if (session.isCompleted) return;
     final hasSets = session.exercises.any((e) => e.sets.isNotEmpty);
 
     if (hasSets) {
-      final prs = PRTrackingService.checkForNewPRs(
-        session.exercises,
-        widget.plan.splitId,
-      );
-
       // Stamp identity so repeated autosaves upsert ONE row per (plan, week).
       // upsertSession assigns a UUID on first save and reuses it thereafter.
       session = session.copyWith(
@@ -156,10 +186,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       );
       _weekSessions[_currentWeek] = session; // keep the id-stamped instance
       await context.read<WorkoutSessionProvider>().upsertSession(session);
-
-      if (prs.isNotEmpty && mounted) {
-        _showPRDialog(prs);
-      }
     }
   }
 
@@ -198,8 +224,157 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   void _updateSession(WorkoutSession session) {
+    if (_getOrCreateSession().isCompleted) return;
     _weekSessions[_currentWeek] = session;
     setState(() {});
+  }
+
+  Future<void> _toggleTimer() async {
+    final current = _getOrCreateSession();
+    if (current.isCompleted) return;
+    final now = DateTime.now();
+
+    if (current.isTimerRunning) {
+      final paused = current.copyWith(
+        timerStartedAt: null,
+        durationSeconds: current.elapsedSeconds(now),
+      );
+      _weekSessions[_currentWeek] = paused;
+      _syncTicker(paused);
+      await context.read<WorkoutSessionProvider>().upsertSession(paused);
+      if (mounted) setState(() {});
+      return;
+    }
+
+    final other = HiveService.getRunningSession(excludingId: current.id);
+    if (other != null) {
+      await showDialog<void>(
+        context: context,
+        builder:
+            (dialogContext) => AlertDialog(
+              title: const Text('Another workout is running'),
+              content: Text(
+                '${other.planName}, Week ${other.weekNumber} has an active timer. '
+                'Pause or stop it before starting this workout.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('OK'),
+                ),
+              ],
+            ),
+      );
+      return;
+    }
+
+    final started = current.copyWith(
+      date: current.startedAt == null ? now : current.date,
+      startedAt: current.startedAt ?? now,
+      timerStartedAt: now,
+      durationSeconds: current.durationSeconds ?? 0,
+      planId: widget.plan.id,
+      splitId: widget.plan.splitId,
+    );
+    _weekSessions[_currentWeek] = started;
+    _syncTicker(started);
+    await context.read<WorkoutSessionProvider>().upsertSession(started);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _stopWorkout() async {
+    final draft = _getOrCreateSession();
+    if (draft.isCompleted || !draft.hasStarted) return;
+    final duration = formatDuration(draft.elapsedSeconds());
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('Log workout?'),
+            content: Text('Record this workout with a duration of $duration?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                child: const Text('Log workout'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      final provider = context.read<WorkoutSessionProvider>();
+      final result = await WorkoutCompletionService.complete(
+        draft,
+        upsert: provider.upsertSession,
+      );
+      _weekSessions[_currentWeek] = result.session;
+      _syncTicker(result.session);
+      if (!mounted) return;
+      setState(() {});
+      if (result.personalRecords.isNotEmpty) {
+        _showPRDialog(result.personalRecords);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Workout could not be logged. Your draft is unchanged.',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<bool> _confirmDiscard(WorkoutSession draft) async {
+    final duration = formatDuration(draft.elapsedSeconds());
+    return await showDialog<bool>(
+          context: context,
+          builder:
+              (dialogContext) => AlertDialog(
+                title: const Text('Discard workout?'),
+                content: Text(
+                  'Entered sets and $duration of elapsed time will be removed. '
+                  'This workout will not affect history or personal records.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('Cancel'),
+                  ),
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: errorColor(context),
+                      foregroundColor: onColor(errorColor(context)),
+                    ),
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    child: const Text('Discard'),
+                  ),
+                ],
+              ),
+        ) ??
+        false;
+  }
+
+  Future<void> _discardCurrentWorkout() async {
+    final draft = _getOrCreateSession();
+    if (draft.isCompleted || !await _confirmDiscard(draft) || !mounted) return;
+    _ticker?.cancel();
+    _ticker = null;
+    if (draft.id != null) {
+      await context.read<WorkoutSessionProvider>().deleteSession(draft.id!);
+    }
+    final clean = WorkoutSessionInitializer.initialize(
+      plan: widget.plan,
+      weekNumber: _currentWeek,
+    );
+    _touchedSets.clear();
+    setState(() => _weekSessions[_currentWeek] = clean);
   }
 
   void _addEmptyExercise() {
@@ -399,6 +574,22 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   void _deleteWeek(int index) async {
     final week = _weeks[index];
+    final saved =
+        _weekSessions[week] ??
+        HiveService.getSessionForPlanAndWeek(
+          widget.plan.name,
+          week,
+          widget.plan.splitId,
+        );
+    if (saved != null && !saved.isCompleted) {
+      if (index == _currentWeekIndex) {
+        await _discardCurrentWorkout();
+      } else if (await _confirmDiscard(saved) && saved.id != null && mounted) {
+        await context.read<WorkoutSessionProvider>().deleteSession(saved.id!);
+        _weekSessions.remove(week);
+      }
+      return;
+    }
     if (_weeks.length == 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -468,6 +659,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       },
     );
     final planColor = planColorOf(activePlan.planColor, context);
+    final elapsed = formatDuration(session.elapsedSeconds());
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -477,7 +669,39 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.transparent,
-        flexibleSpace: headerFlexibleSpace(context, bottomInset: 48),
+        flexibleSpace: Stack(
+          children: [
+            Positioned.fill(
+              child: headerFlexibleSpace(context, bottomInset: 48),
+            ),
+            Positioned.fill(
+              bottom: 48,
+              child: SafeArea(
+                bottom: false,
+                child: IgnorePointer(
+                  child: Center(
+                    child: Semantics(
+                      liveRegion: !session.isCompleted,
+                      label:
+                          session.isCompleted
+                              ? 'Recorded duration $elapsed'
+                              : 'Elapsed time $elapsed',
+                      child: Text(
+                        elapsed,
+                        key: const ValueKey('workout_elapsed_time'),
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: textPrimaryColor(context),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
         toolbarHeight: 60,
         leading: IconButton(
           icon: Icon(LucideIcons.arrowLeft, color: accent),
@@ -491,6 +715,49 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           fallbackIndex: plans.indexWhere((plan) => plan.id == activePlan.id),
           color: planColor,
         ),
+        actions: [
+          if (!session.isCompleted) ...[
+            Semantics(
+              button: true,
+              label: session.isTimerRunning ? 'Pause workout' : 'Start workout',
+              child: IconButton(
+                tooltip: session.isTimerRunning ? 'Pause' : 'Play',
+                onPressed: _toggleTimer,
+                icon: Icon(
+                  session.isTimerRunning ? LucideIcons.pause : LucideIcons.play,
+                  color: accent,
+                ),
+              ),
+            ),
+            Semantics(
+              button: true,
+              enabled: session.hasStarted,
+              label: 'Stop and log workout',
+              child: IconButton(
+                tooltip: 'Stop',
+                onPressed: session.hasStarted ? _stopWorkout : null,
+                icon: Icon(LucideIcons.square, color: accent),
+              ),
+            ),
+            PopupMenuButton<String>(
+              tooltip: 'Workout actions',
+              onSelected: (value) {
+                if (value == 'discard') _discardCurrentWorkout();
+              },
+              itemBuilder:
+                  (context) => [
+                    PopupMenuItem(
+                      value: 'discard',
+                      height: 48,
+                      child: Text(
+                        'Discard workout',
+                        style: TextStyle(color: errorColor(context)),
+                      ),
+                    ),
+                  ],
+            ),
+          ],
+        ],
         bottom: _buildPlanTabBar(accent, plans, activePlan),
       ),
       body: Column(
@@ -505,99 +772,109 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   _currentWeekIndex > 0
                       ? () => _onWeekChanged(_currentWeekIndex - 1)
                       : null,
-              child: CustomScrollView(
-                physics: const BouncingScrollPhysics(
-                  parent: AlwaysScrollableScrollPhysics(),
-                ),
-                slivers: [
-                  // State the gutter once, on the sliver, rather than as a
-                  // margin per item: the rounded cards need clearance from the
-                  // screen edges or their corners read as a clipping bug, and
-                  // the + ADD EXERCISE tile inherits the same inset for free.
-                  SliverPadding(
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    sliver: SliverReorderableList(
-                      itemCount: session.exercises.length + 1,
-                      onReorder: _reorderExercises,
-                      proxyDecorator: (child, index, animation) {
-                        return Material(
-                          color: surfaceColor(context),
-                          borderRadius: AppRadius.card,
-                          child: child,
-                        );
-                      },
-                      itemBuilder: (context, index) {
-                        if (index == session.exercises.length) {
-                          return InkWell(
-                            key: const ValueKey('add_exercise_button'),
-                            onTap: _addEmptyExercise,
-                            borderRadius: AppRadius.button,
+              child: IgnorePointer(
+                ignoring: session.isCompleted,
+                child: CustomScrollView(
+                  physics: const BouncingScrollPhysics(
+                    parent: AlwaysScrollableScrollPhysics(),
+                  ),
+                  slivers: [
+                    // State the gutter once, on the sliver, rather than as a
+                    // margin per item: the rounded cards need clearance from the
+                    // screen edges or their corners read as a clipping bug, and
+                    // the + ADD EXERCISE tile inherits the same inset for free.
+                    SliverPadding(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      sliver: SliverReorderableList(
+                        itemCount:
+                            session.exercises.length +
+                            (session.isCompleted ? 0 : 1),
+                        onReorder: _reorderExercises,
+                        proxyDecorator: (child, index, animation) {
+                          return Material(
+                            color: surfaceColor(context),
+                            borderRadius: AppRadius.card,
+                            child: child,
+                          );
+                        },
+                        itemBuilder: (context, index) {
+                          if (index == session.exercises.length) {
+                            return InkWell(
+                              key: const ValueKey('add_exercise_button'),
+                              onTap: _addEmptyExercise,
+                              borderRadius: AppRadius.button,
+                              child: Container(
+                                constraints: const BoxConstraints(
+                                  minHeight: 48,
+                                ),
+                                padding: const EdgeInsets.all(AppSpacing.lg),
+                                decoration: BoxDecoration(
+                                  color: surfaceColor(context),
+                                  border: Border.all(color: accent, width: 1),
+                                  borderRadius: AppRadius.button,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'Add exercise',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelLarge
+                                        ?.copyWith(color: accent),
+                                  ),
+                                ),
+                              ),
+                            );
+                          }
+
+                          final exercise = session.exercises[index];
+
+                          return ReorderableDelayedDragStartListener(
+                            key: ObjectKey(exercise),
+                            index: index,
                             child: Container(
-                              constraints: const BoxConstraints(minHeight: 48),
-                              padding: const EdgeInsets.all(AppSpacing.lg),
+                              margin: const EdgeInsets.only(
+                                bottom: AppSpacing.sm,
+                              ),
                               decoration: BoxDecoration(
                                 color: surfaceColor(context),
-                                border: Border.all(color: accent, width: 1),
-                                borderRadius: AppRadius.button,
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Add exercise',
-                                  style: Theme.of(context).textTheme.labelLarge
-                                      ?.copyWith(color: accent),
+                                border: Border.all(
+                                  color: borderColor(context),
+                                  width: 1,
                                 ),
+                                borderRadius: AppRadius.card,
+                              ),
+                              child: ExerciseCard(
+                                exercise: exercise,
+                                exerciseIndex: index,
+                                accent: accent,
+                                template: _templateFor(exercise.name),
+                                previousSets: previousExerciseSets(
+                                  HiveService.getCompletedSessions(),
+                                  exercise.name,
+                                  splitId: widget.plan.splitId,
+                                  planId: widget.plan.id,
+                                  planName: widget.plan.name,
+                                  beforeWeek: _currentWeek,
+                                ),
+                                onSetChanged: _changeSetValues,
+                                onEntryFinished: () {
+                                  if (mounted) _autoSave();
+                                },
+                                touchedSets: _touchedSets,
+                                onAddSet: (i) => _addSet(i),
+                                onEditSet:
+                                    (i, setIndex) => _editSet(i, setIndex),
+                                onAddNote: _addExerciseNote,
+                                onRename: _showExerciseRenameDialog,
+                                onDeleteExercise: _deleteExercise,
                               ),
                             ),
                           );
-                        }
-
-                        final exercise = session.exercises[index];
-
-                        return ReorderableDelayedDragStartListener(
-                          key: ObjectKey(exercise),
-                          index: index,
-                          child: Container(
-                            margin: const EdgeInsets.only(
-                              bottom: AppSpacing.sm,
-                            ),
-                            decoration: BoxDecoration(
-                              color: surfaceColor(context),
-                              border: Border.all(
-                                color: borderColor(context),
-                                width: 1,
-                              ),
-                              borderRadius: AppRadius.card,
-                            ),
-                            child: ExerciseCard(
-                              exercise: exercise,
-                              exerciseIndex: index,
-                              accent: accent,
-                              template: _templateFor(exercise.name),
-                              previousSets: previousExerciseSets(
-                                HiveService.getSessions(),
-                                exercise.name,
-                                splitId: widget.plan.splitId,
-                                planId: widget.plan.id,
-                                planName: widget.plan.name,
-                                beforeWeek: _currentWeek,
-                              ),
-                              onSetChanged: _changeSetValues,
-                              onEntryFinished: () {
-                                if (mounted) _autoSave();
-                              },
-                              touchedSets: _touchedSets,
-                              onAddSet: (i) => _addSet(i),
-                              onEditSet: (i, setIndex) => _editSet(i, setIndex),
-                              onAddNote: _addExerciseNote,
-                              onRename: _showExerciseRenameDialog,
-                              onDeleteExercise: _deleteExercise,
-                            ),
-                          ),
-                        );
-                      },
+                        },
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

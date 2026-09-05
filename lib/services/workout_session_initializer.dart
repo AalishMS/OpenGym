@@ -46,6 +46,8 @@ class WorkoutSessionInitializer {
                 .toList(),
         weekNumber: weekNumber,
         splitId: plan.splitId,
+        isCompleted: false,
+        durationSeconds: 0,
       );
     }
 
@@ -71,6 +73,8 @@ class WorkoutSessionInitializer {
               .toList(),
       weekNumber: weekNumber,
       splitId: plan.splitId,
+      isCompleted: false,
+      durationSeconds: 0,
     );
   }
 }
