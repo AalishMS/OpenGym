@@ -9,7 +9,6 @@ import '../data/plan_colors.dart';
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
 import '../models/exercise.dart';
-import '../models/exercise_template.dart';
 import '../models/set.dart' as gym;
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
@@ -41,7 +40,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   List<int> _weeks = [1];
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};
-  final Set<gym.Set> _touchedSets = {};
   Timer? _ticker;
 
   @override
@@ -91,7 +89,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
     if (existingSession != null) {
       _weekSessions[week] = existingSession;
-      _reconcileTouched(existingSession);
       _syncTicker(existingSession);
     } else {
       _ticker?.cancel();
@@ -107,14 +104,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     } else {
       _ticker?.cancel();
       _ticker = null;
-    }
-  }
-
-  void _reconcileTouched(WorkoutSession session) {
-    for (final exercise in session.exercises) {
-      for (final set in exercise.sets) {
-        if (set.reps != 0 || set.weight != 0) _touchedSets.add(set);
-      }
     }
   }
 
@@ -136,21 +125,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       }
     }
     return HiveService.getLastSetForExercise(exerciseName, widget.plan.splitId);
-  }
-
-  /// The plan entry matching [exerciseName], for target hints only.
-  ///
-  /// Matched by name rather than by index: the session's exercise list can be
-  /// reordered, renamed or extended independently of the plan, so index
-  /// matching would show one exercise's prescription on another's sets. No
-  /// match means no hint.
-  ExerciseTemplate? _templateFor(String exerciseName) {
-    for (final template in widget.plan.exercises) {
-      if (template.name.toLowerCase() == exerciseName.toLowerCase()) {
-        return template;
-      }
-    }
-    return null;
   }
 
   Future<void> _onWeekChanged(int newIndex) async {
@@ -373,7 +347,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       plan: widget.plan,
       weekNumber: _currentWeek,
     );
-    _touchedSets.clear();
     setState(() => _weekSessions[_currentWeek] = clean);
   }
 
@@ -441,8 +414,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       onSave: (updatedSet) {
         final updatedSets = List<gym.Set>.from(exercise.sets);
         updatedSets[setIndex] = updatedSet;
-        _touchedSets.remove(set);
-        _touchedSets.add(updatedSet);
         final updatedExercises = List<Exercise>.from(session.exercises);
         updatedExercises[exerciseIndex] = Exercise(
           name: exercise.name,
@@ -505,9 +476,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       note: set.note,
     );
     updatedSets[setIndex] = updatedSet;
-    _touchedSets.remove(set);
-    _touchedSets.add(updatedSet);
-
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(
       name: exercise.name,
@@ -643,7 +611,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   @override
   Widget build(BuildContext context) {
     final session = _getOrCreateSession();
-    _reconcileTouched(session);
     final accent = accentColor(context);
     final surface = surfaceColor(context);
 
@@ -868,7 +835,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                 exercise: exercise,
                                 exerciseIndex: index,
                                 accent: accent,
-                                template: _templateFor(exercise.name),
                                 previousSets: previousExerciseSets(
                                   HiveService.getCompletedSessions(),
                                   exercise.name,
@@ -881,7 +847,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                 onEntryFinished: () {
                                   if (mounted) _autoSave();
                                 },
-                                touchedSets: _touchedSets,
                                 onAddSet: (i) => _addSet(i),
                                 onEditSet:
                                     (i, setIndex) => _editSet(i, setIndex),

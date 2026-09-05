@@ -27,7 +27,7 @@ void main() {
         body: ExerciseCard(
           exercise: Exercise(
             name: 'Barbell bench press',
-            sets: [gym.Set(weight: 70, reps: 8)],
+            sets: [gym.Set(weight: 70, reps: 8, note: 'Almost hit PR')],
           ),
           exerciseIndex: 4,
           accent: const Color(0xFF7C5CFF),
@@ -60,6 +60,15 @@ void main() {
       expect(tester.getSize(control).width, greaterThanOrEqualTo(48));
       expect(tester.getSize(control).height, greaterThanOrEqualTo(48));
     }
+  });
+
+  testWidgets('workout cards do not render set notes or target annotations', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host());
+
+    expect(find.textContaining('Almost hit PR'), findsNothing);
+    expect(find.textContaining('TARGET'), findsNothing);
   });
 
   testWidgets('card semantic actions invoke only their assigned callbacks', (

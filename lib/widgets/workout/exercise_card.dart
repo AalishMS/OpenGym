@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../models/exercise.dart';
-import '../../models/exercise_template.dart';
 import '../../models/set.dart' as gym;
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
@@ -12,12 +11,10 @@ class ExerciseCard extends StatelessWidget {
   final Exercise exercise;
   final int exerciseIndex;
   final Color accent;
-  final ExerciseTemplate? template;
   final List<gym.Set> previousSets;
   final VoidCallback? onEntryFinished;
   final void Function(int exercise, int index, double weight, int reps)?
   onSetChanged;
-  final Set<gym.Set> touchedSets;
   final void Function(int) onAddSet;
   final void Function(int, int) onEditSet;
   final void Function(int) onAddNote;
@@ -29,34 +26,15 @@ class ExerciseCard extends StatelessWidget {
     required this.exercise,
     required this.exerciseIndex,
     required this.accent,
-    this.template,
     this.previousSets = const [],
     this.onEntryFinished,
     this.onSetChanged,
-    this.touchedSets = const {},
     required this.onAddSet,
     required this.onEditSet,
     required this.onAddNote,
     required this.onRename,
     required this.onDeleteExercise,
   });
-
-  String? _annotation(int index) {
-    final set = exercise.sets[index];
-    final target = template?.targetAt(index);
-    final note = set.note;
-    final parts = [
-      if (note != null &&
-          note.trim().isNotEmpty &&
-          note.trim().toLowerCase() != 'new pr!')
-        note,
-      if (!touchedSets.contains(set) &&
-          target != null &&
-          (target.weight > 0 || target.reps > 0))
-        'TARGET ${entryWeight(target.weight)} KG · ${target.reps} REPS',
-    ];
-    return parts.isEmpty ? null : parts.join(' · ');
-  }
 
   Widget action(
     BuildContext context,
@@ -177,7 +155,6 @@ class ExerciseCard extends StatelessWidget {
                           i < previousSets.length && previousSets[i].reps > 0
                               ? '${entryWeight(previousSets[i].weight)} × ${previousSets[i].reps}'
                               : null,
-                      annotation: _annotation(i),
                       rpe: exercise.sets[i].rpe,
                     ),
                 ],

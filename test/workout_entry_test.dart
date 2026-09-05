@@ -87,6 +87,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('80 × 8'), findsOneWidget);
     expect(find.text('75 × 10'), findsOneWidget);
+    expect(find.text('steady'), findsNothing);
+    expect(find.textContaining('TARGET'), findsNothing);
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
     for (final key in ['5', '0', 'Next', '6', 'Next', '4', '5', 'Save']) {

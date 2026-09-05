@@ -128,6 +128,9 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Simplified workout exercise cards by removing inline target and saved set-note
+  annotations; targets still seed editable values and notes remain available in
+  set details and History.
 - Reworked the custom set keypad footer so matching Next and Save actions share
   one row; Save replaces the detached Close action and Next disables at the
   final field instead of changing its label to Done.
