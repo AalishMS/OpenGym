@@ -147,14 +147,9 @@ class ExerciseCard extends StatelessWidget {
                 context,
                 'Add set',
                 () => onAddSet(exerciseIndex),
-                Center(
-                  child: Text(
-                    'Add set',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 12,
-                      color: accent,
-                    ),
-                  ),
+                Tooltip(
+                  message: 'Add set',
+                  child: Icon(LucideIcons.plus, size: 20, color: accent),
                 ),
               ),
             ],

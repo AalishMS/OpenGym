@@ -105,9 +105,78 @@ void main() {
       await tester.tap(find.text('[OPEN]'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      Navigator.of(tester.element(find.byType(Dialog))).pop();
+      Navigator.of(tester.element(find.text('[OPEN]'))).pop();
       await tester.pumpAndSettle();
     }
+  });
+
+  testWidgets('edit set sheet saves drafts, cancels, validates and deletes', (
+    tester,
+  ) async {
+    final original = gym.Set(weight: 60, reps: 8, rpe: 7, note: 'Original');
+    gym.Set? saved;
+    var deleted = false;
+    await tester.pumpWidget(
+      host(
+        Builder(
+          builder:
+              (context) => TextButton(
+                onPressed:
+                    () => WorkoutDialogs.showEditSetDialog(
+                      context,
+                      set: original,
+                      onSave: (value) => saved = value,
+                      onDelete: () => deleted = true,
+                    ),
+                child: const Text('Open'),
+              ),
+        ),
+      ),
+    );
+    Future<void> tap(String label) async {
+      await tester.tap(find.text(label).last);
+      await tester.pumpAndSettle();
+    }
+
+    await tap('Open');
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.text('Prev'), findsNothing);
+    await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+    await tester.pumpAndSettle();
+    await tap('9');
+    await tap('0');
+    await tap('Next');
+    await tap('0');
+    await tap('Done');
+    await tap('Save');
+    expect(saved, isNull);
+    expect(
+      find.text('Enter a valid weight and at least one rep.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.bySemanticsLabel('Set 1 Reps'));
+    await tester.pumpAndSettle();
+    await tap('6');
+    await tap('Done');
+    await tester.tap(find.bySemanticsLabel('RPE 8'));
+    await tester.enterText(find.byType(TextField), 'Controlled tempo');
+    await tap('Save');
+    expect(saved!.weight, 90);
+    expect(saved!.reps, 6);
+    expect(saved!.rpe, 8);
+    expect(saved!.note, 'Controlled tempo');
+    expect(original.weight, 60);
+    saved = null;
+    await tap('Open');
+    await tester.enterText(find.byType(TextField), 'Discard me');
+    await tap('Cancel');
+    expect(saved, isNull);
+    expect(original.note, 'Original');
+    await tap('Open');
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    expect(deleted, isTrue);
+    expect(find.text('Edit set'), findsNothing);
   });
 
   testWidgets('exercise names and confirmation prose use sans typography', (

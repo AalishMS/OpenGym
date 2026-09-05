@@ -128,6 +128,11 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Compacted set entry across workout, plan, and history editing: 44px visual
+  fields retain 48px tap areas, previous results use larger text, and workout
+  cards use a plus icon with an accessible Add set label. Logged set details
+  now open in a compact bottom sheet with Kg/Reps, RPE, notes, inline validation,
+  and separate Delete/Cancel/Save actions; drafts only persist on Save.
 - Polished set entry across workout and plan editing:
   - Replaced bracketed terminal labels with clear sentence-case controls and
     improved sans-serif typography for headers, previous results, and inputs

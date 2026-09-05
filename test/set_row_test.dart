@@ -10,6 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/workout/set_entry_table.dart';
+import 'package:gymapp/widgets/workout/workout_dialogs.dart';
+import 'package:gymapp/models/set.dart' as gym;
 
 void main() {
   setUpAll(() async {
@@ -19,6 +21,10 @@ void main() {
     if (fontPath != null) {
       final bytes = ByteData.sublistView(await File(fontPath).readAsBytes());
       final assets = {
+        for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold'])
+          'Manrope-$weight.ttf': [
+            {'asset': 'Manrope-$weight.ttf'},
+          ],
         for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold'])
           'JetBrainsMono-$weight.ttf': [
             {'asset': 'JetBrainsMono-$weight.ttf'},
@@ -88,6 +94,13 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
+        if (scale == 1) {
+          expect(tester.getSize(find.bySemanticsLabel('Set 1 Kg')).height, 48);
+          expect(
+            tester.widget<Text>(find.text('135 × 10')).style!.fontSize,
+            16,
+          );
+        }
         for (final pair in {'Kg': 'Set 1 Kg', 'Reps': 'Set 1 Reps'}.entries) {
           expect(
             tester.getCenter(find.text(pair.key, findRichText: true)).dx,
@@ -217,10 +230,6 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Set 2 Kg'));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      if (Platform.environment['OPENGYM_VISUAL_FONT'] != null) {
-        await tester.runAsync(() => GoogleFonts.pendingFonts());
-        await tester.pumpAndSettle();
-      }
       final boundary = tester.renderObject<RenderRepaintBoundary>(
         find.byKey(const ValueKey('capture')),
       );
@@ -233,6 +242,23 @@ void main() {
         picture.dispose();
       });
       await tap(tester, 'Close');
+      WorkoutDialogs.showEditSetDialog(
+        tester.element(find.byType(SetEntryTable)),
+        set: gym.Set(weight: 50, reps: 8, rpe: 8),
+        onSave: (_) {},
+        onDelete: () {},
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      await tester.runAsync(() async {
+        final picture = await boundary.toImage();
+        final bytes = await picture.toByteData(format: ui.ImageByteFormat.png);
+        await File(
+          'build/edit-set-${brightness.name}.png',
+        ).writeAsBytes(bytes!.buffer.asUint8List());
+        picture.dispose();
+      });
+      await tap(tester, 'Cancel');
     }
   });
 }

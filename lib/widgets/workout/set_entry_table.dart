@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
+import '../../theme/spacing.dart';
 import '../../theme/semantic_colors.dart';
 
 /// A display snapshot. Editing it never mutates a session or a plan implicitly.
@@ -31,6 +32,7 @@ class SetEntryTable extends StatelessWidget {
   final ValueChanged<int>? onDetails;
   final ValueChanged<int>? onDelete;
   final VoidCallback? onEntryFinished;
+  final bool showHistoryColumns;
 
   const SetEntryTable({
     super.key,
@@ -40,6 +42,7 @@ class SetEntryTable extends StatelessWidget {
     this.onDetails,
     this.onDelete,
     this.onEntryFinished,
+    this.showHistoryColumns = true,
   });
 
   Future<void> _open(BuildContext context, int index, bool weight) async {
@@ -69,7 +72,10 @@ class SetEntryTable extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Column(
     children: [
-      _EntryHeader(trailing: onDetails != null || onDelete != null),
+      _EntryHeader(
+        trailing: onDetails != null || onDelete != null,
+        showHistoryColumns: showHistoryColumns,
+      ),
       for (var index = 0; index < sets.length; index++)
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
@@ -77,6 +83,7 @@ class SetEntryTable extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _EntryRow(
+                showHistoryColumns: showHistoryColumns,
                 index: index,
                 previous: sets[index].previous,
                 weight: entryWeight(sets[index].weight),
@@ -135,12 +142,18 @@ Widget _effort(BuildContext context, int rpe) => Semantics(
 );
 
 /// Header and data share the exact same column geometry at every width.
-Widget _columns(List<Widget> cells, {Widget? trailing}) => Row(
+Widget _columns(
+  List<Widget> cells, {
+  Widget? trailing,
+  bool showHistoryColumns = true,
+}) => Row(
   children: [
-    SizedBox(width: 32, child: cells[0]),
-    const SizedBox(width: 8),
-    Expanded(flex: 6, child: cells[1]),
-    const SizedBox(width: 8),
+    if (showHistoryColumns) ...[
+      SizedBox(width: 32, child: cells[0]),
+      const SizedBox(width: 8),
+      Expanded(flex: 6, child: cells[1]),
+      const SizedBox(width: 8),
+    ],
     Expanded(flex: 5, child: cells[2]),
     const SizedBox(width: 8),
     Expanded(flex: 5, child: cells[3]),
@@ -150,21 +163,26 @@ Widget _columns(List<Widget> cells, {Widget? trailing}) => Row(
 
 class _EntryHeader extends StatelessWidget {
   final bool trailing;
-  const _EntryHeader({this.trailing = false});
+  final bool showHistoryColumns;
+  const _EntryHeader({this.trailing = false, this.showHistoryColumns = true});
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
-    child: _columns([
-      for (final label in ['Set', 'Prev', 'Kg', 'Reps'])
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall!.copyWith(color: textSecondaryColor(context)),
-        ),
-    ], trailing: trailing ? const SizedBox() : null),
+    child: _columns(
+      [
+        for (final label in ['Set', 'Prev', 'Kg', 'Reps'])
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleSmall!.copyWith(
+              color: textSecondaryColor(context),
+            ),
+          ),
+      ],
+      trailing: trailing ? const SizedBox() : null,
+      showHistoryColumns: showHistoryColumns,
+    ),
   );
 }
 
@@ -177,6 +195,7 @@ class _EntryRow extends StatelessWidget {
   final VoidCallback onWeight;
   final VoidCallback onReps;
   final Widget? trailing;
+  final bool showHistoryColumns;
 
   const _EntryRow({
     required this.index,
@@ -187,34 +206,39 @@ class _EntryRow extends StatelessWidget {
     required this.onWeight,
     required this.onReps,
     this.trailing,
+    this.showHistoryColumns = true,
   });
 
   @override
-  Widget build(BuildContext context) => _columns([
-    Text(
-      '${index + 1}',
-      textAlign: TextAlign.center,
-      style: Theme.of(context).textTheme.titleMedium!.copyWith(
-        fontWeight: FontWeight.w700,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      ),
-    ),
-    Semantics(
-      label: 'Previous set ${index + 1}: ${previous ?? 'no history'}',
-      child: Text(
-        previous ?? '—',
+  Widget build(BuildContext context) => _columns(
+    [
+      Text(
+        '${index + 1}',
         textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: textSecondaryColor(context),
+        style: Theme.of(context).textTheme.titleMedium!.copyWith(
+          fontWeight: FontWeight.w700,
           fontFeatures: const [FontFeature.tabularFigures()],
         ),
       ),
-    ),
-    _field(context, weight, 'Kg', activeWeight == true, onWeight),
-    _field(context, reps, 'Reps', activeWeight == false, onReps),
-  ], trailing: trailing);
+      Semantics(
+        label: 'Previous set ${index + 1}: ${previous ?? 'no history'}',
+        child: Text(
+          previous ?? '—',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+            color: textSecondaryColor(context),
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+      ),
+      _field(context, weight, 'Kg', activeWeight == true, onWeight),
+      _field(context, reps, 'Reps', activeWeight == false, onReps),
+    ],
+    trailing: trailing,
+    showHistoryColumns: showHistoryColumns,
+  );
 
   Widget _field(
     BuildContext context,
@@ -231,34 +255,39 @@ class _EntryRow extends StatelessWidget {
     button: true,
     selected: active,
     child: Material(
-      color: active ? accentMutedColor(context) : backgroundColor(context),
+      color: Colors.transparent,
       borderRadius: AppRadius.field,
       child: InkWell(
         onTap: onTap,
         borderRadius: AppRadius.field,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 52),
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: active ? accentColor(context) : borderColor(context),
-              width: active ? 2 : 1,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.all(AppSpacing.xs),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color:
+                  active ? accentMutedColor(context) : backgroundColor(context),
+              border: Border.all(
+                color: active ? accentColor(context) : borderColor(context),
+                width: active ? 2 : 1,
+              ),
+              borderRadius: AppRadius.field,
             ),
-            borderRadius: AppRadius.field,
-          ),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              value.isEmpty ? '—' : value,
-              style: Theme.of(context).textTheme.titleLarge!.copyWith(
-                fontSize: 20,
-                fontFeatures: const [FontFeature.tabularFigures()],
-                fontWeight: FontWeight.bold,
-                color:
-                    active
-                        ? onColor(accentMutedColor(context))
-                        : textPrimaryColor(context),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                value.isEmpty ? '—' : value,
+                style: Theme.of(context).textTheme.titleLarge!.copyWith(
+                  fontSize: 20,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                  fontWeight: FontWeight.bold,
+                  color:
+                      active
+                          ? onColor(accentMutedColor(context))
+                          : textPrimaryColor(context),
+                ),
               ),
             ),
           ),
@@ -396,7 +425,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
               onWeight: () => _select(_index, true),
               onReps: () => _select(_index, false),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
@@ -404,7 +433,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                 style: _quiet(context),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: AppSpacing.md),
             Row(
               children: [
                 Expanded(
@@ -442,7 +471,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                   ],
                 ),
               ),
-            const SizedBox(height: 8),
+            const SizedBox(height: AppSpacing.sm),
             SizedBox(
               width: double.infinity,
               child: _key(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/set.dart' as gym;
 import 'package:gymapp/providers/settings_provider.dart';
@@ -45,6 +46,8 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(host());
+    expect(find.text('Add set'), findsNothing);
+    expect(find.byIcon(LucideIcons.plus), findsOneWidget);
     for (final label in [
       'Exercise note',
       'Delete exercise',

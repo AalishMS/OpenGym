@@ -7,6 +7,7 @@ import '../../providers/settings_provider.dart';
 import '../../services/pr_tracking_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
+import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import 'set_entry_table.dart';
 
@@ -472,202 +473,14 @@ class WorkoutDialogs {
     required void Function(gym.Set updatedSet) onSave,
     required VoidCallback onDelete,
   }) {
-    final accent = accentColor(context);
-
-    final weightController = TextEditingController(text: set.weight.toString());
-    final repsController = TextEditingController(text: set.reps.toString());
-    final noteController = TextEditingController(text: set.note ?? '');
-    int? selectedRpe = set.rpe;
-
-    showDialog(
+    showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return Dialog(
-              backgroundColor: surfaceColor(context),
-              shape: RoundedRectangleBorder(
-                borderRadius: AppRadius.card,
-                side: BorderSide(color: borderColor(context), width: 1),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '> EDIT SET',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: accent,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      _DialogSetEntry(
-                        weightController: weightController,
-                        repsController: repsController,
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'RPE',
-                        style: GoogleFonts.jetBrainsMono(fontSize: 12),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 4,
-                        runSpacing: 4,
-                        children: List.generate(10, (index) {
-                          final rpe = index + 1;
-                          return Semantics(
-                            button: true,
-                            container: true,
-                            label: 'RPE $rpe',
-                            selected: selectedRpe == rpe,
-                            onTap: () {
-                              setDialogState(() {
-                                selectedRpe = selectedRpe == rpe ? null : rpe;
-                              });
-                            },
-                            child: InkWell(
-                              onTap: () {
-                                setDialogState(() {
-                                  selectedRpe = selectedRpe == rpe ? null : rpe;
-                                });
-                              },
-                              borderRadius: AppRadius.chip,
-                              child: Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color:
-                                      selectedRpe == rpe
-                                          ? accentFillColor(context)
-                                          : Colors.transparent,
-                                  border: Border.all(
-                                    color:
-                                        selectedRpe == rpe
-                                            ? accentFillColor(context)
-                                            : borderColor(context),
-                                  ),
-                                  borderRadius: AppRadius.chip,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    '$rpe',
-                                    style: GoogleFonts.jetBrainsMono(
-                                      fontSize: 12,
-                                      color:
-                                          selectedRpe == rpe
-                                              ? onAccentColor(context)
-                                              : textPrimaryColor(context),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: noteController,
-                        decoration: const InputDecoration(
-                          labelText: 'Note (optional)',
-                        ),
-                        maxLines: 2,
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        alignment: WrapAlignment.spaceBetween,
-                        runSpacing: 8,
-                        children: [
-                          TextButton(
-                            onPressed: () {
-                              Navigator.pop(context);
-                              onDelete();
-                            },
-                            child: Text(
-                              'Delete',
-                              style: GoogleFonts.jetBrainsMono(
-                                color: errorColor(context),
-                              ),
-                            ),
-                          ),
-                          OverflowBar(
-                            alignment: MainAxisAlignment.end,
-                            children: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: Text(
-                                  'Cancel',
-                                  style: GoogleFonts.jetBrainsMono(
-                                    color: textSecondaryColor(context),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton(
-                                onPressed: () {
-                                  final weight = double.tryParse(
-                                    weightController.text,
-                                  );
-                                  final reps = int.tryParse(
-                                    repsController.text,
-                                  );
-
-                                  if (weight == null ||
-                                      weight < 0 ||
-                                      reps == null ||
-                                      reps <= 0) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          '> Invalid values',
-                                          style: GoogleFonts.jetBrainsMono(),
-                                        ),
-                                        backgroundColor: errorColor(context),
-                                      ),
-                                    );
-                                    return;
-                                  }
-
-                                  final updatedSet = gym.Set(
-                                    reps: reps,
-                                    weight: weight,
-                                    rpe: selectedRpe,
-                                    note:
-                                        noteController.text.isNotEmpty
-                                            ? noteController.text
-                                            : null,
-                                  );
-
-                                  Navigator.pop(context);
-                                  onSave(updatedSet);
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: accentFillColor(context),
-                                  foregroundColor: onAccentColor(context),
-                                ),
-                                child: Text(
-                                  'Save',
-                                  style: GoogleFonts.jetBrainsMono(),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: surfaceColor(context),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+      builder:
+          (_) => _EditSetSheet(set: set, onSave: onSave, onDelete: onDelete),
     );
   }
 
@@ -1276,13 +1089,198 @@ class WorkoutDialogs {
 
 /// Numeric drafts use the same keypad as the inline rows; notes can still use
 /// the system text keyboard. The surrounding dialog owns save/cancel behavior.
+class _EditSetSheet extends StatefulWidget {
+  final gym.Set set;
+  final ValueChanged<gym.Set> onSave;
+  final VoidCallback onDelete;
+
+  const _EditSetSheet({
+    required this.set,
+    required this.onSave,
+    required this.onDelete,
+  });
+
+  @override
+  State<_EditSetSheet> createState() => _EditSetSheetState();
+}
+
+class _EditSetSheetState extends State<_EditSetSheet> {
+  late final TextEditingController _weight = TextEditingController(
+    text: entryWeight(widget.set.weight),
+  );
+  late final TextEditingController _reps = TextEditingController(
+    text: '${widget.set.reps}',
+  );
+  late final TextEditingController _note = TextEditingController(
+    text: widget.set.note ?? '',
+  );
+  late int? _rpe = widget.set.rpe;
+  String? _error;
+
+  @override
+  void dispose() {
+    _weight.dispose();
+    _reps.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final weight = double.tryParse(_weight.text);
+    final reps = int.tryParse(_reps.text);
+    if (weight == null || weight < 0 || reps == null || reps <= 0) {
+      setState(() => _error = 'Enter a valid weight and at least one rep.');
+      return;
+    }
+    final updated = gym.Set(
+      weight: weight,
+      reps: reps,
+      rpe: _rpe,
+      note: _note.text.isEmpty ? null : _note.text,
+    );
+    Navigator.pop(context);
+    widget.onSave(updated);
+  }
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    top: false,
+    child: Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Edit set', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: AppSpacing.lg),
+            _DialogSetEntry(
+              weightController: _weight,
+              repsController: _reps,
+              showHistoryColumns: false,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text('RPE', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: AppSpacing.sm),
+            LayoutBuilder(
+              builder:
+                  (context, constraints) => Wrap(
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
+                    children: [
+                      for (var rpe = 1; rpe <= 10; rpe++)
+                        Semantics(
+                          label: 'RPE $rpe',
+                          selected: _rpe == rpe,
+                          button: true,
+                          excludeSemantics: true,
+                          onTap:
+                              () => setState(
+                                () => _rpe = _rpe == rpe ? null : rpe,
+                              ),
+                          child: SizedBox(
+                            width: ((constraints.maxWidth - 32) / 5).clamp(
+                              48.0,
+                              double.infinity,
+                            ),
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed:
+                                  () => setState(
+                                    () => _rpe = _rpe == rpe ? null : rpe,
+                                  ),
+                              style: OutlinedButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                backgroundColor:
+                                    _rpe == rpe
+                                        ? accentFillColor(context)
+                                        : null,
+                                foregroundColor:
+                                    _rpe == rpe
+                                        ? onAccentColor(context)
+                                        : textPrimaryColor(context),
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: AppRadius.chip,
+                                ),
+                              ),
+                              child: Text('$rpe'),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            TextField(
+              controller: _note,
+              decoration: const InputDecoration(labelText: 'Note (optional)'),
+              minLines: 1,
+              maxLines: 3,
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Semantics(
+                liveRegion: true,
+                child: Text(
+                  _error!,
+                  style: TextStyle(color: errorColor(context)),
+                ),
+              ),
+            ],
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                TextButton(
+                  style: TextButton.styleFrom(
+                    foregroundColor: errorColor(context),
+                  ),
+                  child: const Text('Delete'),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    widget.onDelete();
+                  },
+                ),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(
+                  child: OverflowBar(
+                    alignment: MainAxisAlignment.end,
+                    spacing: AppSpacing.sm,
+                    overflowSpacing: AppSpacing.sm,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      ElevatedButton(
+                        onPressed: _save,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: accentFillColor(context),
+                          foregroundColor: onAccentColor(context),
+                        ),
+                        child: const Text('Save'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
 class _DialogSetEntry extends StatefulWidget {
   final TextEditingController weightController;
   final TextEditingController repsController;
+  final bool showHistoryColumns;
 
   const _DialogSetEntry({
     required this.weightController,
     required this.repsController,
+    this.showHistoryColumns = true,
   });
 
   @override
@@ -1292,7 +1290,8 @@ class _DialogSetEntry extends StatefulWidget {
 class _DialogSetEntryState extends State<_DialogSetEntry> {
   @override
   Widget build(BuildContext context) => SetEntryTable(
-    exerciseName: 'SET DETAILS',
+    exerciseName: 'Set details',
+    showHistoryColumns: widget.showHistoryColumns,
     sets: [
       SetEntry(
         weight: double.tryParse(widget.weightController.text) ?? 0,
