@@ -30,10 +30,7 @@ void main() {
           ),
           exerciseIndex: 4,
           accent: const Color(0xFF7C5CFF),
-          onIncrementReps: (_, __) {},
-          onDecrementReps: (_, __) {},
-          onIncrementWeight: (_, __) {},
-          onDecrementWeight: (_, __) {},
+
           onAddSet: onAddSet ?? (_) {},
           onEditSet: (_, __) {},
           onAddNote: onAddNote ?? (_) {},
@@ -52,10 +49,8 @@ void main() {
       'Exercise note',
       'Delete exercise',
       'Add set',
-      'Decrease weight',
-      'Increase weight',
-      'Decrease reps',
-      'Increase reps',
+      'Set 1 Kg',
+      'Set 1 Reps',
     ]) {
       final control = find.bySemanticsLabel(label);
       expect(control, findsOneWidget);

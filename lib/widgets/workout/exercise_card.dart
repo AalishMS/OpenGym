@@ -6,18 +6,18 @@ import '../../models/exercise_template.dart';
 import '../../models/set.dart' as gym;
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
-import 'set_row.dart';
+import 'set_entry_table.dart';
 
 class ExerciseCard extends StatelessWidget {
   final Exercise exercise;
   final int exerciseIndex;
   final Color accent;
   final ExerciseTemplate? template;
+  final List<gym.Set> previousSets;
+  final VoidCallback? onEntryFinished;
+  final void Function(int exercise, int index, double weight, int reps)?
+  onSetChanged;
   final Set<gym.Set> touchedSets;
-  final void Function(int, int) onIncrementReps;
-  final void Function(int, int) onDecrementReps;
-  final void Function(int, int) onIncrementWeight;
-  final void Function(int, int) onDecrementWeight;
   final void Function(int) onAddSet;
   final void Function(int, int) onEditSet;
   final void Function(int) onAddNote;
@@ -30,17 +30,29 @@ class ExerciseCard extends StatelessWidget {
     required this.exerciseIndex,
     required this.accent,
     this.template,
+    this.previousSets = const [],
+    this.onEntryFinished,
+    this.onSetChanged,
     this.touchedSets = const {},
-    required this.onIncrementReps,
-    required this.onDecrementReps,
-    required this.onIncrementWeight,
-    required this.onDecrementWeight,
     required this.onAddSet,
     required this.onEditSet,
     required this.onAddNote,
     required this.onRename,
     required this.onDeleteExercise,
   });
+
+  String? _annotation(int index) {
+    final set = exercise.sets[index];
+    final target = template?.targetAt(index);
+    final parts = [
+      if (set.note?.isNotEmpty ?? false) set.note!,
+      if (!touchedSets.contains(set) &&
+          target != null &&
+          (target.weight > 0 || target.reps > 0))
+        'TARGET ${entryWeight(target.weight)} KG · ${target.reps} REPS',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
 
   Widget action(
     BuildContext context,
@@ -153,32 +165,26 @@ class ExerciseCard extends StatelessWidget {
           else
             Padding(
               padding: const EdgeInsets.only(top: 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SetHeaderRow(),
-                  ...exercise.sets.asMap().entries.map((entry) {
-                    final setIndex = entry.key;
-                    final set = entry.value;
-                    return SetRow(
-                      setIndex: setIndex,
-                      set: set,
-                      exerciseIndex: exerciseIndex,
-                      accent: accent,
-                      target: template?.targetAt(setIndex),
-                      touched: touchedSets.contains(set),
-                      onDecrementReps:
-                          () => onDecrementReps(exerciseIndex, setIndex),
-                      onIncrementReps:
-                          () => onIncrementReps(exerciseIndex, setIndex),
-                      onDecrementWeight:
-                          () => onDecrementWeight(exerciseIndex, setIndex),
-                      onIncrementWeight:
-                          () => onIncrementWeight(exerciseIndex, setIndex),
-                      onEdit: () => onEditSet(exerciseIndex, setIndex),
-                    );
-                  }),
+              child: SetEntryTable(
+                exerciseName: exercise.name,
+                onEntryFinished: onEntryFinished,
+                sets: [
+                  for (var i = 0; i < exercise.sets.length; i++)
+                    SetEntry(
+                      weight: exercise.sets[i].weight,
+                      reps: exercise.sets[i].reps,
+                      previous:
+                          i < previousSets.length && previousSets[i].reps > 0
+                              ? '${entryWeight(previousSets[i].weight)} × ${previousSets[i].reps}'
+                              : null,
+                      annotation: _annotation(i),
+                      rpe: exercise.sets[i].rpe,
+                    ),
                 ],
+                onChanged:
+                    (index, weight, reps) =>
+                        onSetChanged?.call(exerciseIndex, index, weight, reps),
+                onDetails: (index) => onEditSet(exerciseIndex, index),
               ),
             ),
         ],

@@ -323,11 +323,11 @@ void main() {
     await pumpEditorWithPlan(tester, plan);
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    await tester.tap(find.bySemanticsLabel('Delete set'));
+    await tester.tap(find.byTooltip('Delete set'));
     await tester.pumpAndSettle();
     expect(find.text('> Cannot delete the last set'), findsOneWidget);
-    expect(find.bySemanticsLabel('Decrease weight'), findsOneWidget);
-    expect(find.text('80kg x 5', findRichText: true), findsOneWidget);
+    expect(find.bySemanticsLabel('Set 1 Kg'), findsOneWidget);
+    expect(find.text('80'), findsOneWidget);
   });
 
   testWidgets('edit loads persisted set targets and reorder changes order', (
@@ -351,7 +351,7 @@ void main() {
     await pumpEditorWithPlan(tester, plan);
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    expect(find.text('80kg x 5', findRichText: true), findsOneWidget);
+    expect(find.text('80'), findsOneWidget);
     await tester.drag(
       find.byType(ReorderableDragStartListener).first,
       const Offset(0, 400),
@@ -378,10 +378,10 @@ void main() {
       title.style?.fontFamily,
       isNot(GoogleFonts.jetBrainsMono().fontFamily),
     );
-    expect(find.bySemanticsLabel('Decrease weight'), findsOneWidget);
+    expect(find.bySemanticsLabel('Set 1 Kg'), findsOneWidget);
     expect(
-      tester.getSize(find.bySemanticsLabel('Decrease weight').first),
-      const Size(32, 32),
+      tester.getSize(find.bySemanticsLabel('Set 1 Kg').first).height,
+      greaterThanOrEqualTo(48),
     );
   });
 
@@ -396,7 +396,7 @@ void main() {
     await tester.tap(find.text('[DONE]'));
     await tester.pumpAndSettle();
 
-    expect(find.bySemanticsLabel('Decrease weight'), findsOneWidget);
+    expect(find.bySemanticsLabel('Set 1 Kg'), findsOneWidget);
     expect(find.text('[+ ADD SET]'), findsNothing);
     expect(find.text('[DELETE]'), findsNothing);
     expect(find.bySemanticsLabel('Add set'), findsOneWidget);
@@ -422,12 +422,20 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('[DONE]'));
     await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+    await tester.pumpAndSettle();
+    for (final key in ['5', '0', '.', '2', '5', '[NEXT]', '1', '2', '[DONE]']) {
+      await tester.tap(find.text(key).last);
+      await tester.pumpAndSettle();
+    }
     await tester.tap(find.text('SAVE'));
     await tester.pumpAndSettle();
     final saved = HiveService.getPlans();
     expect(saved, hasLength(1));
     expect(saved.single.name, 'Persisted Push');
     expect(saved.single.exercises.single.name, 'Bench Press');
-    expect(saved.single.exercises.single.setTargets, isNotNull);
+    expect(saved.single.exercises.single.targetAt(0)!.weight, 50.25);
+    expect(saved.single.exercises.single.targetAt(0)!.reps, 12);
+    expect(HiveService.getSessions(), isEmpty);
   });
 }

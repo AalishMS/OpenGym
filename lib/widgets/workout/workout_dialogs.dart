@@ -8,6 +8,7 @@ import '../../services/pr_tracking_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../utils/format.dart';
+import 'set_entry_table.dart';
 
 class WorkoutDialogs {
   static void showPRDialog(BuildContext context, List<PRResult> prs) {
@@ -329,24 +330,9 @@ class WorkoutDialogs {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      TextField(
-                        controller: weightController,
-                        decoration: const InputDecoration(
-                          labelText: 'Weight (kg)',
-                          hintText: 'e.g., 50',
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: repsController,
-                        decoration: const InputDecoration(
-                          labelText: 'Reps',
-                          hintText: 'e.g., 8',
-                        ),
-                        keyboardType: TextInputType.number,
+                      _DialogSetEntry(
+                        weightController: weightController,
+                        repsController: repsController,
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -528,20 +514,9 @@ class WorkoutDialogs {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      TextField(
-                        controller: weightController,
-                        decoration: const InputDecoration(
-                          labelText: 'Weight (kg)',
-                        ),
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextField(
-                        controller: repsController,
-                        decoration: const InputDecoration(labelText: 'Reps'),
-                        keyboardType: TextInputType.number,
+                      _DialogSetEntry(
+                        weightController: weightController,
+                        repsController: repsController,
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -1255,25 +1230,9 @@ class WorkoutDialogs {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: weightController,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Weight (kg)',
-                        hintText: 'e.g., 70',
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: repsController,
-                      decoration: const InputDecoration(
-                        labelText: 'Reps',
-                        hintText: 'e.g., 8',
-                      ),
-                      keyboardType: TextInputType.number,
+                    _DialogSetEntry(
+                      weightController: weightController,
+                      repsController: repsController,
                     ),
                     const SizedBox(height: 12),
                     OverflowBar(
@@ -1324,4 +1283,37 @@ class WorkoutDialogs {
           ),
     );
   }
+}
+
+/// Numeric drafts use the same keypad as the inline rows; notes can still use
+/// the system text keyboard. The surrounding dialog owns save/cancel behavior.
+class _DialogSetEntry extends StatefulWidget {
+  final TextEditingController weightController;
+  final TextEditingController repsController;
+
+  const _DialogSetEntry({
+    required this.weightController,
+    required this.repsController,
+  });
+
+  @override
+  State<_DialogSetEntry> createState() => _DialogSetEntryState();
+}
+
+class _DialogSetEntryState extends State<_DialogSetEntry> {
+  @override
+  Widget build(BuildContext context) => SetEntryTable(
+    exerciseName: 'SET DETAILS',
+    sets: [
+      SetEntry(
+        weight: double.tryParse(widget.weightController.text) ?? 0,
+        reps: int.tryParse(widget.repsController.text) ?? 0,
+      ),
+    ],
+    onChanged:
+        (index, weight, reps) => setState(() {
+          widget.weightController.text = entryWeight(weight);
+          widget.repsController.text = '$reps';
+        }),
+  );
 }

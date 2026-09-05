@@ -166,6 +166,14 @@ Repository layer wrapping HiveService for clean architecture:
   - Plan/session providers reload when the active split changes; stats, PRs, progression, history lookups, and active workouts are split-scoped
   - Backup format v3 includes every split and the active selection; v1/v2 imports are upgraded into `My Split`
   - Clear-all preserves split profiles, while sample data replaces data only in the active split and links sessions to their sample plans
+- Unified set entry across Workout, Create/Edit Plan, and history editing:
+  - Replaced weight/reps steppers with aligned Set / Prev / Kg / Reps columns in `SetEntryTable`
+  - Added an in-app keypad with decimal weights (two decimal places), digit deletion, nonnegative ±2.5 kg adjustments, Next/Done navigation, and Close/back dismissal
+  - The active field is highlighted; the focused set and its previous result stay above the keypad
+  - Workout Prev uses the latest earlier occurrence in the same plan and split; plan editing can consult exercise history across plans within its split. Missing results display a dash, and targets remain separately labeled hints
+  - Workout edits update the draft immediately and autosave on keypad dismissal, so PR dialogs cannot interrupt digit entry
+  - Preserved set notes, colored RPE annotations, and delete actions through set details; set detail dialogs share the same numeric input
+  - Added keypad, responsive layout, history lookup, plan persistence, and workout autosave regression coverage
 - Changed first-run appearance defaults to light mode with the cyan accent while preserving existing users' saved choices
 - Reduced plan-color noise with identity markers:
   - Home cards now use a compact colored rail beside the plan name instead of a full-width stripe and colored statistics

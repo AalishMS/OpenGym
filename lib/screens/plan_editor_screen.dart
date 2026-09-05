@@ -10,6 +10,7 @@ import '../models/exercise_template.dart';
 import '../models/set_template.dart';
 import '../models/workout_plan.dart';
 import '../providers/workout_plan_provider.dart';
+import '../providers/split_provider.dart';
 import '../services/hive_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
@@ -17,7 +18,8 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../widgets/dashboard/dashboard_panel.dart';
-import '../widgets/workout/set_row.dart';
+import '../widgets/workout/set_entry_table.dart';
+import '../utils/set_history.dart';
 import '../widgets/workout/workout_dialogs.dart';
 
 class PlanEditorScreen extends StatefulWidget {
@@ -39,6 +41,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
   int _nextExerciseId = 0;
   int? _selectedColor = kPlanColors[0];
   late String _initialSignature;
+  String? _splitId;
 
   bool get _canSave => _nameController.text.trim().isNotEmpty;
 
@@ -52,6 +55,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
     super.initState();
 
     final plan = widget.plan;
+    _splitId = plan?.splitId ?? context.read<SplitProvider?>()?.activeSplitId;
     if (plan != null) {
       final freshPlan =
           plan.id != null ? HiveService.getPlanById(plan.id!) : plan;
@@ -146,6 +150,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
     final existing = widget.plan;
     final plan = WorkoutPlan(
       id: existing?.id,
+      splitId: _splitId,
       userId: existing?.userId,
       updatedAt: existing?.updatedAt,
       deletedAt: existing?.deletedAt,
@@ -336,10 +341,9 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                           const SizedBox(height: AppSpacing.xs),
                           Text(
                             'Tap an exercise to add or remove it from the plan.',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(height: 1.4),
+                            style: Theme.of(
+                              context,
+                            ).textTheme.bodySmall?.copyWith(height: 1.4),
                           ),
                         ],
                       ),
@@ -392,13 +396,19 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                                               vertical: AppSpacing.xs,
                                             ),
                                             decoration: BoxDecoration(
-                                              color: active
-                                                  ? accentFillColor(context)
-                                                  : backgroundColor(context),
+                                              color:
+                                                  active
+                                                      ? accentFillColor(context)
+                                                      : backgroundColor(
+                                                        context,
+                                                      ),
                                               border: Border.all(
-                                                color: active
-                                                    ? accentFillColor(context)
-                                                    : borderColor(context),
+                                                color:
+                                                    active
+                                                        ? accentFillColor(
+                                                          context,
+                                                        )
+                                                        : borderColor(context),
                                               ),
                                               borderRadius: AppRadius.chip,
                                             ),
@@ -436,8 +446,9 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                           AppSpacing.lg,
                         ),
                         itemCount: exercises.length + 1,
-                        separatorBuilder: (context, index) =>
-                            const SizedBox(height: AppSpacing.sm),
+                        separatorBuilder:
+                            (context, index) =>
+                                const SizedBox(height: AppSpacing.sm),
                         itemBuilder: (context, index) {
                           if (index == 0) {
                             return _ExercisePickTile(
@@ -460,8 +471,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                             label: name,
                             accent: accent,
                             added: added,
-                            onTap: () =>
-                                _toggleExercise(name, setSheetState),
+                            onTap: () => _toggleExercise(name, setSheetState),
                           );
                         },
                       ),
@@ -689,6 +699,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                                           ),
                                           child: _ExerciseEditorCard(
                                             exercise: exercise,
+                                            splitId: _splitId,
                                             index: index,
                                             accent: planColor,
                                             onToggle:
@@ -921,6 +932,7 @@ class _ColorPicker extends StatelessWidget {
 class _ExerciseEditorCard extends StatelessWidget {
   final _EditorExercise exercise;
   final int index;
+  final String? splitId;
   final Color accent;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
@@ -930,6 +942,7 @@ class _ExerciseEditorCard extends StatelessWidget {
 
   const _ExerciseEditorCard({
     required this.exercise,
+    this.splitId,
     required this.index,
     required this.accent,
     required this.onToggle,
@@ -939,11 +952,6 @@ class _ExerciseEditorCard extends StatelessWidget {
     required this.onSetAdded,
   });
 
-  /// Width the set rows reserve for their trailing delete button. [SetHeaderRow]
-  /// has to match it, or `WEIGHT`/`REPS` sit a column to the right of the
-  /// steppers they label.
-  static const double _deleteColumnWidth = 32;
-
   /// Indent that lines the prescription up under the exercise name rather than
   /// under its index badge.
   static const double _nameIndent = 20 + AppSpacing.sm;
@@ -952,8 +960,7 @@ class _ExerciseEditorCard extends StatelessWidget {
   /// plan instead of just a title.
   ///
   /// Spans rather than a plain string because the numbers carry the line and the
-  /// units step back out of the way — the same split [setValueStyle] and
-  /// [setUnitStyle] make on the rows this summarises, so a collapsed card
+  /// units step back out of the way — the same hierarchy as the entry table, so a collapsed card
   /// previews its own contents in the voice they are written in.
   List<TextSpan> _prescriptionSpans(TextStyle number, TextStyle unit) {
     final sets = exercise.sets;
@@ -1002,6 +1009,11 @@ class _ExerciseEditorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final border = borderColor(context);
     final expanded = exercise.expanded;
+    final previous = previousExerciseSets(
+      HiveService.getSessions(),
+      exercise.name,
+      splitId: splitId,
+    );
 
     return Container(
       decoration: BoxDecoration(
@@ -1026,30 +1038,22 @@ class _ExerciseEditorCard extends StatelessWidget {
               decoration: BoxDecoration(
                 border: Border(top: BorderSide(color: border)),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SetHeaderRow(
-                    stepperBoxWidth: 66,
-                    trailingGap: _deleteColumnWidth,
-                  ),
-                  // Rows separate on rhythm rather than on rules — one border
-                  // each turned a four-set card into seven stacked hairlines.
-                  ...exercise.sets.asMap().entries.map((entry) {
-                    final setIndex = entry.key;
-                    return _EditorSetRow(
-                      setIndex: setIndex,
-                      set: entry.value,
-                      accent: accent,
-                      canDelete: true,
-                      deleteColumnWidth: _deleteColumnWidth,
-                      onChanged:
-                          (reps, weight) =>
-                              onSetChanged(setIndex, reps, weight),
-                      onDelete: () => onSetDeleted(setIndex),
-                    );
-                  }),
+              child: SetEntryTable(
+                exerciseName: exercise.name,
+                sets: [
+                  for (var i = 0; i < exercise.sets.length; i++)
+                    SetEntry(
+                      weight: exercise.sets[i].weight,
+                      reps: exercise.sets[i].reps,
+                      previous:
+                          i < previous.length && previous[i].reps > 0
+                              ? '${entryWeight(previous[i].weight)} × ${previous[i].reps}'
+                              : null,
+                    ),
                 ],
+                onChanged:
+                    (index, weight, reps) => onSetChanged(index, reps, weight),
+                onDelete: onSetDeleted,
               ),
             ),
             _buildFooter(context, border),
@@ -1184,128 +1188,6 @@ class _ExerciseEditorCard extends StatelessWidget {
   }
 }
 
-/// One prescribed set: its numbers first, then the controls that change them.
-///
-/// Built to the same spec as the workout screen's `SetRow` — value loud and to
-/// the left, quiet twin steppers to the right — because a prescribed set and a
-/// logged set are the same thing at different times, and the two screens used to
-/// look nothing alike. The value here used to be 13px trapped inside a 98px
-/// stepper, which made the control louder than the number it carried.
-class _EditorSetRow extends StatelessWidget {
-  final int setIndex;
-  final ExerciseSetData set;
-  final Color accent;
-  final bool canDelete;
-  final double deleteColumnWidth;
-  final void Function(int reps, double weight) onChanged;
-  final VoidCallback onDelete;
-
-  const _EditorSetRow({
-    required this.setIndex,
-    required this.set,
-    required this.accent,
-    required this.canDelete,
-    required this.deleteColumnWidth,
-    required this.onChanged,
-    required this.onDelete,
-  });
-
-  /// Plates come in 2.5kg steps, reps in ones. Both clamp to the range the old
-  /// stepper enforced, so a prescription cannot go negative or run away.
-  void _stepWeight(double delta) =>
-      onChanged(set.reps, (set.weight + delta).clamp(0, 999).toDouble());
-
-  void _stepReps(int delta) =>
-      onChanged((set.reps + delta).clamp(1, 999), set.weight);
-
-  @override
-  Widget build(BuildContext context) {
-    final unitStyle = setUnitStyle(context);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          _IndexBadge(
-            label: '${setIndex + 1}',
-            borderTint: borderColor(context),
-            textTint: textSecondaryColor(context),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: InkWell(
-              // Stepping from 0 to 70kg is 28 taps. Tapping the number types it.
-              onTap:
-                  () => WorkoutDialogs.showEditPlanSetDialog(
-                    context,
-                    setNumber: setIndex + 1,
-                    reps: set.reps,
-                    weight: set.weight,
-                    accent: accent,
-                    onSave: onChanged,
-                  ),
-              borderRadius: AppRadius.chip,
-              splashColor: accent.withValues(alpha: 0.2),
-              highlightColor: accent.withValues(alpha: 0.1),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                child: RichText(
-                  softWrap: false,
-                  text: TextSpan(
-                    style: setValueStyle(context),
-                    children: [
-                      TextSpan(text: formatWeight(set.weight)),
-                      TextSpan(text: 'kg', style: unitStyle),
-                      TextSpan(text: ' x ', style: unitStyle),
-                      TextSpan(text: '${set.reps}'),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          StepperBox(
-            buttonSize: 32,
-            label: 'weight',
-            onDecrement: () => _stepWeight(-2.5),
-            onIncrement: () => _stepWeight(2.5),
-            accent: accent,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          StepperBox(
-            buttonSize: 32,
-            label: 'reps',
-            onDecrement: () => _stepReps(-1),
-            onIncrement: () => _stepReps(1),
-            accent: accent,
-          ),
-          canDelete
-              ? Semantics(
-                label: 'Delete set',
-                button: true,
-                onTap: onDelete,
-                child: InkWell(
-                  onTap: onDelete,
-                  borderRadius: AppRadius.control,
-                  child: SizedBox(
-                    width: deleteColumnWidth,
-                    height: 48,
-                    child: Icon(
-                      LucideIcons.x,
-                      size: 12,
-                      color: textSecondaryColor(context),
-                    ),
-                  ),
-                ),
-              )
-              : SizedBox(width: deleteColumnWidth),
-        ],
-      ),
-    );
-  }
-}
-
 /// The `1` / `2` pill on an exercise header or a set row.
 ///
 /// Fixed width so names and values stay left-aligned once the count passes 9,
@@ -1401,9 +1283,9 @@ class _SearchField extends StatelessWidget {
           color: textSecondaryColor(context),
         ),
         hintText: 'Search by exercise name',
-        hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: textSecondaryColor(context),
-            ),
+        hintStyle: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: textSecondaryColor(context)),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
           vertical: AppSpacing.md,
@@ -1435,10 +1317,10 @@ class _SelectionCount extends StatelessWidget {
       child: Text(
         '$count SELECTED',
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: accent,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 0.5,
-            ),
+          color: accent,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
@@ -1499,9 +1381,10 @@ class _ExercisePickTile extends StatelessWidget {
                 child: Icon(
                   added ? LucideIcons.check : LucideIcons.plus,
                   size: 14,
-                  color: added
-                      ? onAccentColor(context)
-                      : (isCustom ? accent : textSecondaryColor(context)),
+                  color:
+                      added
+                          ? onAccentColor(context)
+                          : (isCustom ? accent : textSecondaryColor(context)),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
@@ -1509,10 +1392,9 @@ class _ExercisePickTile extends StatelessWidget {
                 child: Text(
                   label,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        fontWeight:
-                            added ? FontWeight.bold : FontWeight.w600,
-                        color: added ? accent : textPrimaryColor(context),
-                      ),
+                    fontWeight: added ? FontWeight.bold : FontWeight.w600,
+                    color: added ? accent : textPrimaryColor(context),
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -1521,10 +1403,10 @@ class _ExercisePickTile extends StatelessWidget {
               Text(
                 statusLabel,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: added ? accent : textSecondaryColor(context),
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.6,
-                    ),
+                  color: added ? accent : textSecondaryColor(context),
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.6,
+                ),
               ),
             ],
           ),

@@ -9,6 +9,9 @@ import '../models/set.dart' as gym;
 import '../services/pr_tracking_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
+import '../utils/set_history.dart';
+import '../widgets/workout/set_entry_table.dart';
+import '../widgets/workout/workout_dialogs.dart';
 
 class HistoryScreen extends StatelessWidget {
   const HistoryScreen({super.key});
@@ -620,44 +623,28 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                         ),
                       ),
                     const SizedBox(height: 8),
-                    ...exercise.sets.asMap().entries.map((setEntry) {
-                      final setIndex = setEntry.key;
-                      final set = setEntry.value;
-                      return Padding(
-                        padding: const EdgeInsets.only(left: 8, bottom: 4),
-                        child: Row(
-                          children: [
-                            Text(
-                              'SET ${setIndex + 1}:',
-                              style: GoogleFonts.jetBrainsMono(
-                                fontSize: 10,
-                                color: textSecondaryColor(context),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '${set.weight}KG x ${set.reps}REPS',
-                              style: GoogleFonts.jetBrainsMono(fontSize: 10),
-                            ),
-                            const Spacer(),
-                            InkWell(
-                              onTap:
-                                  () =>
-                                      _showEditSetDialog(index, setIndex, set),
-                              splashColor: accent.withValues(alpha: 0.2),
-                              highlightColor: accent.withValues(alpha: 0.1),
-                              child: Text(
-                                '[EDIT]',
-                                style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 10,
-                                  color: accent,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
+                    SetEntryTable(
+                      exerciseName: exercise.name,
+                      sets: _entriesFor(exercise),
+                      onChanged: (setIndex, weight, reps) {
+                        final current = _session.exercises[index];
+                        final sets = List<gym.Set>.of(current.sets);
+                        final old = sets[setIndex];
+                        sets[setIndex] = gym.Set(
+                          weight: weight,
+                          reps: reps,
+                          rpe: old.rpe,
+                          note: old.note,
+                        );
+                        _replaceSets(index, sets);
+                      },
+                      onDetails:
+                          (setIndex) => _showEditSetDialog(
+                            index,
+                            setIndex,
+                            exercise.sets[setIndex],
+                          ),
+                    ),
                     const SizedBox(height: 8),
                     InkWell(
                       onTap: () => _showAddSetDialog(index, exercise),
@@ -681,242 +668,64 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
     );
   }
 
-  void _showAddSetDialog(int exerciseIndex, Exercise exercise) {
-    final accent = accentColor(context);
-    final weightController = TextEditingController();
-    final repsController = TextEditingController();
+  List<SetEntry> _entriesFor(Exercise exercise) {
+    final previous = previousExerciseSets(
+      context.read<WorkoutSessionProvider>().sessions.where(
+        (session) => session.date.isBefore(_session.date),
+      ),
+      exercise.name,
+      splitId: _session.splitId,
+      planId: _session.planId,
+      planName: _session.planName,
+    );
+    return [
+      for (var i = 0; i < exercise.sets.length; i++)
+        SetEntry(
+          weight: exercise.sets[i].weight,
+          reps: exercise.sets[i].reps,
+          previous:
+              i < previous.length && previous[i].reps > 0
+                  ? '${entryWeight(previous[i].weight)} × ${previous[i].reps}'
+                  : null,
+          annotation: exercise.sets[i].note,
+          rpe: exercise.sets[i].rpe,
+        ),
+    ];
+  }
 
-    showDialog(
-      context: context,
-      builder:
-          (ctx) => Dialog(
-            backgroundColor: surfaceColor(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: borderColor(context), width: 1),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '> ADD SET',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: accent,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: weightController,
-                    decoration: const InputDecoration(labelText: 'Weight (kg)'),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: repsController,
-                    decoration: const InputDecoration(labelText: 'Reps'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(ctx),
-                        child: Text(
-                          '[CANCEL]',
-                          style: GoogleFonts.jetBrainsMono(
-                            color: textSecondaryColor(context),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () {
-                          final weight = double.tryParse(weightController.text);
-                          final reps = int.tryParse(repsController.text);
-                          if (weight != null && reps != null) {
-                            final newSet = gym.Set(reps: reps, weight: weight);
-                            final updatedExercises = List<Exercise>.from(
-                              _session.exercises,
-                            );
-                            updatedExercises[exerciseIndex] = Exercise(
-                              name: exercise.name,
-                              sets: [...exercise.sets, newSet],
-                              note: exercise.note,
-                            );
-                            setState(() {
-                              _session = _session.copyWith(
-                                exercises: updatedExercises,
-                              );
-                            });
-                            Navigator.pop(ctx);
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accentFillColor(context),
-                          foregroundColor: onAccentColor(context),
-                        ),
-                        child: Text(
-                          '[ADD]',
-                          style: GoogleFonts.jetBrainsMono(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
+  void _replaceSets(int index, List<gym.Set> sets) {
+    final exercises = List<Exercise>.of(_session.exercises);
+    final old = exercises[index];
+    exercises[index] = Exercise(name: old.name, sets: sets, note: old.note);
+    setState(() => _session = _session.copyWith(exercises: exercises));
+  }
+
+  void _showAddSetDialog(int exerciseIndex, Exercise exercise) {
+    WorkoutDialogs.showAddSetDialog(
+      context,
+      onAdd: (set) {
+        _replaceSets(exerciseIndex, [
+          ..._session.exercises[exerciseIndex].sets,
+          set,
+        ]);
+      },
     );
   }
 
   void _showEditSetDialog(int exerciseIndex, int setIndex, gym.Set set) {
-    final accent = accentColor(context);
-    final weightController = TextEditingController(text: set.weight.toString());
-    final repsController = TextEditingController(text: set.reps.toString());
-    final noteController = TextEditingController(text: set.note ?? '');
-
-    showDialog(
-      context: context,
-      builder:
-          (ctx) => Dialog(
-            backgroundColor: surfaceColor(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: borderColor(context), width: 1),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '> EDIT SET',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: accent,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: weightController,
-                    decoration: const InputDecoration(labelText: 'Weight (kg)'),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: repsController,
-                    decoration: const InputDecoration(labelText: 'Reps'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: noteController,
-                    decoration: const InputDecoration(labelText: 'Note'),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      TextButton(
-                        onPressed: () {
-                          final exercises = List<Exercise>.from(
-                            _session.exercises,
-                          );
-                          final exercise = exercises[exerciseIndex];
-                          final sets = List<gym.Set>.from(exercise.sets)
-                            ..removeAt(setIndex);
-                          exercises[exerciseIndex] = Exercise(
-                            name: exercise.name,
-                            sets: sets,
-                            note: exercise.note,
-                          );
-                          setState(() {
-                            _session = _session.copyWith(exercises: exercises);
-                          });
-                          Navigator.pop(ctx);
-                        },
-                        child: Text(
-                          '[DELETE]',
-                          style: GoogleFonts.jetBrainsMono(
-                            color: errorColor(context),
-                          ),
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: Text(
-                              '[CANCEL]',
-                              style: GoogleFonts.jetBrainsMono(
-                                color: textSecondaryColor(context),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          ElevatedButton(
-                            onPressed: () {
-                              final weight = double.tryParse(
-                                weightController.text,
-                              );
-                              final reps = int.tryParse(repsController.text);
-                              if (weight != null && reps != null) {
-                                final exercises = List<Exercise>.from(
-                                  _session.exercises,
-                                );
-                                final exercise = exercises[exerciseIndex];
-                                final sets = List<gym.Set>.from(exercise.sets);
-                                sets[setIndex] = gym.Set(
-                                  reps: reps,
-                                  weight: weight,
-                                  rpe: set.rpe,
-                                  note:
-                                      noteController.text.isNotEmpty
-                                          ? noteController.text
-                                          : null,
-                                );
-                                exercises[exerciseIndex] = Exercise(
-                                  name: exercise.name,
-                                  sets: sets,
-                                  note: exercise.note,
-                                );
-                                setState(() {
-                                  _session = _session.copyWith(
-                                    exercises: exercises,
-                                  );
-                                });
-                                Navigator.pop(ctx);
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: accentFillColor(context),
-                              foregroundColor: onAccentColor(context),
-                            ),
-                            child: Text(
-                              '[SAVE]',
-                              style: GoogleFonts.jetBrainsMono(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
+    WorkoutDialogs.showEditSetDialog(
+      context,
+      set: set,
+      onSave: (updated) {
+        final sets = List<gym.Set>.of(_session.exercises[exerciseIndex].sets);
+        sets[setIndex] = updated;
+        _replaceSets(exerciseIndex, sets);
+      },
+      onDelete: () {
+        final sets = List<gym.Set>.of(_session.exercises[exerciseIndex].sets)
+          ..removeAt(setIndex);
+        _replaceSets(exerciseIndex, sets);
+      },
     );
   }
 }

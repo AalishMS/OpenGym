@@ -17,6 +17,7 @@ import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/fade_page_route.dart';
+import '../utils/set_history.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
 import '../widgets/workout/workout_dialogs.dart';
@@ -346,15 +347,20 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
   }
 
-  void _incrementReps(int exerciseIndex, int setIndex) {
+  void _changeSetValues(
+    int exerciseIndex,
+    int setIndex,
+    double weight,
+    int reps,
+  ) {
     final session = _getOrCreateSession();
     final exercise = session.exercises[exerciseIndex];
     final set = exercise.sets[setIndex];
 
     final updatedSets = List<gym.Set>.from(exercise.sets);
     final updatedSet = gym.Set(
-      reps: set.reps + 1,
-      weight: set.weight,
+      reps: reps,
+      weight: weight,
       rpe: set.rpe,
       note: set.note,
     );
@@ -370,92 +376,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
 
     _updateSession(session.copyWith(exercises: updatedExercises));
-    _autoSave();
-  }
-
-  void _decrementReps(int exerciseIndex, int setIndex) {
-    final session = _getOrCreateSession();
-    final exercise = session.exercises[exerciseIndex];
-    final set = exercise.sets[setIndex];
-
-    if (set.reps <= 0) return;
-
-    final updatedSets = List<gym.Set>.from(exercise.sets);
-    final updatedSet = gym.Set(
-      reps: set.reps - 1,
-      weight: set.weight,
-      rpe: set.rpe,
-      note: set.note,
-    );
-    updatedSets[setIndex] = updatedSet;
-    _touchedSets.remove(set);
-    _touchedSets.add(updatedSet);
-
-    final updatedExercises = List<Exercise>.from(session.exercises);
-    updatedExercises[exerciseIndex] = Exercise(
-      name: exercise.name,
-      sets: updatedSets,
-      note: exercise.note,
-    );
-
-    _updateSession(session.copyWith(exercises: updatedExercises));
-    _autoSave();
-  }
-
-  void _incrementWeight(int exerciseIndex, int setIndex) {
-    final session = _getOrCreateSession();
-    final exercise = session.exercises[exerciseIndex];
-    final set = exercise.sets[setIndex];
-
-    final updatedSets = List<gym.Set>.from(exercise.sets);
-    final updatedSet = gym.Set(
-      reps: set.reps,
-      weight: set.weight + 2.5,
-      rpe: set.rpe,
-      note: set.note,
-    );
-    updatedSets[setIndex] = updatedSet;
-    _touchedSets.remove(set);
-    _touchedSets.add(updatedSet);
-
-    final updatedExercises = List<Exercise>.from(session.exercises);
-    updatedExercises[exerciseIndex] = Exercise(
-      name: exercise.name,
-      sets: updatedSets,
-      note: exercise.note,
-    );
-
-    _updateSession(session.copyWith(exercises: updatedExercises));
-    _autoSave();
-  }
-
-  void _decrementWeight(int exerciseIndex, int setIndex) {
-    final session = _getOrCreateSession();
-    final exercise = session.exercises[exerciseIndex];
-    final set = exercise.sets[setIndex];
-
-    if (set.weight <= 0) return;
-
-    final updatedSets = List<gym.Set>.from(exercise.sets);
-    final updatedSet = gym.Set(
-      reps: set.reps,
-      weight: set.weight - 2.5,
-      rpe: set.rpe,
-      note: set.note,
-    );
-    updatedSets[setIndex] = updatedSet;
-    _touchedSets.remove(set);
-    _touchedSets.add(updatedSet);
-
-    final updatedExercises = List<Exercise>.from(session.exercises);
-    updatedExercises[exerciseIndex] = Exercise(
-      name: exercise.name,
-      sets: updatedSets,
-      note: exercise.note,
-    );
-
-    _updateSession(session.copyWith(exercises: updatedExercises));
-    _autoSave();
+    // Persist once entry closes so PR dialogs never interrupt typing.
   }
 
   void _reorderExercises(int oldIndex, int newIndex) {
@@ -688,11 +609,19 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                               exerciseIndex: index,
                               accent: accent,
                               template: _templateFor(exercise.name),
+                              previousSets: previousExerciseSets(
+                                HiveService.getSessions(),
+                                exercise.name,
+                                splitId: widget.plan.splitId,
+                                planId: widget.plan.id,
+                                planName: widget.plan.name,
+                                beforeWeek: _currentWeek,
+                              ),
+                              onSetChanged: _changeSetValues,
+                              onEntryFinished: () {
+                                if (mounted) _autoSave();
+                              },
                               touchedSets: _touchedSets,
-                              onIncrementReps: _incrementReps,
-                              onDecrementReps: _decrementReps,
-                              onIncrementWeight: _incrementWeight,
-                              onDecrementWeight: _decrementWeight,
                               onAddSet: (i) => _addSet(i),
                               onEditSet: (i, setIndex) => _editSet(i, setIndex),
                               onAddNote: _addExerciseNote,
