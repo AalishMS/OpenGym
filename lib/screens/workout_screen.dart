@@ -708,7 +708,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               child: SizedBox(
                 height: 48,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  // Week labels sit slightly above the strip's centre to make
+                  // room for their underline. Match that optical baseline
+                  // while keeping the full 48px add-week tap target.
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                   child: Center(
                     child: Text(
                       '+ WEEK ${_weeks.length + 1}',
