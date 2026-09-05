@@ -128,6 +128,9 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Reworked the custom set keypad footer so matching Next and Save actions share
+  one row; Save replaces the detached Close action and Next disables at the
+  final field instead of changing its label to Done.
 - Fixed three workout-screen interaction and layout regressions:
   - RPE 10 now stays on one line inside the set-details action
   - Week swipes continue across completed sessions while retaining vertical-scroll disambiguation

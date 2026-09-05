@@ -382,10 +382,10 @@ class _SetKeyboardState extends State<_SetKeyboard> {
       _select(_index, false);
     } else if (_index + 1 < widget.sets.length) {
       _select(_index + 1, true);
-    } else {
-      Navigator.pop(context);
     }
   }
+
+  bool get _hasNext => _weight || _index + 1 < widget.sets.length;
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -405,10 +405,6 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
                 ),
               ],
             ),
@@ -478,13 +474,20 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                 ),
               ),
             const SizedBox(height: AppSpacing.sm),
-            SizedBox(
-              width: double.infinity,
-              child: _key(
-                !_weight && _index == widget.sets.length - 1 ? 'Done' : 'Next',
-                _next,
-                filled: true,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: _key('Next', _hasNext ? _next : null, filled: true),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: _key(
+                    'Save',
+                    () => Navigator.pop(context),
+                    filled: true,
+                  ),
+                ),
+              ],
             ),
           ],
         ),

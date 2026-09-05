@@ -121,7 +121,15 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.byType(EditableText), findsNothing);
         expect(tester.testTextInput.isVisible, isFalse);
-        await tap(tester, 'Close');
+        final next = find.widgetWithText(TextButton, 'Next');
+        final save = find.widgetWithText(TextButton, 'Save');
+        expect(tester.getTopLeft(next).dy, tester.getTopLeft(save).dy);
+        expect(tester.getCenter(next).dx, lessThan(tester.getCenter(save).dx));
+        expect(
+          tester.widget<TextButton>(next).style?.backgroundColor?.resolve({}),
+          tester.widget<TextButton>(save).style?.backgroundColor?.resolve({}),
+        );
+        await tap(tester, 'Save');
       }
     }
   });
@@ -218,15 +226,19 @@ void main() {
       await tap(tester, '0');
       await tap(tester, 'Next');
       await tap(tester, '6');
-      await tap(tester, 'Done');
+      final finalNext = tester.widget<TextButton>(
+        find.widgetWithText(TextButton, 'Next'),
+      );
+      expect(finalNext.onPressed, isNull);
+      await tap(tester, 'Save');
       expect(entries[1].weight, 80);
       expect(entries[1].reps, 6);
       expect(entries[0].previous, '65 × 8');
-      expect(find.text('Close'), findsNothing);
+      expect(find.text('Save'), findsNothing);
     },
   );
 
-  testWidgets('close and back preserve edits without changing untouched sets', (
+  testWidgets('save and back preserve edits without changing untouched sets', (
     tester,
   ) async {
     final changes = <double>[];
@@ -246,7 +258,7 @@ void main() {
     expect(changes.last, 99);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('Close'), findsNothing);
+    expect(find.text('Save'), findsNothing);
     expect(changes.last, 99);
   });
 
@@ -281,7 +293,7 @@ void main() {
         await file.writeAsBytes(bytes!.buffer.asUint8List());
         picture.dispose();
       });
-      await tap(tester, 'Close');
+      await tap(tester, 'Save');
       WorkoutDialogs.showEditSetDialog(
         tester.element(find.byType(SetEntryTable)),
         set: gym.Set(weight: 50, reps: 8, rpe: 8),

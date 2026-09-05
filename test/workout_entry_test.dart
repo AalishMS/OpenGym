@@ -42,7 +42,7 @@ void main() {
     await Hive.openBox<WorkoutSession>(HiveService.sessionsBox);
   });
 
-  testWidgets('workout keypad keeps history separate and autosaves on close', (
+  testWidgets('workout keypad keeps history separate and autosaves on save', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -89,7 +89,7 @@ void main() {
     expect(find.text('75 × 10'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
-    for (final key in ['5', '0', 'Next', '6', 'Next', '4', '5', 'Close']) {
+    for (final key in ['5', '0', 'Next', '6', 'Next', '4', '5', 'Save']) {
       await tester.tap(find.text(key).last);
       await tester.pumpAndSettle();
     }
