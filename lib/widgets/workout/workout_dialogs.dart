@@ -12,7 +12,6 @@ import 'set_entry_table.dart';
 
 class WorkoutDialogs {
   static void showPRDialog(BuildContext context, List<PRResult> prs) {
-    final accent = accentColor(context);
     showDialog(
       context: context,
       builder:
@@ -29,15 +28,7 @@ class WorkoutDialogs {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '> NEW PR DETECTED!',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: accent,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 4),
                     ...prs.map(
                       (pr) => Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
@@ -51,9 +42,10 @@ class WorkoutDialogs {
                               ),
                             ),
                             Text(
-                              '${pr.newPR}kg (Previous: ${pr.previousPR}kg)',
-                              style: GoogleFonts.jetBrainsMono(
-                                fontSize: 12,
+                              '${pr.newPR} kg · was ${pr.previousPR} kg',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.copyWith(
                                 color: textSecondaryColor(context),
                               ),
                             ),
@@ -71,8 +63,8 @@ class WorkoutDialogs {
                           foregroundColor: onAccentColor(context),
                         ),
                         child: Text(
-                          '[ACKNOWLEDGE]',
-                          style: GoogleFonts.jetBrainsMono(),
+                          'Got it',
+                          style: Theme.of(context).textTheme.labelLarge,
                         ),
                       ),
                     ),
@@ -141,7 +133,7 @@ class WorkoutDialogs {
                         TextButton(
                           onPressed: () => Navigator.pop(context),
                           child: Text(
-                            '[CANCEL]',
+                            'Cancel',
                             style: GoogleFonts.jetBrainsMono(
                               color: textSecondaryColor(context),
                             ),
@@ -171,7 +163,7 @@ class WorkoutDialogs {
                             foregroundColor: onAccentColor(context),
                           ),
                           child: Text(
-                            '[ADD]',
+                            'Add',
                             style: GoogleFonts.jetBrainsMono(),
                           ),
                         ),
@@ -243,7 +235,7 @@ class WorkoutDialogs {
                         TextButton(
                           onPressed: () => Navigator.pop(context),
                           child: Text(
-                            '[CANCEL]',
+                            'Cancel',
                             style: GoogleFonts.jetBrainsMono(
                               color: textSecondaryColor(context),
                             ),
@@ -273,7 +265,7 @@ class WorkoutDialogs {
                             foregroundColor: onAccentColor(context),
                           ),
                           child: Text(
-                            '[RENAME]',
+                            'Rename',
                             style: GoogleFonts.jetBrainsMono(),
                           ),
                         ),
@@ -402,7 +394,7 @@ class WorkoutDialogs {
                           TextButton(
                             onPressed: () => Navigator.pop(context),
                             child: Text(
-                              '[CANCEL]',
+                              'Cancel',
                               style: GoogleFonts.jetBrainsMono(
                                 color: textSecondaryColor(context),
                               ),
@@ -457,7 +449,7 @@ class WorkoutDialogs {
                               foregroundColor: onAccentColor(context),
                             ),
                             child: Text(
-                              '[ADD]',
+                              'Add',
                               style: GoogleFonts.jetBrainsMono(),
                             ),
                           ),
@@ -598,7 +590,7 @@ class WorkoutDialogs {
                               onDelete();
                             },
                             child: Text(
-                              '[DELETE]',
+                              'Delete',
                               style: GoogleFonts.jetBrainsMono(
                                 color: errorColor(context),
                               ),
@@ -610,7 +602,7 @@ class WorkoutDialogs {
                               TextButton(
                                 onPressed: () => Navigator.pop(context),
                                 child: Text(
-                                  '[CANCEL]',
+                                  'Cancel',
                                   style: GoogleFonts.jetBrainsMono(
                                     color: textSecondaryColor(context),
                                   ),
@@ -660,7 +652,7 @@ class WorkoutDialogs {
                                   foregroundColor: onAccentColor(context),
                                 ),
                                 child: Text(
-                                  '[SAVE]',
+                                  'Save',
                                   style: GoogleFonts.jetBrainsMono(),
                                 ),
                               ),
@@ -727,7 +719,7 @@ class WorkoutDialogs {
                       TextButton(
                         onPressed: () => Navigator.pop(context),
                         child: Text(
-                          '[CANCEL]',
+                          'Cancel',
                           style: GoogleFonts.jetBrainsMono(
                             color: textSecondaryColor(context),
                           ),
@@ -747,10 +739,7 @@ class WorkoutDialogs {
                           backgroundColor: accentFillColor(context),
                           foregroundColor: onAccentColor(context),
                         ),
-                        child: Text(
-                          '[SAVE]',
-                          style: GoogleFonts.jetBrainsMono(),
-                        ),
+                        child: Text('Save', style: GoogleFonts.jetBrainsMono()),
                       ),
                     ],
                   ),
@@ -853,7 +842,7 @@ class WorkoutDialogs {
                         TextButton(
                           onPressed: () => Navigator.pop(context),
                           child: Text(
-                            '[CANCEL]',
+                            'Cancel',
                             style: GoogleFonts.jetBrainsMono(
                               color: textSecondaryColor(context),
                             ),
@@ -873,7 +862,7 @@ class WorkoutDialogs {
                             foregroundColor: onAccentColor(context),
                           ),
                           child: Text(
-                            '[RENAME]',
+                            'Rename',
                             style: GoogleFonts.jetBrainsMono(),
                           ),
                         ),
@@ -930,7 +919,7 @@ class WorkoutDialogs {
                         TextButton(
                           onPressed: () => Navigator.pop(context, false),
                           child: Text(
-                            '[CANCEL]',
+                            'Cancel',
                             style: GoogleFonts.jetBrainsMono(
                               color: textSecondaryColor(context),
                             ),
@@ -944,7 +933,7 @@ class WorkoutDialogs {
                             foregroundColor: onColor(errorColor(context)),
                           ),
                           child: Text(
-                            '[DELETE]',
+                            'Delete',
                             style: GoogleFonts.jetBrainsMono(),
                           ),
                         ),
@@ -1002,7 +991,7 @@ class WorkoutDialogs {
                         TextButton(
                           onPressed: () => Navigator.pop(context, false),
                           child: Text(
-                            '[CANCEL]',
+                            'Cancel',
                             style: GoogleFonts.jetBrainsMono(
                               color: textSecondaryColor(context),
                             ),
@@ -1016,7 +1005,7 @@ class WorkoutDialogs {
                             foregroundColor: onColor(errorColor(context)),
                           ),
                           child: Text(
-                            '[DELETE]',
+                            'Delete',
                             style: GoogleFonts.jetBrainsMono(),
                           ),
                         ),
@@ -1080,7 +1069,7 @@ class WorkoutDialogs {
                         TextButton(
                           onPressed: () => Navigator.pop(context, false),
                           child: Text(
-                            '[CANCEL]',
+                            'Cancel',
                             style: GoogleFonts.jetBrainsMono(
                               color: textSecondaryColor(context),
                             ),
@@ -1094,7 +1083,7 @@ class WorkoutDialogs {
                             foregroundColor: onColor(errorColor(context)),
                           ),
                           child: Text(
-                            '[DELETE]',
+                            'Delete',
                             style: GoogleFonts.jetBrainsMono(),
                           ),
                         ),
@@ -1154,7 +1143,7 @@ class WorkoutDialogs {
                         TextButton(
                           onPressed: () => Navigator.pop(context, false),
                           child: Text(
-                            '[KEEP EDITING]',
+                            'Keep editing',
                             style: GoogleFonts.jetBrainsMono(
                               color: textSecondaryColor(context),
                             ),
@@ -1168,7 +1157,7 @@ class WorkoutDialogs {
                             foregroundColor: onColor(errorColor(context)),
                           ),
                           child: Text(
-                            '[DISCARD]',
+                            'Discard',
                             style: GoogleFonts.jetBrainsMono(),
                           ),
                         ),
@@ -1241,7 +1230,7 @@ class WorkoutDialogs {
                         TextButton(
                           onPressed: () => Navigator.pop(dialogContext),
                           child: Text(
-                            '[CANCEL]',
+                            'Cancel',
                             style: GoogleFonts.jetBrainsMono(
                               color: textSecondaryColor(dialogContext),
                             ),
@@ -1270,7 +1259,7 @@ class WorkoutDialogs {
                             foregroundColor: onAccentColor(context),
                           ),
                           child: Text(
-                            '[SAVE]',
+                            'Save',
                             style: GoogleFonts.jetBrainsMono(),
                           ),
                         ),

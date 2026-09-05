@@ -86,7 +86,7 @@ void main() {
 
   testWidgets('add exercise sheet survives being closed', (tester) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('[+ ADD EXERCISE]'));
+    await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await tester.enterText(
@@ -95,14 +95,14 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('[DONE]'));
+    await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('selected category exposes selected semantics', (tester) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('[+ ADD EXERCISE]'));
+    await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     final category = find.text('Chest');
     expect(
@@ -134,7 +134,7 @@ void main() {
 
   testWidgets('exercise selection can be toggled off', (tester) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('[+ ADD EXERCISE]'));
+    await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     expect(find.text('0 SELECTED'), findsOneWidget);
 
@@ -172,11 +172,11 @@ void main() {
     tester,
   ) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('[+ ADD EXERCISE]'));
+    await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('[DONE]'));
+    await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     for (final label in ['Add set', 'Delete exercise']) {
       expect(
@@ -190,7 +190,7 @@ void main() {
     tester,
   ) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('[+ ADD EXERCISE]'));
+    await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     final tile = find.ancestor(
       of: find.text('Bench Press'),
@@ -215,7 +215,7 @@ void main() {
     await tester.tapAt(const Offset(32, 48));
     await tester.pumpAndSettle();
     expect(find.text('> DISCARD CHANGES?'), findsOneWidget);
-    await tester.tap(find.text('[KEEP EDITING]'));
+    await tester.tap(find.text('Keep editing'));
     await tester.pumpAndSettle();
     expect(find.text('Push Day'), findsOneWidget);
   });
@@ -225,7 +225,7 @@ void main() {
     await tester.enterText(find.byType(TextField).first, 'Push Day');
     await tester.tapAt(const Offset(32, 48));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('[DISCARD]'));
+    await tester.tap(find.text('Discard'));
     await tester.pumpAndSettle();
     expect(find.text('CREATE PLAN'), findsNothing);
   });
@@ -274,7 +274,7 @@ void main() {
     await pumpEditor(tester);
     await tester.enterText(find.byType(TextField).first, 'Push Day');
 
-    for (final label in ['SAVE', '[+ ADD EXERCISE]']) {
+    for (final label in ['SAVE', 'Add exercise']) {
       final target = find.ancestor(
         of: find.text(label),
         matching: find.byType(InkWell),
@@ -288,7 +288,7 @@ void main() {
     tester,
   ) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('[+ ADD EXERCISE]'));
+    await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('CUSTOM EXERCISE'));
     await tester.pumpAndSettle();
@@ -296,7 +296,7 @@ void main() {
     await tester.pump();
     expect(find.text('Name cannot be empty'), findsOneWidget);
     await tester.enterText(find.byType(TextField).last, 'Bench Press');
-    await tester.tap(find.text('[CANCEL]'));
+    await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
@@ -367,11 +367,11 @@ void main() {
     tester,
   ) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('[+ ADD EXERCISE]'));
+    await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('[DONE]'));
+    await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     final title = tester.widget<Text>(find.text('Bench Press'));
     expect(
@@ -389,11 +389,11 @@ void main() {
     tester,
   ) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('[+ ADD EXERCISE]'));
+    await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('[DONE]'));
+    await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
 
     expect(find.bySemanticsLabel('Set 1 Kg'), findsOneWidget);
@@ -406,7 +406,7 @@ void main() {
 
   testWidgets('editor remains renderable at compact width', (tester) async {
     await pumpEditor(tester, size: const Size(320, 700));
-    await tester.tap(find.text('[+ ADD EXERCISE]'));
+    await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
@@ -416,15 +416,15 @@ void main() {
   ) async {
     await pumpEditorWithProvider(tester);
     await tester.enterText(find.byType(TextField).first, 'Persisted Push');
-    await tester.tap(find.text('[+ ADD EXERCISE]'));
+    await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('[DONE]'));
+    await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
-    for (final key in ['5', '0', '.', '2', '5', '[NEXT]', '1', '2', '[DONE]']) {
+    for (final key in ['5', '0', '.', '2', '5', 'Next', '1', '2', 'Done']) {
       await tester.tap(find.text(key).last);
       await tester.pumpAndSettle();
     }

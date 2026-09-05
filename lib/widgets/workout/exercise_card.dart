@@ -44,8 +44,12 @@ class ExerciseCard extends StatelessWidget {
   String? _annotation(int index) {
     final set = exercise.sets[index];
     final target = template?.targetAt(index);
+    final note = set.note;
     final parts = [
-      if (set.note?.isNotEmpty ?? false) set.note!,
+      if (note != null &&
+          note.trim().isNotEmpty &&
+          note.trim().toLowerCase() != 'new pr!')
+        note,
       if (!touchedSets.contains(set) &&
           target != null &&
           (target.weight > 0 || target.reps > 0))
@@ -62,6 +66,7 @@ class ExerciseCard extends StatelessWidget {
   ) => Semantics(
     button: true,
     container: true,
+    excludeSemantics: true,
     label: label,
     onTap: callback,
     child: InkWell(
@@ -144,7 +149,7 @@ class ExerciseCard extends StatelessWidget {
                 () => onAddSet(exerciseIndex),
                 Center(
                   child: Text(
-                    '[+]',
+                    'Add set',
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 12,
                       color: accent,
@@ -158,7 +163,7 @@ class ExerciseCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
-                '> No sets added yet',
+                'No sets added yet',
                 style: TextStyle(color: textSecondaryColor(context)),
               ),
             )

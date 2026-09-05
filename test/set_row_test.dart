@@ -88,9 +88,9 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        for (final pair in {'KG': 'Set 1 Kg', 'REPS': 'Set 1 Reps'}.entries) {
+        for (final pair in {'Kg': 'Set 1 Kg', 'Reps': 'Set 1 Reps'}.entries) {
           expect(
-            tester.getCenter(find.text(pair.key)).dx,
+            tester.getCenter(find.text(pair.key, findRichText: true)).dx,
             closeTo(
               tester.getCenter(find.bySemanticsLabel(pair.value)).dx,
               0.1,
@@ -106,7 +106,7 @@ void main() {
         expect(tester.takeException(), isNull);
         expect(find.byType(EditableText), findsNothing);
         expect(tester.testTextInput.isVisible, isFalse);
-        await tap(tester, '[CLOSE]');
+        await tap(tester, 'Close');
       }
     }
   });
@@ -138,38 +138,38 @@ void main() {
       expect(entries[0].weight, 50.25);
       await tap(tester, '.');
       expect(entries[0].weight, 50.25);
-      await tap(tester, '[DEL]');
+      await tap(tester, 'Delete');
       expect(entries[0].weight, 50.2);
-      await tap(tester, '[+2.5 KG]');
+      await tap(tester, '+2.5 kg');
       expect(entries[0].weight, 52.7);
-      await tap(tester, '[-2.5 KG]');
+      await tap(tester, '−2.5 kg');
       expect(entries[0].weight, 50.2);
-      await tap(tester, '[NEXT]');
-      expect(find.text('SET 1 OF 2 · REPS'), findsOneWidget);
+      await tap(tester, 'Next');
+      expect(find.text('Set 1 of 2 · Reps'), findsOneWidget);
       final decimal = tester.widget<TextButton>(
         find.widgetWithText(TextButton, '.'),
       );
       expect(decimal.onPressed, isNull);
       expect(
         tester
-            .widget<TextButton>(find.widgetWithText(TextButton, '[+2.5 KG]'))
+            .widget<TextButton>(find.widgetWithText(TextButton, '+2.5 kg'))
             .onPressed,
         isNull,
       );
       await tap(tester, '1');
       await tap(tester, '2');
       expect(entries[0].reps, 12);
-      await tap(tester, '[NEXT]');
-      expect(find.text('SET 2 OF 2 · KG'), findsOneWidget);
+      await tap(tester, 'Next');
+      expect(find.text('Set 2 of 2 · Weight'), findsOneWidget);
       await tap(tester, '8');
       await tap(tester, '0');
-      await tap(tester, '[NEXT]');
+      await tap(tester, 'Next');
       await tap(tester, '6');
-      await tap(tester, '[DONE]');
+      await tap(tester, 'Done');
       expect(entries[1].weight, 80);
       expect(entries[1].reps, 6);
       expect(entries[0].previous, '65 × 8');
-      expect(find.text('[CLOSE]'), findsNothing);
+      expect(find.text('Close'), findsNothing);
     },
   );
 
@@ -182,18 +182,18 @@ void main() {
     );
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
-    await tap(tester, '[-2.5 KG]');
+    await tap(tester, '−2.5 kg');
     expect(changes.last, 0);
     await tap(tester, '9');
     await tap(tester, '9');
     await tap(tester, '9');
     await tap(tester, '9');
     expect(changes.last, 999);
-    await tap(tester, '[DEL]');
+    await tap(tester, 'Delete');
     expect(changes.last, 99);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('[CLOSE]'), findsNothing);
+    expect(find.text('Close'), findsNothing);
     expect(changes.last, 99);
   });
 
@@ -232,7 +232,7 @@ void main() {
         await file.writeAsBytes(bytes!.buffer.asUint8List());
         picture.dispose();
       });
-      await tap(tester, '[CLOSE]');
+      await tap(tester, 'Close');
     }
   });
 }

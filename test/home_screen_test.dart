@@ -301,7 +301,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        final addTile = find.text('[+ ADD EXERCISE]');
+        final addTile = find.text('Add exercise');
         expect(
           find.ancestor(
             of: addTile,

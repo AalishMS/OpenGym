@@ -128,6 +128,13 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Polished set entry across workout and plan editing:
+  - Replaced bracketed terminal labels with clear sentence-case controls and
+    improved sans-serif typography for headers, previous results, and inputs
+  - Matched Kg and Reps field sizing, surfaced RPE as a colored `@value`, and
+    removed redundant New PR copy from exercise rows and dialogs
+  - Kept exercise card spacing symmetrical while preserving the shared custom
+    number keyboard and aligned four-column layout
 - Refined the Home header hierarchy:
   - Reduced the active split from the page-title role to the compact secondary
     title role and scaled its chevron to match

@@ -484,7 +484,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                         AppSpacing.lg,
                       ),
                       child: _FullWidthButton(
-                        label: 'DONE',
+                        label: 'Done',
                         accent: accent,
                         filled: true,
                         onTap: () => Navigator.pop(sheetContext),
@@ -566,7 +566,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                 TextButton(
                   onPressed: () => Navigator.pop(dialogContext),
                   child: Text(
-                    '[CANCEL]',
+                    'Cancel',
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 11,
                       color: textSecondaryColor(context),
@@ -583,7 +583,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                           }
                           : null,
                   child: Text(
-                    '[CONFIRM]',
+                    'Confirm',
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 11,
                       color:
@@ -734,7 +734,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                           ),
                           const SizedBox(height: AppSpacing.lg),
                           _FullWidthButton(
-                            label: '+ ADD EXERCISE',
+                            label: 'Add exercise',
                             accent: planColor,
                             onTap: _showAddExerciseSheet,
                           ),
@@ -1075,7 +1075,7 @@ class _ExerciseEditorCard extends StatelessWidget {
       highlightColor: accent.withValues(alpha: 0.1),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
-          AppSpacing.xs,
+          AppSpacing.md,
           AppSpacing.sm,
           AppSpacing.md,
           AppSpacing.sm,
@@ -1446,16 +1446,13 @@ class _FullWidthButton extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (label.startsWith('+')) ...[
+            if (label == 'Add exercise') ...[
               Icon(LucideIcons.plus, size: 12, color: accent),
               const SizedBox(width: AppSpacing.sm),
             ],
             Text(
-              '[$label]',
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.1,
+              label,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
                 color: filled ? onAccentColor(context) : accent,
               ),
             ),

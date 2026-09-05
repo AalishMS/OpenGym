@@ -89,16 +89,7 @@ void main() {
     expect(find.text('75 × 10'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
-    for (final key in [
-      '5',
-      '0',
-      '[NEXT]',
-      '6',
-      '[NEXT]',
-      '4',
-      '5',
-      '[CLOSE]',
-    ]) {
+    for (final key in ['5', '0', 'Next', '6', 'Next', '4', '5', 'Close']) {
       await tester.tap(find.text(key).last);
       await tester.pumpAndSettle();
     }

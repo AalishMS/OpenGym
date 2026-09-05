@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/semantic_colors.dart';
@@ -91,36 +89,23 @@ class SetEntryTable extends StatelessWidget {
                           tooltip:
                               onDelete != null ? 'Delete set' : 'Set details',
                           onPressed: () => (onDelete ?? onDetails)!(index),
-                          icon: Icon(
-                            onDelete != null ? Icons.close : Icons.more_horiz,
-                            size: 18,
-                            color: textSecondaryColor(context),
-                          ),
+                          icon:
+                              onDelete == null && sets[index].rpe != null
+                                  ? _effort(context, sets[index].rpe!)
+                                  : Icon(
+                                    onDelete != null
+                                        ? Icons.close
+                                        : Icons.more_horiz,
+                                    size: 18,
+                                    color: textSecondaryColor(context),
+                                  ),
                         )
                         : null,
               ),
-              if (sets[index].annotation != null || sets[index].rpe != null)
+              if (sets[index].annotation != null)
                 Padding(
-                  padding: const EdgeInsets.only(left: 38, top: 4),
-                  child: Text.rich(
-                    TextSpan(
-                      children: [
-                        if (sets[index].rpe != null)
-                          TextSpan(
-                            text: 'RPE ${sets[index].rpe}',
-                            style: _quiet(context).copyWith(
-                              color: rpeColor(sets[index].rpe!, context),
-                            ),
-                          ),
-                        if (sets[index].rpe != null &&
-                            sets[index].annotation != null)
-                          const TextSpan(text: ' · '),
-                        if (sets[index].annotation != null)
-                          TextSpan(text: sets[index].annotation),
-                      ],
-                    ),
-                    style: _quiet(context),
-                  ),
+                  padding: const EdgeInsets.only(left: 40, top: 6),
+                  child: Text(sets[index].annotation!, style: _quiet(context)),
                 ),
             ],
           ),
@@ -130,18 +115,35 @@ class SetEntryTable extends StatelessWidget {
 }
 
 TextStyle _quiet(BuildContext context) =>
-    GoogleFonts.jetBrainsMono(fontSize: 11, color: textSecondaryColor(context));
+    Theme.of(context).textTheme.bodyMedium!.copyWith(
+      fontSize: 14,
+      fontWeight: FontWeight.w600,
+      color: textSecondaryColor(context),
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+
+Widget _effort(BuildContext context, int rpe) => Semantics(
+  label: 'RPE $rpe',
+  excludeSemantics: true,
+  child: Text(
+    '@$rpe',
+    style: Theme.of(context).textTheme.labelLarge!.copyWith(
+      fontWeight: FontWeight.w700,
+      color: rpeColor(rpe, context),
+    ),
+  ),
+);
 
 /// Header and data share the exact same column geometry at every width.
 Widget _columns(List<Widget> cells, {Widget? trailing}) => Row(
   children: [
     SizedBox(width: 32, child: cells[0]),
-    const SizedBox(width: 6),
-    Expanded(flex: 5, child: cells[1]),
-    const SizedBox(width: 6),
+    const SizedBox(width: 8),
+    Expanded(flex: 6, child: cells[1]),
+    const SizedBox(width: 8),
     Expanded(flex: 5, child: cells[2]),
-    const SizedBox(width: 6),
-    Expanded(flex: 4, child: cells[3]),
+    const SizedBox(width: 8),
+    Expanded(flex: 5, child: cells[3]),
     if (trailing != null) SizedBox(width: 48, child: trailing),
   ],
 );
@@ -154,8 +156,14 @@ class _EntryHeader extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: _columns([
-      for (final label in ['SET', 'PREV', 'KG', 'REPS'])
-        Text(label, textAlign: TextAlign.center, style: _quiet(context)),
+      for (final label in ['Set', 'Prev', 'Kg', 'Reps'])
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: Theme.of(
+            context,
+          ).textTheme.titleSmall!.copyWith(color: textSecondaryColor(context)),
+        ),
     ], trailing: trailing ? const SizedBox() : null),
   );
 }
@@ -184,16 +192,24 @@ class _EntryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => _columns([
     Text(
-      '[${(index + 1).toString().padLeft(2, '0')}]',
+      '${index + 1}',
       textAlign: TextAlign.center,
-      style: _quiet(context),
+      style: Theme.of(context).textTheme.titleMedium!.copyWith(
+        fontWeight: FontWeight.w700,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
     ),
     Semantics(
       label: 'Previous set ${index + 1}: ${previous ?? 'no history'}',
       child: Text(
         previous ?? '—',
         textAlign: TextAlign.center,
-        style: _quiet(context),
+        style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: textSecondaryColor(context),
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
       ),
     ),
     _field(context, weight, 'Kg', activeWeight == true, onWeight),
@@ -221,7 +237,7 @@ class _EntryRow extends StatelessWidget {
         onTap: onTap,
         borderRadius: AppRadius.field,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 48),
+          constraints: const BoxConstraints(minHeight: 52),
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
           alignment: Alignment.center,
           decoration: BoxDecoration(
@@ -235,8 +251,9 @@ class _EntryRow extends StatelessWidget {
             fit: BoxFit.scaleDown,
             child: Text(
               value.isEmpty ? '—' : value,
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 18,
+              style: Theme.of(context).textTheme.titleLarge!.copyWith(
+                fontSize: 20,
+                fontFeatures: const [FontFeature.tabularFigures()],
                 fontWeight: FontWeight.bold,
                 color:
                     active
@@ -356,17 +373,26 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                 ),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('[CLOSE]'),
+                  child: const Text('Close'),
                 ),
               ],
             ),
-            const _EntryHeader(),
+            _EntryHeader(trailing: widget.sets.any((set) => set.rpe != null)),
             _EntryRow(
               index: _index,
               previous: _set.previous,
               weight: _weight ? _input : entryWeight(_set.weight),
               reps: _weight ? '${_set.reps}' : _input,
               activeWeight: _weight,
+              trailing:
+                  widget.sets.any((set) => set.rpe != null)
+                      ? Center(
+                        child:
+                            _set.rpe == null
+                                ? const SizedBox()
+                                : _effort(context, _set.rpe!),
+                      )
+                      : null,
               onWeight: () => _select(_index, true),
               onReps: () => _select(_index, false),
             ),
@@ -374,7 +400,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
             Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                'SET ${_index + 1} OF ${widget.sets.length} · ${_weight ? 'KG' : 'REPS'}',
+                'Set ${_index + 1} of ${widget.sets.length} · ${_weight ? 'Weight' : 'Reps'}',
                 style: _quiet(context),
               ),
             ),
@@ -382,14 +408,11 @@ class _SetKeyboardState extends State<_SetKeyboard> {
             Row(
               children: [
                 Expanded(
-                  child: _key(
-                    '[-2.5 KG]',
-                    _weight ? () => _adjust(-2.5) : null,
-                  ),
+                  child: _key('−2.5 kg', _weight ? () => _adjust(-2.5) : null),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: _key('[+2.5 KG]', _weight ? () => _adjust(2.5) : null),
+                  child: _key('+2.5 kg', _weight ? () => _adjust(2.5) : null),
                 ),
               ],
             ),
@@ -407,7 +430,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                       if (i > 0) const SizedBox(width: 8),
                       Expanded(
                         child: _key(
-                          row[i] == 'delete' ? '[DEL]' : row[i],
+                          row[i] == 'delete' ? 'Delete' : row[i],
                           row[i] == '.' && !_weight
                               ? null
                               : () => _type(row[i]),
@@ -423,9 +446,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
             SizedBox(
               width: double.infinity,
               child: _key(
-                !_weight && _index == widget.sets.length - 1
-                    ? '[DONE]'
-                    : '[NEXT]',
+                !_weight && _index == widget.sets.length - 1 ? 'Done' : 'Next',
                 _next,
                 filled: true,
               ),
@@ -444,7 +465,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
   }) => Semantics(
     label: semanticLabel,
     child: SizedBox(
-      height: 48,
+      height: 52,
       child: TextButton(
         onPressed: onTap,
         style: TextButton.styleFrom(
@@ -457,8 +478,8 @@ class _SetKeyboardState extends State<_SetKeyboard> {
             borderRadius: AppRadius.button,
             side: BorderSide(color: borderColor(context)),
           ),
-          textStyle: GoogleFonts.jetBrainsMono(
-            fontSize: 16,
+          textStyle: Theme.of(context).textTheme.labelLarge!.copyWith(
+            fontSize: label.length == 1 ? 22 : 15,
             fontWeight: FontWeight.w600,
           ),
         ),
