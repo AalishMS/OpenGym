@@ -86,3 +86,44 @@ String formatStatisticsDate(DateTime date) {
 }
 
 String formatWeekLabel(DateTime date) => '${date.day}/${date.month}';
+
+/// ISO week dates use Thursday to determine the week-year (not calendar year).
+({int year, int week}) isoWeek(DateTime date) {
+  final day = DateTime.utc(date.year, date.month, date.day);
+  final thursday = day.add(Duration(days: DateTime.thursday - day.weekday));
+  final first = DateTime.utc(thursday.year, 1, 1);
+  return (
+    year: thursday.year,
+    week: thursday.difference(first).inDays ~/ 7 + 1,
+  );
+}
+
+String formatIsoWeek(DateTime date) => 'W${isoWeek(date).week}';
+
+String formatWeekRange(DateTime start) {
+  final end = DateTime(start.year, start.month, start.day + 6);
+  return '${formatIsoWeek(start)} · ${isoWeek(start).year} · '
+      '${formatStatisticsDate(start)} – ${formatStatisticsDate(end)}';
+}
+
+String formatChartNumber(double value) {
+  final magnitude = value.abs();
+  if (magnitude >= 1000000) return '${(value / 1000000).toStringAsFixed(1)}m';
+  if (magnitude >= 1000) return '${(value / 1000).toStringAsFixed(1)}k';
+  return formatWeight(value);
+}
+
+String formatExactVolume(double kilograms, String unit) =>
+    '${formatAnalyticsNumber(displayWeight(kilograms, unit), decimals: 2).replaceFirst(RegExp(r'\.?0+$'), '')} $unit';
+
+String formatChartExerciseValue(
+  double value,
+  ExerciseMetric metric,
+  String unit,
+) => switch (metric) {
+  ExerciseMetric.bestWeight ||
+  ExerciseMetric.estimatedOneRepMax ||
+  ExerciseMetric.bestSetVolume ||
+  ExerciseMetric.sessionVolume => formatExactVolume(value, unit),
+  _ => formatExerciseValue(value, metric, unit),
+};

@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:ui' show SemanticsAction, Tristate;
+import 'package:gymapp/models/statistics.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -370,33 +370,28 @@ void main() {
       await tester.pumpWidget(host(const StatsScreen(), sessions: [session]));
       await tester.pump();
 
-      Finder control(String label) => find.widgetWithText(ChoiceChip, label);
-      for (final label in ['4 weeks', '12 weeks']) {
-        final chip = control(label);
-        expect(chip, findsOneWidget);
-        expect(tester.getSize(chip).height, greaterThanOrEqualTo(48));
-        final data = tester.getSemantics(find.text(label)).getSemanticsData();
-        expect(data.label, label);
-        expect(data.hasAction(SemanticsAction.tap), isTrue);
-      }
+      final control = find.byType(DropdownButtonFormField<StatisticsPeriod>);
+      await tester.ensureVisible(control);
+      await tester.pumpAndSettle();
+      expect(tester.getSize(control).height, greaterThanOrEqualTo(48));
       expect(
         tester
-            .getSemantics(find.text('4 weeks'))
-            .getSemanticsData()
-            .flagsCollection
-            .isSelected,
-        Tristate.isTrue,
+            .widget<DropdownButtonFormField<StatisticsPeriod>>(control)
+            .initialValue,
+        StatisticsPeriod.fourWeeks,
       );
-      await tester.tap(control('12 weeks'));
-      await tester.pump();
+      await tester.tap(control);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('12 weeks').last);
+      await tester.pumpAndSettle();
       expect(
         tester
-            .getSemantics(find.text('12 weeks'))
-            .getSemanticsData()
-            .flagsCollection
-            .isSelected,
-        Tristate.isTrue,
+            .widget<DropdownButtonFormField<StatisticsPeriod>>(control)
+            .initialValue,
+        StatisticsPeriod.twelveWeeks,
       );
+      expect(find.text('Recent sessions'), findsNothing);
+      expect(find.byType(ChoiceChip), findsNothing);
       semantics.dispose();
     },
   );
@@ -407,7 +402,7 @@ void main() {
     final session = WorkoutSession(
       id: 'session-1',
       planName: 'Push Day',
-      date: DateTime(2026, 8, 28),
+      date: DateTime.now(),
       exercises: [
         Exercise(name: 'Bench Press', sets: [Set(reps: 5, weight: 80)]),
       ],

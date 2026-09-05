@@ -5,6 +5,84 @@ import '../models/workout_session.dart';
 class StatisticsAnalyticsService {
   const StatisticsAnalyticsService();
 
+  /// Exercise volume across calendar weeks, including gaps through this week.
+  List<WeeklyTrainingValue> weeklyVolume(
+    Iterable<WorkoutSession> sessions, {
+    String? exerciseName,
+    String? splitId,
+    DateTime? now,
+  }) {
+    final current = startOfWeek(now ?? DateTime.now());
+    final end = DateTime(current.year, current.month, current.day + 7);
+    final totals = <DateTime, double>{};
+    for (final session in eligibleSessions(sessions, splitId: splitId)) {
+      if (!session.date.isBefore(end)) continue;
+      final sets = session.exercises
+          .where(
+            (exercise) =>
+                exerciseName == null ||
+                exercise.name.trim().toLowerCase() ==
+                    exerciseName.trim().toLowerCase(),
+          )
+          .expand((exercise) => exercise.sets)
+          .where((set) => set.reps > 0);
+      if (sets.isEmpty) continue;
+      final week = startOfWeek(session.date);
+      totals.update(
+        week,
+        (value) =>
+            value +
+            sets.fold<double>(0, (sum, set) => sum + set.weight * set.reps),
+        ifAbsent:
+            () =>
+                sets.fold<double>(0, (sum, set) => sum + set.weight * set.reps),
+      );
+    }
+    final first = totals.keys.fold(current, (a, b) => a.isBefore(b) ? a : b);
+    return List.unmodifiable([
+      for (
+        var week = first;
+        !week.isAfter(current);
+        week = DateTime(week.year, week.month, week.day + 7)
+      )
+        WeeklyTrainingValue(
+          weekStart: week,
+          volumeLoad: totals[week] ?? 0,
+          totalReps: 0,
+          totalSets: 0,
+          durationSeconds: 0,
+          sessionsWithDuration: 0,
+        ),
+    ]);
+  }
+
+  String? latestExercise(Iterable<WorkoutSession> sessions) {
+    final latest = <String, DateTime>{};
+    for (final session in eligibleSessions(sessions)) {
+      for (final exercise in session.exercises) {
+        if (exercise.sets.any((set) => set.reps > 0)) {
+          latest.putIfAbsent(
+            exercise.name.trim().toLowerCase(),
+            () => session.date,
+          );
+        }
+      }
+    }
+    final names =
+        exerciseNames(
+            sessions,
+          ).where((name) => latest.containsKey(name.toLowerCase())).toList()
+          ..sort((a, b) {
+            final date = latest[b.toLowerCase()]!.compareTo(
+              latest[a.toLowerCase()]!,
+            );
+            return date == 0
+                ? a.toLowerCase().compareTo(b.toLowerCase())
+                : date;
+          });
+    return names.firstOrNull;
+  }
+
   static double estimatedOneRepMax(gym.Set set) {
     if (set.weight <= 0 || set.reps < 1 || set.reps > 12) return 0;
     return set.weight * (1 + set.reps / 30);
@@ -233,7 +311,12 @@ class StatisticsAnalyticsService {
     final names = <String, String>{};
     for (final session in eligibleSessions(sessions)) {
       for (final exercise in session.exercises) {
-        names.putIfAbsent(exercise.name.toLowerCase(), () => exercise.name);
+        if (exercise.sets.any((set) => set.reps > 0)) {
+          names.putIfAbsent(
+            exercise.name.trim().toLowerCase(),
+            () => exercise.name.trim(),
+          );
+        }
       }
     }
     final result = names.values.toList()..sort();
@@ -252,7 +335,9 @@ class StatisticsAnalyticsService {
     var overallBestVolume = -1.0;
     for (final session in ordered) {
       final matching = session.exercises.where(
-        (exercise) => exercise.name.toLowerCase() == exerciseName.toLowerCase(),
+        (exercise) =>
+            exercise.name.trim().toLowerCase() ==
+            exerciseName.trim().toLowerCase(),
       );
       final sets =
           matching

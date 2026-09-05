@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/statistics.dart';
-import '../models/workout_session.dart';
 import '../providers/settings_provider.dart';
 import '../providers/split_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../services/statistics_analytics_service.dart';
 import '../theme/app_theme.dart';
-import '../theme/breakpoints.dart';
+import '../theme/app_typography.dart';
+import '../theme/radii.dart';
 import '../utils/statistics_format.dart';
 import '../widgets/statistics/statistics_widgets.dart';
-import 'history_screen.dart';
+import '../widgets/statistics/training_charts.dart';
 
 class StatsScreen extends StatefulWidget {
   const StatsScreen({super.key});
@@ -22,21 +22,46 @@ class StatsScreen extends StatefulWidget {
 
 class _StatsScreenState extends State<StatsScreen> {
   static const _analytics = StatisticsAnalyticsService();
-
   StatisticsPeriod _period = StatisticsPeriod.fourWeeks;
-  TrainingMetric _trainingMetric = TrainingMetric.volumeLoad;
-  ExerciseMetric _exerciseMetric = ExerciseMetric.estimatedOneRepMax;
-  String? _selectedExercise;
+  ExerciseMetric _metric = ExerciseMetric.estimatedOneRepMax;
+  String? _weeklyExercise;
+  String? _progressExercise;
+  bool _allExercises = false;
+  String? _lastSplit;
 
   @override
   Widget build(BuildContext context) {
-    final providerSessions = context.watch<WorkoutSessionProvider>().sessions;
     final splitId = context.watch<SplitProvider?>()?.activeSplitId;
-    final weightUnit = context.watch<SettingsProvider?>()?.weightUnit ?? 'kg';
+    final unit = context.watch<SettingsProvider?>()?.weightUnit ?? 'kg';
     final sessions = _analytics.eligibleSessions(
-      providerSessions,
+      context.watch<WorkoutSessionProvider>().sessions,
       splitId: splitId,
     );
+    if (_lastSplit != splitId) {
+      _lastSplit = splitId;
+      _weeklyExercise = null;
+      _progressExercise = null;
+      _allExercises = false;
+    }
+    final names = _analytics.exerciseNames(sessions);
+    final defaultExercise = _analytics.latestExercise(sessions);
+    final weekly =
+        names.contains(_weeklyExercise) ? _weeklyExercise : defaultExercise;
+    final exercise =
+        names.contains(_progressExercise) ? _progressExercise : defaultExercise;
+    final weeks = _analytics.weeklyVolume(
+      sessions,
+      exerciseName: _allExercises ? null : weekly,
+    );
+    final progress =
+        exercise == null
+            ? null
+            : _analytics.exerciseProgress(
+              _analytics.sessionsInPeriod(sessions, _period),
+              exercise,
+              _metric,
+            );
+    final records = _analytics.recordEvents(sessions).take(8).toList();
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -51,429 +76,323 @@ class _StatsScreenState extends State<StatsScreen> {
       ),
       body:
           sessions.isEmpty
-              ? const _NoStatisticsState()
-              : _StatisticsContent(
-                sessions: sessions,
-                period: _period,
-                trainingMetric: _trainingMetric,
-                exerciseMetric: _exerciseMetric,
-                selectedExercise: _selectedExercise,
-                weightUnit: weightUnit,
-                onPeriodChanged: (value) => setState(() => _period = value),
-                onTrainingMetricChanged:
-                    (value) => setState(() => _trainingMetric = value),
-                onExerciseMetricChanged:
-                    (value) => setState(() => _exerciseMetric = value),
-                onExerciseChanged:
-                    (value) => setState(() => _selectedExercise = value),
+              ? const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'No completed workouts',
+                        textAlign: TextAlign.center,
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'Statistics appear after you finish and log a workout.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              )
+              : SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 880),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const StatisticsSectionHeader(title: 'Weekly training'),
+                        const SizedBox(height: 12),
+                        _ChartPanel(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Volume load',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Weight × reps · All history',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: textSecondaryColor(context),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              _Selector<String>(
+                                fieldKey: 'weekly-exercise',
+                                label: 'Exercise',
+                                value: _allExercises ? '' : weekly ?? '',
+                                values: ['', ...names],
+                                labelFor:
+                                    (name) =>
+                                        name.isEmpty ? 'All exercises' : name,
+                                onChanged:
+                                    (value) => setState(() {
+                                      _allExercises = value.isEmpty;
+                                      _weeklyExercise =
+                                          value.isEmpty ? null : value;
+                                    }),
+                              ),
+                              const SizedBox(height: 24),
+                              WeeklyVolumeChart(
+                                key: ValueKey(
+                                  'weekly-$splitId-${_allExercises ? "all" : weekly}',
+                                ),
+                                weeks: weeks,
+                                weightUnit: unit,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        const StatisticsSectionHeader(
+                          title: 'Exercise progress',
+                        ),
+                        const SizedBox(height: 12),
+                        _ChartPanel(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (exercise == null)
+                                const Text(
+                                  'Log performed sets to see exercise progress.',
+                                )
+                              else ...[
+                                _Selector<String>(
+                                  fieldKey: 'progress-exercise',
+                                  label: 'Exercise',
+                                  value: exercise,
+                                  values: names,
+                                  labelFor: (name) => name,
+                                  onChanged:
+                                      (value) => setState(
+                                        () => _progressExercise = value,
+                                      ),
+                                ),
+                                const SizedBox(height: 12),
+                                LayoutBuilder(
+                                  builder: (context, constraints) {
+                                    final metric = _Selector<ExerciseMetric>(
+                                      fieldKey: 'progress-metric',
+                                      label: 'Metric',
+                                      value: _metric,
+                                      values: ExerciseMetric.values,
+                                      labelFor: (metric) => metric.label,
+                                      onChanged:
+                                          (value) =>
+                                              setState(() => _metric = value),
+                                    );
+                                    final period = _Selector<StatisticsPeriod>(
+                                      fieldKey: 'progress-period',
+                                      label: 'Period',
+                                      value: _period,
+                                      values: StatisticsPeriod.values,
+                                      labelFor: (period) => period.label,
+                                      onChanged:
+                                          (value) =>
+                                              setState(() => _period = value),
+                                    );
+                                    if (constraints.maxWidth < 300 ||
+                                        MediaQuery.textScalerOf(
+                                              context,
+                                            ).scale(1) >
+                                            1.3) {
+                                      return Column(
+                                        children: [
+                                          metric,
+                                          const SizedBox(height: 12),
+                                          period,
+                                        ],
+                                      );
+                                    }
+                                    return Row(
+                                      children: [
+                                        Expanded(flex: 3, child: metric),
+                                        const SizedBox(width: 12),
+                                        Expanded(flex: 2, child: period),
+                                      ],
+                                    );
+                                  },
+                                ),
+                                const SizedBox(height: 24),
+                                if (progress!.points.isNotEmpty) ...[
+                                  _ProgressSummary(
+                                    progress: progress,
+                                    metric: _metric,
+                                    unit: unit,
+                                  ),
+                                  const SizedBox(height: 20),
+                                  Text(
+                                    'Per workout',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelMedium?.copyWith(
+                                      color: textSecondaryColor(context),
+                                    ),
+                                  ),
+                                ],
+                                ExerciseTrendChart(
+                                  key: ValueKey(
+                                    'progress-$splitId-$exercise-$_period-$_metric',
+                                  ),
+                                  progress: progress,
+                                  metric: _metric,
+                                  weightUnit: unit,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        const StatisticsSectionHeader(title: 'Recent records'),
+                        const SizedBox(height: 8),
+                        if (records.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Text(
+                              'New personal records will appear here as you train.',
+                              style: Theme.of(
+                                context,
+                              ).textTheme.bodyMedium?.copyWith(
+                                color: textSecondaryColor(context),
+                              ),
+                            ),
+                          )
+                        else
+                          for (final event in records)
+                            RecordEventRow(event: event, weightUnit: unit),
+                      ],
+                    ),
+                  ),
+                ),
               ),
     );
   }
 }
 
-class _StatisticsContent extends StatelessWidget {
-  static const _analytics = StatisticsAnalyticsService();
+class _ChartPanel extends StatelessWidget {
+  final Widget child;
+  const _ChartPanel({required this.child});
 
-  final List<WorkoutSession> sessions;
-  final StatisticsPeriod period;
-  final TrainingMetric trainingMetric;
-  final ExerciseMetric exerciseMetric;
-  final String? selectedExercise;
-  final String weightUnit;
-  final ValueChanged<StatisticsPeriod> onPeriodChanged;
-  final ValueChanged<TrainingMetric> onTrainingMetricChanged;
-  final ValueChanged<ExerciseMetric> onExerciseMetricChanged;
-  final ValueChanged<String?> onExerciseChanged;
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: surfaceColor(context),
+      borderRadius: AppRadius.card,
+    ),
+    child: child,
+  );
+}
 
-  const _StatisticsContent({
-    required this.sessions,
-    required this.period,
-    required this.trainingMetric,
-    required this.exerciseMetric,
-    required this.selectedExercise,
-    required this.weightUnit,
-    required this.onPeriodChanged,
-    required this.onTrainingMetricChanged,
-    required this.onExerciseMetricChanged,
-    required this.onExerciseChanged,
+class _Selector<T> extends StatelessWidget {
+  final String fieldKey;
+  final String label;
+  final T value;
+  final List<T> values;
+  final String Function(T) labelFor;
+  final ValueChanged<T> onChanged;
+  const _Selector({
+    required this.fieldKey,
+    required this.label,
+    required this.value,
+    required this.values,
+    required this.labelFor,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) => DropdownButtonFormField<T>(
+    key: ValueKey('$fieldKey-$value'),
+    initialValue: value,
+    isExpanded: true,
+    itemHeight: null,
+    decoration: InputDecoration(
+      labelText: label,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+    ),
+    selectedItemBuilder:
+        (context) => [
+          for (final item in values)
+            Text(labelFor(item), maxLines: 1, overflow: TextOverflow.ellipsis),
+        ],
+    items: [
+      for (final item in values)
+        DropdownMenuItem(
+          value: item,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Text(labelFor(item)),
+          ),
+        ),
+    ],
+    onChanged: (value) {
+      if (value != null) onChanged(value);
+    },
+  );
+}
+
+class _ProgressSummary extends StatelessWidget {
+  final ExerciseProgress progress;
+  final ExerciseMetric metric;
+  final String unit;
+  const _ProgressSummary({
+    required this.progress,
+    required this.metric,
+    required this.unit,
   });
 
   @override
   Widget build(BuildContext context) {
-    final periodSessions = _analytics.sessionsInPeriod(sessions, period);
-    final overview = _analytics.trainingOverview(
-      sessions,
-      period,
-      trainingMetric,
-    );
-    final names = _analytics.exerciseNames(periodSessions);
-    final exercise =
-        names.contains(selectedExercise)
-            ? selectedExercise
-            : (names.isEmpty ? null : names.first);
-    final progress =
-        exercise == null
-            ? null
-            : _analytics.exerciseProgress(
-              periodSessions,
-              exercise,
-              exerciseMetric,
-            );
-    final records = _analytics.recordEvents(sessions).take(8).toList();
-    final recentSessions =
-        sessions.take(8).map(_analytics.sessionStatistics).toList();
-    final total = overview.weeks.fold<double>(
-      0,
-      (sum, week) => sum + week.valueFor(trainingMetric),
-    );
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final wide =
-            constraints.maxWidth >= Breakpoints.medium - 180 &&
-            MediaQuery.textScalerOf(context).scale(1) <= 1.4;
-        return Align(
-          alignment: Alignment.topCenter,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+    final best = progress.points
+        .map((point) => point.value)
+        .reduce((a, b) => a > b ? a : b);
+    final change = progress.change;
+    final values = [
+      (
+        'Latest',
+        formatChartExerciseValue(progress.currentValue!, metric, unit),
+      ),
+      (
+        'Change',
+        change == null
+            ? 'Need 2 workouts'
+            : '${change > 0 ? '+' : ''}${formatChartExerciseValue(change, metric, unit)}',
+      ),
+      ('Best in period', formatChartExerciseValue(best, metric, unit)),
+    ];
+    return Wrap(
+      spacing: 24,
+      runSpacing: 16,
+      children: [
+        for (final (label, value) in values)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(
-                  maxWidth: Breakpoints.expanded,
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: textSecondaryColor(context),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const StatisticsSectionHeader(
-                      title: 'Weekly training',
-                      supportingText:
-                          'Completed workouts grouped Monday to Sunday.',
-                    ),
-                    const SizedBox(height: 16),
-                    StatisticsChoiceBar<StatisticsPeriod>(
-                      values: StatisticsPeriod.values,
-                      selected: period,
-                      labelFor: (value) => value.label,
-                      onSelected: onPeriodChanged,
-                    ),
-                    const SizedBox(height: 16),
-                    StatisticsChoiceBar<TrainingMetric>(
-                      values: TrainingMetric.values,
-                      selected: trainingMetric,
-                      labelFor: (value) => value.label,
-                      onSelected: onTrainingMetricChanged,
-                    ),
-                    const SizedBox(height: 20),
-                    _PeriodSummary(
-                      total: total,
-                      metric: trainingMetric,
-                      weightUnit: weightUnit,
-                      comparison: overview.comparison,
-                      hasDurationData: overview.hasDurationData,
-                    ),
-                    const SizedBox(height: 16),
-                    WeeklyTrainingChart(
-                      overview: overview,
-                      metric: trainingMetric,
-                      weightUnit: weightUnit,
-                    ),
-                    const SizedBox(height: 36),
-                    if (wide)
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _RecentSessionsSection(
-                              statistics: recentSessions,
-                              weightUnit: weightUnit,
-                            ),
-                          ),
-                          const SizedBox(width: 32),
-                          Expanded(
-                            child: _RecordEventsSection(
-                              events: records,
-                              weightUnit: weightUnit,
-                            ),
-                          ),
-                        ],
-                      )
-                    else ...[
-                      _RecentSessionsSection(
-                        statistics: recentSessions,
-                        weightUnit: weightUnit,
-                      ),
-                      const SizedBox(height: 36),
-                      _RecordEventsSection(
-                        events: records,
-                        weightUnit: weightUnit,
-                      ),
-                    ],
-                    const SizedBox(height: 36),
-                    const StatisticsSectionHeader(
-                      title: 'Exercise progress',
-                      supportingText:
-                          'One point for each workout containing the exercise.',
-                    ),
-                    const SizedBox(height: 16),
-                    if (names.isEmpty)
-                      const _InlineEmptyState(
-                        text: 'No performed sets are available in this period.',
-                      )
-                    else ...[
-                      DropdownButtonFormField<String>(
-                        key: ValueKey(exercise),
-                        initialValue: exercise,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Exercise',
-                        ),
-                        items: [
-                          for (final name in names)
-                            DropdownMenuItem(value: name, child: Text(name)),
-                        ],
-                        onChanged: onExerciseChanged,
-                      ),
-                      const SizedBox(height: 12),
-                      StatisticsChoiceBar<ExerciseMetric>(
-                        values: ExerciseMetric.values,
-                        selected: exerciseMetric,
-                        labelFor: (value) => value.label,
-                        onSelected: onExerciseMetricChanged,
-                      ),
-                      const SizedBox(height: 16),
-                      ExerciseProgressChart(
-                        progress: progress!,
-                        metric: exerciseMetric,
-                        weightUnit: weightUnit,
-                      ),
-                      const SizedBox(height: 20),
-                      _ExerciseSummary(
-                        progress: progress,
-                        metric: exerciseMetric,
-                        weightUnit: weightUnit,
-                      ),
-                    ],
-                  ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: AppTypography.trainingData(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: textPrimaryColor(context),
                 ),
               ),
             ],
           ),
-        );
-      },
-    );
-  }
-}
-
-class _PeriodSummary extends StatelessWidget {
-  final double total;
-  final TrainingMetric metric;
-  final String weightUnit;
-  final PeriodComparison? comparison;
-  final bool hasDurationData;
-
-  const _PeriodSummary({
-    required this.total,
-    required this.metric,
-    required this.weightUnit,
-    required this.comparison,
-    required this.hasDurationData,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasValue = metric != TrainingMetric.duration || hasDurationData;
-    return MetricSummary(
-      values: [
-        (
-          'Period total',
-          hasValue
-              ? formatTrainingValue(total, metric, weightUnit)
-              : 'Not recorded',
-        ),
-        ('Compared with previous', _comparisonText()),
       ],
-    );
-  }
-
-  String _comparisonText() {
-    final value = comparison;
-    if (value == null) return 'All completed workouts';
-    if (metric == TrainingMetric.duration && !hasDurationData) {
-      return 'Not recorded';
-    }
-    final percentage = value.percentageChange;
-    if (percentage != null) {
-      final prefix = percentage > 0 ? '+' : '';
-      return '$prefix${percentage.toStringAsFixed(0)}%';
-    }
-    if (value.currentValue == 0) return 'No change';
-    final formatted = formatTrainingValue(
-      value.absoluteChange.abs(),
-      metric,
-      weightUnit,
-    );
-    return '${value.absoluteChange > 0 ? '+' : '−'}$formatted';
-  }
-}
-
-class _RecentSessionsSection extends StatelessWidget {
-  final List<SessionStatistics> statistics;
-  final String weightUnit;
-
-  const _RecentSessionsSection({
-    required this.statistics,
-    required this.weightUnit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const StatisticsSectionHeader(
-          title: 'Recent sessions',
-          supportingText: 'Tap a workout to review or edit it.',
-        ),
-        const SizedBox(height: 8),
-        for (final item in statistics)
-          SessionStatisticsRow(
-            statistics: item,
-            weightUnit: weightUnit,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => EditSessionScreen(session: item.session),
-                ),
-              );
-            },
-          ),
-      ],
-    );
-  }
-}
-
-class _RecordEventsSection extends StatelessWidget {
-  final List<RecordEvent> events;
-  final String weightUnit;
-
-  const _RecordEventsSection({required this.events, required this.weightUnit});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const StatisticsSectionHeader(
-          title: 'Recent records',
-          supportingText: 'Recalculated from completed workout history.',
-        ),
-        const SizedBox(height: 8),
-        if (events.isEmpty)
-          const _InlineEmptyState(
-            text: 'Record events appear as training history grows.',
-          )
-        else
-          for (final event in events)
-            RecordEventRow(event: event, weightUnit: weightUnit),
-      ],
-    );
-  }
-}
-
-class _ExerciseSummary extends StatelessWidget {
-  final ExerciseProgress progress;
-  final ExerciseMetric metric;
-  final String weightUnit;
-
-  const _ExerciseSummary({
-    required this.progress,
-    required this.metric,
-    required this.weightUnit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final current = progress.currentValue;
-    final change = progress.change;
-    final bestSet = progress.bestSetWeight;
-    return MetricSummary(
-      values: [
-        (
-          'Current value',
-          current == null
-              ? 'Not available'
-              : formatExerciseValue(current, metric, weightUnit),
-        ),
-        (
-          'Period change',
-          change == null
-              ? 'Need 2 sessions'
-              : '${change > 0 ? '+' : ''}${formatExerciseValue(change, metric, weightUnit)}',
-        ),
-        (
-          'Best set',
-          bestSet == null
-              ? 'Not available'
-              : '${formatAnalyticsWeight(bestSet, weightUnit)} × ${progress.bestSetReps}',
-        ),
-        ('Session count', '${progress.sessionCount}'),
-      ],
-    );
-  }
-}
-
-class _NoStatisticsState extends StatelessWidget {
-  const _NoStatisticsState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'No completed workouts',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Statistics appear after you finish and log a workout.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: textSecondaryColor(context),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _InlineEmptyState extends StatelessWidget {
-  final String text;
-
-  const _InlineEmptyState({required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 96),
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: borderColor(context))),
-      ),
-      child: Text(
-        text,
-        style: Theme.of(
-          context,
-        ).textTheme.bodyMedium?.copyWith(color: textSecondaryColor(context)),
-      ),
     );
   }
 }

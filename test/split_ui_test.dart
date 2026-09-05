@@ -123,10 +123,6 @@ void main() {
 
     await tester.pumpWidget(harness.host(const StatsScreen()));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, 'All time'));
-    await tester.pumpAndSettle();
-    await tester.drag(find.byType(ListView), const Offset(0, -5000));
-    await tester.pumpAndSettle();
     expect(find.text('UL Only'), findsWidgets);
     expect(find.text('PPL Only'), findsNothing);
   });
