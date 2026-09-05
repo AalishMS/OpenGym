@@ -1,6 +1,10 @@
+import '../models/workout_session.dart';
 import '../services/hive_service.dart';
 
 class StatsRepository {
+  List<WorkoutSession> getCompletedSessions(String? splitId) =>
+      HiveService.getCompletedSessions(splitId: splitId);
+
   double getExercisePR(String exerciseName, String? splitId) {
     return HiveService.getExercisePR(exerciseName, splitId);
   }

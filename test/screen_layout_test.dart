@@ -24,7 +24,6 @@ import 'package:gymapp/screens/settings_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/update_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
-import 'package:gymapp/widgets/dashboard/stat_tile.dart';
 
 void main() {
   late Directory hiveDirectory;
@@ -161,8 +160,10 @@ void main() {
           ),
         );
         await tester.pump();
-        expect(find.text('STATISTICS'), findsOneWidget);
-        expect(find.text('> STATISTICS'), findsNothing);
+        expect(find.text('Statistics'), findsOneWidget);
+        expect(find.text('STATISTICS'), findsNothing);
+        expect(find.text('[OVERALL]'), findsNothing);
+        expect(find.text('[EXERCISE]'), findsNothing);
         expectNoOverflow(tester, 'stats $brightness ${scale}x');
 
         await tester.pumpWidget(
@@ -202,7 +203,7 @@ void main() {
               ),
             );
             await tester.pump();
-            expect(find.text('TOTAL WORKOUTS'), findsOneWidget);
+            expect(find.text('Weekly training'), findsOneWidget);
             expectNoOverflow(tester, 'stats $brightness ${scale}x $size');
 
             await tester.pumpWidget(
@@ -252,8 +253,8 @@ void main() {
       );
       await tester.pump();
       expect(
-        tester.widget<Text>(find.text('STATISTICS')).style?.color,
-        textPrimaryColor(tester.element(find.text('STATISTICS'))),
+        tester.widget<Text>(find.text('Statistics')).style?.color,
+        textPrimaryColor(tester.element(find.text('Statistics'))),
       );
 
       await tester.pumpWidget(
@@ -331,7 +332,7 @@ void main() {
     );
   });
 
-  testWidgets('selected exercise progression wraps long headings', (
+  testWidgets('selected exercise stays readable with long names', (
     tester,
   ) async {
     const name = 'Single Arm Dumbbell Bulgarian Split Squat';
@@ -345,56 +346,60 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.drag(find.byType(ListView), const Offset(0, -300));
-    await tester.pump();
-    await tester.ensureVisible(find.text('[EXERCISE]'));
-    await tester.tap(find.text('[EXERCISE]'));
-    await tester.pump();
-    expect(find.text('${name.toUpperCase()} PROGRESSION'), findsOneWidget);
+    await tester.ensureVisible(find.text('Exercise progress'));
+    await tester.pumpAndSettle();
+    expect(find.text(name), findsWidgets);
     expectNoOverflow(tester, 'long progression heading');
   });
 
-  testWidgets('statistics toggle exposes selected semantics and 48px targets', (
-    tester,
-  ) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(390, 800);
-    addTearDown(tester.view.reset);
-    final semantics = tester.ensureSemantics();
-    await tester.pumpWidget(host(const StatsScreen()));
-    await tester.pump();
+  testWidgets(
+    'statistics controls expose selected semantics and 48px targets',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 800);
+      addTearDown(tester.view.reset);
+      final semantics = tester.ensureSemantics();
+      final session = WorkoutSession(
+        id: 'session-controls',
+        planName: 'Push Day',
+        date: DateTime.now(),
+        exercises: [
+          Exercise(name: 'Bench Press', sets: [Set(reps: 5, weight: 80)]),
+        ],
+      );
+      await tester.pumpWidget(host(const StatsScreen(), sessions: [session]));
+      await tester.pump();
 
-    Finder control(String label) =>
-        find.text(label == 'Overall statistics' ? '[OVERALL]' : '[EXERCISE]');
-    for (final label in ['Overall statistics', 'Exercise statistics']) {
-      final toggle = control(label);
-      expect(toggle, findsOneWidget);
-      final target = find.ancestor(of: toggle, matching: find.byType(InkWell));
-      expect(tester.getSize(target).height, greaterThanOrEqualTo(48));
-      final data = tester.getSemantics(toggle).getSemanticsData();
-      expect(data.label, label);
-      expect(data.hasAction(SemanticsAction.tap), isTrue);
-    }
-    expect(
-      tester
-          .getSemantics(control('Overall statistics'))
-          .getSemanticsData()
-          .flagsCollection
-          .isSelected,
-      Tristate.isTrue,
-    );
-    await tester.tap(control('Exercise statistics'));
-    await tester.pump();
-    expect(
-      tester
-          .getSemantics(control('Exercise statistics'))
-          .getSemanticsData()
-          .flagsCollection
-          .isSelected,
-      Tristate.isTrue,
-    );
-    semantics.dispose();
-  });
+      Finder control(String label) => find.widgetWithText(ChoiceChip, label);
+      for (final label in ['4 weeks', '12 weeks']) {
+        final chip = control(label);
+        expect(chip, findsOneWidget);
+        expect(tester.getSize(chip).height, greaterThanOrEqualTo(48));
+        final data = tester.getSemantics(find.text(label)).getSemanticsData();
+        expect(data.label, label);
+        expect(data.hasAction(SemanticsAction.tap), isTrue);
+      }
+      expect(
+        tester
+            .getSemantics(find.text('4 weeks'))
+            .getSemanticsData()
+            .flagsCollection
+            .isSelected,
+        Tristate.isTrue,
+      );
+      await tester.tap(control('12 weeks'));
+      await tester.pump();
+      expect(
+        tester
+            .getSemantics(find.text('12 weeks'))
+            .getSemanticsData()
+            .flagsCollection
+            .isSelected,
+        Tristate.isTrue,
+      );
+      semantics.dispose();
+    },
+  );
 
   testWidgets('statistics refreshes when sessions provider changes', (
     tester,
@@ -413,23 +418,13 @@ void main() {
       host(const StatsScreen(), sessionProvider: sessions),
     );
     await tester.pump();
-    final totalTile = find.ancestor(
-      of: find.text('TOTAL WORKOUTS'),
-      matching: find.byType(StatTile),
-    );
-    expect(
-      find.descendant(of: totalTile, matching: find.text('1')),
-      findsOneWidget,
-    );
+    expect(find.text('400 kg'), findsWidgets);
 
     sessions.values.add(session.copyWith(id: 'session-2'));
     sessions.notifyListeners();
     await tester.pump();
 
-    expect(
-      find.descendant(of: totalTile, matching: find.text('2')),
-      findsOneWidget,
-    );
+    expect(find.text('800 kg'), findsWidgets);
   });
 
   testWidgets(

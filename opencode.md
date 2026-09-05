@@ -128,6 +128,19 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Rebuilt Statistics as a focused training-analysis screen:
+  - Weekly Monday-to-Sunday charts support 4 weeks, 12 weeks, 6 months,
+    1 year, and all-time periods across volume load, performed sets, reps, and
+    recorded duration, with equivalent preceding-period comparisons
+  - Compact recent-session rows show duration, volume, reps, and sets and open
+    the existing History edit workflow
+  - Genuine estimated-1RM, heaviest-weight, rep-count, and set-volume record
+    events are derived chronologically from completed source workouts
+  - Exercise progress supports six selectable metrics, one point per workout,
+    touch details, period change, best-set context, and explicit empty states
+  - Typed immutable analytics models and a pure calculation service keep
+    split filtering, draft/tombstone exclusion, legacy durations, performed-set
+    rules, and Epley eligibility out of widget build logic
 - Simplified workout exercise cards by removing inline target and saved set-note
   annotations; targets still seed editable values and notes remain available in
   set details and History.
