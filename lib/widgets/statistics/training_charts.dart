@@ -56,6 +56,7 @@ class _WeeklyVolumeChartState extends State<WeeklyVolumeChart> {
         const SizedBox(height: 20),
         _ScrollablePlot(
           storageKey: 'weekly-volume-scroll',
+          axisTitle: 'Volume (${widget.weightUnit})',
           maximum: maximum,
           unit: widget.weightUnit,
           onLatest: () => setState(() => _selected = null),
@@ -430,6 +431,7 @@ class _ScrollablePlot extends StatefulWidget {
   final double maximum;
   final double minimum;
   final String unit;
+  final String? axisTitle;
   final String storageKey;
   final int divisions;
   final Widget Function(BuildContext, double) builder;
@@ -439,6 +441,7 @@ class _ScrollablePlot extends StatefulWidget {
     required this.maximum,
     this.minimum = 0,
     required this.unit,
+    this.axisTitle,
     required this.storageKey,
     this.divisions = 4,
     required this.builder,
@@ -473,20 +476,55 @@ class _ScrollablePlotState extends State<_ScrollablePlot> {
   @override
   Widget build(BuildContext context) {
     final scale = MediaQuery.textScalerOf(context).scale(1);
-    final axisWidth = 44.0 * scale;
+    final textScaler = MediaQuery.textScalerOf(context);
+    final axisStyle = DefaultTextStyle.of(context).style.merge(
+      AppTypography.trainingData(
+        fontSize: 11,
+        letterSpacing: 0,
+        color: textSecondaryColor(context),
+      ),
+    );
+    final labels = [
+      for (var i = 0; i <= widget.divisions; i++)
+        formatChartNumber(
+          widget.maximum -
+              (widget.maximum - widget.minimum) * i / widget.divisions,
+        ),
+    ];
+    // Measure the actual typeface and accessibility scale: a fixed gutter can
+    // split suffixes such as "k" onto a second line or clip longer values.
+    final labelSizes =
+        labels.map((label) {
+          final painter = TextPainter(
+            text: TextSpan(text: label, style: axisStyle),
+            textDirection: Directionality.of(context),
+            textScaler: textScaler,
+            maxLines: 1,
+          )..layout();
+          final size = painter.size;
+          painter.dispose();
+          return size;
+        }).toList();
+    final axisWidth =
+        labelSizes
+            .fold<double>(0, (width, size) => math.max(width, size.width))
+            .ceilToDouble() +
+        12;
     final footer = 46.0 * scale;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text(
-              widget.unit,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: textSecondaryColor(context),
+            SizedBox(width: axisWidth),
+            Expanded(
+              child: Text(
+                widget.axisTitle ?? widget.unit,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: textSecondaryColor(context),
+                ),
               ),
             ),
-            const Spacer(),
             SizedBox(
               height: 48,
               child:
@@ -516,21 +554,18 @@ class _ScrollablePlotState extends State<_ScrollablePlot> {
                   children: [
                     for (var i = 0; i <= widget.divisions; i++)
                       Positioned(
-                        top: i * _plotHeight / widget.divisions - 7 * scale,
+                        top:
+                            i * _plotHeight / widget.divisions -
+                            labelSizes[i].height / 2,
                         left: 0,
-                        right: 8,
+                        right: 12,
                         child: Text(
-                          formatChartNumber(
-                            widget.maximum -
-                                (widget.maximum - widget.minimum) *
-                                    i /
-                                    widget.divisions,
-                          ),
+                          labels[i],
+                          key: ValueKey('${widget.storageKey}-axis-$i'),
+                          maxLines: 1,
+                          softWrap: false,
                           textAlign: TextAlign.right,
-                          style: AppTypography.trainingData(
-                            fontSize: 10,
-                            color: textSecondaryColor(context),
-                          ),
+                          style: axisStyle,
                         ),
                       ),
                   ],

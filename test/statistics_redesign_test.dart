@@ -180,6 +180,48 @@ void main() {
   ];
 
   testWidgets(
+    'weekly axis keeps suffixes on one line and anchors the volume unit',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      for (final scale in [1.0, 1.5, 2.0]) {
+        for (final unit in ['kg', 'lbs']) {
+          await tester.pumpWidget(
+            host(
+              WeeklyVolumeChart(weeks: weeks(160), weightUnit: unit),
+              scale: scale,
+            ),
+          );
+          await tester.pumpAndSettle();
+          expect(find.text('Volume ($unit)'), findsOneWidget);
+          expect(find.text(unit), findsNothing);
+          for (var i = 0; i <= 4; i++) {
+            final tick = find.byKey(ValueKey('weekly-volume-scroll-axis-$i'));
+            final text = tester.widget<Text>(tick);
+            final paragraph = tester.renderObject<RenderParagraph>(tick);
+            final boxes = paragraph.getBoxesForSelection(
+              TextSelection(baseOffset: 0, extentOffset: text.data!.length),
+            );
+            expect(boxes, hasLength(1));
+            expect(
+              boxes.single.right,
+              lessThanOrEqualTo(paragraph.size.width + 0.1),
+            );
+            expect(boxes.single.left, greaterThanOrEqualTo(-0.1));
+          }
+          final title = tester.getTopLeft(find.text('Volume ($unit)'));
+          final plot = tester.getTopLeft(
+            find.byKey(const ValueKey('weekly-volume-scroll')),
+          );
+          expect(title.dx, closeTo(plot.dx, 0.1));
+          expect(tester.takeException(), isNull);
+        }
+      }
+    },
+  );
+
+  testWidgets(
     'fixed bars open at newest end, scroll, select, and retain browsing position',
     (tester) async {
       tester.view.physicalSize = const Size(390, 800);
