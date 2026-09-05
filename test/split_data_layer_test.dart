@@ -16,6 +16,7 @@ import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/repositories/stats_repository.dart';
 import 'package:gymapp/services/backup_service.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/services/pr_tracking_service.dart';
 import 'package:gymapp/utils/split_identity.dart';
 
 void main() {
@@ -99,6 +100,44 @@ void main() {
     expect(HiveService.getSessions(splitId: 'ul').single.id, 's2');
     expect(stats.getExercisePR('Bench Press', 'ppl'), 100);
     expect(stats.getExercisePR('Bench Press', 'ul'), 60);
+  });
+
+  test('uncompleted prescriptions do not create personal records', () async {
+    await HiveService.putSessionRaw(
+      WorkoutSession(
+        id: 'week-1-draft',
+        splitId: 'ppl',
+        date: DateTime(2026),
+        planName: 'Push',
+        exercises: [
+          Exercise(
+            name: 'Bench Press',
+            sets: [Set(reps: 5, weight: 120, completed: false)],
+          ),
+        ],
+      ),
+    );
+
+    final stats = StatsRepository();
+    expect(stats.getExercisePR('Bench Press', 'ppl'), 0);
+    expect(stats.getAllExerciseNames('ppl'), isEmpty);
+    expect(stats.getExerciseProgression('Bench Press', 'ppl'), isEmpty);
+    expect(
+      PRTrackingService.checkForNewPRs([
+        Exercise(
+          name: 'Bench Press',
+          sets: [Set(reps: 5, weight: 120, completed: false)],
+        ),
+      ], 'ppl'),
+      isEmpty,
+    );
+
+    expect(
+      PRTrackingService.checkForNewPRs([
+        Exercise(name: 'Bench Press', sets: [Set(reps: 5, weight: 120)]),
+      ], 'ppl'),
+      hasLength(1),
+    );
   });
 
   test('deleting a split tombstones only its descendants', () async {
@@ -201,9 +240,6 @@ WorkoutSession _session(String id, String splitId, double weight) =>
       date: DateTime(2026),
       planName: 'Plan',
       exercises: [
-        Exercise(
-          name: 'Bench Press',
-          sets: [Set(reps: 5, weight: weight)],
-        ),
+        Exercise(name: 'Bench Press', sets: [Set(reps: 5, weight: weight)]),
       ],
     );

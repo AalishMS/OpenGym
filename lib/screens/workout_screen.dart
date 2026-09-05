@@ -328,6 +328,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       weight: weight,
       rpe: set.rpe,
       note: set.note,
+      completed: true,
     );
     updatedSets[setIndex] = updatedSet;
     _touchedSets.remove(set);
@@ -342,6 +343,23 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     _updateSession(session.copyWith(exercises: updatedExercises));
     // Persist once entry closes so PR dialogs never interrupt typing.
+  }
+
+  void _changeSetCompleted(int exerciseIndex, int setIndex, bool completed) {
+    final session = _getOrCreateSession();
+    final exercise = session.exercises[exerciseIndex];
+    final updatedSets = List<gym.Set>.from(exercise.sets);
+    updatedSets[setIndex] = updatedSets[setIndex].copyWith(
+      completed: completed,
+    );
+    final updatedExercises = List<Exercise>.from(session.exercises);
+    updatedExercises[exerciseIndex] = Exercise(
+      name: exercise.name,
+      sets: updatedSets,
+      note: exercise.note,
+    );
+    _updateSession(session.copyWith(exercises: updatedExercises));
+    _autoSave();
   }
 
   void _reorderExercises(int oldIndex, int newIndex) {
@@ -582,6 +600,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                 beforeWeek: _currentWeek,
                               ),
                               onSetChanged: _changeSetValues,
+                              onSetCompletedChanged: _changeSetCompleted,
                               onEntryFinished: () {
                                 if (mounted) _autoSave();
                               },

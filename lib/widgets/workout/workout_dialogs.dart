@@ -1137,6 +1137,7 @@ class _EditSetSheetState extends State<_EditSetSheet> {
       reps: reps,
       rpe: _rpe,
       note: _note.text.isEmpty ? null : _note.text,
+      completed: true,
     );
     Navigator.pop(context);
     widget.onSave(updated);

@@ -21,13 +21,14 @@ class SetAdapter extends TypeAdapter<Set> {
       weight: fields[1] as double,
       rpe: fields[2] as int?,
       note: fields[3] as String?,
+      completed: fields[4] == null ? true : fields[4] as bool,
     );
   }
 
   @override
   void write(BinaryWriter writer, Set obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.reps)
       ..writeByte(1)
@@ -35,7 +36,9 @@ class SetAdapter extends TypeAdapter<Set> {
       ..writeByte(2)
       ..write(obj.rpe)
       ..writeByte(3)
-      ..write(obj.note);
+      ..write(obj.note)
+      ..writeByte(4)
+      ..write(obj.completed);
   }
 
   @override
