@@ -44,8 +44,6 @@ Represents a single set with weight, reps, and optional RPE/note.
 - `double weight` - Weight lifted in kg
 - `int? rpe` - Rate of Perceived Exertion (1-10)
 - `String? note` - Optional note for the set
-- `bool completed` - Whether the athlete confirmed the set as performed;
-  legacy sets default to completed
 
 ### Exercise (typeId: 1)
 Represents an exercise within a workout session.
@@ -130,16 +128,6 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
-- Separated workout prescriptions from completed training results:
-  - Week 1 plan-seeded sets and later-week copied defaults remain visible and
-    editable, but persist as uncompleted until the athlete confirms or edits
-    them
-  - Each workout row has an explicit completion control, so an unchanged
-    prescribed weight and rep count can still be logged as performed
-  - Autosaved uncompleted sets are excluded from PR dialogs, PR statistics,
-    exercise PR lists, and progression data; legacy sets remain completed
-  - Numeric keypad replacement, decimal entry, adjustments, navigation, and
-    autosave-on-close behavior are unchanged
 - Prefilled genuinely new Week 1 workouts from their plan prescriptions:
   - Creates the planned number of sets with each `SetTemplate` rep and weight
     value, including decimal weights

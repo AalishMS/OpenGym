@@ -32,7 +32,6 @@ class PRTrackingService {
       if (exercise.sets.isEmpty) continue;
 
       for (var set in exercise.sets) {
-        if (!set.completed) continue;
         if (splitId == null) continue;
         final currentPR = _statsRepo.getExercisePR(exercise.name, splitId);
 

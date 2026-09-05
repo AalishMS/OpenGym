@@ -37,17 +37,11 @@ void main() {
     expect(session.splitId, 'split-a');
     expect(session.exercises, hasLength(2));
     expect(session.exercises[0].sets, hasLength(2));
-    expect(session.exercises[0].sets.map((set) => (set.reps, set.weight)), [
-      (5, 100.5),
-      (6, 102.25),
-    ]);
-    expect(session.exercises[1].sets.single.weight, 42.5);
     expect(
-      session.exercises.expand((exercise) => exercise.sets),
-      everyElement(
-        isA<gym.Set>().having((set) => set.completed, 'completed', false),
-      ),
+      session.exercises[0].sets.map((set) => (set.reps, set.weight)),
+      [(5, 100.5), (6, 102.25)],
     );
+    expect(session.exercises[1].sets.single.weight, 42.5);
   });
 
   test('existing Week 1 data is returned without being overwritten', () {
@@ -69,7 +63,6 @@ void main() {
 
     expect(identical(session, existing), isTrue);
     expect(session.exercises.single.sets.single.weight, 77.5);
-    expect(session.exercises.single.sets.single.completed, isTrue);
   });
 
   test('plans without targets receive safe empty sets', () {
@@ -122,7 +115,6 @@ void main() {
       (9, 88.75, 7, 'solid'),
     );
     expect(identical(copied, previous.exercises.single.sets.single), isFalse);
-    expect(copied.completed, isFalse);
   });
 
   test('later weeks without prior data ignore Week 1 plan targets', () {

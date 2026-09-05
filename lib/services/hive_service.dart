@@ -482,7 +482,6 @@ class HiveService {
       for (var exercise in session.exercises) {
         if (exercise.name.toLowerCase() == exerciseName.toLowerCase()) {
           for (var set in exercise.sets) {
-            if (!set.completed) continue;
             if (set.weight > maxWeight) {
               maxWeight = set.weight;
             }
@@ -498,9 +497,7 @@ class HiveService {
     final names = <String>{};
     for (var session in sessions) {
       for (var exercise in session.exercises) {
-        if (exercise.sets.any((set) => set.completed)) {
-          names.add(exercise.name);
-        }
+        names.add(exercise.name);
       }
     }
     return names.toList()..sort();
@@ -524,12 +521,11 @@ class HiveService {
 
     for (var session in sessions) {
       for (var exercise in session.exercises) {
-        final completedSets = exercise.sets.where((set) => set.completed);
         if (exercise.name.toLowerCase() == exerciseName.toLowerCase() &&
-            completedSets.isNotEmpty) {
+            exercise.sets.isNotEmpty) {
           double maxWeight = 0;
           int totalVolume = 0;
-          for (var set in completedSets) {
+          for (var set in exercise.sets) {
             if (set.weight > maxWeight) maxWeight = set.weight;
             totalVolume += (set.weight * set.reps).round();
           }

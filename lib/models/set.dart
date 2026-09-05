@@ -16,49 +16,28 @@ class Set extends HiveObject {
   @HiveField(3)
   final String? note;
 
-  /// Whether the athlete confirmed this prescribed or entered set as done.
-  ///
-  /// Existing records predate this field, so they remain completed by default.
-  @HiveField(4, defaultValue: true)
-  final bool completed;
+  Set({required this.reps, required this.weight, this.rpe, this.note});
 
-  Set({
-    required this.reps,
-    required this.weight,
-    this.rpe,
-    this.note,
-    this.completed = true,
-  });
-
-  Set copyWith({
-    int? reps,
-    double? weight,
-    int? rpe,
-    String? note,
-    bool? completed,
-  }) {
+  Set copyWith({int? reps, double? weight, int? rpe, String? note}) {
     return Set(
       reps: reps ?? this.reps,
       weight: weight ?? this.weight,
       rpe: rpe ?? this.rpe,
       note: note ?? this.note,
-      completed: completed ?? this.completed,
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'reps': reps,
-    'weight': weight,
-    'rpe': rpe,
-    'note': note,
-    'completed': completed,
-  };
+        'reps': reps,
+        'weight': weight,
+        'rpe': rpe,
+        'note': note,
+      };
 
   factory Set.fromJson(Map<String, dynamic> json) => Set(
-    reps: json['reps'] as int,
-    weight: (json['weight'] as num).toDouble(),
-    rpe: json['rpe'] as int?,
-    note: json['note'] as String?,
-    completed: json['completed'] as bool? ?? true,
-  );
+        reps: json['reps'] as int,
+        weight: (json['weight'] as num).toDouble(),
+        rpe: json['rpe'] as int?,
+        note: json['note'] as String?,
+      );
 }

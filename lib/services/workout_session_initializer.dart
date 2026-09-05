@@ -37,7 +37,6 @@ class WorkoutSessionInitializer {
                                 weight: set.weight,
                                 rpe: set.rpe,
                                 note: set.note,
-                                completed: false,
                               ),
                             )
                             .toList(),
@@ -65,7 +64,6 @@ class WorkoutSessionInitializer {
                     return gym.Set(
                       reps: target?.reps ?? 0,
                       weight: target?.weight ?? 0,
-                      completed: false,
                     );
                   }),
                 ),

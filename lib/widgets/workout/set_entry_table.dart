@@ -11,7 +11,6 @@ class SetEntry {
   final String? previous;
   final String? annotation;
   final int? rpe;
-  final bool completed;
 
   const SetEntry({
     required this.weight,
@@ -19,7 +18,6 @@ class SetEntry {
     this.previous,
     this.annotation,
     this.rpe,
-    this.completed = true,
   });
 }
 
@@ -33,7 +31,6 @@ class SetEntryTable extends StatelessWidget {
   final void Function(int index, double weight, int reps) onChanged;
   final ValueChanged<int>? onDetails;
   final ValueChanged<int>? onDelete;
-  final void Function(int index, bool completed)? onCompletedChanged;
   final VoidCallback? onEntryFinished;
   final bool showHistoryColumns;
 
@@ -44,7 +41,6 @@ class SetEntryTable extends StatelessWidget {
     required this.onChanged,
     this.onDetails,
     this.onDelete,
-    this.onCompletedChanged,
     this.onEntryFinished,
     this.showHistoryColumns = true,
   });
@@ -92,10 +88,6 @@ class SetEntryTable extends StatelessWidget {
                 previous: sets[index].previous,
                 weight: entryWeight(sets[index].weight),
                 reps: '${sets[index].reps}',
-                leading:
-                    onCompletedChanged == null
-                        ? null
-                        : _completion(context, index, sets[index].completed),
                 onWeight: () => _open(context, index, true),
                 onReps: () => _open(context, index, false),
                 trailing:
@@ -127,23 +119,6 @@ class SetEntryTable extends StatelessWidget {
         ),
     ],
   );
-
-  Widget _completion(BuildContext context, int index, bool completed) =>
-      Semantics(
-        button: true,
-        checked: completed,
-        label: 'Mark set ${index + 1} ${completed ? 'incomplete' : 'complete'}',
-        child: IconButton(
-          tooltip: completed ? 'Mark incomplete' : 'Mark complete',
-          onPressed: () => onCompletedChanged!(index, !completed),
-          icon: Icon(
-            completed ? Icons.check_circle : Icons.radio_button_unchecked,
-            size: 22,
-            color:
-                completed ? accentColor(context) : textSecondaryColor(context),
-          ),
-        ),
-      );
 }
 
 TextStyle _quiet(BuildContext context) =>
@@ -220,7 +195,6 @@ class _EntryRow extends StatelessWidget {
   final VoidCallback onWeight;
   final VoidCallback onReps;
   final Widget? trailing;
-  final Widget? leading;
   final bool showHistoryColumns;
 
   const _EntryRow({
@@ -232,22 +206,20 @@ class _EntryRow extends StatelessWidget {
     required this.onWeight,
     required this.onReps,
     this.trailing,
-    this.leading,
     this.showHistoryColumns = true,
   });
 
   @override
   Widget build(BuildContext context) => _columns(
     [
-      leading ??
-          Text(
-            '${index + 1}',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleMedium!.copyWith(
-              fontWeight: FontWeight.w700,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
+      Text(
+        '${index + 1}',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.titleMedium!.copyWith(
+          fontWeight: FontWeight.w700,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
       Semantics(
         label: 'Previous set ${index + 1}: ${previous ?? 'no history'}',
         child: Text(
@@ -370,7 +342,6 @@ class _SetKeyboardState extends State<_SetKeyboard> {
       previous: _set.previous,
       annotation: _set.annotation,
       rpe: _set.rpe,
-      completed: _set.completed,
     );
     widget.sets[_index] = updated;
     widget.onChanged(_index, updated.weight, updated.reps);

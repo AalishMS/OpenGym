@@ -17,8 +17,6 @@ class ExerciseCard extends StatelessWidget {
   final VoidCallback? onEntryFinished;
   final void Function(int exercise, int index, double weight, int reps)?
   onSetChanged;
-  final void Function(int exercise, int index, bool completed)?
-  onSetCompletedChanged;
   final Set<gym.Set> touchedSets;
   final void Function(int) onAddSet;
   final void Function(int, int) onEditSet;
@@ -35,7 +33,6 @@ class ExerciseCard extends StatelessWidget {
     this.previousSets = const [],
     this.onEntryFinished,
     this.onSetChanged,
-    this.onSetCompletedChanged,
     this.touchedSets = const {},
     required this.onAddSet,
     required this.onEditSet,
@@ -182,20 +179,11 @@ class ExerciseCard extends StatelessWidget {
                               : null,
                       annotation: _annotation(i),
                       rpe: exercise.sets[i].rpe,
-                      completed: exercise.sets[i].completed,
                     ),
                 ],
                 onChanged:
                     (index, weight, reps) =>
                         onSetChanged?.call(exerciseIndex, index, weight, reps),
-                onCompletedChanged:
-                    onSetCompletedChanged == null
-                        ? null
-                        : (index, completed) => onSetCompletedChanged!.call(
-                          exerciseIndex,
-                          index,
-                          completed,
-                        ),
                 onDetails: (index) => onEditSet(exerciseIndex, index),
               ),
             ),

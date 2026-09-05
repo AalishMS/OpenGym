@@ -210,30 +210,6 @@ void main() {
     expect(changes.last, 99);
   });
 
-  testWidgets('an unchanged prescribed value can be explicitly completed', (
-    tester,
-  ) async {
-    var completed = false;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SetEntryTable(
-            exerciseName: 'Squat',
-            sets: const [SetEntry(weight: 100, reps: 5, completed: false)],
-            onChanged: (_, __, ___) {},
-            onCompletedChanged: (index, value) => completed = value,
-          ),
-        ),
-      ),
-    );
-
-    expect(find.text('100'), findsOneWidget);
-    expect(find.text('5'), findsOneWidget);
-    await tester.tap(find.bySemanticsLabel('Mark set 1 complete'));
-    await tester.pump();
-    expect(completed, isTrue);
-  });
-
   testWidgets('light and dark keypad visual review', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(360, 800);
