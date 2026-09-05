@@ -13,6 +13,7 @@ import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../services/hive_service.dart';
 import '../services/pr_tracking_service.dart';
+import '../services/workout_session_initializer.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
@@ -173,63 +174,27 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       return _weekSessions[_currentWeek]!;
     }
 
-    final prevWeek = _currentWeek - 1;
-    if (prevWeek >= 1) {
-      final prevSession = HiveService.getSessionForPlanAndWeek(
-        widget.plan.name,
-        prevWeek,
-        widget.plan.splitId,
-      );
-      if (prevSession != null &&
-          prevSession.exercises.any((e) => e.sets.isNotEmpty)) {
-        return WorkoutSession(
-          date: DateTime.now(),
-          planName: widget.plan.name,
-          exercises:
-              prevSession.exercises
-                  .map(
-                    (prevExercise) => Exercise(
-                      name: prevExercise.name,
-                      sets:
-                          prevExercise.sets
-                              .map(
-                                (s) => gym.Set(
-                                  reps: s.reps,
-                                  weight: s.weight,
-                                  rpe: s.rpe,
-                                  note: s.note,
-                                ),
-                              )
-                              .toList(),
-                      note: prevExercise.note,
-                    ),
-                  )
-                  .toList(),
-          weekNumber: _currentWeek,
-          splitId: widget.plan.splitId,
-        );
-      }
-    }
-
-    return WorkoutSession(
-      date: DateTime.now(),
-      planName: widget.plan.name,
-      exercises:
-          widget.plan.exercises
-              .map(
-                (template) => Exercise(
-                  name: template.name,
-                  sets: List.generate(
-                    template.sets,
-                    (_) => gym.Set(reps: 0, weight: 0),
-                  ),
-                  note: null,
-                ),
-              )
-              .toList(),
-      weekNumber: _currentWeek,
-      splitId: widget.plan.splitId,
+    final existingSession = HiveService.getSessionForPlanAndWeek(
+      widget.plan.name,
+      _currentWeek,
+      widget.plan.splitId,
     );
+    final previousSession =
+        _currentWeek > 1
+            ? HiveService.getSessionForPlanAndWeek(
+              widget.plan.name,
+              _currentWeek - 1,
+              widget.plan.splitId,
+            )
+            : null;
+    final session = WorkoutSessionInitializer.initialize(
+      plan: widget.plan,
+      weekNumber: _currentWeek,
+      existingSession: existingSession,
+      previousSession: previousSession,
+    );
+    _weekSessions[_currentWeek] = session;
+    return session;
   }
 
   void _updateSession(WorkoutSession session) {

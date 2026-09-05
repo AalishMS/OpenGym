@@ -128,6 +128,12 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Prefilled genuinely new Week 1 workouts from their plan prescriptions:
+  - Creates the planned number of sets with each `SetTemplate` rep and weight
+    value, including decimal weights
+  - Preserves any existing or partially completed Week 1 session unchanged
+  - Keeps legacy plans without targets safe with zero-valued sets and leaves
+    Week 2+ copying and fallback behavior unchanged
 - Compacted set entry across workout, plan, and history editing: 44px visual
   fields retain 48px tap areas, previous results use larger text, and workout
   cards use a plus icon with an accessible Add set label. Logged set details
@@ -199,7 +205,8 @@ Repository layer wrapping HiveService for clean architecture:
 - Added per-set plan targets:
   - New `SetTemplate` model (typeId: 5) holding prescribed `reps`/`weight`
   - `ExerciseTemplate.setTargets` is optional and read through `targetAt(index)`, so pre-existing plans need no migration
-  - Targets are display-only: a session is never seeded from them, or `PRTrackingService` would report PRs for weights nobody lifted
+  - Targets seed a genuinely new Week 1 session and then behave like ordinary
+    workout values in the existing autosave and PR flows
   - The workout screen's set row hints at the target beside the live value until the set is touched, matching the plan entry by exercise name (not index)
 - Replaced duplicated create/edit plan screens with one `PlanEditorScreen`:
   - Create and edit flows now share the same UI and persistence path
