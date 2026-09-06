@@ -62,7 +62,7 @@ class MainActivity: FlutterActivity() {
             }
         }
 
-        pendingTimerIntentAction = timerIntentAction(intent) ?: pendingTimerIntentAction
+        pendingTimerIntentAction = prepareTimerIntent(intent) ?: pendingTimerIntentAction
         timerChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, TIMER_NOTIFICATION_CHANNEL).also { channel ->
             channel.setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -102,7 +102,7 @@ class MainActivity: FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
-        val action = timerIntentAction(intent) ?: return
+        val action = prepareTimerIntent(intent) ?: return
         pendingTimerIntentAction = action
         timerChannel?.invokeMethod("notificationIntent", timerEvent(action))
     }
@@ -111,6 +111,16 @@ class MainActivity: FlutterActivity() {
         ACTION_OPEN_TIMER -> "open"
         ACTION_STOP_TIMER -> "stop"
         else -> null
+    }
+
+    private fun prepareTimerIntent(intent: Intent?): String? {
+        val action = timerIntentAction(intent) ?: return null
+        if (action == "stop") {
+            // Freeze the native clock before handing control to Flutter so the
+            // confirmation always shows the exact time of the button press.
+            WorkoutTimerNotification.pause(this, pendingStop = true)
+        }
+        return action
     }
 
     private fun timerEvent(action: String): Map<String, Any?>? {

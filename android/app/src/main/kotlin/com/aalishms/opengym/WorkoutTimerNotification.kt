@@ -188,8 +188,14 @@ object WorkoutTimerNotification {
         val toggleIntent = Intent(context, WorkoutTimerActionReceiver::class.java).apply {
             action = if (state.running) ACTION_PAUSE else ACTION_RESUME
         }
-        val stopIntent = Intent(context, WorkoutTimerActionReceiver::class.java).apply {
+        // Stop must open the workout so Flutter can show the existing logging
+        // confirmation. Target the activity directly: Android may block an
+        // activity launch attempted later from a broadcast receiver while the
+        // app is backgrounded, even though the user pressed a notification
+        // action.
+        val stopIntent = Intent(context, MainActivity::class.java).apply {
             action = ACTION_STOP_TIMER
+            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val immutable = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -219,7 +225,7 @@ object WorkoutTimerNotification {
                 Notification.Action.Builder(
                     R.drawable.ic_launcher_monochrome,
                     "Stop",
-                    PendingIntent.getBroadcast(context, 4102, stopIntent, immutable),
+                    PendingIntent.getActivity(context, 4102, stopIntent, immutable),
                 ).build(),
             )
         manager.notify(NOTIFICATION_ID, builder.build())
@@ -239,15 +245,6 @@ class WorkoutTimerActionReceiver : BroadcastReceiver() {
         when (intent.action) {
             ACTION_PAUSE -> WorkoutTimerNotification.pause(context)
             ACTION_RESUME -> WorkoutTimerNotification.resume(context)
-            ACTION_STOP_TIMER -> {
-                WorkoutTimerNotification.pause(context, pendingStop = true) ?: return
-                context.startActivity(
-                    Intent(context, MainActivity::class.java).apply {
-                        action = ACTION_STOP_TIMER
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    },
-                )
-            }
         }
     }
 }
