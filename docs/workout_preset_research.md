@@ -63,7 +63,7 @@ catalog. The workouts are conservative programming applications of the evidence.
 | `HYP-PPL-6` | Hypertrophy | Push/pull/legs | 6 | Shorter, frequent sessions | 50-70 min |
 | `HYP-ARNOLD-6` | Hypertrophy | Arnold split | 6 | Experienced, arm/shoulder emphasis | 55-75 min |
 | `STR-FB-3` | Strength | Full body | 3 | New strength trainee | 60-80 min |
-| `STR-UL-4` | Strength | Upper/lower | 4 | General strength | 65-85 min |
+| `STR-UL-4` | Strength | Upper/lower | 4 | Intermediate general strength | 65-85 min |
 | `STR-SBD-5` | Strength | Lift-practice split | 5 | Experienced squat/bench/deadlift focus | 50-75 min |
 | `HYB-UL-4` | Strength + hypertrophy | Powerbuilding upper/lower | 4 | General default | 65-85 min |
 | `HYB-PPLUL-5` | Strength + hypertrophy | Push/pull/legs + upper/lower | 5 | Experienced five-day lifter | 60-80 min |
@@ -78,8 +78,13 @@ Every listed set is a working set. Warm-up sets do not count toward the table.
 
 - `3 x 8-12` means three working sets. The user keeps one load until all three
   sets reach 12 reps at the target RIR, then increases the load.
+- `1 x 1 + 1 x 3 + 1 x 5` means three working sets with different loads. The
+  first set is one controlled heavy rep, followed by lighter sets of three and
+  five. The user must reduce the load between sets; this is not one weight taken
+  through three rep targets.
 - `Seed` is the exact rep value OpenGym can place in each `SetTemplate`. The app
-  cannot store a rep range today.
+  cannot store a rep range today. `1 / 3 / 5` maps to three set targets in that
+  order.
 - `RIR 2` means the user should finish with about two possible clean reps left.
 - Rest starts after a working set. Users may take longer when breathing or
   technique has not recovered.
@@ -117,6 +122,15 @@ Strength exercises use load progression:
 4. Reduce the load by about 5-10% after two failed exposures, then build again.
 
 Rep ranges on secondary strength work use double progression.
+
+For a `1 / 3 / 5` main lift, the single is practice with heavy weight rather
+than a one-repetition maximum test. Start near RIR 3 on the single, remove
+weight for the triple, then remove weight again for the set of five. Approximate
+starting zones are 88-92% 1RM for the single, 80-87% for the triple, and 75-82%
+for the set of five. RIR and stable technique take priority over percentages.
+Increase the three loads only after all three sets meet their targets. Beginners
+should use straight sets until they can choose loads and estimate RIR with
+consistent technique.
 
 ### Effort and failure
 
@@ -372,7 +386,9 @@ Use the `HYP-PPL-6` Legs B workout.
 
 These programs build general strength in the listed lifts. Main lifts use heavy
 sets, long rest, low reps, and RIR 2-3. They do not peak a powerlifter for a
-competition and do not prescribe maximal singles.
+competition and do not prescribe maximal singles. The intermediate plans use a
+`1 / 3 / 5` descending-load sequence on selected Squat, Bench Press, and
+Deadlift sessions. Secondary exposures retain straight sets to control fatigue.
 
 ### `STR-FB-3`: Full-body strength
 
@@ -416,7 +432,7 @@ Schedule: Monday upper A, Tuesday lower A, Thursday upper B, Friday lower B.
 
 | Exercise | Prescription | Seed | RIR | Rest |
 |---|---:|---:|---:|---:|
-| Bench Press | 3 x 3 | 3 | 2-3 | 3-5 min |
+| Bench Press | 1 x 1 + 1 x 3 + 1 x 5 | 1 / 3 / 5 | 3 / 2-3 / 2 | 3-5 min |
 | Overhead Press | 3 x 5 | 5 | 2-3 | 3 min |
 | Barbell Row | 3 x 5 | 5 | 2 | 3 min |
 | Pull-ups | 3 x 5-8 | 6 | 2 | 2-3 min |
@@ -426,7 +442,7 @@ Schedule: Monday upper A, Tuesday lower A, Thursday upper B, Friday lower B.
 
 | Exercise | Prescription | Seed | RIR | Rest |
 |---|---:|---:|---:|---:|
-| Squat | 3 x 3 | 3 | 2-3 | 3-5 min |
+| Squat | 1 x 1 + 1 x 3 + 1 x 5 | 1 / 3 / 5 | 3 / 2-3 / 2 | 3-5 min |
 | Romanian Deadlift | 3 x 5 | 5 | 2-3 | 3 min |
 | Bulgarian Split Squat | 2 x 6-8 | 6 | 2 | 2-3 min |
 | Calf Raise | 3 x 8-12 | 10 | 2 | 1-2 min |
@@ -446,7 +462,7 @@ Schedule: Monday upper A, Tuesday lower A, Thursday upper B, Friday lower B.
 
 | Exercise | Prescription | Seed | RIR | Rest |
 |---|---:|---:|---:|---:|
-| Deadlift | 2 x 3 | 3 | 2-3 | 4-5 min |
+| Deadlift | 1 x 1 + 1 x 3 + 1 x 5 | 1 / 3 / 5 | 3 / 2-3 / 2 | 4-5 min |
 | Front Squat | 3 x 5 | 5 | 2-3 | 3 min |
 | Hip Thrust | 3 x 5-8 | 6 | 2 | 2-3 min |
 | Leg Curl | 3 x 8-12 | 10 | 2 | 1-2 min |
@@ -462,7 +478,7 @@ already tolerate five training days.
 
 | Exercise | Prescription | Seed | RIR | Rest |
 |---|---:|---:|---:|---:|
-| Squat | 3 x 3 | 3 | 2-3 | 3-5 min |
+| Squat | 1 x 1 + 1 x 3 + 1 x 5 | 1 / 3 / 5 | 3 / 2-3 / 2 | 3-5 min |
 | Bench Press | 3 x 5 | 5 | 3 | 3 min |
 | Romanian Deadlift | 3 x 5 | 5 | 2-3 | 3 min |
 | Barbell Row | 3 x 5 | 5 | 2 | 3 min |
@@ -471,7 +487,7 @@ already tolerate five training days.
 
 | Exercise | Prescription | Seed | RIR | Rest |
 |---|---:|---:|---:|---:|
-| Bench Press | 3 x 3 | 3 | 2-3 | 3-5 min |
+| Bench Press | 1 x 1 + 1 x 3 + 1 x 5 | 1 / 3 / 5 | 3 / 2-3 / 2 | 3-5 min |
 | Overhead Press | 3 x 5 | 5 | 2-3 | 3 min |
 | Pull-ups | 3 x 5-8 | 6 | 2 | 2-3 min |
 | Close Grip Bench Press | 2 x 5-8 | 6 | 2 | 2-3 min |
@@ -481,7 +497,7 @@ already tolerate five training days.
 
 | Exercise | Prescription | Seed | RIR | Rest |
 |---|---:|---:|---:|---:|
-| Deadlift | 2 x 3 | 3 | 2-3 | 4-5 min |
+| Deadlift | 1 x 1 + 1 x 3 + 1 x 5 | 1 / 3 / 5 | 3 / 2-3 / 2 | 4-5 min |
 | Front Squat | 3 x 5 | 5 | 3 | 3 min |
 | Seated Cable Row | 3 x 5-8 | 6 | 2 | 2-3 min |
 | Leg Curl | 3 x 8-12 | 10 | 2 | 1-2 min |
@@ -575,7 +591,7 @@ last two distribute hypertrophy work.
 
 | Exercise | Prescription | Seed | RIR | Rest |
 |---|---:|---:|---:|---:|
-| Bench Press | 3 x 3 | 3 | 2-3 | 3-5 min |
+| Bench Press | 1 x 1 + 1 x 3 + 1 x 5 | 1 / 3 / 5 | 3 / 2-3 / 2 | 3-5 min |
 | Overhead Press | 3 x 5 | 5 | 2-3 | 3 min |
 | Incline Dumbbell Press | 3 x 6-10 | 8 | 2 | 2 min |
 | Lateral Raise | 3 x 10-15 | 12 | 1-2 | 1-2 min |
@@ -585,7 +601,7 @@ last two distribute hypertrophy work.
 
 | Exercise | Prescription | Seed | RIR | Rest |
 |---|---:|---:|---:|---:|
-| Deadlift | 2 x 3 | 3 | 2-3 | 4-5 min |
+| Deadlift | 1 x 1 + 1 x 3 + 1 x 5 | 1 / 3 / 5 | 3 / 2-3 / 2 | 4-5 min |
 | Barbell Row | 3 x 5 | 5 | 2 | 3 min |
 | Pull-ups | 3 x 5-8 | 6 | 2 | 2-3 min |
 | Face Pull | 3 x 10-15 | 12 | 2 | 1-2 min |
@@ -595,7 +611,7 @@ last two distribute hypertrophy work.
 
 | Exercise | Prescription | Seed | RIR | Rest |
 |---|---:|---:|---:|---:|
-| Squat | 3 x 3 | 3 | 2-3 | 3-5 min |
+| Squat | 1 x 1 + 1 x 3 + 1 x 5 | 1 / 3 / 5 | 3 / 2-3 / 2 | 3-5 min |
 | Romanian Deadlift | 3 x 5 | 5 | 2-3 | 3 min |
 | Leg Press | 3 x 8-12 | 10 | 2 | 2 min |
 | Leg Curl | 3 x 8-12 | 10 | 2 | 1-2 min |
@@ -714,6 +730,23 @@ SetTemplate(
 )
 ```
 
+The descending-load compound sequence maps without a model change:
+
+```text
+ExerciseTemplate(
+  name: 'Bench Press',
+  sets: 3,
+  setTargets: [
+    SetTemplate(reps: 1, weight: 0.0),
+    SetTemplate(reps: 3, weight: 0.0),
+    SetTemplate(reps: 5, weight: 0.0),
+  ],
+)
+```
+
+The preset cannot choose the three descending weights. The user sets each load
+from their current ability and the prescribed RIR.
+
 Use the exact exercise strings in this document; they all exist in
 `lib/data/exercise_library.dart`. Shared workout references such as “use Legs A”
 should be expanded into complete copied plan data during preset creation. Do not
@@ -752,14 +785,14 @@ WorkoutPreset
     name
     exercises[]
       exerciseName
-      sets
-      repMin
-      repMax
-      seedReps
-      targetRirMin
-      targetRirMax
       restSeconds
       substitutions[]
+      setTargets[]
+        repMin
+        repMax
+        seedReps
+        targetRirMin
+        targetRirMax
 ```
 
 Copy a preset into ordinary user-owned plans when selected. Store the preset ID
@@ -793,6 +826,8 @@ sessions.
   review. This is a product guardrail, not a proven biological cutoff.
 - Keep main strength lifts first and avoid consecutive heavy exposures for the
   same lift.
+- Treat every `1 / 3 / 5` single as submaximal. Preset copy must call it a heavy
+  practice rep and must not label it a max attempt.
 - Set all initial weights to `0.0`; never guess a user's strength.
 - Show RIR, rest, progression, warm-up, and safety guidance before plan creation.
 - Let users preview and remove days or exercises before saving.
