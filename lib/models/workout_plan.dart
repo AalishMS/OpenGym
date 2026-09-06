@@ -37,6 +37,11 @@ class WorkoutPlan extends HiveObject {
   @HiveField(9)
   String? splitId;
 
+  /// Explicit display and schedule order within a split.
+  /// Null keeps the legacy Hive insertion order for older plans.
+  @HiveField(10)
+  final int? position;
+
   WorkoutPlan({
     required this.name,
     required this.exercises,
@@ -47,6 +52,7 @@ class WorkoutPlan extends HiveObject {
     this.deletedAt,
     this.dirty,
     this.splitId,
+    this.position,
   });
 
   WorkoutPlan copyWith({
@@ -59,6 +65,7 @@ class WorkoutPlan extends HiveObject {
     DateTime? deletedAt,
     bool? dirty,
     String? splitId,
+    int? position,
   }) => WorkoutPlan(
     name: name ?? this.name,
     exercises: exercises ?? this.exercises,
@@ -69,6 +76,7 @@ class WorkoutPlan extends HiveObject {
     deletedAt: deletedAt ?? this.deletedAt,
     dirty: dirty ?? this.dirty,
     splitId: splitId ?? this.splitId,
+    position: position ?? this.position,
   );
 
   Map<String, dynamic> toJson() => {
@@ -79,6 +87,7 @@ class WorkoutPlan extends HiveObject {
     'updatedAt': updatedAt?.toIso8601String(),
     'deletedAt': deletedAt?.toIso8601String(),
     'splitId': splitId,
+    'position': position,
   };
 
   factory WorkoutPlan.fromJson(Map<String, dynamic> json) => WorkoutPlan(
@@ -98,5 +107,6 @@ class WorkoutPlan extends HiveObject {
             ? DateTime.parse(json['deletedAt'] as String)
             : null,
     splitId: json['splitId'] as String?,
+    position: json['position'] as int?,
   );
 }

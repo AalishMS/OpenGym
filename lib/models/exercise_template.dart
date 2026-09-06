@@ -21,10 +21,15 @@ class ExerciseTemplate extends HiveObject {
   @HiveField(2)
   final List<SetTemplate>? setTargets;
 
+  /// Optional guidance copied into a workout's exercise notes.
+  @HiveField(3)
+  final String? note;
+
   ExerciseTemplate({
     required this.name,
     required this.sets,
     this.setTargets,
+    this.note,
   });
 
   /// The target for set [index], or null if this plan has none.
@@ -35,17 +40,20 @@ class ExerciseTemplate extends HiveObject {
   }
 
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'sets': sets,
-        'setTargets': setTargets?.map((t) => t.toJson()).toList(),
-      };
+    'name': name,
+    'sets': sets,
+    'setTargets': setTargets?.map((t) => t.toJson()).toList(),
+    'note': note,
+  };
 
   factory ExerciseTemplate.fromJson(Map<String, dynamic> json) =>
       ExerciseTemplate(
         name: json['name'] as String,
         sets: json['sets'] as int,
-        setTargets: (json['setTargets'] as List<dynamic>?)
-            ?.map((t) => SetTemplate.fromJson(t as Map<String, dynamic>))
-            .toList(),
+        setTargets:
+            (json['setTargets'] as List<dynamic>?)
+                ?.map((t) => SetTemplate.fromJson(t as Map<String, dynamic>))
+                .toList(),
+        note: json['note'] as String?,
       );
 }

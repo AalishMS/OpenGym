@@ -87,8 +87,8 @@ The core model is intentionally small.
 | --- | --- |
 | `Set` | One performed set: reps, weight, optional RPE, optional note |
 | `Exercise` | One logged exercise with a list of sets |
-| `ExerciseTemplate` | Exercise entry in a plan with target set count |
-| `WorkoutPlan` | Named plan with exercises and optional plan color |
+| `ExerciseTemplate` | Exercise entry with targets and optional workout guidance |
+| `WorkoutPlan` | Named plan with exercises, optional color, and explicit order |
 | `WorkoutSession` | Logged workout for a plan, date, week, and exercises |
 
 Plans and sessions also carry sync metadata:
@@ -163,6 +163,20 @@ their state.
 
 Workout plan creation, editing, and active workout logging are separate screens
 opened from the main flow.
+
+## Bundled Workout Presets
+
+The app compiles a read-only catalog of workout programs from the reviewed
+preset research. Catalog metadata is never written to Hive or Supabase. Choosing
+a program copies its workout days into ordinary user-owned plans, with explicit
+positions so their schedule order survives synchronization. Installation is an
+exclusive local mutation with compensating rollback across split, plan, and
+active-preference boxes.
+
+The Home split menu opens a responsive program browser. Its colored schedule
+strip represents workout/rest rhythm using the existing solved plan colors;
+details expose complete prescriptions, RIR, rest, substitutions, and shared
+guidance before the user creates a copy.
 
 ## UI Design
 

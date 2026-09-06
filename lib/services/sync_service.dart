@@ -28,6 +28,7 @@ class SyncService {
   static const _sessionsCursorKey = 'sessions_last_pulled';
 
   Future<void>? _activeSync;
+  Future<void>? _exclusiveMutation;
   Timer? _debounce;
   final StreamController<void> _changes = StreamController<void>.broadcast();
 
@@ -43,8 +44,38 @@ class SyncService {
     _debounce = Timer(const Duration(seconds: 2), syncNow);
   }
 
+  /// Runs a multi-box local mutation without letting sync observe partial data.
+  Future<T> runExclusiveLocalMutation<T>(Future<T> Function() mutation) async {
+    while (true) {
+      final pendingMutation = _exclusiveMutation;
+      if (pendingMutation != null) {
+        await pendingMutation;
+        continue;
+      }
+      final activeSync = _activeSync;
+      if (activeSync != null) {
+        await activeSync;
+        continue;
+      }
+      break;
+    }
+
+    _debounce?.cancel();
+    _debounce = null;
+    final completer = Completer<void>();
+    _exclusiveMutation = completer.future;
+    try {
+      return await mutation();
+    } finally {
+      _exclusiveMutation = null;
+      completer.complete();
+    }
+  }
+
   Future<void> syncNow() async {
     if (!_canSync) return;
+    final mutation = _exclusiveMutation;
+    if (mutation != null) await mutation;
     final active = _activeSync;
     if (active != null) return active;
     final sync = _runSyncCycle();

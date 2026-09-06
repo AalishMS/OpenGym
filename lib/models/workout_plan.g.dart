@@ -26,13 +26,14 @@ class WorkoutPlanAdapter extends TypeAdapter<WorkoutPlan> {
       deletedAt: fields[7] as DateTime?,
       dirty: fields[8] as bool?,
       splitId: fields[9] as String?,
+      position: fields[10] as int?,
     );
   }
 
   @override
   void write(BinaryWriter writer, WorkoutPlan obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -50,7 +51,9 @@ class WorkoutPlanAdapter extends TypeAdapter<WorkoutPlan> {
       ..writeByte(8)
       ..write(obj.dirty)
       ..writeByte(9)
-      ..write(obj.splitId);
+      ..write(obj.splitId)
+      ..writeByte(10)
+      ..write(obj.position);
   }
 
   @override

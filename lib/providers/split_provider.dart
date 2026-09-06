@@ -7,6 +7,9 @@ import '../models/split.dart';
 import '../repositories/split_repository.dart';
 import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
+import '../services/workout_preset_installer.dart';
+import '../data/workout_presets.dart';
+import '../utils/split_identity.dart';
 
 class SplitProvider with ChangeNotifier {
   static const int maxSplits = 5;
@@ -14,6 +17,7 @@ class SplitProvider with ChangeNotifier {
 
   final SplitRepository _repository;
   final String? Function() _userIdProvider;
+  final WorkoutPresetInstaller _presetInstaller;
   List<Split> _splits = [];
   String? _activeSplitId;
   late final StreamSubscription<void> _syncSubscription;
@@ -21,7 +25,9 @@ class SplitProvider with ChangeNotifier {
   SplitProvider({
     SplitRepository? repository,
     String? Function()? userIdProvider,
+    WorkoutPresetInstaller? presetInstaller,
   }) : _repository = repository ?? SplitRepository(),
+       _presetInstaller = presetInstaller ?? const WorkoutPresetInstaller(),
        _userIdProvider =
            userIdProvider ?? (() => SupabaseService.currentUserId) {
     _syncSubscription = SyncService.instance.changes.listen(
@@ -40,6 +46,22 @@ class SplitProvider with ChangeNotifier {
   }
 
   bool get canCreate => _splits.length < maxSplits;
+
+  bool get canInstallPreset => presetInstallBlockReason == null;
+
+  String? get presetInstallBlockReason {
+    final userId = _userIdProvider();
+    final active = activeSplit;
+    final reusable =
+        userId != null &&
+        active != null &&
+        active.id == defaultSplitIdForUser(userId) &&
+        active.name == 'My Split' &&
+        usageFor(active.id).plans == 0 &&
+        usageFor(active.id).sessions == 0;
+    if (reusable || canCreate) return null;
+    return 'You can have at most five splits. Delete one in Manage splits.';
+  }
 
   SplitUsage usageFor(String splitId) => SplitUsage(
     plans: _repository.getPlanCount(splitId),
@@ -124,6 +146,18 @@ class SplitProvider with ChangeNotifier {
     );
     loadSplits();
     SyncService.instance.scheduleSync();
+  }
+
+  Future<PresetInstallResult> installPreset(WorkoutPreset preset) async {
+    try {
+      return await _presetInstaller.install(
+        preset: preset,
+        userId: _requireUser(),
+        maxSplits: maxSplits,
+      );
+    } finally {
+      loadSplits();
+    }
   }
 
   String _requireUser() {

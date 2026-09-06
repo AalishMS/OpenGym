@@ -60,6 +60,7 @@ class WorkoutSessionInitializer {
               .map(
                 (template) => Exercise(
                   name: template.name,
+                  note: template.note,
                   sets: List.generate(template.sets, (index) {
                     final target =
                         seedTargets ? template.targetAt(index) : null;

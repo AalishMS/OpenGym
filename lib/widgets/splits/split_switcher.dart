@@ -11,6 +11,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import 'split_dialogs.dart';
+import 'preset_browser_dialog.dart';
 
 class SplitSwitcher extends StatefulWidget {
   const SplitSwitcher({super.key});
@@ -53,6 +54,10 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
             onManage: () {
               _closeMenu();
               SplitDialogs.showManage(context);
+            },
+            onBrowse: () {
+              _closeMenu();
+              PresetBrowserDialog.show(context);
             },
             onSelect: (splitId) async {
               _closeMenu();
@@ -179,6 +184,7 @@ class _SplitMenuOverlay extends StatelessWidget {
   final VoidCallback onDismiss;
   final VoidCallback onCreate;
   final VoidCallback onManage;
+  final VoidCallback onBrowse;
   final ValueChanged<String> onSelect;
 
   const _SplitMenuOverlay({
@@ -188,6 +194,7 @@ class _SplitMenuOverlay extends StatelessWidget {
     required this.onDismiss,
     required this.onCreate,
     required this.onManage,
+    required this.onBrowse,
     required this.onSelect,
   });
 
@@ -214,6 +221,7 @@ class _SplitMenuOverlay extends StatelessWidget {
             onDismiss: onDismiss,
             onCreate: onCreate,
             onManage: onManage,
+            onBrowse: onBrowse,
             onSelect: onSelect,
           ),
         ),
@@ -228,6 +236,7 @@ class _AnimatedSplitMenu extends StatefulWidget {
   final VoidCallback onDismiss;
   final VoidCallback onCreate;
   final VoidCallback onManage;
+  final VoidCallback onBrowse;
   final ValueChanged<String> onSelect;
 
   const _AnimatedSplitMenu({
@@ -236,6 +245,7 @@ class _AnimatedSplitMenu extends StatefulWidget {
     required this.onDismiss,
     required this.onCreate,
     required this.onManage,
+    required this.onBrowse,
     required this.onSelect,
   });
 
@@ -283,6 +293,7 @@ class _AnimatedSplitMenuState extends State<_AnimatedSplitMenu>
                     provider: provider,
                     onCreate: widget.onCreate,
                     onManage: widget.onManage,
+                    onBrowse: widget.onBrowse,
                     onSelect: widget.onSelect,
                   ),
             ),
@@ -298,6 +309,7 @@ class _SplitMenu extends StatelessWidget {
   final SplitProvider provider;
   final VoidCallback onCreate;
   final VoidCallback onManage;
+  final VoidCallback onBrowse;
   final ValueChanged<String> onSelect;
 
   const _SplitMenu({
@@ -305,6 +317,7 @@ class _SplitMenu extends StatelessWidget {
     required this.provider,
     required this.onCreate,
     required this.onManage,
+    required this.onBrowse,
     required this.onSelect,
   });
 
@@ -375,6 +388,12 @@ class _SplitMenu extends StatelessWidget {
                         : 'Limit reached · 5 of 5 active',
                 enabled: provider.canCreate,
                 onTap: onCreate,
+              ),
+              _SplitMenuAction(
+                key: const ValueKey('browse-programs-action'),
+                label: 'Browse programs',
+                caption: 'Built-in workout presets',
+                onTap: onBrowse,
               ),
               _SplitMenuAction(
                 key: const ValueKey('manage-splits-action'),

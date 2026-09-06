@@ -67,6 +67,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
           _EditorExercise(
             id: _nextExerciseId++,
             name: exercise.name,
+            note: exercise.note,
             sets: List.generate(exercise.sets, (index) {
               final target = exercise.targetAt(index);
               return ExerciseSetData(
@@ -96,7 +97,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
           final sets = exercise.sets
               .map((set) => '${set.reps}x${set.weight}')
               .join(',');
-          return '${exercise.name}:$sets';
+          return '${exercise.name}:${exercise.note ?? ''}:$sets';
         })
         .join('|');
     return '${_nameController.text.trim()}|$_selectedColor|$exerciseParts';
@@ -136,6 +137,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
               (exercise) => ExerciseTemplate(
                 name: exercise.name,
                 sets: exercise.sets.length,
+                note: exercise.note,
                 setTargets:
                     exercise.sets
                         .map(
@@ -155,6 +157,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
       updatedAt: existing?.updatedAt,
       deletedAt: existing?.deletedAt,
       dirty: existing?.dirty,
+      position: existing?.position ?? _nextPlanPosition(provider.plans),
       name: _nameController.text.trim(),
       exercises: templates,
       planColor: _selectedColor,
@@ -166,6 +169,13 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
       await provider.addPlan(plan);
     }
     if (mounted) Navigator.pop(context);
+  }
+
+  int? _nextPlanPosition(List<WorkoutPlan> plans) {
+    if (widget.isEdit || plans.isEmpty) return null;
+    if (plans.any((plan) => plan.position == null)) return null;
+    return plans.map((plan) => plan.position!).reduce((a, b) => a > b ? a : b) +
+        1;
   }
 
   void _updateSet(int exerciseIndex, int setIndex, int reps, double weight) {
@@ -755,12 +765,14 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
 class _EditorExercise {
   final int id;
   String name;
+  final String? note;
   List<ExerciseSetData> sets;
   bool expanded;
 
   _EditorExercise({
     required this.id,
     required this.name,
+    this.note,
     required this.sets,
     required this.expanded,
   });

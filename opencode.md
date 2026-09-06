@@ -128,6 +128,19 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Added a bundled, read-only workout preset catalog:
+  - Ten evidence-informed programs expand into 46 independently stored workout
+    days with seeded reps, zero starting weights, exercise substitutions, and
+    theme-aware plan colours
+  - A responsive Home browser groups programs by goal and previews schedule,
+    experience, duration, complete prescriptions, RIR, rest, and guidance
+  - Installing a preset reuses only an untouched `My Split`, otherwise creates
+    a new split within the existing five-split limit, and syncs only the user's
+    copied split, plans, and active preference
+  - Explicit plan positions keep preset order stable across devices; optional
+    template notes seed special descending-load and bodyweight cues into workouts
+  - Installation is isolated from sync and compensates failed multi-box writes
+    without tombstones or partial preset data
 - Refined Statistics around two focused charts:
   - Weekly training now leads with exercise-filtered volume load, independent
     exercise selection, and an All exercises option. ISO calendar weeks retain

@@ -127,6 +127,50 @@ void main() {
     expect(find.text('PPL Only'), findsNothing);
   });
 
+  testWidgets('split menu opens the grouped workout preset browser', (
+    tester,
+  ) async {
+    final harness = (await tester.runAsync(_createHarness))!;
+    addTearDown(harness.dispose);
+
+    await tester.pumpWidget(harness.host(const HomeScreen()));
+    await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Browse programs'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('New split')).dy,
+      lessThan(tester.getTopLeft(find.text('Browse programs')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('Browse programs')).dy,
+      lessThan(tester.getTopLeft(find.text('Manage splits')).dy),
+    );
+
+    await tester.tap(find.text('Browse programs'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('preset-catalog')), findsOneWidget);
+    expect(find.text('Workout presets'), findsOneWidget);
+    expect(find.text('Hypertrophy'), findsOneWidget);
+    expect(find.text('Full-body hypertrophy'), findsOneWidget);
+    expect(find.text('3 days · 55–75 min · Full body'), findsOneWidget);
+
+    await tester.tap(find.text('Full-body hypertrophy'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('preset-details-HYP-FB-3')),
+      findsOneWidget,
+    );
+    expect(find.text('Workout days'), findsOneWidget);
+    expect(find.text('Full body A'), findsOneWidget);
+    expect(find.byKey(const ValueKey('install-preset-action')), findsOneWidget);
+
+    await tester.tap(find.text('Full body A'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('3 x 6-10 · Seed 8 / 8 / 8'), findsOneWidget);
+    expect(find.textContaining('Alternatives: Front Squat'), findsOneWidget);
+  });
+
   testWidgets('new split dialog validates names and selects the result', (
     tester,
   ) async {
@@ -158,6 +202,33 @@ void main() {
     expect(find.text('Full Body'), findsOneWidget);
     expect(find.text('[FULL BODY]'), findsNothing);
     expect(harness.plans.plans, isEmpty);
+  });
+
+  testWidgets('preset browser adapts to themes, width, and large text', (
+    tester,
+  ) async {
+    final harness = (await tester.runAsync(_createHarness))!;
+    addTearDown(harness.dispose);
+
+    for (final scenario in [
+      (Brightness.light, const Size(390, 800), 1.5),
+      (Brightness.dark, const Size(1000, 800), 1.0),
+    ]) {
+      await tester.pumpWidget(
+        harness.host(
+          const HomeScreen(),
+          brightness: scenario.$1,
+          size: scenario.$2,
+          textScale: scenario.$3,
+        ),
+      );
+      await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Browse programs'));
+      await tester.pumpAndSettle();
+      expect(find.text('Workout presets'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
   });
 
   testWidgets('five-split limit disables creation with an explanation', (

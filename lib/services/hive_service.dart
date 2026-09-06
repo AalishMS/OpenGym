@@ -302,14 +302,30 @@ class HiveService {
   // Plan operations (id-based)
   // ---------------------------------------------------------------------------
   /// UI-facing list: tombstones (deletedAt != null) are hidden.
-  static List<WorkoutPlan> getPlans({String? splitId}) =>
-      _plansBox.values
-          .where(
-            (p) =>
-                p.deletedAt == null &&
-                (splitId == null || p.splitId == splitId),
-          )
-          .toList();
+  static List<WorkoutPlan> getPlans({String? splitId}) {
+    final plans =
+        _plansBox.values
+            .where(
+              (p) =>
+                  p.deletedAt == null &&
+                  (splitId == null || p.splitId == splitId),
+            )
+            .toList();
+    final indexed = plans.indexed.toList();
+    indexed.sort((a, b) {
+      final aPosition = a.$2.position;
+      final bPosition = b.$2.position;
+      if (aPosition == null && bPosition == null) {
+        return a.$1.compareTo(b.$1);
+      }
+      if (aPosition == null) return 1;
+      if (bPosition == null) return -1;
+      final positionOrder = aPosition.compareTo(bPosition);
+      if (positionOrder != 0) return positionOrder;
+      return (a.$2.id ?? '').compareTo(b.$2.id ?? '');
+    });
+    return indexed.map((entry) => entry.$2).toList();
+  }
 
   /// Returns a plan by id INCLUDING tombstones (get-by-key ignores deletedAt).
   static WorkoutPlan? getPlanById(String id) => _plansBox.get(id);
@@ -322,6 +338,18 @@ class HiveService {
     plan.dirty = true;
     await _plansBox.put(plan.id, plan);
   }
+
+  /// Raw primitives used by the preset installer while sync is gated.
+  static Future<void> putPlansRaw(Map<String, WorkoutPlan> plans) =>
+      _plansBox.putAll(plans);
+
+  static Future<void> deletePlansRaw(Iterable<String> ids) =>
+      _plansBox.deleteAll(ids);
+
+  static Future<void> deleteSplitRaw(String id) => _splitsBox.delete(id);
+
+  static Future<void> deleteSplitPreferenceRaw(String userId) =>
+      _splitPreferencesBox.delete(userId);
 
   static Future<void> softDeletePlan(String id) async {
     final plan = _plansBox.get(id);
