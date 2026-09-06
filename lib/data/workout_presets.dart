@@ -105,16 +105,11 @@ const Map<String, List<String>> workoutPresetSubstitutions = {
 };
 
 const List<String> workoutPresetGuidance = [
-  'Warm up before the first heavy compound with low-fatigue ramp-up sets. '
-      'Warm-up sets do not count as working sets.',
-  'Keep the same load while adding reps within the listed range. Increase the '
-      'load after every set reaches the top of the range at the target RIR.',
-  'Start strength work near RIR 3. Add load only after every prescribed rep is '
-      'completed with stable technique.',
-  'Stop a set when technique changes. Routine failure is not prescribed for '
-      'free-weight compound lifts.',
-  'Run a program for 6–8 weeks unless pain or recovery problems require an '
-      'earlier change. Reduce volume before adding more.',
+  'Warm up before heavy compound lifts',
+  'Add reps first, then increase load',
+  'Leave 1–2 reps in reserve on most sets',
+  'Stop sets before form breaks down',
+  'Stick with a split for 6–8 weeks',
 ];
 
 const List<WorkoutPreset> workoutPresets = [

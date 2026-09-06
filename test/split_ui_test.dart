@@ -167,7 +167,8 @@ void main() {
 
     await tester.tap(find.text('Full body A'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('3 x 6-10 · Seed 8 / 8 / 8'), findsOneWidget);
+    expect(find.text('3 x 6-10'), findsOneWidget);
+    expect(find.textContaining('Seed 8 / 8 / 8'), findsOneWidget);
     expect(find.textContaining('Alternatives: Front Squat'), findsOneWidget);
   });
 

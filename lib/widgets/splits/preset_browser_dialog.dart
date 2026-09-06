@@ -259,7 +259,7 @@ class _CatalogOverview extends StatelessWidget {
                         onTap: () => onSelect(preset),
                       ),
                       if (preset != presets.last)
-                        const SizedBox(height: AppSpacing.sm),
+                        const SizedBox(height: AppSpacing.md),
                     ],
                   ],
                 );
@@ -268,7 +268,7 @@ class _CatalogOverview extends StatelessWidget {
                 crossAxisCount: 2,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: 2.25,
+                childAspectRatio: 1.95,
                 crossAxisSpacing: AppSpacing.md,
                 mainAxisSpacing: AppSpacing.md,
                 children: [
@@ -322,6 +322,10 @@ class _PresetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textPrimary = textPrimaryColor(context);
+    final textSecondary = textSecondaryColor(context);
+    final accent = accentColor(context);
+
     return Semantics(
       button: true,
       label: '${preset.name}, ${preset.days} training days, ${preset.duration}',
@@ -329,7 +333,6 @@ class _PresetCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: AppRadius.card,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 168),
           padding: const EdgeInsets.all(AppSpacing.md),
           decoration: BoxDecoration(
             color: surfaceColor(context),
@@ -338,8 +341,10 @@ class _PresetCard extends StatelessWidget {
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
                     child: Text(
@@ -347,36 +352,79 @@ class _PresetCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: textPrimaryColor(context),
+                        color: textPrimary,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
+                  const SizedBox(width: AppSpacing.sm),
                   Text(
                     preset.id,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: accentColor(context),
+                      color: textPrimary,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.3,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.xs),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 '${preset.days} days · ${preset.duration} · ${preset.splitStyle}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: textSecondaryColor(context),
+                  color: textSecondary,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),
-              Text(
-                preset.bestFit,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: textSecondaryColor(context),
-                ),
+              Row(
+                children: [
+                  Icon(
+                    LucideIcons.userCheck,
+                    size: 13,
+                    color: accent,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      preset.bestFit,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: AppSpacing.md),
-              _ScheduleStrip(preset: preset),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '7-day rotation',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: textSecondary.withAlpha(150),
+                            fontSize: 10,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        _ScheduleStrip(preset: preset),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Icon(
+                    LucideIcons.chevronRight,
+                    size: 16,
+                    color: textSecondary.withAlpha(120),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
@@ -448,16 +496,9 @@ class _PresetDetails extends StatelessWidget {
       key: ValueKey('preset-details-${preset.id}'),
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            _MetaPill(label: _goalLabel(preset.goal)),
-            _MetaPill(label: '${preset.days} training days'),
-            _MetaPill(label: preset.duration),
-            _MetaPill(label: preset.bestFit),
-          ],
-        ),
+        _PresetOverviewCard(preset: preset),
+        const SizedBox(height: AppSpacing.sm),
+        _PresetBestFitBanner(bestFit: preset.bestFit),
         const SizedBox(height: AppSpacing.lg),
         Text(
           preset.summary,
@@ -501,15 +542,24 @@ class _PresetDetails extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text('· ', style: TextStyle(color: accentColor(context))),
+                Container(
+                  width: 5,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: accentColor(context),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
                     guidance,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: textSecondaryColor(context),
-                      height: 1.45,
                     ),
                   ),
                 ),
@@ -521,27 +571,138 @@ class _PresetDetails extends StatelessWidget {
   }
 }
 
-class _MetaPill extends StatelessWidget {
-  final String label;
+class _PresetOverviewCard extends StatelessWidget {
+  final WorkoutPreset preset;
 
-  const _MetaPill({required this.label});
+  const _PresetOverviewCard({required this.preset});
+
+  @override
+  Widget build(BuildContext context) {
+    final border = borderColor(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: surfaceColor(context),
+        border: Border.all(color: border),
+        borderRadius: AppRadius.card,
+      ),
+      padding: const EdgeInsets.symmetric(
+        vertical: AppSpacing.md,
+        horizontal: AppSpacing.sm,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _OverviewMetric(
+              icon: LucideIcons.calendar,
+              value: '${preset.days} days',
+              caption: 'Per week',
+            ),
+          ),
+          Container(width: 1, height: 28, color: border),
+          Expanded(
+            child: _OverviewMetric(
+              icon: LucideIcons.clock,
+              value: preset.duration,
+              caption: 'Per session',
+            ),
+          ),
+          Container(width: 1, height: 28, color: border),
+          Expanded(
+            child: _OverviewMetric(
+              icon: LucideIcons.target,
+              value: _goalLabel(preset.goal),
+              caption: 'Focus',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OverviewMetric extends StatelessWidget {
+  final IconData icon;
+  final String value;
+  final String caption;
+
+  const _OverviewMetric({
+    required this.icon,
+    required this.value,
+    required this.caption,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = accentColor(context);
+    final textPrimary = textPrimaryColor(context);
+    final textSecondary = textSecondaryColor(context);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: accent),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: textPrimary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        Text(
+          caption,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: textSecondary,
+            fontSize: 10,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PresetBestFitBanner extends StatelessWidget {
+  final String bestFit;
+
+  const _PresetBestFitBanner({required this.bestFit});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: accentMutedColor(context),
+        color: surfaceColor(context),
+        border: Border.all(color: borderColor(context)),
         borderRadius: AppRadius.chip,
       ),
-      child: Text(
-        label,
-        style: Theme.of(
-          context,
-        ).textTheme.labelSmall?.copyWith(color: textPrimaryColor(context)),
+      child: Row(
+        children: [
+          Icon(LucideIcons.userCheck, size: 14, color: accentColor(context)),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            'Best fit: ',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: textSecondaryColor(context),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Expanded(
+            child: Text(
+              bestFit,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: textPrimaryColor(context),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -585,9 +746,10 @@ class _PlanExpansion extends StatelessWidget {
         ),
         title: Text(
           plan.name,
-          style: Theme.of(
-            context,
-          ).textTheme.titleSmall?.copyWith(color: textPrimaryColor(context)),
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: textPrimaryColor(context),
+            fontWeight: FontWeight.w600,
+          ),
         ),
         subtitle: Text(
           '${plan.exercises.length} exercises',
@@ -618,52 +780,98 @@ class _ExercisePrescription extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final border = borderColor(context);
+    final accent = accentColor(context);
+    final textPrimary = textPrimaryColor(context);
+    final textSecondary = textSecondaryColor(context);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       decoration:
           showDivider
               ? BoxDecoration(
-                border: Border(top: BorderSide(color: borderColor(context))),
+                border: Border(top: BorderSide(color: border)),
               )
               : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            exercise.name,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: textPrimaryColor(context),
-              fontWeight: FontWeight.w600,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  exercise.name,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: textPrimary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                exercise.prescription,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            '${exercise.prescription} · Seed ${exercise.seedReps.join(' / ')} · '
-            'RIR ${exercise.rir} · Rest ${exercise.rest}',
+            'Seed ${exercise.seedReps.join(' / ')}  ·  RIR ${exercise.rir}  ·  Rest ${exercise.rest}',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: textSecondaryColor(context),
-              height: 1.4,
+              color: textSecondary,
             ),
           ),
           if (exercise.note != null) ...[
             const SizedBox(height: AppSpacing.xs),
-            Text(
-              exercise.note!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: accentColor(context),
-                height: 1.4,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Icon(LucideIcons.info, size: 13, color: accent),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(
+                    exercise.note!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: accent,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
           if (exercise.substitutions.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Alternatives: ${exercise.substitutions.join(', ')}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: textSecondaryColor(context),
-                height: 1.4,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Icon(
+                    LucideIcons.shuffle,
+                    size: 13,
+                    color: textSecondary.withAlpha(140),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(
+                    'Alternatives: ${exercise.substitutions.join(', ')}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: textSecondary,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ],

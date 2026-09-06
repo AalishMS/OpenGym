@@ -392,7 +392,7 @@ class _SplitMenu extends StatelessWidget {
               _SplitMenuAction(
                 key: const ValueKey('browse-programs-action'),
                 label: 'Browse programs',
-                caption: 'Built-in workout presets',
+                caption: 'Choose a split',
                 onTap: onBrowse,
               ),
               _SplitMenuAction(
