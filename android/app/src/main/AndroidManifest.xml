@@ -5,6 +5,8 @@
          in this project contributes it either. The in-app updater needs it to
          reach the GitHub Releases API, and Supabase sync needs it too. -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <!-- Lets the app hand a downloaded APK to the system installer so it can
          update itself. The user must still approve "install unknown apps" and
          then confirm the install; this only allows us to ask. -->
@@ -84,6 +86,17 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="${applicationId}.ACTION_INSTALL_COMPLETE"/>
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name=".WorkoutTimerActionReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".WorkoutTimerBootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
     </application>

@@ -1,6 +1,8 @@
 package com.aalishms.opengym
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -17,8 +19,13 @@ class MainActivity: FlutterActivity() {
     // a runtime permission — it is a per-app settings toggle — so there is
     // nothing to request, only something to read and a screen to open.
     private val INSTALLER_CHANNEL = "com.aalishms.opengym/installer"
+    private val TIMER_NOTIFICATION_CHANNEL = "com.aalishms.opengym/workout_timer_notification"
+    private val NOTIFICATION_PERMISSION_REQUEST = 4103
 
     private var highRefreshRateEnabled = true
+    private var timerChannel: MethodChannel? = null
+    private var pendingTimerIntentAction: String? = null
+    private var pendingPermissionResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -54,6 +61,84 @@ class MainActivity: FlutterActivity() {
                 }
             }
         }
+
+        pendingTimerIntentAction = timerIntentAction(intent) ?: pendingTimerIntentAction
+        timerChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, TIMER_NOTIFICATION_CHANNEL).also { channel ->
+            channel.setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "requestPermission" -> requestNotificationPermission(result)
+                    "show" -> {
+                        WorkoutTimerNotification.show(this, call.arguments as Map<*, *>)
+                        result.success(null)
+                    }
+                    "pause" -> {
+                        WorkoutTimerNotification.pauseFromDart(this, call.arguments as Map<*, *>)
+                        result.success(null)
+                    }
+                    "dismiss" -> {
+                        WorkoutTimerNotification.dismiss(this)
+                        result.success(null)
+                    }
+                    "acknowledgeStop" -> {
+                        WorkoutTimerNotification.acknowledgeStop(this)
+                        result.success(null)
+                    }
+                    "snapshot" -> result.success(WorkoutTimerNotification.state(this)?.toMap())
+                    "restore" -> {
+                        WorkoutTimerNotification.restore(this)
+                        result.success(null)
+                    }
+                    "consumeIntent" -> {
+                        val action = pendingTimerIntentAction
+                        pendingTimerIntentAction = null
+                        result.success(action?.let { timerEvent(it) })
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        val action = timerIntentAction(intent) ?: return
+        pendingTimerIntentAction = action
+        timerChannel?.invokeMethod("notificationIntent", timerEvent(action))
+    }
+
+    private fun timerIntentAction(intent: Intent?): String? = when (intent?.action) {
+        ACTION_OPEN_TIMER -> "open"
+        ACTION_STOP_TIMER -> "stop"
+        else -> null
+    }
+
+    private fun timerEvent(action: String): Map<String, Any?>? {
+        val snapshot = WorkoutTimerNotification.state(this)?.toMap() ?: return null
+        return mapOf("action" to action, "snapshot" to snapshot)
+    }
+
+    private fun requestNotificationPermission(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+        ) {
+            result.success(true)
+            return
+        }
+        if (pendingPermissionResult != null) {
+            result.error("permission_in_progress", "Notification permission is already being requested.", null)
+            return
+        }
+        pendingPermissionResult = result
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_PERMISSION_REQUEST)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != NOTIFICATION_PERMISSION_REQUEST) return
+        val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+        pendingPermissionResult?.success(granted)
+        pendingPermissionResult = null
     }
 
     /**

@@ -128,6 +128,15 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Added Android workout timer notifications:
+  - Starting a workout posts a quiet ongoing system notification with the plan,
+    week, an OS-rendered elapsed chronometer, and Pause/Resume and Stop actions
+  - Notification actions reconcile with the existing Hive draft without
+    replacing exercise data; Stop returns to the exact workout and reuses the
+    existing logging confirmation and PR flow
+  - Android stores only timer identity and clock metadata, restores the
+    notification after process/device restarts, and asks for notification
+    permission only when a workout is first started
 - Added a bundled, read-only workout preset catalog:
   - Ten evidence-informed programs expand into 46 independently stored workout
     days with seeded reps, zero starting weights, exercise substitutions, and

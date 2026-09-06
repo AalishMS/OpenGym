@@ -472,6 +472,58 @@ void main() {
     }
   });
 
+  testWidgets('notification navigation opens the requested workout week', (
+    tester,
+  ) async {
+    final plan = populatedPlan();
+    final sessions = [
+      for (var week = 1; week <= 3; week++)
+        WorkoutSession(
+          id: 'notification-session-$week',
+          planId: plan.id,
+          planName: plan.name,
+          date: DateTime(2026, 9, week),
+          exercises: const [],
+          weekNumber: week,
+          isCompleted: week != 2,
+          startedAt: week == 2 ? DateTime(2026, 9, 2, 10) : null,
+          durationSeconds: week == 2 ? 90 : null,
+        ),
+    ];
+    await tester.runAsync(() async {
+      for (final session in sessions) {
+        await Hive.box<WorkoutSession>(
+          HiveService.sessionsBox,
+        ).put(session.id, session);
+      }
+    });
+
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider<WorkoutPlanProvider>.value(
+            value: _PlanProvider([plan]),
+          ),
+          ChangeNotifierProvider<WorkoutSessionProvider>(
+            create: (_) => _SessionProvider(sessions),
+          ),
+        ],
+        child: MaterialApp(
+          theme: buildTheme(const Color(0xFF00A8FF), Brightness.dark),
+          home: WorkoutScreen(plan: plan, planIndex: 0, initialWeekNumber: 1),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final tabs = tester.widget<UnderlineTabStrip>(
+      find.byWidgetPredicate(
+        (widget) => widget is UnderlineTabStrip && widget.rule == StripRule.top,
+      ),
+    );
+    expect(tabs.selectedIndex, 0);
+  });
+
   testWidgets('long workout title stays clear of the centered timer', (
     tester,
   ) async {

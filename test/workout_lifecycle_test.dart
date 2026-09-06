@@ -8,6 +8,7 @@ import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/services/pr_tracking_service.dart';
 import 'package:gymapp/services/workout_completion_service.dart';
 import 'package:gymapp/services/workout_session_initializer.dart';
+import 'package:gymapp/services/workout_timer_notification_service.dart';
 
 void main() {
   WorkoutSession draft({
@@ -84,6 +85,47 @@ void main() {
       durationSeconds: 30,
     );
     expect(session.elapsedSeconds(DateTime(2026, 9, 5, 10, 2, 10)), 100);
+  });
+
+  test('notification snapshot uses the same persisted timer semantics', () {
+    final snapshot = WorkoutTimerNotificationSnapshot.fromMap({
+      'sessionId': 'draft',
+      'planId': 'plan',
+      'splitId': 'split-a',
+      'planName': 'Strength',
+      'weekNumber': 2,
+      'accumulatedSeconds': 30,
+      'runningSinceMillis': DateTime(2026, 9, 5, 10).millisecondsSinceEpoch,
+      'running': true,
+      'actionRevision': 42,
+      'pendingStop': false,
+    });
+
+    expect(snapshot.isRunning, isTrue);
+    expect(snapshot.elapsedSeconds(DateTime(2026, 9, 5, 10, 1, 10)), 100);
+  });
+
+  test('notification stop event opens the workout and requests logging', () {
+    final event = WorkoutTimerNotificationEvent.fromMap({
+      'action': 'stop',
+      'snapshot': {
+        'sessionId': 'draft',
+        'planId': 'plan',
+        'splitId': 'split-a',
+        'planName': 'Strength',
+        'weekNumber': 2,
+        'accumulatedSeconds': 90,
+        'runningSinceMillis': null,
+        'running': false,
+        'actionRevision': 43,
+        'pendingStop': true,
+      },
+    });
+
+    expect(event.openWorkout, isTrue);
+    expect(event.requestLogConfirmation, isTrue);
+    expect(event.snapshot.pendingStop, isTrue);
+    expect(event.snapshot.elapsedSeconds(), 90);
   });
 
   test(

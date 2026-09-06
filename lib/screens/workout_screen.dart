@@ -16,6 +16,7 @@ import '../services/hive_service.dart';
 import '../services/pr_tracking_service.dart';
 import '../services/workout_session_initializer.dart';
 import '../services/workout_completion_service.dart';
+import '../services/workout_timer_notification_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
@@ -29,8 +30,16 @@ import '../widgets/workout/workout_dialogs.dart';
 class WorkoutScreen extends StatefulWidget {
   final WorkoutPlan plan;
   final int planIndex;
+  final int? initialWeekNumber;
+  final bool showLogConfirmationOnOpen;
 
-  const WorkoutScreen({super.key, required this.plan, required this.planIndex});
+  const WorkoutScreen({
+    super.key,
+    required this.plan,
+    required this.planIndex,
+    this.initialWeekNumber,
+    this.showLogConfirmationOnOpen = false,
+  });
 
   @override
   State<WorkoutScreen> createState() => _WorkoutScreenState();
@@ -41,17 +50,43 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};
   Timer? _ticker;
+  WorkoutSessionProvider? _sessionProvider;
+  bool _didShowInitialLogConfirmation = false;
 
   @override
   void initState() {
     super.initState();
     _loadWeeks();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _sessionProvider =
+          context.read<WorkoutSessionProvider>()
+            ..addListener(_reloadCurrentSession);
+      if (widget.showLogConfirmationOnOpen && !_didShowInitialLogConfirmation) {
+        _didShowInitialLogConfirmation = true;
+        _stopWorkout();
+      }
+    });
   }
 
   @override
   void dispose() {
     _ticker?.cancel();
+    _sessionProvider?.removeListener(_reloadCurrentSession);
     super.dispose();
+  }
+
+  void _reloadCurrentSession() {
+    if (!mounted) return;
+    final saved = HiveService.getSessionForPlanAndWeek(
+      widget.plan.name,
+      _currentWeek,
+      widget.plan.splitId,
+    );
+    if (saved == null) return;
+    _weekSessions[_currentWeek] = saved;
+    _syncTicker(saved);
+    setState(() {});
   }
 
   void _loadWeeks() {
@@ -76,6 +111,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         final draft = drafts.reduce((a, b) => a.date.isAfter(b.date) ? a : b);
         _currentWeekIndex = _weeks.indexOf(draft.weekNumber);
       }
+    }
+    final requestedWeek = widget.initialWeekNumber;
+    if (requestedWeek != null && _weeks.contains(requestedWeek)) {
+      _currentWeekIndex = _weeks.indexOf(requestedWeek);
     }
     _loadSessionForCurrentWeek();
   }
@@ -216,6 +255,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       _weekSessions[_currentWeek] = paused;
       _syncTicker(paused);
       await context.read<WorkoutSessionProvider>().upsertSession(paused);
+      await WorkoutTimerNotificationService.instance.pause(paused);
       if (mounted) setState(() {});
       return;
     }
@@ -253,6 +293,19 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     _weekSessions[_currentWeek] = started;
     _syncTicker(started);
     await context.read<WorkoutSessionProvider>().upsertSession(started);
+    final notificationsAllowed =
+        current.hasStarted ||
+        await WorkoutTimerNotificationService.instance.requestPermission();
+    await WorkoutTimerNotificationService.instance.show(started);
+    if (!notificationsAllowed && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Allow notifications to use workout timer controls outside the app.',
+          ),
+        ),
+      );
+    }
     if (mounted) setState(() {});
   }
 
@@ -278,7 +331,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             ],
           ),
     );
-    if (confirmed != true || !mounted) return;
+    if (confirmed != true || !mounted) {
+      await WorkoutTimerNotificationService.instance.acknowledgeStop();
+      return;
+    }
 
     try {
       final provider = context.read<WorkoutSessionProvider>();
@@ -288,6 +344,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       );
       _weekSessions[_currentWeek] = result.session;
       _syncTicker(result.session);
+      await WorkoutTimerNotificationService.instance.dismiss();
       if (!mounted) return;
       setState(() {});
       if (result.personalRecords.isNotEmpty) {
@@ -342,6 +399,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     _ticker = null;
     if (draft.id != null) {
       await context.read<WorkoutSessionProvider>().deleteSession(draft.id!);
+      final notification =
+          await WorkoutTimerNotificationService.instance.snapshot();
+      if (notification?.sessionId == draft.id) {
+        await WorkoutTimerNotificationService.instance.dismiss();
+      }
     }
     final clean = WorkoutSessionInitializer.initialize(
       plan: widget.plan,
