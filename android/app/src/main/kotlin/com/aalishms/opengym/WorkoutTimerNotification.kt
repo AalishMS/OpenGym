@@ -183,7 +183,9 @@ object WorkoutTimerNotification {
 
         val openIntent = Intent(context, MainActivity::class.java).apply {
             action = ACTION_OPEN_TIMER
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val toggleIntent = Intent(context, WorkoutTimerActionReceiver::class.java).apply {
             action = if (state.running) ACTION_PAUSE else ACTION_RESUME
@@ -195,7 +197,9 @@ object WorkoutTimerNotification {
         // action.
         val stopIntent = Intent(context, MainActivity::class.java).apply {
             action = ACTION_STOP_TIMER
-            flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val immutable = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
