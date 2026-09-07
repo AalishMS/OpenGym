@@ -41,8 +41,12 @@ center.
 <table>
   <tr>
     <td align="center">
-      <strong>Workout plans</strong><br>
+      <strong>Workout plans — light</strong><br>
       <img src="screenshots/home.png" width="300" alt="OpenGym workout plans screen">
+    </td>
+    <td align="center">
+      <strong>Workout plans — dark</strong><br>
+      <img src="screenshots/home_dark.png" width="300" alt="OpenGym workout plans screen in dark mode">
     </td>
     <td align="center">
       <strong>Workout logging</strong><br>
@@ -51,10 +55,20 @@ center.
   </tr>
   <tr>
     <td align="center">
-      <strong>Training statistics</strong><br>
+      <strong>Fast set entry</strong><br>
+      <img src="screenshots/workout_keypad.png" width="300" alt="OpenGym workout keypad for entering a set">
+    </td>
+    <td align="center">
+      <strong>Weekly training</strong><br>
       <img src="screenshots/statistics.png" width="300" alt="OpenGym training statistics screen">
     </td>
     <td align="center">
+      <strong>Exercise progress</strong><br>
+      <img src="screenshots/statistics_2.png" width="300" alt="OpenGym exercise progress chart">
+    </td>
+  </tr>
+  <tr>
+    <td align="center" colspan="3">
       <strong>Appearance and preferences</strong><br>
       <img src="screenshots/settings.png" width="300" alt="OpenGym settings screen">
     </td>
