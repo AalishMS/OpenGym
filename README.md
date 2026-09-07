@@ -6,6 +6,7 @@
 
 <p align="center">
   <a href="#features">Features</a> •
+  <a href="#screenshots">Screenshots</a> •
   <a href="#tech-stack">Tech Stack</a> •
   <a href="#getting-started">Getting Started</a> •
   <a href="#project-structure">Structure</a> •
@@ -32,6 +33,33 @@ session. Its interface uses calm surfaces, clear hierarchy, and small flashes of
 color to make plans and progress easy to recognize. The personality is in the
 details, including the familiar `> OpenGym` wordmark; the workout stays at the
 center.
+
+---
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center">
+      <strong>Workout plans</strong><br>
+      <img src="screenshots/home.png" width="300" alt="OpenGym workout plans screen">
+    </td>
+    <td align="center">
+      <strong>Workout logging</strong><br>
+      <img src="screenshots/workout.png" width="300" alt="OpenGym active workout screen">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <strong>Training statistics</strong><br>
+      <img src="screenshots/statistics.png" width="300" alt="OpenGym training statistics screen">
+    </td>
+    <td align="center">
+      <strong>Appearance and preferences</strong><br>
+      <img src="screenshots/settings.png" width="300" alt="OpenGym settings screen">
+    </td>
+  </tr>
+</table>
 
 ---
 
