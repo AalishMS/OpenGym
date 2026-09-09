@@ -21,7 +21,7 @@ import '../widgets/app_button.dart';
 import '../widgets/app_wordmark.dart';
 import 'plan_editor_screen.dart';
 import 'workout_screen.dart';
-import '../services/sample_data_seeder.dart';
+import '../widgets/splits/preset_browser_dialog.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -130,28 +130,22 @@ class HomeScreen extends StatelessWidget {
               ).textTheme.bodyMedium?.copyWith(color: textSecondary),
             ),
             const SizedBox(height: AppSpacing.xxl),
-            // Sample data stays reachable for someone who wants to look around
-            // before committing to their own plan, at text weight so it reads
-            // as the way out rather than the way in. It also lives in Settings.
+            AppButton.secondary(
+              label: 'Create plan',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const PlanEditorScreen.create(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
             AppButton.text(
-              label: 'Load sample data',
-              onPressed: () async {
-                final splitId = context.read<SplitProvider?>()?.activeSplitId;
-                await SampleDataSeeder.seedSampleData(splitId: splitId);
-                provider.loadPlans();
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Sample data loaded',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: onAccentColor(context),
-                        ),
-                      ),
-                      backgroundColor: accentFillColor(context),
-                    ),
-                  );
-                }
+              label: 'Choose a split',
+              onPressed: () {
+                PresetBrowserDialog.show(context);
               },
             ),
           ],

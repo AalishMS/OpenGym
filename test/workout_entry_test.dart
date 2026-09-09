@@ -89,7 +89,15 @@ void main() {
     expect(find.text('75 × 10'), findsOneWidget);
     expect(find.text('steady'), findsNothing);
     expect(find.textContaining('TARGET'), findsNothing);
-    await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+    expect(find.bySemanticsLabel('Set details'), findsNothing);
+    expect(find.bySemanticsLabel('Delete set'), findsNWidgets(2));
+    await tester.tap(find.bySemanticsLabel('Set 1 Kg').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Set 1 RPE 7'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('8').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Set 1 Kg').last);
     await tester.pumpAndSettle();
     for (final key in ['5', '0', 'Next', '6', 'Next', '4', '5', 'Save']) {
       await tester.tap(find.text(key).last);
@@ -99,7 +107,7 @@ void main() {
         HiveService.getSessionForPlanAndWeek('Push', 2, plan.splitId)!;
     expect(saved.exercises.single.sets[0].weight, 50);
     expect(saved.exercises.single.sets[0].reps, 6);
-    expect(saved.exercises.single.sets[0].rpe, 7);
+    expect(saved.exercises.single.sets[0].rpe, 8);
     expect(saved.exercises.single.sets[0].note, 'steady');
     expect(saved.exercises.single.sets[1].weight, 45);
     expect(
@@ -111,6 +119,27 @@ void main() {
       80,
     );
     expect(find.text('80 × 8'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Delete set').last);
+    await tester.pumpAndSettle();
+    expect(
+      HiveService.getSessionForPlanAndWeek(
+        'Push',
+        2,
+        plan.splitId,
+      )!.exercises.single.sets.length,
+      1,
+    );
+    await tester.tap(find.bySemanticsLabel('Delete set'));
+    await tester.pumpAndSettle();
+    expect(find.text('No sets added yet'), findsOneWidget);
+    expect(
+      HiveService.getSessionForPlanAndWeek(
+        'Push',
+        2,
+        plan.splitId,
+      )!.exercises.single.sets,
+      isEmpty,
+    );
     expect(tester.takeException(), isNull);
   });
 }

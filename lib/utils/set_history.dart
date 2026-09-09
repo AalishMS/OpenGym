@@ -11,11 +11,12 @@ List<gym.Set> previousExerciseSets(
   String? planName,
   String? splitId,
   int? beforeWeek,
+  bool includeDrafts = false,
 }) {
   final eligible =
       sessions.where((session) {
           if (session.deletedAt != null) return false;
-          if (!session.isCompleted) return false;
+          if (!includeDrafts && !session.isCompleted) return false;
           if (splitId != null && session.splitId != splitId) return false;
           if (planName != null &&
               (planId != null && session.planId != null

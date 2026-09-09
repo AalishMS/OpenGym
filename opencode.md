@@ -128,6 +128,15 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Compacted active workout set entry:
+  - Set-row details actions are now destructive cross buttons that delete and
+    autosave immediately, including when the final set is removed
+  - The shared number keypad uses a responsive three-column digit grid with a
+    separate row of ±2.5 and ±1 adjustments plus matching Next/Save actions
+  - Active workout keypads edit RPE directly with the number pad; ±1 also
+    adjusts reps, while legacy set notes remain available in History
+  - Exercise rows keep RPE visible as a compact, borderless, theme-aware
+    `@value` beside Reps, with the delete cross returned to the quiet icon tone
 - Added Android workout timer notifications:
   - Starting a workout posts a quiet ongoing system notification with the plan,
     week, an OS-rendered elapsed chronometer, and Pause/Resume and Stop actions

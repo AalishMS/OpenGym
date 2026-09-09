@@ -15,6 +15,7 @@ void main() {
     void Function(int)? onAddSet,
     void Function(int)? onAddNote,
     void Function(int)? onDeleteExercise,
+    void Function(int, int)? onDeleteSet,
   }) {
     return MaterialApp(
       theme: buildTheme(const Color(0xFF7C5CFF), Brightness.dark),
@@ -33,7 +34,8 @@ void main() {
           accent: const Color(0xFF7C5CFF),
 
           onAddSet: onAddSet ?? (_) {},
-          onEditSet: (_, __) {},
+          onSetRpeChanged: (_, __, ___) {},
+          onDeleteSet: onDeleteSet ?? (_, __) {},
           onAddNote: onAddNote ?? (_) {},
           onRename: (_) {},
           onDeleteExercise: onDeleteExercise ?? (_) {},
@@ -54,6 +56,7 @@ void main() {
       'Add set',
       'Set 1 Kg',
       'Set 1 Reps',
+      'Delete set',
     ]) {
       final control = find.bySemanticsLabel(label);
       expect(control, findsOneWidget);
@@ -81,6 +84,7 @@ void main() {
         onAddSet: (i) => calls.add('add:$i'),
         onAddNote: (i) => calls.add('note:$i'),
         onDeleteExercise: (i) => calls.add('delete:$i'),
+        onDeleteSet: (exercise, set) => calls.add('set:$exercise:$set'),
       ),
     );
     for (final action
@@ -88,6 +92,7 @@ void main() {
           'Exercise note': 'note:4',
           'Add set': 'add:4',
           'Delete exercise': 'delete:4',
+          'Delete set': 'set:4:0',
         }.entries) {
       calls.clear();
       tester.semantics.tap(find.semantics.byLabel(action.key));

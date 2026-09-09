@@ -49,6 +49,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   List<int> _weeks = [1];
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};
+  bool _hasUnsavedChanges = false;
   Timer? _ticker;
   WorkoutSessionProvider? _sessionProvider;
   bool _didShowInitialLogConfirmation = false;
@@ -188,7 +189,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     if (session.isCompleted) return;
     final hasSets = session.exercises.any((e) => e.sets.isNotEmpty);
 
-    if (hasSets) {
+    if (hasSets || _hasUnsavedChanges) {
       // Stamp identity so repeated autosaves upsert ONE row per (plan, week).
       // upsertSession assigns a UUID on first save and reuses it thereafter.
       session = session.copyWith(
@@ -199,6 +200,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       );
       _weekSessions[_currentWeek] = session; // keep the id-stamped instance
       await context.read<WorkoutSessionProvider>().upsertSession(session);
+      _hasUnsavedChanges = false;
     }
   }
 
@@ -236,9 +238,29 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     return session;
   }
 
+  /// All persisted sessions plus any in-memory drafts whose latest edits may
+  /// not have been flushed to Hive yet. Deduplicates by session id so the
+  /// in-memory copy wins when both exist.
+  List<WorkoutSession> _sessionsWithDrafts() {
+    final persisted = HiveService.getSessions();
+    final draftIds = <String>{};
+    final merged = <WorkoutSession>[];
+    for (final draft in _weekSessions.values) {
+      if (draft.id != null) draftIds.add(draft.id!);
+      merged.add(draft);
+    }
+    for (final session in persisted) {
+      if (session.id == null || !draftIds.contains(session.id)) {
+        merged.add(session);
+      }
+    }
+    return merged;
+  }
+
   void _updateSession(WorkoutSession session) {
     if (_getOrCreateSession().isCompleted) return;
     _weekSessions[_currentWeek] = session;
+    _hasUnsavedChanges = true;
     setState(() {});
   }
 
@@ -409,7 +431,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       plan: widget.plan,
       weekNumber: _currentWeek,
     );
-    setState(() => _weekSessions[_currentWeek] = clean);
+    setState(() {
+      _weekSessions[_currentWeek] = clean;
+      _hasUnsavedChanges = false;
+    });
   }
 
   void _addEmptyExercise() {
@@ -447,57 +472,39 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   void _addSet(int exerciseIndex) {
     final session = _getOrCreateSession();
     final exercise = session.exercises[exerciseIndex];
-    final lastSet = _getLastSetForExerciseInPlan(exercise.name);
 
-    WorkoutDialogs.showAddSetDialog(
-      context,
-      lastSet: lastSet,
-      onAdd: (newSet) {
-        final updatedExercises = List<Exercise>.from(session.exercises);
-        updatedExercises[exerciseIndex] = Exercise(
-          name: exercise.name,
-          sets: [...exercise.sets, newSet],
-          note: exercise.note,
-        );
-        _updateSession(session.copyWith(exercises: updatedExercises));
-        _autoSave();
-      },
+    // Duplicate the last set's values, or fall back to defaults.
+    final gym.Set newSet;
+    if (exercise.sets.isNotEmpty) {
+      final last = exercise.sets.last;
+      newSet = gym.Set(reps: last.reps, weight: last.weight);
+    } else {
+      final planSet = _getLastSetForExerciseInPlan(exercise.name);
+      newSet = gym.Set(reps: planSet?.reps ?? 8, weight: planSet?.weight ?? 0);
+    }
+
+    final updatedExercises = List<Exercise>.from(session.exercises);
+    updatedExercises[exerciseIndex] = Exercise(
+      name: exercise.name,
+      sets: [...exercise.sets, newSet],
+      note: exercise.note,
     );
+    _updateSession(session.copyWith(exercises: updatedExercises));
+    _autoSave();
   }
 
-  void _editSet(int exerciseIndex, int setIndex) {
+  void _deleteSet(int exerciseIndex, int setIndex) {
     final session = _getOrCreateSession();
     final exercise = session.exercises[exerciseIndex];
-    final set = exercise.sets[setIndex];
-
-    WorkoutDialogs.showEditSetDialog(
-      context,
-      set: set,
-      onSave: (updatedSet) {
-        final updatedSets = List<gym.Set>.from(exercise.sets);
-        updatedSets[setIndex] = updatedSet;
-        final updatedExercises = List<Exercise>.from(session.exercises);
-        updatedExercises[exerciseIndex] = Exercise(
-          name: exercise.name,
-          sets: updatedSets,
-          note: exercise.note,
-        );
-        _updateSession(session.copyWith(exercises: updatedExercises));
-        _autoSave();
-      },
-      onDelete: () {
-        final updatedSets = List<gym.Set>.from(exercise.sets)
-          ..removeAt(setIndex);
-        final updatedExercises = List<Exercise>.from(session.exercises);
-        updatedExercises[exerciseIndex] = Exercise(
-          name: exercise.name,
-          sets: updatedSets,
-          note: exercise.note,
-        );
-        _updateSession(session.copyWith(exercises: updatedExercises));
-        _autoSave();
-      },
+    final updatedSets = List<gym.Set>.from(exercise.sets)..removeAt(setIndex);
+    final updatedExercises = List<Exercise>.from(session.exercises);
+    updatedExercises[exerciseIndex] = Exercise(
+      name: exercise.name,
+      sets: updatedSets,
+      note: exercise.note,
     );
+    _updateSession(session.copyWith(exercises: updatedExercises));
+    _autoSave();
   }
 
   void _addExerciseNote(int exerciseIndex) {
@@ -547,6 +554,27 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     _updateSession(session.copyWith(exercises: updatedExercises));
     // Persist once entry closes so PR dialogs never interrupt typing.
+  }
+
+  void _changeSetRpe(int exerciseIndex, int setIndex, int? rpe) {
+    final session = _getOrCreateSession();
+    final exercise = session.exercises[exerciseIndex];
+    final set = exercise.sets[setIndex];
+    final updatedSets = List<gym.Set>.from(exercise.sets);
+    updatedSets[setIndex] = gym.Set(
+      reps: set.reps,
+      weight: set.weight,
+      rpe: rpe,
+      note: set.note,
+    );
+    final updatedExercises = List<Exercise>.from(session.exercises);
+    updatedExercises[exerciseIndex] = Exercise(
+      name: exercise.name,
+      sets: updatedSets,
+      note: exercise.note,
+    );
+    _updateSession(session.copyWith(exercises: updatedExercises));
+    // Persist once entry closes, matching weight and rep edits.
   }
 
   void _reorderExercises(int oldIndex, int newIndex) {
@@ -898,20 +926,22 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                 exerciseIndex: index,
                                 accent: accent,
                                 previousSets: previousExerciseSets(
-                                  HiveService.getCompletedSessions(),
+                                  _sessionsWithDrafts(),
                                   exercise.name,
                                   splitId: widget.plan.splitId,
                                   planId: widget.plan.id,
                                   planName: widget.plan.name,
                                   beforeWeek: _currentWeek,
+                                  includeDrafts: true,
                                 ),
                                 onSetChanged: _changeSetValues,
+                                onSetRpeChanged: _changeSetRpe,
                                 onEntryFinished: () {
                                   if (mounted) _autoSave();
                                 },
                                 onAddSet: (i) => _addSet(i),
-                                onEditSet:
-                                    (i, setIndex) => _editSet(i, setIndex),
+                                onDeleteSet:
+                                    (i, setIndex) => _deleteSet(i, setIndex),
                                 onAddNote: _addExerciseNote,
                                 onRename: _showExerciseRenameDialog,
                                 onDeleteExercise: _deleteExercise,

@@ -44,6 +44,9 @@ class AppRadius {
   /// Buttons and full-width tap targets.
   static const BorderRadius button = BorderRadius.all(Radius.circular(md));
 
+  /// Large keypad keys and the wide actions that sit beside them.
+  static const BorderRadius keypadKey = BorderRadius.all(Radius.circular(xl));
+
   /// Text fields and other input decorations.
   static const BorderRadius field = button;
 

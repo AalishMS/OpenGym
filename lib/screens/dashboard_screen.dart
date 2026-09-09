@@ -6,7 +6,7 @@ import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../providers/split_provider.dart';
 import '../repositories/stats_repository.dart';
-import '../services/sample_data_seeder.dart';
+import '../widgets/splits/preset_browser_dialog.dart';
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
 import '../theme/spacing.dart';
@@ -320,23 +320,9 @@ class _EmptyState extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.md),
             AppButton.text(
-              label: 'Load sample data',
-              onPressed: () async {
-                await SampleDataSeeder.seedSampleData();
-                if (!context.mounted) return;
-                context.read<WorkoutPlanProvider>().loadPlans();
-                context.read<WorkoutSessionProvider>().loadSessions();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Sample data loaded',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: onAccentColor(context),
-                      ),
-                    ),
-                    backgroundColor: accentFillColor(context),
-                  ),
-                );
+              label: 'Choose a split',
+              onPressed: () {
+                PresetBrowserDialog.show(context);
               },
             ),
           ],

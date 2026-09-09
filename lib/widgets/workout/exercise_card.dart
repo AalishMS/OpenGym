@@ -15,8 +15,9 @@ class ExerciseCard extends StatelessWidget {
   final VoidCallback? onEntryFinished;
   final void Function(int exercise, int index, double weight, int reps)?
   onSetChanged;
+  final void Function(int exercise, int index, int? rpe) onSetRpeChanged;
   final void Function(int) onAddSet;
-  final void Function(int, int) onEditSet;
+  final void Function(int, int) onDeleteSet;
   final void Function(int) onAddNote;
   final void Function(int) onRename;
   final void Function(int) onDeleteExercise;
@@ -29,8 +30,9 @@ class ExerciseCard extends StatelessWidget {
     this.previousSets = const [],
     this.onEntryFinished,
     this.onSetChanged,
+    required this.onSetRpeChanged,
     required this.onAddSet,
-    required this.onEditSet,
+    required this.onDeleteSet,
     required this.onAddNote,
     required this.onRename,
     required this.onDeleteExercise,
@@ -161,7 +163,9 @@ class ExerciseCard extends StatelessWidget {
                 onChanged:
                     (index, weight, reps) =>
                         onSetChanged?.call(exerciseIndex, index, weight, reps),
-                onDetails: (index) => onEditSet(exerciseIndex, index),
+                onRpeChanged:
+                    (index, rpe) => onSetRpeChanged(exerciseIndex, index, rpe),
+                onDelete: (index) => onDeleteSet(exerciseIndex, index),
               ),
             ),
         ],

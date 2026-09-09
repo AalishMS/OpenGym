@@ -8,10 +8,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/theme/semantic_colors.dart';
 import 'package:gymapp/widgets/workout/set_entry_table.dart';
-import 'package:gymapp/widgets/workout/workout_dialogs.dart';
-import 'package:gymapp/models/set.dart' as gym;
 
 void main() {
   setUpAll(() async {
@@ -51,8 +51,10 @@ void main() {
     Brightness brightness = Brightness.light,
     double scale = 1,
     bool showDetails = false,
+    void Function(int, int?)? onRpeChanged,
+    Color accentSeed = const Color(0xFF00BCD4),
   }) => MaterialApp(
-    theme: buildTheme(const Color(0xFF00BCD4), brightness),
+    theme: buildTheme(accentSeed, brightness),
     builder:
         (context, child) => MediaQuery(
           data: MediaQuery.of(
@@ -68,6 +70,7 @@ void main() {
           exerciseName: 'Bench Press',
           sets: entries,
           onChanged: onChanged,
+          onRpeChanged: onRpeChanged,
           onDetails: showDetails ? (_) {} : null,
         ),
       ),
@@ -127,7 +130,9 @@ void main() {
         expect(tester.getCenter(next).dx, lessThan(tester.getCenter(save).dx));
         expect(
           tester.widget<TextButton>(next).style?.backgroundColor?.resolve({}),
-          tester.widget<TextButton>(save).style?.backgroundColor?.resolve({}),
+          isNot(
+            tester.widget<TextButton>(save).style?.backgroundColor?.resolve({}),
+          ),
         );
         await tap(tester, 'Save');
       }
@@ -173,6 +178,63 @@ void main() {
   });
 
   testWidgets(
+    'workout rows show a compact RPE field for every value, accent, and theme',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(320, 800);
+      addTearDown(tester.view.reset);
+
+      for (final brightness in Brightness.values) {
+        for (final accent in SettingsProvider.accents) {
+          for (var rpe = 1; rpe <= 10; rpe++) {
+            await tester.pumpWidget(
+              host(
+                [SetEntry(weight: 137.5, reps: 12, rpe: rpe)],
+                (_, __, ___) {},
+                brightness: brightness,
+                accentSeed: accent.seed,
+                onRpeChanged: (_, __) {},
+              ),
+            );
+            await tester.pumpAndSettle();
+
+            final reps = find.bySemanticsLabel('Set 1 Reps');
+            final effort = find.bySemanticsLabel('Set 1 RPE value $rpe');
+            final effortText = find.descendant(
+              of: effort,
+              matching: find.text('@$rpe'),
+            );
+            final context = tester.element(effortText);
+
+            expect(
+              tester.getSize(reps).width,
+              lessThan(tester.getSize(find.bySemanticsLabel('Set 1 Kg')).width),
+            );
+            expect(
+              tester.widget<Text>(effortText).style!.color,
+              rpeColor(rpe, context),
+            );
+            expect(
+              tester.widget<Text>(effortText).style!.fontSize,
+              Theme.of(context).textTheme.labelLarge!.fontSize,
+            );
+            expect(
+              find.descendant(
+                of: effort,
+                matching: find.byWidgetPredicate(
+                  (widget) => widget is Container && widget.decoration != null,
+                ),
+              ),
+              findsNothing,
+            );
+            expect(tester.takeException(), isNull);
+          }
+        }
+      }
+    },
+  );
+
+  testWidgets(
     'replacement, decimals, delete, adjustment and next preserve each set',
     (tester) async {
       tester.view.devicePixelRatio = 1;
@@ -193,35 +255,68 @@ void main() {
       );
       await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
       await tester.pumpAndSettle();
+      final adjustment = tester.getSize(
+        find.widgetWithText(OutlinedButton, '+2.5'),
+      );
+      final digit = tester.getSize(find.widgetWithText(TextButton, '1'));
+      expect(adjustment.width, lessThan(digit.width));
+      expect(digit.width, greaterThan(90));
       for (final key in ['5', '0', '.', '2', '5']) {
         await tap(tester, key);
       }
       expect(entries[0].weight, 50.25);
       await tap(tester, '.');
       expect(entries[0].weight, 50.25);
-      await tap(tester, 'Delete');
+      await tester.tap(find.bySemanticsLabel('Delete digit'));
+      await tester.pumpAndSettle();
       expect(entries[0].weight, 50.2);
-      await tap(tester, '+2.5 kg');
+      await tap(tester, '+2.5');
       expect(entries[0].weight, 52.7);
-      await tap(tester, '−2.5 kg');
+      await tap(tester, '−2.5');
+      expect(entries[0].weight, 50.2);
+      await tap(tester, '+1');
+      expect(entries[0].weight, 51.2);
+      await tap(tester, '−1');
       expect(entries[0].weight, 50.2);
       await tap(tester, 'Next');
-      expect(find.text('Set 1 of 2 · Reps'), findsOneWidget);
+      expect(
+        tester
+            .widget<Semantics>(find.bySemanticsLabel('Set 1 Reps').last)
+            .properties
+            .selected,
+        isTrue,
+      );
       final decimal = tester.widget<TextButton>(
         find.widgetWithText(TextButton, '.'),
       );
       expect(decimal.onPressed, isNull);
       expect(
         tester
-            .widget<TextButton>(find.widgetWithText(TextButton, '+2.5 kg'))
+            .widget<OutlinedButton>(find.widgetWithText(OutlinedButton, '+2.5'))
             .onPressed,
         isNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(find.widgetWithText(OutlinedButton, '+1'))
+            .onPressed,
+        isNotNull,
       );
       await tap(tester, '1');
       await tap(tester, '2');
       expect(entries[0].reps, 12);
+      await tap(tester, '+1');
+      expect(entries[0].reps, 13);
+      await tap(tester, '−1');
+      expect(entries[0].reps, 12);
       await tap(tester, 'Next');
-      expect(find.text('Set 2 of 2 · Weight'), findsOneWidget);
+      expect(
+        tester
+            .widget<Semantics>(find.bySemanticsLabel('Set 2 Kg').last)
+            .properties
+            .selected,
+        isTrue,
+      );
       await tap(tester, '8');
       await tap(tester, '0');
       await tap(tester, 'Next');
@@ -247,14 +342,15 @@ void main() {
     );
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
-    await tap(tester, '−2.5 kg');
+    await tap(tester, '−2.5');
     expect(changes.last, 0);
     await tap(tester, '9');
     await tap(tester, '9');
     await tap(tester, '9');
     await tap(tester, '9');
     expect(changes.last, 999);
-    await tap(tester, 'Delete');
+    await tester.tap(find.bySemanticsLabel('Delete digit'));
+    await tester.pumpAndSettle();
     expect(changes.last, 99);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
@@ -264,18 +360,19 @@ void main() {
 
   testWidgets('light and dark keypad visual review', (tester) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(360, 800);
+    tester.view.physicalSize = const Size(320, 640);
     addTearDown(tester.view.reset);
     for (final brightness in Brightness.values) {
       await tester.pumpWidget(
         host(
           const [
-            SetEntry(weight: 50, reps: 8, previous: '47.5 × 8'),
-            SetEntry(weight: 50, reps: 8, previous: '47.5 × 7'),
-            SetEntry(weight: 47.5, reps: 10),
+            SetEntry(weight: 50, reps: 8, previous: '47.5 × 8', rpe: 5),
+            SetEntry(weight: 50, reps: 8, previous: '47.5 × 7', rpe: 8),
+            SetEntry(weight: 47.5, reps: 10, rpe: 10),
           ],
           (_, __, ___) {},
           brightness: brightness,
+          onRpeChanged: (_, __) {},
         ),
       );
       await tester.pumpAndSettle();
@@ -294,23 +391,78 @@ void main() {
         picture.dispose();
       });
       await tap(tester, 'Save');
-      WorkoutDialogs.showEditSetDialog(
-        tester.element(find.byType(SetEntryTable)),
-        set: gym.Set(weight: 50, reps: 8, rpe: 8),
-        onSave: (_) {},
-        onDelete: () {},
-      );
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      await tester.runAsync(() async {
-        final picture = await boundary.toImage();
-        final bytes = await picture.toByteData(format: ui.ImageByteFormat.png);
-        await File(
-          'build/edit-set-${brightness.name}.png',
-        ).writeAsBytes(bytes!.buffer.asUint8List());
-        picture.dispose();
-      });
-      await tap(tester, 'Cancel');
     }
+  });
+
+  testWidgets('workout keypad edits and clears RPE without changing values', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(360, 800);
+    addTearDown(tester.view.reset);
+    final entries = [
+      const SetEntry(weight: 70, reps: 8, previous: '65 × 8', rpe: 7),
+      const SetEntry(weight: 72.5, reps: 6, previous: '70 × 6'),
+    ];
+    final changes = <int?>[];
+    await tester.pumpWidget(
+      host(
+        entries,
+        (_, __, ___) {},
+        onRpeChanged: (index, rpe) {
+          entries[index] = SetEntry(
+            weight: entries[index].weight,
+            reps: entries[index].reps,
+            previous: entries[index].previous,
+            rpe: rpe,
+          );
+          changes.add(rpe);
+        },
+      ),
+    );
+    await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+    await tester.pumpAndSettle();
+    expect(find.text('RPE'), findsNWidgets(2));
+    await tester.tap(find.bySemanticsLabel('Set 1 RPE 7'));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('RPE 8'), findsNothing);
+    expect(
+      tester.widget<TextButton>(find.widgetWithText(TextButton, '.')).onPressed,
+      isNull,
+    );
+    for (final label in ['+2.5', '−2.5', '+1', '−1']) {
+      expect(
+        tester
+            .widget<OutlinedButton>(find.widgetWithText(OutlinedButton, label))
+            .onPressed,
+        isNull,
+      );
+    }
+    await tap(tester, '1');
+    await tap(tester, '0');
+    expect(changes, [1, 10]);
+    await tap(tester, '9');
+    expect(changes, [1, 10]);
+    expect(entries[0].weight, 70);
+    expect(entries[0].reps, 8);
+    await tester.tap(find.bySemanticsLabel('Delete digit'));
+    await tester.pumpAndSettle();
+    expect(changes, [1, 10, 1]);
+    await tester.tap(find.bySemanticsLabel('Delete digit'));
+    await tester.pumpAndSettle();
+    expect(changes, [1, 10, 1, null]);
+    expect(find.bySemanticsLabel('Set 1 RPE, not set'), findsOneWidget);
+    await tap(tester, '0');
+    expect(changes, [1, 10, 1, null]);
+    await tap(tester, 'Next');
+    expect(
+      tester
+          .widget<Semantics>(find.bySemanticsLabel('Set 2 Kg').last)
+          .properties
+          .selected,
+      isTrue,
+    );
+    expect(entries[1].weight, 72.5);
+    expect(entries[1].reps, 6);
   });
 }
