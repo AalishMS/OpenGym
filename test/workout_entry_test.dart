@@ -171,7 +171,7 @@ void main() {
     await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     expect(find.text('Add exercises'), findsOneWidget);
-    expect(find.text('Selected (1)'), findsOneWidget);
+    expect(find.text('Selected (0)'), findsOneWidget);
     expect(find.text('Create custom exercise'), findsOneWidget);
 
     await tester.enterText(
@@ -181,7 +181,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lat Pulldown'));
     await tester.pumpAndSettle();
-    expect(find.text('Selected (2)'), findsOneWidget);
+    expect(find.text('Selected (1)'), findsOneWidget);
 
     await tester.tapAt(const Offset(8, 8));
     await tester.pumpAndSettle();
@@ -195,6 +195,16 @@ void main() {
       saved!.exercises.map((exercise) => exercise.name),
       contains('Lat Pulldown'),
     );
+
+    await tester.tap(find.text('Add exercise'));
+    await tester.pumpAndSettle();
+    expect(find.text('Selected (0)'), findsOneWidget);
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search exercises'),
+      'lat pulldown',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Added'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

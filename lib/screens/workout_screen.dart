@@ -442,9 +442,18 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final session = _getOrCreateSession();
     showExercisePickerSheet(
       context,
-      selectedExerciseNames: session.exercises.map((exercise) => exercise.name),
+      selectedExerciseNames: const <String>[],
+      alreadyAddedExerciseNames: session.exercises.map(
+        (exercise) => exercise.name,
+      ),
       onAdd: (name) {
         final currentSession = _getOrCreateSession();
+        final normalizedName = name.trim().toLowerCase();
+        if (currentSession.exercises.any(
+          (exercise) => exercise.name.trim().toLowerCase() == normalizedName,
+        )) {
+          return;
+        }
         final updatedExercises = List<Exercise>.from(currentSession.exercises);
         updatedExercises.add(Exercise(name: name, sets: [], note: null));
         _updateSession(currentSession.copyWith(exercises: updatedExercises));

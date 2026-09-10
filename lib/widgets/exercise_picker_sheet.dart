@@ -10,6 +10,7 @@ import 'muscle_group_illustration.dart';
 void showExercisePickerSheet(
   BuildContext context, {
   required Iterable<String> selectedExerciseNames,
+  Iterable<String> alreadyAddedExerciseNames = const <String>[],
   required void Function(String name) onAdd,
   required void Function(String name) onRemove,
   String selectionOwner = 'workout',
@@ -22,6 +23,7 @@ void showExercisePickerSheet(
     builder:
         (sheetContext) => _ExercisePickerSheet(
           selectedExerciseNames: selectedExerciseNames,
+          alreadyAddedExerciseNames: alreadyAddedExerciseNames,
           onAdd: onAdd,
           onRemove: onRemove,
           selectionOwner: selectionOwner,
@@ -33,12 +35,14 @@ enum _PickerView { groups, category, selected }
 
 class _ExercisePickerSheet extends StatefulWidget {
   final Iterable<String> selectedExerciseNames;
+  final Iterable<String> alreadyAddedExerciseNames;
   final void Function(String name) onAdd;
   final void Function(String name) onRemove;
   final String selectionOwner;
 
   const _ExercisePickerSheet({
     required this.selectedExerciseNames,
+    required this.alreadyAddedExerciseNames,
     required this.onAdd,
     required this.onRemove,
     required this.selectionOwner,
@@ -51,6 +55,7 @@ class _ExercisePickerSheet extends StatefulWidget {
 class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
   final TextEditingController _searchController = TextEditingController();
   final Map<String, String> _selectedNames = <String, String>{};
+  final Set<String> _alreadyAddedNames = <String>{};
   _PickerView _view = _PickerView.groups;
   String? _selectedCategory;
   String _query = '';
@@ -58,8 +63,14 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
   @override
   void initState() {
     super.initState();
+    for (final name in widget.alreadyAddedExerciseNames) {
+      _alreadyAddedNames.add(_key(name));
+    }
     for (final name in widget.selectedExerciseNames) {
-      _selectedNames.putIfAbsent(_key(name), () => name);
+      final key = _key(name);
+      if (!_alreadyAddedNames.contains(key)) {
+        _selectedNames.putIfAbsent(key, () => name);
+      }
     }
   }
 
@@ -73,6 +84,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
 
   void _toggleExercise(String name) {
     final key = _key(name);
+    if (_alreadyAddedNames.contains(key)) return;
     final selectedName = _selectedNames.remove(key);
     if (selectedName != null) {
       widget.onRemove(selectedName);
@@ -85,7 +97,9 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
 
   void _addCustomExercise(String name) {
     final key = _key(name);
-    if (_selectedNames.containsKey(key)) return;
+    if (_selectedNames.containsKey(key) || _alreadyAddedNames.contains(key)) {
+      return;
+    }
     _selectedNames[key] = name;
     widget.onAdd(name);
     setState(() {});
@@ -138,7 +152,8 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
     String inputText = initialName;
     String? errorText;
     if (initialName.trim().isNotEmpty &&
-        _selectedNames.containsKey(_key(initialName))) {
+        (_selectedNames.containsKey(_key(initialName)) ||
+            _alreadyAddedNames.contains(_key(initialName)))) {
       errorText = 'Exercise with this name already exists';
     }
 
@@ -183,7 +198,8 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                     final trimmed = value.trim();
                     if (trimmed.isEmpty) {
                       errorText = 'Name cannot be empty';
-                    } else if (_selectedNames.containsKey(_key(trimmed))) {
+                    } else if (_selectedNames.containsKey(_key(trimmed)) ||
+                        _alreadyAddedNames.contains(_key(trimmed))) {
                       errorText = 'Exercise with this name already exists';
                     } else {
                       errorText = null;
@@ -352,6 +368,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                 _ExerciseResult(name: name, category: category),
             ],
             selectedNames: _selectedNames,
+            alreadyAddedNames: _alreadyAddedNames,
             onToggle: _toggleExercise,
             showCategory: false,
           ),
@@ -378,6 +395,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
           child: _ExerciseList(
             results: results,
             selectedNames: _selectedNames,
+            alreadyAddedNames: _alreadyAddedNames,
             onToggle: _toggleExercise,
             showCategory: true,
           ),
@@ -409,6 +427,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                   : _ExerciseList(
                     results: results,
                     selectedNames: _selectedNames,
+                    alreadyAddedNames: _alreadyAddedNames,
                     onToggle: _toggleExercise,
                     showCategory: true,
                   ),
@@ -706,12 +725,14 @@ class _SectionLabel extends StatelessWidget {
 class _ExerciseList extends StatelessWidget {
   final List<_ExerciseResult> results;
   final Map<String, String> selectedNames;
+  final Set<String> alreadyAddedNames;
   final ValueChanged<String> onToggle;
   final bool showCategory;
 
   const _ExerciseList({
     required this.results,
     required this.selectedNames,
+    required this.alreadyAddedNames,
     required this.onToggle,
     required this.showCategory,
   });
@@ -735,10 +756,13 @@ class _ExerciseList extends StatelessWidget {
           ),
       itemBuilder: (context, index) {
         final result = results[index];
-        final selected = selectedNames.containsKey(result.name.toLowerCase());
+        final normalizedName = result.name.trim().toLowerCase();
+        final selected = selectedNames.containsKey(normalizedName);
+        final alreadyAdded = alreadyAddedNames.contains(normalizedName);
         return _ExerciseRow(
           result: result,
           selected: selected,
+          alreadyAdded: alreadyAdded,
           showCategory: showCategory,
           onTap: () => onToggle(result.name),
         );
@@ -750,12 +774,14 @@ class _ExerciseList extends StatelessWidget {
 class _ExerciseRow extends StatelessWidget {
   final _ExerciseResult result;
   final bool selected;
+  final bool alreadyAdded;
   final bool showCategory;
   final VoidCallback onTap;
 
   const _ExerciseRow({
     required this.result,
     required this.selected,
+    required this.alreadyAdded,
     required this.showCategory,
     required this.onTap,
   });
@@ -763,12 +789,12 @@ class _ExerciseRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Semantics(
-      button: true,
+      button: !alreadyAdded,
       selected: selected,
       label:
-          '${result.name}${showCategory ? ', ${result.category}' : ''}, ${selected ? 'selected' : 'not selected'}',
+          '${result.name}${showCategory ? ', ${result.category}' : ''}, ${alreadyAdded ? 'already added' : (selected ? 'selected' : 'not selected')}',
       child: InkWell(
-        onTap: onTap,
+        onTap: alreadyAdded ? null : onTap,
         borderRadius: AppRadius.button,
         child: Container(
           constraints: const BoxConstraints(minHeight: 56),
@@ -806,15 +832,23 @@ class _ExerciseRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
-              Checkbox(
-                value: selected,
-                onChanged: (_) => onTap(),
-                activeColor: accentFillColor(context),
-                checkColor: onAccentColor(context),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: AppRadius.badge,
+              if (alreadyAdded)
+                Text(
+                  'Added',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: textSecondaryColor(context),
+                  ),
+                )
+              else
+                Checkbox(
+                  value: selected,
+                  onChanged: (_) => onTap(),
+                  activeColor: accentFillColor(context),
+                  checkColor: onAccentColor(context),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: AppRadius.badge,
+                  ),
                 ),
-              ),
             ],
           ),
         ),

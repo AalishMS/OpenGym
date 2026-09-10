@@ -128,6 +128,11 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Fixed workout exercise-picker selections leaking into later picker sessions:
+  - Exercises already in the workout now appear as `Added` instead of counting
+    as selections, while only choices made in the open sheet are selected
+  - Reopening the picker starts with zero selections, keeps existing exercises
+    protected from duplicate additions, and leaves plan-editor removal intact
 - Redesigned and consolidated the add-exercise picker:
   - Active workouts and the plan editor now share one immediate-selection sheet
     while preserving workout autosave and plan-editor draft defaults
