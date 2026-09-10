@@ -447,6 +447,12 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
               children: [
                 Expanded(
                   child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: AppRadius.button,
+                      ),
+                    ),
                     onPressed: _showSelected,
                     child: Text('Selected (${_selectedNames.length})'),
                   ),
@@ -457,6 +463,10 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                     style: FilledButton.styleFrom(
                       backgroundColor: accentFillColor(context),
                       foregroundColor: onAccentColor(context),
+                      minimumSize: const Size.fromHeight(48),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: AppRadius.button,
+                      ),
                     ),
                     onPressed: () => Navigator.pop(context),
                     child: const Text('Done'),
@@ -650,7 +660,7 @@ class _ContentHeading extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.sm,
         0,
-        AppSpacing.lg,
+        AppSpacing.xxl,
         AppSpacing.xs,
       ),
       child: Row(
@@ -717,7 +727,12 @@ class _ExerciseList extends StatelessWidget {
       ),
       itemCount: results.length,
       separatorBuilder:
-          (context, index) => Divider(height: 1, color: borderColor(context)),
+          (context, index) => Divider(
+            height: 1,
+            indent: AppSpacing.md,
+            endIndent: AppSpacing.md,
+            color: borderColor(context),
+          ),
       itemBuilder: (context, index) {
         final result = results[index];
         final selected = selectedNames.containsKey(result.name.toLowerCase());
