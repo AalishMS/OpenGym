@@ -142,4 +142,59 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('workout add exercise opens the library picker and autosaves', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(400, 880);
+    addTearDown(tester.view.reset);
+    final plan = WorkoutPlan(
+      id: 'plan-library-picker',
+      name: 'Library picker',
+      exercises: [ExerciseTemplate(name: 'Bench Press', sets: 1)],
+    );
+    await tester.runAsync(() async {
+      await Hive.box<WorkoutPlan>(HiveService.plansBox).put(plan.id, plan);
+    });
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider(create: (_) => WorkoutPlanProvider()),
+          ChangeNotifierProvider(create: (_) => WorkoutSessionProvider()),
+        ],
+        child: MaterialApp(home: WorkoutScreen(plan: plan, planIndex: 0)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Add exercise'));
+    await tester.pumpAndSettle();
+    expect(find.text('ADD EXERCISES'), findsOneWidget);
+    expect(find.text('1 SELECTED'), findsOneWidget);
+    expect(find.text('CUSTOM EXERCISE'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search by exercise name'),
+      'lat pulldown',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lat Pulldown'));
+    await tester.pumpAndSettle();
+    expect(find.text('2 SELECTED'), findsOneWidget);
+
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    final saved = HiveService.getSessionForPlanAndWeek(
+      plan.name,
+      1,
+      plan.splitId,
+    );
+    expect(saved, isNotNull);
+    expect(
+      saved!.exercises.map((exercise) => exercise.name),
+      contains('Lat Pulldown'),
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

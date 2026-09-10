@@ -128,6 +128,11 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Mapped the active workout's add-exercise action to the plan editor picker:
+  - Workouts can now search the bundled exercise library, browse categories,
+    multi-select exercises, and create custom exercises from the same sheet
+  - Existing workout exercises are marked as selected, add/remove changes
+    autosave through the draft session flow, and duplicate names are prevented
 - Compacted active workout set entry:
   - Set-row details actions are now destructive cross buttons that delete and
     autosave immediately, including when the final set is removed

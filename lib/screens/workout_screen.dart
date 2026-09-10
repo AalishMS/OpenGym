@@ -24,6 +24,7 @@ import '../utils/fade_page_route.dart';
 import '../utils/format.dart';
 import '../utils/set_history.dart';
 import '../widgets/underline_tab_strip.dart';
+import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/workout/exercise_card.dart';
 import '../widgets/workout/workout_dialogs.dart';
 
@@ -438,13 +439,27 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   void _addEmptyExercise() {
-    WorkoutDialogs.showAddExerciseDialog(
+    final session = _getOrCreateSession();
+    showExercisePickerSheet(
       context,
+      selectedExerciseNames: session.exercises.map((exercise) => exercise.name),
       onAdd: (name) {
-        final session = _getOrCreateSession();
-        final updatedExercises = List<Exercise>.from(session.exercises);
+        final currentSession = _getOrCreateSession();
+        final updatedExercises = List<Exercise>.from(currentSession.exercises);
         updatedExercises.add(Exercise(name: name, sets: [], note: null));
-        _updateSession(session.copyWith(exercises: updatedExercises));
+        _updateSession(currentSession.copyWith(exercises: updatedExercises));
+        _autoSave();
+      },
+      onRemove: (name) {
+        final currentSession = _getOrCreateSession();
+        final normalizedName = name.toLowerCase();
+        final updatedExercises =
+            currentSession.exercises
+                .where(
+                  (exercise) => exercise.name.toLowerCase() != normalizedName,
+                )
+                .toList();
+        _updateSession(currentSession.copyWith(exercises: updatedExercises));
         _autoSave();
       },
     );
