@@ -128,6 +128,15 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Redesigned and consolidated the add-exercise picker:
+  - Active workouts and the plan editor now share one immediate-selection sheet
+    while preserving workout autosave and plan-editor draft defaults
+  - The opening view is a responsive six-group browser with local code-drawn
+    muscle illustrations, followed by quiet wrapping exercise rows
+  - Global search includes category context and a prefilled custom fallback;
+    selected review includes catalog and custom exercises across all groups
+  - Done, close, and sheet dismissal retain changes, with keyboard-aware pinned
+    actions and focused narrow-screen, large-text, theme, and behavior coverage
 - Mapped the active workout's add-exercise action to the plan editor picker:
   - Workouts can now search the bundled exercise library, browse categories,
     multi-select exercises, and create custom exercises from the same sheet

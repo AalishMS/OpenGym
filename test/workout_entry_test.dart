@@ -170,20 +170,20 @@ void main() {
 
     await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
-    expect(find.text('ADD EXERCISES'), findsOneWidget);
-    expect(find.text('1 SELECTED'), findsOneWidget);
-    expect(find.text('CUSTOM EXERCISE'), findsOneWidget);
+    expect(find.text('Add exercises'), findsOneWidget);
+    expect(find.text('Selected (1)'), findsOneWidget);
+    expect(find.text('Create custom exercise'), findsOneWidget);
 
     await tester.enterText(
-      find.widgetWithText(TextField, 'Search by exercise name'),
+      find.widgetWithText(TextField, 'Search exercises'),
       'lat pulldown',
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lat Pulldown'));
     await tester.pumpAndSettle();
-    expect(find.text('2 SELECTED'), findsOneWidget);
+    expect(find.text('Selected (2)'), findsOneWidget);
 
-    await tester.tap(find.text('Done'));
+    await tester.tapAt(const Offset(8, 8));
     await tester.pumpAndSettle();
     final saved = HiveService.getSessionForPlanAndWeek(
       plan.name,

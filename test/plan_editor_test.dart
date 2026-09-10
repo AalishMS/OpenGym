@@ -84,13 +84,23 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> openExerciseGroup(
+    WidgetTester tester, {
+    String group = 'Chest',
+  }) async {
+    await tester.tap(find.text('Add exercise'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(group));
+    await tester.pumpAndSettle();
+  }
+
   testWidgets('add exercise sheet survives being closed', (tester) async {
     await pumpEditor(tester);
     await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await tester.enterText(
-      find.widgetWithText(TextField, 'Search by exercise name'),
+      find.widgetWithText(TextField, 'Search exercises'),
       'press',
     );
     await tester.pumpAndSettle();
@@ -100,53 +110,43 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('selected category exposes selected semantics', (tester) async {
+  testWidgets('picker opens on a two-column muscle group browser', (
+    tester,
+  ) async {
     await pumpEditor(tester);
     await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
-    final category = find.text('Chest');
-    expect(
-      tester
-          .getSize(
-            find.ancestor(of: category, matching: find.byType(InkWell)).first,
-          )
-          .height,
-      greaterThanOrEqualTo(48),
+    expect(find.byKey(const ValueKey('muscle-group-grid')), findsOneWidget);
+    for (final group in [
+      'Chest',
+      'Back',
+      'Shoulders',
+      'Arms',
+      'Legs',
+      'Core',
+    ]) {
+      expect(find.text(group), findsOneWidget);
+    }
+    expect(find.text('Bench Press'), findsNothing);
+    final chestTile = find.ancestor(
+      of: find.text('Chest'),
+      matching: find.byType(InkWell),
     );
-    expect(
-      tester.getSemantics(
-        find
-            .byWidgetPredicate(
-              (widget) =>
-                  widget is Semantics && widget.properties.label == 'Chest',
-            )
-            .first,
-      ),
-      matchesSemantics(
-        label: 'Chest',
-        isSelected: true,
-        isButton: true,
-        hasTapAction: true,
-        hasSelectedState: true,
-      ),
-    );
+    expect(tester.getSize(chestTile).height, greaterThanOrEqualTo(48));
   });
 
   testWidgets('exercise selection can be toggled off', (tester) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('Add exercise'));
-    await tester.pumpAndSettle();
-    expect(find.text('0 SELECTED'), findsOneWidget);
+    await openExerciseGroup(tester);
+    expect(find.text('Selected (0)'), findsOneWidget);
 
-    await tester.tap(find.text('Bench Press'));
+    await tester.tap(find.text('Bench Press').last);
     await tester.pump();
-    expect(find.text('1 SELECTED'), findsOneWidget);
-    expect(find.text('REMOVE'), findsOneWidget);
+    expect(find.text('Selected (1)'), findsOneWidget);
 
-    await tester.tap(find.text('REMOVE'));
+    await tester.tap(find.text('Bench Press').last);
     await tester.pump();
-    expect(find.text('0 SELECTED'), findsOneWidget);
-    expect(find.text('REMOVE'), findsNothing);
+    expect(find.text('Selected (0)'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -172,8 +172,7 @@ void main() {
     tester,
   ) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('Add exercise'));
-    await tester.pumpAndSettle();
+    await openExerciseGroup(tester);
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Done'));
@@ -190,21 +189,95 @@ void main() {
     tester,
   ) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('Add exercise'));
-    await tester.pumpAndSettle();
+    await openExerciseGroup(tester);
     final tile = find.ancestor(
       of: find.text('Bench Press'),
       matching: find.byType(InkWell),
     );
     expect(tester.getSize(tile).height, greaterThanOrEqualTo(48));
     await tester.enterText(
-      find.widgetWithText(TextField, 'Search by exercise name'),
+      find.widgetWithText(TextField, 'Search exercises'),
       'press',
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
     expect(find.text('Bench Press'), findsNWidgets(2));
+  });
+
+  testWidgets('group navigation and clearing search restore the category', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    await tester.tap(find.text('Add exercise'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Barbell Row'), findsOneWidget);
+    expect(find.text('Muscle groups'), findsOneWidget);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search exercises'),
+      'press',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Bench Press'), findsOneWidget);
+    expect(find.text('Chest'), findsWidgets);
+
+    await tester.tap(find.byTooltip('Clear search'));
+    await tester.pumpAndSettle();
+    expect(find.text('Barbell Row'), findsOneWidget);
+    expect(find.text('Bench Press'), findsNothing);
+  });
+
+  testWidgets('empty search offers custom creation with the query prefilled', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    await tester.tap(find.text('Add exercise'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search exercises'),
+      'Cable Halo',
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('No exercises found'), findsOneWidget);
+    await tester.tap(find.text('Create “Cable Halo”'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<EditableText>(find.byType(EditableText).last)
+          .controller
+          .text,
+      'Cable Halo',
+    );
+  });
+
+  testWidgets('selected review includes custom exercises and dismiss retains', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    await tester.tap(find.text('Add exercise'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create custom exercise'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'Cable Halo');
+    tester.testTextInput.hide();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Selected (1)'));
+    await tester.pumpAndSettle();
+    expect(find.text('Selected exercises'), findsOneWidget);
+    expect(find.text('Cable Halo'), findsWidgets);
+    expect(find.text('Custom'), findsOneWidget);
+
+    await tester.tapAt(const Offset(8, 8));
+    await tester.pumpAndSettle();
+    expect(find.text('Add exercises'), findsNothing);
+    expect(find.text('Cable Halo'), findsOneWidget);
+    expect(HiveService.getPlans(), isEmpty);
   });
 
   testWidgets('dirty back confirms discard and cancel preserves editor', (
@@ -290,7 +363,7 @@ void main() {
     await pumpEditor(tester);
     await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('CUSTOM EXERCISE'));
+    await tester.tap(find.text('Create custom exercise'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, '   ');
     await tester.pump();
@@ -298,9 +371,11 @@ void main() {
     await tester.enterText(find.byType(TextField).last, 'Bench Press');
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Chest'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('CUSTOM EXERCISE'));
+    await tester.tap(find.text('Create custom exercise'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, 'Bench Press');
     await tester.pump();
@@ -367,8 +442,7 @@ void main() {
     tester,
   ) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('Add exercise'));
-    await tester.pumpAndSettle();
+    await openExerciseGroup(tester);
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Done'));
@@ -389,8 +463,7 @@ void main() {
     tester,
   ) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('Add exercise'));
-    await tester.pumpAndSettle();
+    await openExerciseGroup(tester);
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Done'));
@@ -416,8 +489,7 @@ void main() {
   ) async {
     await pumpEditorWithProvider(tester);
     await tester.enterText(find.byType(TextField).first, 'Persisted Push');
-    await tester.tap(find.text('Add exercise'));
-    await tester.pumpAndSettle();
+    await openExerciseGroup(tester);
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Done'));
