@@ -128,6 +128,8 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Fixed active-workout set duplication so Add set carries the previous set's
+  RPE along with its weight and reps.
 - Refined the History workout-details readout:
   - Replaced the four standalone summary pills with one responsive, divided
     session readout that prioritizes aligned training values and adapts from a

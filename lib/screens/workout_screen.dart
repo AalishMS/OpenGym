@@ -501,7 +501,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final gym.Set newSet;
     if (exercise.sets.isNotEmpty) {
       final last = exercise.sets.last;
-      newSet = gym.Set(reps: last.reps, weight: last.weight);
+      newSet = gym.Set(reps: last.reps, weight: last.weight, rpe: last.rpe);
     } else {
       final planSet = _getLastSetForExerciseInPlan(exercise.name);
       newSet = gym.Set(reps: planSet?.reps ?? 8, weight: planSet?.weight ?? 0);

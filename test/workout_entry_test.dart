@@ -68,7 +68,7 @@ void main() {
               name: 'Bench Press',
               sets: [
                 Set(weight: 80, reps: 8, rpe: 7, note: 'steady'),
-                Set(weight: 75, reps: 10),
+                Set(weight: 75, reps: 10, rpe: 9),
               ],
             ),
           ],
@@ -119,6 +119,24 @@ void main() {
       80,
     );
     expect(find.text('80 × 8'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Add set'));
+    await tester.pump();
+    final duplicated =
+        HiveService.getSessionForPlanAndWeek('Push', 2, plan.splitId)!;
+    expect(duplicated.exercises.single.sets, hasLength(3));
+    expect(duplicated.exercises.single.sets.last.weight, 45);
+    expect(duplicated.exercises.single.sets.last.reps, 10);
+    expect(duplicated.exercises.single.sets.last.rpe, 9);
+    await tester.tap(find.bySemanticsLabel('Delete set').last);
+    await tester.pumpAndSettle();
+    expect(
+      HiveService.getSessionForPlanAndWeek(
+        'Push',
+        2,
+        plan.splitId,
+      )!.exercises.single.sets.length,
+      2,
+    );
     await tester.tap(find.bySemanticsLabel('Delete set').last);
     await tester.pumpAndSettle();
     expect(
