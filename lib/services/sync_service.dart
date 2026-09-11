@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -31,12 +33,81 @@ class SyncService {
   Future<void>? _exclusiveMutation;
   Timer? _debounce;
   final StreamController<void> _changes = StreamController<void>.broadcast();
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  Future<void>? _connectivityStart;
+  bool? _connectivityAvailable;
 
   Stream<void> get changes => _changes.stream;
 
   SupabaseClient get _db => SupabaseService.client;
   bool get _canSync =>
       SupabaseService.isConfigured && SupabaseService.currentUserId != null;
+
+  /// Watches transport changes only as a hint to retry queued work.
+  ///
+  /// A Wi-Fi/mobile result does not prove internet access, so failures still
+  /// flow through the normal soft-failing sync cycle and retain dirty rows.
+  Future<void> startConnectivityMonitoring({
+    Future<List<ConnectivityResult>> Function()? checkConnectivity,
+    Stream<List<ConnectivityResult>>? connectivityChanges,
+  }) async {
+    if (_connectivitySubscription != null) return;
+    final pending = _connectivityStart;
+    if (pending != null) return pending;
+
+    final connectivity = Connectivity();
+    final start = _startConnectivityMonitoring(
+      checkConnectivity ?? connectivity.checkConnectivity,
+      connectivityChanges ?? connectivity.onConnectivityChanged,
+    );
+    _connectivityStart = start;
+    try {
+      await start;
+    } finally {
+      _connectivityStart = null;
+    }
+  }
+
+  Future<void> _startConnectivityMonitoring(
+    Future<List<ConnectivityResult>> Function() checkConnectivity,
+    Stream<List<ConnectivityResult>> connectivityChanges,
+  ) async {
+    try {
+      _connectivityAvailable = _hasConnectivity(await checkConnectivity());
+    } catch (e) {
+      debugPrint('connectivity check deferred: $e');
+    }
+    _connectivitySubscription = connectivityChanges.listen(
+      _handleConnectivityChange,
+      onError: (Object error) {
+        debugPrint('connectivity monitoring error: $error');
+      },
+    );
+  }
+
+  Future<void> stopConnectivityMonitoring() async {
+    await _connectivitySubscription?.cancel();
+    _connectivitySubscription = null;
+    _connectivityAvailable = null;
+  }
+
+  void _handleConnectivityChange(List<ConnectivityResult> results) {
+    final available = _hasConnectivity(results);
+    final restored = _connectivityAvailable == false && available;
+    _connectivityAvailable = available;
+    if (restored) unawaited(_retryAfterConnectivityRestore());
+  }
+
+  bool _hasConnectivity(List<ConnectivityResult> results) =>
+      results.any((result) => result != ConnectivityResult.none);
+
+  Future<void> _retryAfterConnectivityRestore() async {
+    // If an offline request is still waiting for its socket timeout, let it
+    // settle and then make a fresh attempt on the restored transport.
+    final active = _activeSync;
+    if (active != null) await active;
+    if (_connectivityAvailable == true) await syncNow();
+  }
 
   void scheduleSync() {
     if (!_canSync) return;

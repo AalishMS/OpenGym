@@ -25,6 +25,9 @@ dependencies:
   share_plus: ^10.1.4
   uuid: ^4.3.0
   supabase_flutter: ^2.5.0
+  # Connectivity is only a retry hint for background sync. Local Hive data is
+  # always usable, and Supabase requests still determine actual reachability.
+  connectivity_plus: ^7.0.0
   # In-app updater: query the GitHub Releases API, read the installed version,
   # then download and hand off to the installer.
   #

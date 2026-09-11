@@ -408,6 +408,16 @@ Repository layer wrapping HiveService for clean architecture:
 - Fixed spacing and visual feedback across all screens
 - `flutter analyze` passes with no errors (only info-level const warnings)
 
+## Offline-First Startup (Latest)
+- Startup now prepares the authenticated user's local Hive workspace without
+  waiting for Supabase, then shows cached data immediately
+- Account adoption and cloud reconciliation run after the first usable frame;
+  offline failures retain dirty rows for later retry
+- Connectivity restoration triggers a background sync retry, while lifecycle
+  resume and mutation-triggered sync remain available
+- First-adoption default split metadata is provisional so an existing remote
+  workspace wins its first reconciliation
+
 ## Export/Import (Backup) Feature
 - Added JSON-based export/import for backing up and restoring all gym data
 - **Models**: Added `toJson()`/`factory fromJson()` to all 5 model classes (Set, Exercise, ExerciseTemplate, WorkoutPlan, WorkoutSession)

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/workout_plan_provider.dart';
@@ -7,20 +9,20 @@ import 'providers/settings_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/split_provider.dart';
 import 'services/hive_service.dart';
+import 'services/adopt_local_data.dart';
 import 'services/supabase_service.dart';
 import 'services/sync_service.dart';
 import 'auth/auth_gate.dart';
 import 'theme/app_theme.dart';
-import 'widgets/app_wordmark.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    await HiveService.init();
-    await SupabaseService.init();
+    await Future.wait([HiveService.init(), SupabaseService.init()]);
+    await AdoptLocalData.prepareLocal();
   } catch (e) {
-    debugPrint('Hive init error: $e');
+    debugPrint('Local startup error: $e');
   }
 
   runApp(const MyApp());
@@ -34,7 +36,6 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
-  bool _initialized = false;
   late WorkoutPlanProvider _workoutPlanProvider;
   late WorkoutSessionProvider _workoutSessionProvider;
   late ProgressionProvider _progressionProvider;
@@ -45,13 +46,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _initialize();
-    SyncService.instance.syncNow(); // initial cycle if already logged in
+    _splitProvider = SplitProvider();
+    _workoutPlanProvider = WorkoutPlanProvider(_splitProvider);
+    _workoutSessionProvider = WorkoutSessionProvider(_splitProvider);
+    _progressionProvider = ProgressionProvider(_splitProvider);
+    _settingsProvider = SettingsProvider();
+    unawaited(SyncService.instance.startConnectivityMonitoring());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(SyncService.instance.stopConnectivityMonitoring());
     super.dispose();
   }
 
@@ -62,59 +68,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _initialize() async {
-    _splitProvider = SplitProvider();
-    _workoutPlanProvider = WorkoutPlanProvider(_splitProvider);
-    _workoutSessionProvider = WorkoutSessionProvider(_splitProvider);
-    _progressionProvider = ProgressionProvider(_splitProvider);
-    _settingsProvider = SettingsProvider();
-
-    await Future.delayed(const Duration(milliseconds: 100));
-
-    if (mounted) {
-      setState(() {
-        _initialized = true;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (!_initialized) {
-      return MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: buildTheme(
-          SettingsProvider.accents[SettingsProvider.defaultAccentIndex].seed,
-          Brightness.light,
-        ),
-        home: Builder(
-          builder:
-              (context) => Scaffold(
-                backgroundColor: backgroundColor(context),
-                body: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const AppWordmark(fontSize: 28),
-                      const SizedBox(height: 32),
-                      Semantics(
-                        label: 'Starting OpenGym',
-                        value: 'In progress',
-                        liveRegion: true,
-                        child: const SizedBox(
-                          width: 24,
-                          height: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-        ),
-      );
-    }
-
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: _splitProvider),

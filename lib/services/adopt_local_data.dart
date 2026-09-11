@@ -4,22 +4,60 @@ import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
 
 /// One-time-per-user adoption of on-device data into the signed-in account,
-/// plus a shared-device guard. Call once after a successful login (from the
-/// auth gate), before showing the main app.
+/// plus a shared-device guard.
 class AdoptLocalData {
   AdoptLocalData._();
 
   static const _lastUserKey = 'lastUserId';
+  static String? _preparedUserId;
+  static String? _preparingUserId;
+  static Future<void>? _preparation;
+  static String? _syncingUserId;
+  static Future<void>? _backgroundSync;
 
-  /// Returns when it is safe to show the app. Never throws.
-  static Future<void> run() async {
+  static bool get isPreparedForCurrentUser {
+    final userId = SupabaseService.currentUserId;
+    return userId != null && _preparedUserId == userId;
+  }
+
+  /// Performs only the on-device work required before showing account data.
+  ///
+  /// This deliberately contains no network calls. A returning user can open
+  /// cached data immediately, while a different user cannot see the previous
+  /// account's cache during the handover.
+  static Future<void> prepareLocal() async {
     if (!SupabaseService.isConfigured) return;
     final userId = SupabaseService.currentUserId;
     if (userId == null) return;
+    await prepareLocalForUser(userId);
+  }
 
+  static Future<void> prepareLocalForUser(String userId) async {
+    if (_preparedUserId == userId) return;
+
+    final pending = _preparation;
+    if (pending != null) {
+      await pending;
+      if (_preparedUserId == userId) return;
+    }
+
+    final preparation = _prepareLocalForUser(userId);
+    _preparingUserId = userId;
+    _preparation = preparation;
+    try {
+      await preparation;
+      _preparedUserId = userId;
+    } finally {
+      if (_preparingUserId == userId) {
+        _preparingUserId = null;
+        _preparation = null;
+      }
+    }
+  }
+
+  static Future<void> _prepareLocalForUser(String userId) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // --- 1. Shared-device guard --------------------------------------------
     final lastUser = prefs.getString(_lastUserKey);
     final userChanged = lastUser != null && lastUser != userId;
     if (userChanged) {
@@ -35,21 +73,18 @@ class AdoptLocalData {
     }
     await prefs.setString(_lastUserKey, userId);
 
-    // --- 2. Adoption (once per user on this device) -------------------------
     final adoptedKey = 'adopted_$userId';
-    if (prefs.getBool(adoptedKey) == true) {
-      // Already adopted here — a normal sync is enough.
-      await SyncService.instance.syncNow();
-      return;
-    }
+    final isFirstAdoption = prefs.getBool(adoptedKey) != true;
 
-    try {
-      // The sync cycle pulls split metadata first, then creates/reuses the
-      // deterministic My Split and assigns any legacy local rows to it.
-      await SyncService.instance.syncNow();
+    await HiveService.ensureSplitWorkspace(
+      userId,
+      provisional: isFirstAdoption,
+    );
 
-      // Stamp every local record for this user and mark dirty. If we cleared
-      // above (userChanged), these lists are empty and this is a no-op.
+    if (isFirstAdoption) {
+      // Stamp legacy rows locally before the UI opens. The following sync pulls
+      // remote split metadata first, so a provisional default never overwrites
+      // an existing cloud workspace.
       final now = DateTime.now();
       for (final p in HiveService.getAllPlansRaw()) {
         p.userId = userId;
@@ -63,15 +98,37 @@ class AdoptLocalData {
         s.dirty = true;
         await HiveService.putSessionRaw(s);
       }
-
-      // Push adopted ownership and pull any changes made during adoption.
-      await SyncService.instance.syncNow();
-
       await prefs.setBool(adoptedKey, true);
-    } catch (e) {
-      // Leave the flag unset so adoption retries on the next login.
-      // ignore: avoid_print
-      print('adoption failed (will retry next login): $e');
+    }
+  }
+
+  /// Starts or joins the current user's network reconciliation.
+  ///
+  /// Callers intentionally do not await this on the launch path. Dirty rows
+  /// remain queued when the request fails and connectivity/lifecycle events
+  /// will retry later.
+  static Future<void> syncInBackground() async {
+    await prepareLocal();
+    final userId = SupabaseService.currentUserId;
+    if (userId == null) return;
+
+    final pending = _backgroundSync;
+    final pendingUserId = _syncingUserId;
+    if (pending != null) {
+      await pending;
+      if (pendingUserId == userId) return;
+    }
+
+    final sync = SyncService.instance.syncNow();
+    _syncingUserId = userId;
+    _backgroundSync = sync;
+    try {
+      await sync;
+    } finally {
+      if (_syncingUserId == userId) {
+        _syncingUserId = null;
+        _backgroundSync = null;
+      }
     }
   }
 }

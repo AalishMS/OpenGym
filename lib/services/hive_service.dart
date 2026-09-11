@@ -73,7 +73,10 @@ class HiveService {
     return splits.isEmpty ? null : splits.first.id;
   }
 
-  static Future<void> ensureSplitWorkspace(String userId) async {
+  static Future<void> ensureSplitWorkspace(
+    String userId, {
+    bool provisional = false,
+  }) async {
     final now = DateTime.now();
     final prefs = await SharedPreferences.getInstance();
     final migrationKey = 'split_scope_migration_$userId';
@@ -100,7 +103,10 @@ class HiveService {
           name: 'My Split',
           userId: userId,
           createdAt: now,
-          updatedAt: now,
+          // A first-adoption workspace may be created while fully offline.
+          // Leave its timestamp unset so an existing server copy of the
+          // deterministic default split wins the first reconciliation.
+          updatedAt: provisional ? null : now,
           dirty: true,
         );
         await _splitsBox.put(split.id, split);
@@ -117,7 +123,7 @@ class HiveService {
         SplitPreference(
           userId: userId,
           activeSplitId: activeId,
-          updatedAt: now,
+          updatedAt: provisional ? null : now,
           dirty: true,
         ),
       );

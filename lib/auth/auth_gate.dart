@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -32,8 +34,8 @@ class AuthGate extends StatelessWidget {
   }
 }
 
-/// Runs adoption once when a session is present, showing a loader until the
-/// first clear/pull settles, then the app.
+/// Exposes cached data after network-free account preparation, then reconciles
+/// with the server in the background.
 class _PostLoginGate extends StatefulWidget {
   const _PostLoginGate();
 
@@ -42,18 +44,27 @@ class _PostLoginGate extends StatefulWidget {
 }
 
 class _PostLoginGateState extends State<_PostLoginGate> {
-  late final Future<void> _ready = _adoptThenReload();
+  late final bool _wasPrepared = AdoptLocalData.isPreparedForCurrentUser;
+  late final Future<void> _ready = AdoptLocalData.prepareLocal();
 
-  Future<void> _adoptThenReload() async {
-    await AdoptLocalData.run();
-    if (!mounted) return;
-    context.read<SplitProvider>().loadSplits();
-    context.read<WorkoutPlanProvider>().loadPlans();
-    context.read<WorkoutSessionProvider>().loadSessions();
+  @override
+  void initState() {
+    super.initState();
+    _ready.then((_) {
+      if (!mounted) return;
+      context.read<SplitProvider>().loadSplits();
+      context.read<WorkoutPlanProvider>().loadPlans();
+      context.read<WorkoutSessionProvider>().loadSessions();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        unawaited(AdoptLocalData.syncInBackground());
+      });
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_wasPrepared) return const AppShell();
+
     return FutureBuilder<void>(
       future: _ready,
       builder: (context, snap) {
