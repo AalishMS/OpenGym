@@ -44,6 +44,9 @@ enum UpdateStatus {
 class UpdateProvider with ChangeNotifier {
   static const String _lastCheckKey = 'update_last_check';
   static const String _cachedReleaseKey = 'update_cached_release';
+  static const bool _previewUpdate = bool.fromEnvironment(
+    'OPENGYM_PREVIEW_UPDATE',
+  );
 
   /// How long to wait between automatic network checks. Unauthenticated GitHub
   /// allows 60 requests/hour per IP; four a day leaves that untouched. The
@@ -85,7 +88,13 @@ class UpdateProvider with ChangeNotifier {
   /// Reads the installed version so Settings can show it. Safe to call often.
   Future<void> loadInstalledVersion() async {
     if (_installed != null) return;
-    _installed = await UpdateService.installedVersion();
+    final installed = await UpdateService.installedVersion();
+    // Lets developers exercise the real GitHub-backed prompt without cutting
+    // a release. kDebugMode prevents the override from affecting release APKs.
+    _installed =
+        kDebugMode && _previewUpdate
+            ? const AppVersion([0, 0, 0], 0)
+            : installed;
     if (_installed != null) notifyListeners();
   }
 
@@ -151,7 +160,10 @@ class UpdateProvider with ChangeNotifier {
     // asking again is a clear request to see the answer.
     if (_dismissedTag == fresh.tagName) _dismissedTag = null;
 
-    if (UpdateService.isNewer(installed: _installed!, candidate: fresh.version)) {
+    if (UpdateService.isNewer(
+      installed: _installed!,
+      candidate: fresh.version,
+    )) {
       _release = fresh;
       _status = UpdateStatus.available;
     } else {
@@ -187,8 +199,10 @@ class UpdateProvider with ChangeNotifier {
     // Without this the download would succeed and the install would silently
     // do nothing, which looks exactly like a broken update.
     if (!await UpdateService.ensureInstallPermission()) {
-      _fail('OpenGym needs permission to install apps. Enable "Install unknown '
-          'apps" for OpenGym in system settings, then try again.');
+      _fail(
+        'OpenGym needs permission to install apps. Enable "Install unknown '
+        'apps" for OpenGym in system settings, then try again.',
+      );
       return;
     }
 
@@ -244,9 +258,10 @@ class UpdateProvider with ChangeNotifier {
       case OtaStatus.CHECKSUM_ERROR:
       case OtaStatus.INSTALLATION_ERROR:
       case OtaStatus.INTERNAL_ERROR:
-        _error = event.value?.trim().isNotEmpty == true
-            ? event.value!.trim()
-            : 'The update could not be installed.';
+        _error =
+            event.value?.trim().isNotEmpty == true
+                ? event.value!.trim()
+                : 'The update could not be installed.';
         _status = UpdateStatus.failed;
     }
     notifyListeners();
@@ -263,8 +278,10 @@ class UpdateProvider with ChangeNotifier {
     }
     if (_installed == null) return;
 
-    final newer =
-        UpdateService.isNewer(installed: _installed!, candidate: candidate.version);
+    final newer = UpdateService.isNewer(
+      installed: _installed!,
+      candidate: candidate.version,
+    );
     if (newer && _dismissedTag != candidate.tagName) {
       _release = candidate;
       _status = UpdateStatus.available;

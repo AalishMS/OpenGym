@@ -1,41 +1,98 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/update_provider.dart';
 import '../services/update_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_typography.dart';
 import '../theme/radii.dart';
+import 'app_button.dart';
+
+typedef ReleasePageLauncher = Future<bool> Function(Uri uri);
+
+Future<bool> _launchReleasePage(Uri uri) {
+  return launchUrl(uri, mode: LaunchMode.externalApplication);
+}
 
 /// Opens the update prompt. Safe to call when one is already on screen.
-Future<void> showUpdateDialog(BuildContext context) {
+Future<void> showUpdateDialog(
+  BuildContext context, {
+  ReleasePageLauncher? openRelease,
+}) {
   return showDialog<void>(
     context: context,
     // Downloading is cancellable from inside the dialog, so a stray tap on the
     // barrier must not orphan a download the user can no longer see.
     barrierDismissible: false,
     routeSettings: const RouteSettings(name: '/update'),
-    builder: (_) => const UpdateDialog(),
+    builder: (_) => UpdateDialog(openRelease: openRelease),
   );
 }
 
-/// The prompt that offers a new release, then shows the download.
-///
-/// One dialog covers offer → download → install → failure so the user never
-/// watches a dialog vanish and another appear in its place.
+/// Turns a GitHub release body into a short, readable list for the prompt.
+/// Full notes remain available through the release link.
+List<String> releaseHighlights(String markdown, {int limit = 4}) {
+  if (limit <= 0) return const [];
+
+  final highlights = <String>[];
+  for (final rawLine in markdown.split(RegExp(r'\r?\n'))) {
+    var line = rawLine.trim();
+    if (line.isEmpty || line.startsWith('#')) continue;
+
+    line =
+        line
+            .replaceFirst(RegExp(r'^[-*+]\s+'), '')
+            .replaceFirst(RegExp(r'^\d+[.)]\s+'), '')
+            .replaceFirst(RegExp(r'^\[[ xX]\]\s*'), '')
+            .replaceAllMapped(
+              RegExp(r'\[([^\]]+)\]\([^\)]+\)'),
+              (match) => match.group(1)!,
+            )
+            .replaceAll(RegExp(r'[*_`]'), '')
+            .trim();
+
+    if (line.isEmpty || Uri.tryParse(line)?.hasAbsolutePath == true) continue;
+    highlights.add(line);
+    if (highlights.length == limit) break;
+  }
+  return highlights;
+}
+
+/// The prompt that offers a new release, then shows download and install state.
 class UpdateDialog extends StatelessWidget {
-  const UpdateDialog({super.key});
+  const UpdateDialog({this.openRelease, super.key});
+
+  final ReleasePageLauncher? openRelease;
+
+  Future<void> _openRelease(BuildContext context, ReleaseInfo release) async {
+    try {
+      final opened = await (openRelease ?? _launchReleasePage)(
+        release.releasePageUri,
+      );
+      if (!opened && context.mounted) {
+        _showError(context, 'Could not open GitHub. Try again in a moment.');
+      }
+    } catch (_) {
+      if (context.mounted) {
+        _showError(context, 'Could not open GitHub. Try again in a moment.');
+      }
+    }
+  }
+
+  void _showError(BuildContext context, String message) {
+    final ground = errorColor(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: TextStyle(color: onColor(ground))),
+        backgroundColor: ground,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final updates = context.watch<UpdateProvider>();
-    final accent = accentColor(context);
-    final surface = surfaceColor(context);
-    final border = borderColor(context);
-    final textPrimary = textPrimaryColor(context);
-    final textSecondary = textSecondaryColor(context);
-    final error = errorColor(context);
-
     final release = updates.release;
     final status = updates.status;
 
@@ -50,123 +107,58 @@ class UpdateDialog extends StatelessWidget {
     }
 
     final failed = status == UpdateStatus.failed;
-    final size = formatBytes(release.apkSize);
+    final media = MediaQuery.of(context);
 
     return Dialog(
-      backgroundColor: surface,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      backgroundColor: surfaceColor(context),
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.card,
-        side: BorderSide(color: border, width: 1),
+        side: BorderSide(color: borderColor(context), width: 1),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              failed ? 'Update failed' : 'Update available',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(color: failed ? error : accent),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    release.displayVersion,
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: textPrimary,
-                    ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 440,
+          maxHeight: media.size.height - media.viewInsets.vertical - 48,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ReleaseHeader(release: release, failed: failed),
+              if (failed) ...[
+                const SizedBox(height: 20),
+                _FailureMessage(
+                  message:
+                      updates.error ?? 'The update could not be installed.',
+                ),
+              ] else ...[
+                const SizedBox(height: 24),
+                _Highlights(changelog: release.changelog),
+              ],
+              const SizedBox(height: 20),
+              Semantics(
+                link: true,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: AppButton.secondary(
+                    label: 'View release on GitHub',
+                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                    onPressed: () => _openRelease(context, release),
                   ),
                 ),
-                if (size.isNotEmpty) ...[
-                  const SizedBox(width: 8),
-                  Text(
-                    size,
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 11,
-                      color: textSecondary,
-                    ),
-                  ),
-                ],
+              ),
+              if (status == UpdateStatus.downloading ||
+                  status == UpdateStatus.installing) ...[
+                const SizedBox(height: 20),
+                _Progress(status: status, progress: updates.progress),
               ],
-            ),
-            if (failed) ...[
-              const SizedBox(height: 12),
-              Text(
-                updates.error ?? 'The update could not be installed.',
-                style: GoogleFonts.jetBrainsMono(fontSize: 12, color: error),
-              ),
-            ] else if (release.changelog.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              _Changelog(
-                text: release.changelog,
-                border: border,
-                textSecondary: textSecondary,
-              ),
+              const SizedBox(height: 20),
+              _Actions(updates: updates, showError: _showError),
             ],
-            if (status == UpdateStatus.downloading ||
-                status == UpdateStatus.installing) ...[
-              const SizedBox(height: 16),
-              _Progress(
-                status: status,
-                progress: updates.progress,
-                accent: accent,
-                border: border,
-                textSecondary: textSecondary,
-              ),
-            ],
-            const SizedBox(height: 16),
-            _Actions(
-              updates: updates,
-              accent: accent,
-              textSecondary: textSecondary,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// The release body, rendered as plain monospace text.
-///
-/// GitHub sends markdown, but the app has no markdown renderer and the terminal
-/// aesthetic reads `- item` lists correctly as-is. Height is capped so a chatty
-/// release note cannot push the buttons off screen.
-class _Changelog extends StatelessWidget {
-  const _Changelog({
-    required this.text,
-    required this.border,
-    required this.textSecondary,
-  });
-
-  final String text;
-  final Color border;
-  final Color textSecondary;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      constraints: const BoxConstraints(maxHeight: 180),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        border: Border.all(color: border, width: 1),
-        borderRadius: AppRadius.card,
-      ),
-      child: SingleChildScrollView(
-        child: Text(
-          text,
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 11,
-            height: 1.5,
-            color: textSecondary,
           ),
         ),
       ),
@@ -174,20 +166,172 @@ class _Changelog extends StatelessWidget {
   }
 }
 
+class _ReleaseHeader extends StatelessWidget {
+  const _ReleaseHeader({required this.release, required this.failed});
+
+  final ReleaseInfo release;
+  final bool failed;
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = accentColor(context);
+    final error = errorColor(context);
+    final size = formatBytes(release.apkSize);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 4,
+          height: 76,
+          decoration: BoxDecoration(
+            color: failed ? error : accent,
+            borderRadius: AppRadius.micro,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                failed ? 'Update needs attention' : 'A new build is ready',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  color: failed ? error : textPrimaryColor(context),
+                ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                failed
+                    ? 'Nothing was changed. You can retry when ready.'
+                    : 'Update OpenGym to get the latest improvements.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _MetadataChip(label: release.displayVersion),
+                  if (size.isNotEmpty) _MetadataChip(label: size),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MetadataChip extends StatelessWidget {
+  const _MetadataChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        border: Border.all(color: borderColor(context)),
+        borderRadius: AppRadius.chip,
+      ),
+      child: Text(
+        label,
+        style: AppTypography.trainingData(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: textSecondaryColor(context),
+        ),
+      ),
+    );
+  }
+}
+
+class _Highlights extends StatelessWidget {
+  const _Highlights({required this.changelog});
+
+  final String changelog;
+
+  @override
+  Widget build(BuildContext context) {
+    final highlights = releaseHighlights(changelog);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text("What's changed", style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 12),
+        if (highlights.isEmpty)
+          Text(
+            'Release notes are available on GitHub.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: textSecondaryColor(context),
+            ),
+          )
+        else
+          ...highlights.map(
+            (highlight) => Padding(
+              padding: const EdgeInsets.only(bottom: 9),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: accentColor(context),
+                        borderRadius: AppRadius.micro,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Text(
+                      highlight,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _FailureMessage extends StatelessWidget {
+  const _FailureMessage({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        border: Border.all(color: errorColor(context)),
+        borderRadius: AppRadius.card,
+      ),
+      child: Text(
+        message,
+        style: Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(color: errorColor(context)),
+      ),
+    );
+  }
+}
+
 class _Progress extends StatelessWidget {
-  const _Progress({
-    required this.status,
-    required this.progress,
-    required this.accent,
-    required this.border,
-    required this.textSecondary,
-  });
+  const _Progress({required this.status, required this.progress});
 
   final UpdateStatus status;
   final double progress;
-  final Color accent;
-  final Color border;
-  final Color textSecondary;
 
   @override
   Widget build(BuildContext context) {
@@ -195,23 +339,34 @@ class _Progress extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                installing ? 'Opening installer' : 'Downloading update',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+            ),
+            if (!installing)
+              Text(
+                '${(progress * 100).round()}%',
+                style: AppTypography.trainingData(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: textSecondaryColor(context),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 9),
         ClipRRect(
           borderRadius: AppRadius.micro,
           child: LinearProgressIndicator(
-            // Indeterminate while the installer is in charge: there is no
-            // percentage to report and a frozen bar would look stalled.
             value: installing ? null : progress,
-            minHeight: 4,
-            backgroundColor: border,
-            valueColor: AlwaysStoppedAnimation<Color>(accent),
+            minHeight: 5,
+            backgroundColor: borderColor(context),
+            valueColor: AlwaysStoppedAnimation<Color>(accentColor(context)),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          installing
-              ? 'Opening the installer...'
-              : 'Downloading... ${(progress * 100).round()}%',
-          style: GoogleFonts.jetBrainsMono(fontSize: 11, color: textSecondary),
         ),
       ],
     );
@@ -219,15 +374,10 @@ class _Progress extends StatelessWidget {
 }
 
 class _Actions extends StatelessWidget {
-  const _Actions({
-    required this.updates,
-    required this.accent,
-    required this.textSecondary,
-  });
+  const _Actions({required this.updates, required this.showError});
 
   final UpdateProvider updates;
-  final Color accent;
-  final Color textSecondary;
+  final void Function(BuildContext context, String message) showError;
 
   Future<void> _runAction(
     BuildContext context,
@@ -235,19 +385,10 @@ class _Actions extends StatelessWidget {
   ) async {
     try {
       await action();
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '> Update action failed: $e',
-            style: GoogleFonts.jetBrainsMono(
-              color: onColor(errorColor(context)),
-            ),
-          ),
-          backgroundColor: errorColor(context),
-        ),
-      );
+    } catch (_) {
+      if (context.mounted) {
+        showError(context, 'The update action failed. Try again.');
+      }
     }
   }
 
@@ -255,50 +396,37 @@ class _Actions extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = updates.status;
 
-    // The installer owns the screen from here; offering buttons would only
-    // invite a second install attempt.
-    if (status == UpdateStatus.installing) {
-      return const SizedBox.shrink();
-    }
+    // The installer owns the screen from here; offering buttons would invite a
+    // second install attempt.
+    if (status == UpdateStatus.installing) return const SizedBox.shrink();
 
     if (status == UpdateStatus.downloading) {
       return Align(
         alignment: Alignment.centerRight,
-        child: TextButton(
+        child: AppButton.text(
+          label: 'Cancel download',
           onPressed: () => _runAction(context, updates.cancelUpdate),
-          child: Text(
-            '[CANCEL]',
-            style: GoogleFonts.jetBrainsMono(color: textSecondary),
-          ),
         ),
       );
     }
 
     final failed = status == UpdateStatus.failed;
-    return Wrap(
-      alignment: WrapAlignment.end,
-      spacing: 8,
-      runSpacing: 4,
+    return Row(
       children: [
-        TextButton(
-          onPressed: () {
-            Navigator.pop(context);
-            updates.dismiss();
-          },
-          child: Text(
-            failed ? '[CLOSE]' : '[LATER]',
-            style: GoogleFonts.jetBrainsMono(color: textSecondary),
+        Expanded(
+          child: AppButton.text(
+            label: failed ? 'Close' : 'Later',
+            onPressed: () {
+              Navigator.pop(context);
+              updates.dismiss();
+            },
           ),
         ),
-        ElevatedButton(
-          onPressed: () => _runAction(context, updates.startUpdate),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: accentFillColor(context),
-            foregroundColor: onAccentColor(context),
-          ),
-          child: Text(
-            failed ? '[RETRY]' : '[UPDATE]',
-            style: GoogleFonts.jetBrainsMono(),
+        const SizedBox(width: 12),
+        Expanded(
+          child: AppButton.primary(
+            label: failed ? 'Try again' : 'Update now',
+            onPressed: () => _runAction(context, updates.startUpdate),
           ),
         ),
       ],

@@ -11,14 +11,21 @@ void main() {
   final release = ReleaseInfo(
     tagName: 'v1.0.0+2',
     displayVersion: 'OpenGym v1.0.0',
-    changelog: '- Fixes',
-    htmlUrl: 'https://example.invalid/release',
+    changelog: '''
+## What's changed
+- Faster workout startup
+- Fixed the set editor
+- Clearer progress charts
+- Improved offline sync
+- This fifth note belongs on GitHub
+''',
+    htmlUrl: 'https://github.com/AalishMS/OpenGym/releases/tag/v1.0.0%2B2',
     apkUrl: 'https://example.invalid/app.apk',
     apkSize: 1024,
     version: AppVersion.tryParse('1.0.0+2')!,
   );
 
-  Widget host(_FakeUpdates updates) =>
+  Widget host(_FakeUpdates updates, {ReleasePageLauncher? openRelease}) =>
       ChangeNotifierProvider<UpdateProvider>.value(
         value: updates,
         child: MaterialApp(
@@ -27,8 +34,10 @@ void main() {
             body: Builder(
               builder:
                   (context) => TextButton(
-                    onPressed: () => showUpdateDialog(context),
-                    child: const Text('[OPEN]'),
+                    onPressed:
+                        () =>
+                            showUpdateDialog(context, openRelease: openRelease),
+                    child: const Text('Open'),
                   ),
             ),
           ),
@@ -40,16 +49,19 @@ void main() {
   ) async {
     final updates = _FakeUpdates(UpdateStatus.available, release);
     await tester.pumpWidget(host(updates));
-    await tester.tap(find.text('[OPEN]'));
+    await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
-    expect(find.text('Update available'), findsOneWidget);
-    await tester.tap(find.text('[UPDATE]'));
+    expect(find.text('A new build is ready'), findsOneWidget);
+    expect(find.text("What's changed"), findsOneWidget);
+    expect(find.text('Faster workout startup'), findsOneWidget);
+    expect(find.text('This fifth note belongs on GitHub'), findsNothing);
+    await tester.tap(find.text('Update now'));
     await tester.pump();
     expect(updates.startCount, 1);
-    await tester.tap(find.text('[CANCEL]'));
+    await tester.tap(find.text('Cancel download'));
     await tester.pump();
     expect(updates.cancelCount, 1);
-    await tester.tap(find.text('[LATER]'));
+    await tester.tap(find.text('Later'));
     await tester.pumpAndSettle();
     expect(updates.dismissCount, 1);
   });
@@ -60,11 +72,11 @@ void main() {
     final updates = _FakeUpdates(UpdateStatus.failed, release)
       ..errorValue = 'Network unavailable';
     await tester.pumpWidget(host(updates));
-    await tester.tap(find.text('[OPEN]'));
+    await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
-    expect(find.text('Update failed'), findsOneWidget);
+    expect(find.text('Update needs attention'), findsOneWidget);
     expect(find.text('Network unavailable'), findsOneWidget);
-    await tester.tap(find.text('[RETRY]'));
+    await tester.tap(find.text('Try again'));
     await tester.pump();
     expect(updates.startCount, 1);
   });
@@ -75,22 +87,65 @@ void main() {
     await tester.pumpWidget(
       host(_FakeUpdates(UpdateStatus.installing, release)),
     );
-    await tester.tap(find.text('[OPEN]'));
+    await tester.tap(find.text('Open'));
     await tester.pump();
-    expect(find.text('Opening the installer...'), findsOneWidget);
-    expect(find.text('[UPDATE]'), findsNothing);
-    expect(find.text('[CANCEL]'), findsNothing);
+    expect(find.text('Opening installer'), findsOneWidget);
+    expect(find.text('Update now'), findsNothing);
+    expect(find.text('Cancel download'), findsNothing);
+  });
+
+  testWidgets('GitHub action opens the exact release page', (tester) async {
+    Uri? openedUri;
+    await tester.pumpWidget(
+      host(
+        _FakeUpdates(UpdateStatus.available, release),
+        openRelease: (uri) async {
+          openedUri = uri;
+          return true;
+        },
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View release on GitHub'));
+    await tester.pump();
+
+    expect(openedUri, release.releasePageUri);
+  });
+
+  testWidgets('failed GitHub launch gives useful feedback', (tester) async {
+    await tester.pumpWidget(
+      host(
+        _FakeUpdates(UpdateStatus.available, release),
+        openRelease: (_) async => false,
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('View release on GitHub'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Could not open GitHub'), findsOneWidget);
   });
 
   testWidgets('update action failures are shown to the user', (tester) async {
     final updates = _FakeUpdates(UpdateStatus.available, release)
       ..throwOnStart = true;
     await tester.pumpWidget(host(updates));
-    await tester.tap(find.text('[OPEN]'));
+    await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('[UPDATE]'));
+    await tester.tap(find.text('Update now'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('update failed'), findsOneWidget);
+    expect(find.text('The update action failed. Try again.'), findsOneWidget);
+  });
+
+  test('release notes are normalized and capped', () {
+    expect(releaseHighlights(release.changelog), [
+      'Faster workout startup',
+      'Fixed the set editor',
+      'Clearer progress charts',
+      'Improved offline sync',
+    ]);
   });
 }
 

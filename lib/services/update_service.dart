@@ -22,6 +22,9 @@ const MethodChannel _installerChannel =
 const String kReleasesApiUrl =
     'https://api.github.com/repos/AalishMS/OpenGym/releases/latest';
 
+const String kReleasesPageUrl =
+    'https://github.com/AalishMS/OpenGym/releases';
+
 /// Requests are abandoned after this, so a captive portal or a stalled socket
 /// can never leave a check hanging.
 const Duration kUpdateRequestTimeout = Duration(seconds: 10);
@@ -123,6 +126,26 @@ class ReleaseInfo {
     required this.apkSize,
     required this.version,
   });
+
+  /// The public page for this exact build.
+  ///
+  /// GitHub normally supplies [htmlUrl]. Treat it as untrusted API data and
+  /// fall back to a URL derived from the tag if it is missing or points away
+  /// from this repository.
+  Uri get releasePageUri {
+    final supplied = Uri.tryParse(htmlUrl);
+    if (supplied != null &&
+        supplied.scheme == 'https' &&
+        supplied.host.toLowerCase() == 'github.com' &&
+        supplied.pathSegments.length >= 4 &&
+        supplied.pathSegments[0].toLowerCase() == 'aalishms' &&
+        supplied.pathSegments[1].toLowerCase() == 'opengym' &&
+        supplied.pathSegments[2].toLowerCase() == 'releases') {
+      return supplied;
+    }
+
+    return Uri.parse('$kReleasesPageUrl/tag/${Uri.encodeComponent(tagName)}');
+  }
 
   /// Reads a GitHub release payload, returning null if it is not something we
   /// can offer as an update. Every field is treated as untrusted.

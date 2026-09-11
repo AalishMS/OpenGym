@@ -128,6 +128,15 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Rebuilt the in-app release prompt around the current OpenGym visual system:
+  - Release notes are normalized into four short highlights, with the complete
+    notes available through a clear GitHub action
+  - The GitHub action now opens the exact release in the external browser and
+    falls back to a safe tag-derived repository URL when API data is missing
+  - Download, install, failure, retry, cancel, and responsive scrolling states
+    remain inside the same accessible dialog
+  - Debug Android builds can preview a real update offer without publishing by
+    running with `--dart-define=OPENGYM_PREVIEW_UPDATE=true`
 - Fixed active-workout set duplication so Add set carries the previous set's
   RPE along with its weight and reps.
 - Refined the History workout-details readout:

@@ -81,21 +81,42 @@ void main() {
     AppVersion v(String s) => AppVersion.tryParse(s)!;
 
     test('a higher build number is newer', () {
-      expect(UpdateService.isNewer(installed: v('1.0.0+1'), candidate: v('1.0.1+2')), isTrue);
+      expect(
+        UpdateService.isNewer(installed: v('1.0.0+1'), candidate: v('1.0.1+2')),
+        isTrue,
+      );
     });
 
     test('an equal build number is not newer', () {
-      expect(UpdateService.isNewer(installed: v('1.0.0+2'), candidate: v('1.0.1+2')), isFalse);
+      expect(
+        UpdateService.isNewer(installed: v('1.0.0+2'), candidate: v('1.0.1+2')),
+        isFalse,
+      );
     });
 
-    test('a lower build number is not newer, even with a higher version name', () {
-      // Guards the exact trap the build number exists to avoid: Android would
-      // reject this APK as a downgrade, so we must not offer it.
-      expect(UpdateService.isNewer(installed: v('1.0.0+9'), candidate: v('2.0.0+3')), isFalse);
-    });
+    test(
+      'a lower build number is not newer, even with a higher version name',
+      () {
+        // Guards the exact trap the build number exists to avoid: Android would
+        // reject this APK as a downgrade, so we must not offer it.
+        expect(
+          UpdateService.isNewer(
+            installed: v('1.0.0+9'),
+            candidate: v('2.0.0+3'),
+          ),
+          isFalse,
+        );
+      },
+    );
 
     test('build numbers win over version names that sort the other way', () {
-      expect(UpdateService.isNewer(installed: v('1.9.0+4'), candidate: v('1.10.0+5')), isTrue);
+      expect(
+        UpdateService.isNewer(
+          installed: v('1.9.0+4'),
+          candidate: v('1.10.0+5'),
+        ),
+        isTrue,
+      );
     });
   });
 
@@ -104,37 +125,81 @@ void main() {
 
     test('compares version names component-wise, not as strings', () {
       // String comparison would call "1.10.0" older than "1.9.0".
-      expect(UpdateService.isNewer(installed: v('1.9.0'), candidate: v('1.10.0')), isTrue);
-      expect(UpdateService.isNewer(installed: v('1.10.0'), candidate: v('1.9.0')), isFalse);
+      expect(
+        UpdateService.isNewer(installed: v('1.9.0'), candidate: v('1.10.0')),
+        isTrue,
+      );
+      expect(
+        UpdateService.isNewer(installed: v('1.10.0'), candidate: v('1.9.0')),
+        isFalse,
+      );
     });
 
     test('an identical version name is not newer', () {
-      expect(UpdateService.isNewer(installed: v('1.2.3'), candidate: v('1.2.3')), isFalse);
+      expect(
+        UpdateService.isNewer(installed: v('1.2.3'), candidate: v('1.2.3')),
+        isFalse,
+      );
     });
 
     test('pads missing components with zero', () {
-      expect(UpdateService.isNewer(installed: v('1.2'), candidate: v('1.2.1')), isTrue);
-      expect(UpdateService.isNewer(installed: v('1.2.0'), candidate: v('1.2')), isFalse);
+      expect(
+        UpdateService.isNewer(installed: v('1.2'), candidate: v('1.2.1')),
+        isTrue,
+      );
+      expect(
+        UpdateService.isNewer(installed: v('1.2.0'), candidate: v('1.2')),
+        isFalse,
+      );
     });
 
     test('falls back when only one side carries a build number', () {
-      expect(UpdateService.isNewer(installed: v('1.0.0+1'), candidate: v('1.0.1')), isTrue);
-      expect(UpdateService.isNewer(installed: v('1.0.0'), candidate: v('1.0.1+2')), isTrue);
+      expect(
+        UpdateService.isNewer(installed: v('1.0.0+1'), candidate: v('1.0.1')),
+        isTrue,
+      );
+      expect(
+        UpdateService.isNewer(installed: v('1.0.0'), candidate: v('1.0.1+2')),
+        isTrue,
+      );
     });
   });
 
   group('ReleaseInfo.fromJson', () {
     test('reads every field the update prompt needs', () {
-      final r = ReleaseInfo.fromJson(jsonDecode(_releaseJson) as Map<String, dynamic>)!;
+      final r =
+          ReleaseInfo.fromJson(
+            jsonDecode(_releaseJson) as Map<String, dynamic>,
+          )!;
       expect(r.tagName, 'v1.2.0+7');
       expect(r.displayVersion, 'OpenGym v1.2.0');
       expect(r.changelog, contains('in-app updater'));
       expect(r.htmlUrl, contains('github.com'));
+      expect(
+        r.releasePageUri.toString(),
+        'https://github.com/AalishMS/OpenGym/releases/tag/v1.2.0%2B7',
+      );
       expect(r.version.build, 7);
     });
 
+    test(
+      'derives a safe release page when GitHub omits or changes the URL',
+      () {
+        final json = jsonDecode(_releaseJson) as Map<String, dynamic>;
+        json['html_url'] = 'https://example.invalid/not-the-release';
+
+        expect(
+          ReleaseInfo.fromJson(json)!.releasePageUri.toString(),
+          'https://github.com/AalishMS/OpenGym/releases/tag/v1.2.0%2B7',
+        );
+      },
+    );
+
     test('finds the .apk asset by extension, not by position or name', () {
-      final r = ReleaseInfo.fromJson(jsonDecode(_releaseJson) as Map<String, dynamic>)!;
+      final r =
+          ReleaseInfo.fromJson(
+            jsonDecode(_releaseJson) as Map<String, dynamic>,
+          )!;
       expect(r.apkUrl, 'https://example.invalid/OpenGym.apk');
       expect(r.apkSize, 24117248);
     });
@@ -142,7 +207,11 @@ void main() {
     test('is not fooled by an asset that merely contains .apk', () {
       final json = jsonDecode(_releaseJson) as Map<String, dynamic>;
       json['assets'] = [
-        {'name': 'notes.apk.txt', 'size': 1, 'browser_download_url': 'https://x.invalid/a'},
+        {
+          'name': 'notes.apk.txt',
+          'size': 1,
+          'browser_download_url': 'https://x.invalid/a',
+        },
       ];
       expect(ReleaseInfo.fromJson(json), isNull);
     });
@@ -171,11 +240,14 @@ void main() {
       expect(ReleaseInfo.fromJson(json)!.displayVersion, 'v1.2.0+7');
     });
 
-    test('tolerates a null body, which GitHub sends for an empty changelog', () {
-      final json = jsonDecode(_releaseJson) as Map<String, dynamic>;
-      json['body'] = null;
-      expect(ReleaseInfo.fromJson(json)!.changelog, isEmpty);
-    });
+    test(
+      'tolerates a null body, which GitHub sends for an empty changelog',
+      () {
+        final json = jsonDecode(_releaseJson) as Map<String, dynamic>;
+        json['body'] = null;
+        expect(ReleaseInfo.fromJson(json)!.changelog, isEmpty);
+      },
+    );
   });
 
   group('formatBytes', () {
