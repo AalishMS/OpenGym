@@ -798,6 +798,7 @@ class _ExerciseRow extends StatelessWidget {
         borderRadius: AppRadius.button,
         child: Container(
           constraints: const BoxConstraints(minHeight: 56),
+          margin: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
           padding: const EdgeInsets.symmetric(
             horizontal: AppSpacing.md,
             vertical: AppSpacing.sm,

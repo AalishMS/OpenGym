@@ -128,6 +128,8 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Inset add-exercise picker rows vertically so selected accent highlights no
+  longer touch the separators between exercises.
 - Fixed workout exercise-picker selections leaking into later picker sessions:
   - Exercises already in the workout now appear as `Added` instead of counting
     as selections, while only choices made in the open sheet are selected

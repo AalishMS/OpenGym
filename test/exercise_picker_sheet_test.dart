@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/theme/spacing.dart';
 import 'package:gymapp/widgets/exercise_picker_sheet.dart';
 
 class _PickerHarness extends StatefulWidget {
@@ -98,6 +99,30 @@ void main() {
     expect(find.text('Done'), findsOneWidget);
     expect(tester.takeException(), isNull);
     expect(tester.getTopLeft(find.text('Done')).dy, lessThan(700 - 240));
+  });
+
+  testWidgets('selected exercise highlight stays clear of row dividers', (
+    tester,
+  ) async {
+    await pumpPicker(tester, initialNames: const ['Bench Press']);
+    await tester.tap(find.text('Chest'));
+    await tester.pumpAndSettle();
+
+    final selectedRow = find.ancestor(
+      of: find.text('Bench Press'),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Container &&
+            widget.decoration is BoxDecoration &&
+            (widget.decoration! as BoxDecoration).color != null,
+      ),
+    );
+    final container = tester.widget<Container>(selectedRow.first);
+
+    expect(
+      container.margin,
+      const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+    );
   });
 
   testWidgets('renders picker states for visual inspection', (tester) async {
