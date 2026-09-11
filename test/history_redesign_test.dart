@@ -387,7 +387,7 @@ void main() {
     },
   );
 
-  testWidgets('PR attempt is a compact marker beside the set weight', (
+  testWidgets('saved PR note is a compact marker beside the set weight', (
     tester,
   ) async {
     final provider = _Sessions([
@@ -395,14 +395,14 @@ void main() {
         id: 'pr-attempt',
         name: 'Strength day',
         date: DateTime(2026, 9, 11),
-        setNote: 'PR attempt',
+        setNote: 'New PR!',
       ),
     ]);
     await tester.pumpWidget(host(provider));
     await tester.tap(find.text('Strength day'));
     await tester.pumpAndSettle();
 
-    expect(find.text('PR attempt'), findsNothing);
+    expect(find.text('New PR!'), findsNothing);
     expect(find.text('PR'), findsOneWidget);
     expect(
       tester.getCenter(find.text('PR')).dy,

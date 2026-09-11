@@ -132,8 +132,9 @@ Repository layer wrapping HiveService for clean architecture:
   - Replaced the four standalone summary pills with one responsive, divided
     session readout that prioritizes aligned training values and adapts from a
     four-column rail to a two-by-two grid on phones
-  - Moved legacy `PR attempt` set notes beside their weight as a compact `PR`
-    marker while preserving ordinary set notes below their set rows
+  - Moved saved PR marker notes (`New PR!`, `PR attempt`, and `PR`) beside their
+    weight as a compact `PR` marker while preserving ordinary set notes below
+    their set rows
 - Rebuilt History as a readable, split-scoped training journal:
   - Completed workouts are grouped by month and year, ordered newest first,
     searchable immediately by saved workout or exercise name, and summarized

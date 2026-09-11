@@ -9,6 +9,16 @@ import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import '../../utils/statistics_format.dart';
 
+bool _isPrMarker(String? note) {
+  final normalized = note?.trim().toLowerCase().replaceAll(
+    RegExp(r'[.!]+$'),
+    '',
+  );
+  return normalized == 'pr' ||
+      normalized == 'new pr' ||
+      normalized == 'pr attempt';
+}
+
 class WorkoutDetailsSummary extends StatelessWidget {
   final SessionStatistics statistics;
   final String weightUnit;
@@ -235,11 +245,10 @@ class WorkoutExerciseDetails extends StatelessWidget {
                 weight: displayWeight(entry.$2.weight, weightUnit),
                 reps: entry.$2.reps,
                 rpe: entry.$2.rpe,
-                isPrAttempt:
-                    entry.$2.note?.trim().toLowerCase() == 'pr attempt',
+                isPrAttempt: _isPrMarker(entry.$2.note),
               ),
               if ((entry.$2.note?.trim().isNotEmpty ?? false) &&
-                  entry.$2.note?.trim().toLowerCase() != 'pr attempt')
+                  !_isPrMarker(entry.$2.note))
                 Padding(
                   padding: const EdgeInsets.only(
                     top: AppSpacing.xs,
