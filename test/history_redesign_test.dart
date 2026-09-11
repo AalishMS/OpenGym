@@ -260,6 +260,56 @@ void main() {
     },
   );
 
+  testWidgets('personal record pill uses every solved accent pairing', (
+    tester,
+  ) async {
+    final summary =
+        buildHistoryJournalData([
+          session(
+            id: 'accent-pr',
+            name: 'Accent day',
+            date: DateTime(2026, 9, 11),
+          ),
+        ]).groups.single.workouts.single;
+
+    for (final brightness in Brightness.values) {
+      for (final accent in SettingsProvider.accents) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: buildTheme(accent.seed, brightness),
+            home: Scaffold(
+              body: HistoryWorkoutRow(
+                summary: summary,
+                weightUnit: 'kg',
+                onTap: () {},
+              ),
+            ),
+          ),
+        );
+
+        final pillFinder = find.byKey(
+          const ValueKey('history-personal-record-pill'),
+        );
+        final context = tester.element(pillFinder);
+        final decoration =
+            tester.widget<DecoratedBox>(pillFinder).decoration as BoxDecoration;
+        final label = tester.widget<Text>(find.text('Personal record'));
+        final variant = '${accent.name} / ${brightness.name}';
+
+        expect(
+          decoration.color,
+          accentFillColor(context),
+          reason: '$variant should use the accent ground',
+        );
+        expect(
+          label.style?.color,
+          onAccentColor(context),
+          reason: '$variant should use the accent foreground',
+        );
+      }
+    }
+  });
+
   testWidgets('journal search clears and split changes reset the query', (
     tester,
   ) async {

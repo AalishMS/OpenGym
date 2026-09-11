@@ -205,8 +205,9 @@ class _WorkoutSummaryContent extends StatelessWidget {
         if (summary.hasPersonalRecord) ...[
           const SizedBox(height: AppSpacing.sm),
           DecoratedBox(
+            key: const ValueKey('history-personal-record-pill'),
             decoration: BoxDecoration(
-              color: successColor(context),
+              color: accentFillColor(context),
               borderRadius: AppRadius.badge,
             ),
             child: Padding(
@@ -217,7 +218,7 @@ class _WorkoutSummaryContent extends StatelessWidget {
               child: Text(
                 'Personal record',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: onColor(successColor(context)),
+                  color: onAccentColor(context),
                   fontWeight: FontWeight.w600,
                 ),
               ),
