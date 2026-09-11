@@ -360,6 +360,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Workout details'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('workout-details-readout')),
+        findsOneWidget,
+      );
       expect(find.text('Not recorded'), findsOneWidget);
       expect(find.text('Performed sets'), findsOneWidget);
       expect(find.text('0'), findsWidgets);
@@ -382,6 +386,29 @@ void main() {
       );
     },
   );
+
+  testWidgets('PR attempt is a compact marker beside the set weight', (
+    tester,
+  ) async {
+    final provider = _Sessions([
+      session(
+        id: 'pr-attempt',
+        name: 'Strength day',
+        date: DateTime(2026, 9, 11),
+        setNote: 'PR attempt',
+      ),
+    ]);
+    await tester.pumpWidget(host(provider));
+    await tester.tap(find.text('Strength day'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('PR attempt'), findsNothing);
+    expect(find.text('PR'), findsOneWidget);
+    expect(
+      tester.getCenter(find.text('PR')).dy,
+      moreOrLessEquals(tester.getCenter(find.text('80')).dy, epsilon: 1),
+    );
+  });
 
   testWidgets('successful edit refreshes details and failed edit keeps draft', (
     tester,

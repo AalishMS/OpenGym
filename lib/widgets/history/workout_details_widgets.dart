@@ -37,26 +37,24 @@ class WorkoutDetailsSummary extends StatelessWidget {
           ).textTheme.bodyMedium?.copyWith(color: textSecondaryColor(context)),
         ),
         const SizedBox(height: AppSpacing.lg),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            _SummaryItem(
+        _SessionReadout(
+          items: [
+            _SummaryData(
               label: 'Exercises',
               value: session.exercises.length.toString(),
             ),
-            _SummaryItem(
+            _SummaryData(
               label: 'Performed sets',
               value: statistics.totalSets.toString(),
             ),
-            _SummaryItem(
+            _SummaryData(
               label: 'Duration',
               value:
                   session.durationSeconds == null
                       ? 'Not recorded'
                       : formatStatisticsDuration(session.durationSeconds!),
             ),
-            _SummaryItem(
+            _SummaryData(
               label: 'Volume load',
               value: formatVolumeLoad(statistics.volumeLoad, weightUnit),
             ),
@@ -67,33 +65,133 @@ class WorkoutDetailsSummary extends StatelessWidget {
   }
 }
 
-class _SummaryItem extends StatelessWidget {
+class _SummaryData {
   final String label;
   final String value;
 
-  const _SummaryItem({required this.label, required this.value});
+  const _SummaryData({required this.label, required this.value});
+}
+
+class _SessionReadout extends StatelessWidget {
+  final List<_SummaryData> items;
+
+  const _SessionReadout({required this.items});
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minWidth: 132),
+    return DecoratedBox(
+      key: const ValueKey('workout-details-readout'),
+      decoration: BoxDecoration(
+        color: surfaceColor(context),
+        border: Border.all(color: borderColor(context)),
+        borderRadius: AppRadius.card,
+      ),
+      child: ClipRRect(
+        borderRadius: AppRadius.card,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final columnCount = constraints.maxWidth >= 560 ? 4 : 2;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var start = 0; start < items.length; start += columnCount)
+                  _SummaryRow(
+                    items: items.sublist(
+                      start,
+                      (start + columnCount).clamp(0, items.length),
+                    ),
+                    columnCount: columnCount,
+                    showTopRule: start > 0,
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  final List<_SummaryData> items;
+  final int columnCount;
+  final bool showTopRule;
+
+  const _SummaryRow({
+    required this.items,
+    required this.columnCount,
+    required this.showTopRule,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: surfaceColor(context),
-          border: Border.all(color: borderColor(context)),
-          borderRadius: AppRadius.card,
+          border:
+              showTopRule
+                  ? Border(top: BorderSide(color: borderColor(context)))
+                  : null,
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label, style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: AppSpacing.xs),
-              Text(value, style: Theme.of(context).textTheme.titleMedium),
-            ],
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final entry in items.indexed)
+              Expanded(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border:
+                        entry.$1 == 0
+                            ? null
+                            : Border(
+                              left: BorderSide(color: borderColor(context)),
+                            ),
+                  ),
+                  child: _SummaryItem(data: entry.$2),
+                ),
+              ),
+            for (var index = items.length; index < columnCount; index++)
+              const Spacer(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryItem extends StatelessWidget {
+  final _SummaryData data;
+
+  const _SummaryItem({required this.data});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.lg,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            data.value,
+            style: AppTypography.trainingData(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: textPrimaryColor(context),
+              height: 1.2,
+            ),
           ),
-        ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            data.label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: textSecondaryColor(context),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -137,8 +235,11 @@ class WorkoutExerciseDetails extends StatelessWidget {
                 weight: displayWeight(entry.$2.weight, weightUnit),
                 reps: entry.$2.reps,
                 rpe: entry.$2.rpe,
+                isPrAttempt:
+                    entry.$2.note?.trim().toLowerCase() == 'pr attempt',
               ),
-              if (entry.$2.note?.trim().isNotEmpty ?? false)
+              if ((entry.$2.note?.trim().isNotEmpty ?? false) &&
+                  entry.$2.note?.trim().toLowerCase() != 'pr attempt')
                 Padding(
                   padding: const EdgeInsets.only(
                     top: AppSpacing.xs,
@@ -184,12 +285,14 @@ class _SetValues extends StatelessWidget {
   final double weight;
   final int reps;
   final int? rpe;
+  final bool isPrAttempt;
 
   const _SetValues({
     required this.index,
     required this.weight,
     required this.reps,
     required this.rpe,
+    required this.isPrAttempt,
   });
 
   @override
@@ -201,7 +304,37 @@ class _SetValues extends StatelessWidget {
     return Row(
       children: [
         Expanded(flex: 2, child: Text('${index + 1}', style: style)),
-        Expanded(flex: 4, child: Text(formatWeight(weight), style: style)),
+        Expanded(
+          flex: 4,
+          child: Row(
+            children: [
+              Flexible(child: Text(formatWeight(weight), style: style)),
+              if (isPrAttempt) ...[
+                const SizedBox(width: AppSpacing.xs),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: accentColor(context)),
+                    borderRadius: AppRadius.badge,
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.xs,
+                      vertical: AppSpacing.xxs,
+                    ),
+                    child: Text(
+                      'PR',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: accentColor(context),
+                        fontWeight: FontWeight.w700,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
         Expanded(flex: 3, child: Text('$reps', style: style)),
         Expanded(flex: 2, child: Text(rpe?.toString() ?? '—', style: style)),
       ],
