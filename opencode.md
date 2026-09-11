@@ -128,6 +128,21 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Rebuilt History as a readable, split-scoped training journal:
+  - Completed workouts are grouped by month and year, ordered newest first,
+    searchable immediately by saved workout or exercise name, and summarized
+    with performed sets, duration, unit-aware volume load, and historical PRs
+  - Search and scroll state survive detail navigation and tab changes, while a
+    split switch clears both; empty history and empty search now provide clear
+    next actions
+  - Dedicated workout details preserve saved exercise order, zero-rep sets,
+    exercise/set notes, RPE, duration availability, and converted display
+    weights without changing stored kilograms
+  - Editing still reuses the shared set-entry and set-details controls, saves
+    only through the session provider, and retains recoverable drafts on errors;
+    deletion now names the workout/date and supports retry without dismissing
+  - Added calculation, search, split, navigation, mutation-failure, responsive,
+    large-text, light/dark, and rendered-preview regression coverage
 - Inset add-exercise picker rows vertically so selected accent highlights no
   longer touch the separators between exercises.
 - Fixed workout exercise-picker selections leaking into later picker sessions:

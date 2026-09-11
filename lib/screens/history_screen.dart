@@ -1,461 +1,372 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
-import '../providers/workout_session_provider.dart';
-import '../models/workout_session.dart';
+
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
-import '../services/pr_tracking_service.dart';
-import '../services/hive_service.dart';
+import '../models/workout_session.dart';
+import '../providers/settings_provider.dart';
+import '../providers/workout_session_provider.dart';
+import '../services/statistics_analytics_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
+import '../theme/spacing.dart';
 import '../utils/set_history.dart';
+import '../utils/statistics_format.dart';
+import '../widgets/app_button.dart';
+import '../widgets/history/history_journal_data.dart';
+import '../widgets/history/history_journal_widgets.dart';
+import '../widgets/history/workout_details_widgets.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../widgets/workout/workout_dialogs.dart';
 
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
   @override
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
+
+class _HistoryScreenState extends State<HistoryScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  String _query = '';
+  String? _splitId;
+  bool _hasSeenSplit = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final splitId = context.watch<WorkoutSessionProvider>().activeSplitId;
+    if (_hasSeenSplit && splitId != _splitId) {
+      _query = '';
+      _searchController.clear();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) _scrollController.jumpTo(0);
+      });
+    }
+    _splitId = splitId;
+    _hasSeenSplit = true;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _clearSearch() {
+    _searchController.clear();
+    setState(() => _query = '');
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final provider = context.watch<WorkoutSessionProvider>();
+    final weightUnit = context.watch<SettingsProvider>().weightUnit;
+    final journal = buildHistoryJournalData(
+      provider.sessions,
+      query: _query,
+      splitId: provider.activeSplitId,
+    );
+    final entries = <Object>[
+      for (final group in journal.groups) ...[group, ...group.workouts],
+    ];
+
     return Scaffold(
       backgroundColor: backgroundColor(context),
       appBar: AppBar(
         backgroundColor: surfaceColor(context),
+        automaticallyImplyLeading: false,
         title: Text(
-          'WORKOUT HISTORY',
+          'History',
           style: Theme.of(
             context,
           ).textTheme.titleLarge?.copyWith(color: textPrimaryColor(context)),
         ),
-        automaticallyImplyLeading: false,
       ),
-      body: Consumer<WorkoutSessionProvider>(
-        builder: (context, provider, child) {
-          if (provider.sessions.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    '> NO SESSIONS FOUND',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 16,
-                      color: textSecondaryColor(context),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Complete a workout to see it here',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 12,
-                      color: textSecondaryColor(context),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(8),
-            itemCount: provider.sessions.length,
-            itemBuilder: (context, index) {
-              final session = provider.sessions[index];
-              return _SessionCard(
-                key: ValueKey(
-                  session.id ?? session.key ?? 'session-index-$index',
-                ),
-                session: session,
-                index: index,
-                onDelete: () {
-                  showDialog(
-                    context: context,
-                    builder:
-                        (ctx) => Dialog(
-                          backgroundColor: surfaceColor(context),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: AppRadius.card,
-                            side: BorderSide(
-                              color: borderColor(context),
-                              width: 1,
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '> DELETE WORKOUT?',
-                                  style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: errorColor(context),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'This will permanently delete this workout session.',
-                                  style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 12,
-                                    color: textSecondaryColor(context),
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.end,
-                                  children: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(ctx),
-                                      child: Text(
-                                        '[CANCEL]',
-                                        style: GoogleFonts.jetBrainsMono(
-                                          color: textSecondaryColor(context),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        provider.deleteSession(session.id!);
-                                        Navigator.pop(ctx);
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: errorColor(context),
-                                        foregroundColor: onColor(
-                                          errorColor(context),
-                                        ),
-                                      ),
-                                      child: Text(
-                                        '[DELETE]',
-                                        style: GoogleFonts.jetBrainsMono(),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                  );
-                },
-                onEdit: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => EditSessionScreen(session: session),
-                    ),
-                  );
-                },
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-}
-
-String _historyDuration(int totalSeconds) {
-  final hours = totalSeconds ~/ 3600;
-  final minutes = (totalSeconds % 3600) ~/ 60;
-  final seconds = totalSeconds % 60;
-  final mm = minutes.toString().padLeft(2, '0');
-  final ss = seconds.toString().padLeft(2, '0');
-  return hours == 0 ? '$mm:$ss' : '$hours:$mm:$ss';
-}
-
-class _SessionCard extends StatefulWidget {
-  final WorkoutSession session;
-  final int index;
-  final VoidCallback onDelete;
-  final VoidCallback onEdit;
-
-  const _SessionCard({
-    super.key,
-    required this.session,
-    required this.index,
-    required this.onDelete,
-    required this.onEdit,
-  });
-
-  @override
-  State<_SessionCard> createState() => _SessionCardState();
-}
-
-class _SessionCardState extends State<_SessionCard> {
-  bool _isExpanded = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final session = widget.session;
-    final prs = PRTrackingService.checkAgainstHistory(
-      session.exercises,
-      HiveService.getCompletedSessions(
-        splitId: session.splitId,
-      ).where((candidate) => candidate.id != session.id),
-    );
-    final hasPR = prs.isNotEmpty;
-    final accent = accentColor(context);
-    final border = borderColor(context);
-    final textSecondary = textSecondaryColor(context);
-    final error = errorColor(context);
-
-    int totalSets = 0;
-    int totalVolume = 0;
-    for (var exercise in session.exercises) {
-      totalSets += exercise.sets.length;
-      for (var set in exercise.sets) {
-        totalVolume += (set.weight * set.reps).round();
-      }
-    }
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border.all(color: border, width: 1),
-        borderRadius: AppRadius.card,
-      ),
-      child: Column(
-        children: [
-          InkWell(
-            onTap: () {
-              setState(() {
-                _isExpanded = !_isExpanded;
-              });
-            },
-            // Top-only: the header sits above the expandable body, so its
-            // splash follows the card's top corners and stops square below.
-            borderRadius: AppRadius.cardTop,
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: accent),
-                          borderRadius: AppRadius.chip,
-                        ),
-                        child: Text(
-                          '${session.date.day}/${session.date.month}/${session.date.year}',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 10,
-                            color: accent,
-                          ),
-                        ),
-                      ),
-                      if (hasPR) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            // A PR is the log's one celebratory event — the
-                            // "good" end of the semantic ramp, solved per mode,
-                            // not a hand-picked amber that only worked on dark.
-                            color: successColor(context),
-                            borderRadius: AppRadius.badge,
-                          ),
-                          child: Text(
-                            '[PR]',
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 10,
-                              color: onColor(successColor(context)),
-                            ),
-                          ),
-                        ),
-                      ],
-                      const Spacer(),
-                      PopupMenuButton<String>(
-                        tooltip: 'Session actions',
-                        onSelected: (value) {
-                          if (value == 'edit') widget.onEdit();
-                          if (value == 'delete') widget.onDelete();
-                        },
-                        itemBuilder:
-                            (context) => [
-                              PopupMenuItem(
-                                value: 'edit',
-                                height: 48,
-                                child: Text(
-                                  '[EDIT]',
-                                  style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                    color: accent,
-                                    letterSpacing: 0.06,
-                                  ),
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                height: 48,
-                                child: Text(
-                                  '[DELETE]',
-                                  style: GoogleFonts.jetBrainsMono(
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                    color: error,
-                                    letterSpacing: 0.06,
-                                  ),
-                                ),
-                              ),
-                            ],
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        _isExpanded
-                            ? LucideIcons.chevronUp
-                            : LucideIcons.chevronDown,
-                        color: textSecondaryColor(context),
-                        size: 20,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    session.planName.toUpperCase(),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'WEEK ${session.weekNumber}  •  ${session.exercises.length} EXERCISES  •  $totalSets SETS  •  ${totalVolume}KG'
-                    '${session.durationSeconds == null ? '' : '  •  ${_historyDuration(session.durationSeconds!)}'}',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 10,
-                      color: textSecondaryColor(context),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (_isExpanded)
-            _buildExpandedContent(session, accent, border, textSecondary),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExpandedContent(
-    WorkoutSession session,
-    Color accent,
-    Color border,
-    Color textSecondary,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(border: Border(top: BorderSide(color: border))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ...session.exercises.map(
-            (exercise) => _ExerciseSection(exercise: exercise, accent: accent),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ExerciseSection extends StatelessWidget {
-  final Exercise exercise;
-  final Color accent;
-
-  const _ExerciseSection({required this.exercise, required this.accent});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880),
+          child: Column(
             children: [
-              Expanded(
-                child: Text(
-                  exercise.name.toUpperCase(),
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                ),
+                child: HistorySearchField(
+                  controller: _searchController,
+                  onChanged: (value) => setState(() => _query = value),
+                  onClear: _clearSearch,
                 ),
               ),
-              if (exercise.note != null)
-                Text(
-                  '[NOTE]',
-                  style: GoogleFonts.jetBrainsMono(fontSize: 10, color: accent),
-                ),
+              Expanded(
+                child:
+                    journal.isEmpty
+                        ? HistoryEmptyState(
+                          isSearching: _query.trim().isNotEmpty,
+                          onClearSearch: _clearSearch,
+                        )
+                        : ListView.builder(
+                          key: const PageStorageKey('history-journal-list'),
+                          controller: _scrollController,
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.lg,
+                            AppSpacing.lg,
+                            AppSpacing.lg,
+                            AppSpacing.xxl,
+                          ),
+                          itemCount: entries.length,
+                          itemBuilder: (context, index) {
+                            final entry = entries[index];
+                            if (entry is HistoryMonthGroup) {
+                              return Padding(
+                                padding: EdgeInsets.only(
+                                  top: index == 0 ? 0 : AppSpacing.xl,
+                                  bottom: AppSpacing.md,
+                                ),
+                                child: HistoryMonthHeader(group: entry),
+                              );
+                            }
+                            final summary = entry as HistoryWorkoutSummary;
+                            return Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.md,
+                              ),
+                              child: HistoryWorkoutRow(
+                                key: ValueKey(
+                                  'history-row-${historySessionIdentity(summary.session)}',
+                                ),
+                                summary: summary,
+                                weightUnit: weightUnit,
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder:
+                                          (_) => WorkoutDetailsScreen(
+                                            sessionIdentity:
+                                                historySessionIdentity(
+                                                  summary.session,
+                                                ),
+                                          ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            );
+                          },
+                        ),
+              ),
             ],
           ),
-          if (exercise.note != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                exercise.note!,
-                style: GoogleFonts.jetBrainsMono(
-                  fontSize: 10,
-                  color: textSecondaryColor(context),
-                ),
-              ),
-            ),
-          const SizedBox(height: 8),
-          ...exercise.sets.asMap().entries.map((entry) {
-            final setIndex = entry.key;
-            final set = entry.value;
-            return Padding(
-              padding: const EdgeInsets.only(left: 8, bottom: 2),
-              child: Row(
-                children: [
-                  Text(
-                    'SET ${setIndex + 1}:',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 10,
-                      color: textSecondaryColor(context),
+        ),
+      ),
+    );
+  }
+}
+
+class WorkoutDetailsScreen extends StatelessWidget {
+  final String sessionIdentity;
+
+  const WorkoutDetailsScreen({required this.sessionIdentity, super.key});
+
+  WorkoutSession? _session(WorkoutSessionProvider provider) {
+    for (final session in provider.sessions) {
+      if (historySessionIdentity(session) == sessionIdentity) return session;
+    }
+    return null;
+  }
+
+  Future<void> _edit(BuildContext context, WorkoutSession session) async {
+    final updated = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => EditSessionScreen(session: session),
+      ),
+    );
+    if (!context.mounted || updated != true) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Workout updated')));
+  }
+
+  Future<void> _delete(BuildContext context, WorkoutSession session) async {
+    var deleting = false;
+    String? error;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (dialogContext) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => AlertDialog(
+                  title: const Text('Delete workout?'),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Delete “${session.planName}” from '
+                        '${formatStatisticsDate(session.date)}?',
+                      ),
+                      if (error != null) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        Text(
+                          error!,
+                          key: const ValueKey('delete-workout-error'),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: errorColor(context)),
+                        ),
+                      ],
+                    ],
+                  ),
+                  actions: [
+                    AppButton.text(
+                      label: 'Cancel',
+                      onPressed:
+                          deleting ? null : () => Navigator.pop(dialogContext),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${set.weight}KG x ${set.reps}REPS',
-                    style: GoogleFonts.jetBrainsMono(fontSize: 10),
-                  ),
-                  if (set.rpe != null) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: borderColor(context)),
-                        borderRadius: AppRadius.chip,
-                      ),
+                    AppButton.destructive(
+                      label: 'Delete',
+                      onPressed:
+                          deleting
+                              ? null
+                              : () async {
+                                final id = session.id;
+                                if (id == null) {
+                                  setDialogState(
+                                    () =>
+                                        error =
+                                            'This workout cannot be deleted because its identity is missing.',
+                                  );
+                                  return;
+                                }
+                                setDialogState(() {
+                                  deleting = true;
+                                  error = null;
+                                });
+                                try {
+                                  await dialogContext
+                                      .read<WorkoutSessionProvider>()
+                                      .deleteSession(id);
+                                  if (!dialogContext.mounted) return;
+                                  Navigator.pop(dialogContext);
+                                  if (context.mounted) Navigator.pop(context);
+                                } catch (exception) {
+                                  debugPrint(
+                                    'Failed to delete workout: $exception',
+                                  );
+                                  if (!dialogContext.mounted) return;
+                                  setDialogState(() {
+                                    deleting = false;
+                                    error =
+                                        'Could not delete the workout. Check your data and try again.';
+                                  });
+                                }
+                              },
+                      child:
+                          deleting
+                              ? const SizedBox.square(
+                                dimension: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                              : null,
+                    ),
+                  ],
+                ),
+          ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = context.watch<WorkoutSessionProvider>();
+    final session = _session(provider);
+    final weightUnit = context.watch<SettingsProvider>().weightUnit;
+    return Scaffold(
+      backgroundColor: backgroundColor(context),
+      appBar: AppBar(
+        backgroundColor: surfaceColor(context),
+        title: const Text('Workout details'),
+        actions: [
+          if (session != null)
+            PopupMenuButton<String>(
+              tooltip: 'Workout actions',
+              onSelected: (value) {
+                if (value == 'edit') _edit(context, session);
+                if (value == 'delete') _delete(context, session);
+              },
+              itemBuilder:
+                  (context) => [
+                    const PopupMenuItem(
+                      value: 'edit',
+                      height: 48,
+                      child: Text('Edit'),
+                    ),
+                    PopupMenuItem(
+                      value: 'delete',
+                      height: 48,
                       child: Text(
-                        'RPE ${set.rpe}',
-                        style: GoogleFonts.jetBrainsMono(fontSize: 8),
+                        'Delete',
+                        style: TextStyle(color: errorColor(context)),
                       ),
                     ),
                   ],
-                ],
-              ),
-            );
-          }),
+            ),
         ],
       ),
+      body:
+          session == null
+              ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Workout no longer available',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      AppButton.text(
+                        label: 'Back',
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+              : Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 880),
+                  child: ListView(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    children: [
+                      WorkoutDetailsSummary(
+                        statistics: const StatisticsAnalyticsService()
+                            .sessionStatistics(session),
+                        weightUnit: weightUnit,
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
+                      for (final exercise in session.exercises) ...[
+                        WorkoutExerciseDetails(
+                          exercise: exercise,
+                          weightUnit: weightUnit,
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
     );
   }
 }
@@ -472,6 +383,7 @@ class EditSessionScreen extends StatefulWidget {
 class _EditSessionScreenState extends State<EditSessionScreen> {
   late WorkoutSession _session;
   late TextEditingController _planNameController;
+  bool _isSaving = false;
 
   @override
   void initState() {
@@ -487,208 +399,128 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
   }
 
   void _removeExercise(int index) {
-    setState(() {
-      final exercises = List<Exercise>.from(_session.exercises);
-      exercises.removeAt(index);
-      _session = _session.copyWith(exercises: exercises);
-    });
+    final exercises = List<Exercise>.from(_session.exercises)..removeAt(index);
+    setState(() => _session = _session.copyWith(exercises: exercises));
   }
 
   Future<void> _save() async {
-    _session = _session.copyWith(planName: _planNameController.text);
-    final history = HiveService.getCompletedSessions(
-      splitId: _session.splitId,
-    ).where((candidate) => candidate.id != _session.id);
-    final prs = PRTrackingService.checkAgainstHistory(
-      _session.exercises,
-      history,
-    );
-    await context.read<WorkoutSessionProvider>().updateSession(_session);
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    final foreground = onAccentColor(context);
-    final background = accentFillColor(context);
-    final message =
-        prs.isEmpty
-            ? 'Workout updated'
-            : 'Workout updated · ${prs.length} personal record${prs.length == 1 ? '' : 's'}';
-    Navigator.pop(context);
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(message, style: TextStyle(color: foreground)),
-        backgroundColor: background,
-      ),
-    );
+    if (_isSaving) return;
+    final name = _planNameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Enter a workout name.')));
+      return;
+    }
+    setState(() => _isSaving = true);
+    _session = _session.copyWith(planName: name);
+    try {
+      await context.read<WorkoutSessionProvider>().updateSession(_session);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (exception) {
+      debugPrint('Failed to update workout: $exception');
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not save the workout. Your edits are still here. Try again.',
+          ),
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor(context);
     return Scaffold(
       backgroundColor: backgroundColor(context),
       appBar: AppBar(
         backgroundColor: surfaceColor(context),
-        flexibleSpace: headerFlexibleSpace(context),
-        title: Text(
-          '> EDIT WORKOUT',
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: accent,
-          ),
-        ),
-        leading: IconButton(
-          icon: Icon(LucideIcons.arrowLeft, color: accent),
-          onPressed: () => Navigator.pop(context),
-        ),
+        title: const Text('Edit workout'),
         actions: [
-          InkWell(
-            onTap: _save,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              child: Text(
-                '[SAVE]',
-                style: GoogleFonts.jetBrainsMono(color: accent),
-              ),
-            ),
+          TextButton(
+            onPressed: _isSaving ? null : _save,
+            child:
+                _isSaving
+                    ? const SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Text('Save'),
           ),
+          const SizedBox(width: AppSpacing.sm),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          TextField(
-            controller: _planNameController,
-            decoration: const InputDecoration(
-              labelText: 'Plan Name',
-              border: OutlineInputBorder(borderRadius: AppRadius.field),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'EXERCISES',
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: accent,
-            ),
-          ),
-          const SizedBox(height: 8),
-          ..._session.exercises.asMap().entries.map((entry) {
-            final index = entry.key;
-            final exercise = entry.value;
-            return Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              decoration: BoxDecoration(
-                color: surfaceColor(context),
-                border: Border.all(color: borderColor(context), width: 1),
-                borderRadius: AppRadius.card,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 6,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border.all(color: accent),
-                            borderRadius: AppRadius.badge,
-                          ),
-                          child: Text(
-                            '[${index + 1}]',
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 10,
-                              color: accent,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            exercise.name.toUpperCase(),
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        InkWell(
-                          onTap: () => _removeExercise(index),
-                          splashColor: errorColor(
-                            context,
-                          ).withValues(alpha: 0.2),
-                          highlightColor: errorColor(
-                            context,
-                          ).withValues(alpha: 0.1),
-                          child: Text(
-                            '[DEL]',
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 10,
-                              color: errorColor(context),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (exercise.note != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          exercise.note!,
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 10,
-                            color: textSecondaryColor(context),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    SetEntryTable(
-                      exerciseName: exercise.name,
-                      sets: _entriesFor(exercise),
-                      onChanged: (setIndex, weight, reps) {
-                        final current = _session.exercises[index];
-                        final sets = List<gym.Set>.of(current.sets);
-                        final old = sets[setIndex];
-                        sets[setIndex] = gym.Set(
-                          weight: weight,
-                          reps: reps,
-                          rpe: old.rpe,
-                          note: old.note,
-                        );
-                        _replaceSets(index, sets);
-                      },
-                      onDetails:
-                          (setIndex) => _showEditSetDialog(
-                            index,
-                            setIndex,
-                            exercise.sets[setIndex],
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    InkWell(
-                      onTap: () => _showAddSetDialog(index, exercise),
-                      splashColor: accent.withValues(alpha: 0.2),
-                      highlightColor: accent.withValues(alpha: 0.1),
-                      child: Text(
-                        '[+ ADD SET]',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 10,
-                          color: accent,
-                        ),
-                      ),
-                    ),
-                  ],
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 880),
+          child: ListView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            children: [
+              TextField(
+                key: const ValueKey('workout-name-field'),
+                controller: _planNameController,
+                enabled: !_isSaving,
+                decoration: const InputDecoration(
+                  labelText: 'Workout name',
+                  border: OutlineInputBorder(borderRadius: AppRadius.field),
                 ),
               ),
-            );
-          }),
-        ],
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Weights are edited in kilograms.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              Text('Exercises', style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: AppSpacing.md),
+              for (final entry in _session.exercises.indexed)
+                _EditableExerciseCard(
+                  key: ValueKey('edit-exercise-${entry.$1}-${entry.$2.name}'),
+                  exercise: entry.$2,
+                  entries: _entriesFor(entry.$2),
+                  enabled: !_isSaving,
+                  onRemove: () => _removeExercise(entry.$1),
+                  onChanged: (setIndex, weight, reps) {
+                    final sets = List<gym.Set>.of(
+                      _session.exercises[entry.$1].sets,
+                    );
+                    final old = sets[setIndex];
+                    sets[setIndex] = gym.Set(
+                      weight: weight,
+                      reps: reps,
+                      rpe: old.rpe,
+                      note: old.note,
+                    );
+                    _replaceSets(entry.$1, sets);
+                  },
+                  onRpeChanged: (setIndex, rpe) {
+                    final sets = List<gym.Set>.of(
+                      _session.exercises[entry.$1].sets,
+                    );
+                    final old = sets[setIndex];
+                    sets[setIndex] = gym.Set(
+                      weight: old.weight,
+                      reps: old.reps,
+                      rpe: rpe,
+                      note: old.note,
+                    );
+                    _replaceSets(entry.$1, sets);
+                  },
+                  onDetails:
+                      (setIndex) => _showEditSetDialog(
+                        entry.$1,
+                        setIndex,
+                        entry.$2.sets[setIndex],
+                      ),
+                  onAddSet: () => _showAddSetDialog(entry.$1),
+                ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -704,28 +536,32 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
       planName: _session.planName,
     );
     return [
-      for (var i = 0; i < exercise.sets.length; i++)
+      for (var index = 0; index < exercise.sets.length; index++)
         SetEntry(
-          weight: exercise.sets[i].weight,
-          reps: exercise.sets[i].reps,
+          weight: exercise.sets[index].weight,
+          reps: exercise.sets[index].reps,
           previous:
-              i < previous.length && previous[i].reps > 0
-                  ? '${entryWeight(previous[i].weight)} × ${previous[i].reps}'
+              index < previous.length && previous[index].reps > 0
+                  ? '${entryWeight(previous[index].weight)} × ${previous[index].reps}'
                   : null,
-          annotation: exercise.sets[i].note,
-          rpe: exercise.sets[i].rpe,
+          annotation: exercise.sets[index].note,
+          rpe: exercise.sets[index].rpe,
         ),
     ];
   }
 
-  void _replaceSets(int index, List<gym.Set> sets) {
+  void _replaceSets(int exerciseIndex, List<gym.Set> sets) {
     final exercises = List<Exercise>.of(_session.exercises);
-    final old = exercises[index];
-    exercises[index] = Exercise(name: old.name, sets: sets, note: old.note);
+    final old = exercises[exerciseIndex];
+    exercises[exerciseIndex] = Exercise(
+      name: old.name,
+      sets: sets,
+      note: old.note,
+    );
     setState(() => _session = _session.copyWith(exercises: exercises));
   }
 
-  void _showAddSetDialog(int exerciseIndex, Exercise exercise) {
+  void _showAddSetDialog(int exerciseIndex) {
     WorkoutDialogs.showAddSetDialog(
       context,
       onAdd: (set) {
@@ -751,6 +587,84 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
           ..removeAt(setIndex);
         _replaceSets(exerciseIndex, sets);
       },
+    );
+  }
+}
+
+class _EditableExerciseCard extends StatelessWidget {
+  final Exercise exercise;
+  final List<SetEntry> entries;
+  final bool enabled;
+  final VoidCallback onRemove;
+  final void Function(int index, double weight, int reps) onChanged;
+  final void Function(int index, int? rpe) onRpeChanged;
+  final ValueChanged<int> onDetails;
+  final VoidCallback onAddSet;
+
+  const _EditableExerciseCard({
+    required this.exercise,
+    required this.entries,
+    required this.enabled,
+    required this.onRemove,
+    required this.onChanged,
+    required this.onRpeChanged,
+    required this.onDetails,
+    required this.onAddSet,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final note = exercise.note?.trim();
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.md),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: surfaceColor(context),
+        border: Border.all(color: borderColor(context)),
+        borderRadius: AppRadius.card,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  exercise.name,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              AppIconButton(
+                label: 'Remove ${exercise.name}',
+                icon: LucideIcons.trash2,
+                color: errorColor(context),
+                onPressed: enabled ? onRemove : null,
+              ),
+            ],
+          ),
+          if (note != null && note.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(note, style: Theme.of(context).textTheme.bodySmall),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          IgnorePointer(
+            ignoring: !enabled,
+            child: SetEntryTable(
+              exerciseName: exercise.name,
+              sets: entries,
+              onChanged: onChanged,
+              onRpeChanged: onRpeChanged,
+              onDetails: onDetails,
+            ),
+          ),
+          AppButton.text(
+            label: 'Add set',
+            icon: const Icon(LucideIcons.plus, size: 18),
+            onPressed: enabled ? onAddSet : null,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -15,6 +15,7 @@ class WorkoutSessionProvider with ChangeNotifier {
   List<WorkoutSession> get sessions => _sessions;
   WorkoutSession? get currentSession => _currentSession;
   int get currentWeek => _currentWeek;
+  String? get activeSplitId => _splitProvider?.activeSplitId;
 
   WorkoutSessionProvider([this._splitProvider]) {
     _splitProvider?.addListener(loadSessions);

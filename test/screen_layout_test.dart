@@ -147,8 +147,8 @@ void main() {
           ),
         );
         await tester.pump();
-        expect(find.text('WORKOUT HISTORY'), findsOneWidget);
-        expect(find.text('> WORKOUT HISTORY'), findsNothing);
+        expect(find.text('History'), findsOneWidget);
+        expect(find.text('WORKOUT HISTORY'), findsNothing);
         expectNoOverflow(tester, 'history $brightness ${scale}x');
 
         await tester.pumpWidget(
@@ -241,8 +241,8 @@ void main() {
       );
       await tester.pump();
       expect(
-        tester.widget<Text>(find.text('WORKOUT HISTORY')).style?.color,
-        textPrimaryColor(tester.element(find.text('WORKOUT HISTORY'))),
+        tester.widget<Text>(find.text('History')).style?.color,
+        textPrimaryColor(tester.element(find.text('History'))),
       );
 
       await tester.pumpWidget(
@@ -271,7 +271,7 @@ void main() {
     }
   });
 
-  testWidgets('populated history keeps summary and moves actions to overflow', (
+  testWidgets('populated history opens dedicated workout details', (
     tester,
   ) async {
     final session = WorkoutSession(
@@ -284,52 +284,15 @@ void main() {
     );
     await tester.pumpWidget(host(const HistoryScreen(), sessions: [session]));
     await tester.pump();
-    expect(find.text('PUSH DAY'), findsOneWidget);
-    expect(find.textContaining('1 EXERCISES'), findsOneWidget);
-    expect(find.byTooltip('Session actions'), findsOneWidget);
-    expect(find.text('[EDIT]'), findsNothing);
-    expect(find.text('[DEL]'), findsNothing);
-    expectNoOverflow(tester, 'populated history');
-  });
-
-  testWidgets('history overflow actions use bracket-control typography', (
-    tester,
-  ) async {
-    final session = WorkoutSession(
-      id: 'session-1',
-      planName: 'Push Day',
-      date: DateTime(2026, 8, 28),
-      exercises: [
-        Exercise(name: 'Bench Press', sets: [Set(reps: 5, weight: 80)]),
-      ],
-    );
-    await tester.pumpWidget(host(const HistoryScreen(), sessions: [session]));
-    await tester.pump();
-
-    await tester.tap(find.byTooltip('Session actions'));
+    expect(find.text('Push Day'), findsOneWidget);
+    expect(find.textContaining('1 exercise'), findsOneWidget);
+    expect(find.byTooltip('Workout actions'), findsNothing);
+    await tester.tap(find.text('Push Day'));
     await tester.pumpAndSettle();
-
-    final editStyle = tester.widget<Text>(find.text('[EDIT]')).style!;
-    final deleteStyle = tester.widget<Text>(find.text('[DELETE]')).style!;
-    expect(
-      editStyle.fontFamily,
-      GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold).fontFamily,
-    );
-    expect(editStyle.fontSize, 9);
-    expect(editStyle.fontWeight, FontWeight.bold);
-    expect(editStyle.letterSpacing, 0.06);
-    expect(editStyle.color, accentColor(tester.element(find.text('[EDIT]'))));
-    expect(
-      deleteStyle.fontFamily,
-      GoogleFonts.jetBrainsMono(fontWeight: FontWeight.bold).fontFamily,
-    );
-    expect(deleteStyle.fontSize, 9);
-    expect(deleteStyle.fontWeight, FontWeight.bold);
-    expect(deleteStyle.letterSpacing, 0.06);
-    expect(
-      deleteStyle.color,
-      errorColor(tester.element(find.text('[DELETE]'))),
-    );
+    expect(find.text('Workout details'), findsOneWidget);
+    expect(find.byTooltip('Workout actions'), findsOneWidget);
+    expect(find.text('Bench Press'), findsOneWidget);
+    expectNoOverflow(tester, 'workout details');
   });
 
   testWidgets('selected exercise stays readable with long names', (

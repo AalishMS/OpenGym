@@ -17,6 +17,7 @@ import 'package:gymapp/models/split_preference.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/split_provider.dart';
+import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/repositories/split_repository.dart';
@@ -118,8 +119,15 @@ void main() {
 
     await tester.pumpWidget(harness.host(const HistoryScreen()));
     await tester.pumpAndSettle();
-    expect(find.text('UL PLAN'), findsOneWidget);
-    expect(find.text('PPL PLAN'), findsNothing);
+    expect(find.text('UL Plan'), findsOneWidget);
+    expect(find.text('PPL Plan'), findsNothing);
+    await tester.tap(find.text('UL Plan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Workout details'), findsOneWidget);
+    expect(find.text('UL Only'), findsOneWidget);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
 
     await tester.pumpWidget(harness.host(const StatsScreen()));
     await tester.pumpAndSettle();
@@ -435,6 +443,9 @@ class _Harness {
       ChangeNotifierProvider<SplitProvider>.value(value: splits),
       ChangeNotifierProvider<WorkoutPlanProvider>.value(value: plans),
       ChangeNotifierProvider<WorkoutSessionProvider>.value(value: sessions),
+      ChangeNotifierProvider<SettingsProvider>(
+        create: (_) => SettingsProvider(),
+      ),
     ],
     child: MaterialApp(
       key: UniqueKey(),
