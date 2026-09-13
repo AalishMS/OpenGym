@@ -43,7 +43,6 @@ void main() {
     tester.view.physicalSize = const Size(320, 640);
     addTearDown(tester.view.reset);
     for (final show in <void Function(BuildContext)>[
-      (context) => WorkoutDialogs.showAddExerciseDialog(context, onAdd: (_) {}),
       (context) => WorkoutDialogs.showRenameExerciseDialog(
         context,
         currentName: 'Bench Press',
@@ -71,14 +70,6 @@ void main() {
       (context) =>
           WorkoutDialogs.showDeletePlanDialog(context, planName: 'Push Day'),
       (context) => WorkoutDialogs.showDiscardChangesDialog(context),
-      (context) => WorkoutDialogs.showEditPlanSetDialog(
-        context,
-        setNumber: 1,
-        reps: 12,
-        weight: 137.5,
-        accent: const Color(0xFF7C5CFF),
-        onSave: (_, __) {},
-      ),
     ]) {
       await tester.pumpWidget(
         ChangeNotifierProvider(
@@ -179,19 +170,9 @@ void main() {
     expect(find.text('Edit set'), findsNothing);
   });
 
-  testWidgets('exercise names and confirmation prose use sans typography', (
-    tester,
-  ) async {
+  testWidgets('confirmation prose uses sans typography', (tester) async {
     await tester.pumpWidget(host(const SizedBox()));
     final context = tester.element(find.byType(Scaffold));
-    WorkoutDialogs.showAddExerciseDialog(context, onAdd: (_) {});
-    await tester.pumpAndSettle();
-    expect(
-      tester.widget<TextField>(find.byType(TextField)).style?.fontFamily,
-      isNot(startsWith('JetBrainsMono')),
-    );
-    Navigator.of(context).pop();
-    await tester.pumpAndSettle();
     WorkoutDialogs.showDeleteExerciseDialog(
       context,
       exerciseName: 'Bench Press',

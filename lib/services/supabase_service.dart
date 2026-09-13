@@ -12,9 +12,8 @@ class SupabaseService {
   // SUPABASE_ANON_KEY here is a *publishable* key (prefix `sb_publishable_`):
   // it is meant to ship in client bundles/APKs and is already public in the
   // hosted web build. RLS is the real security boundary. NEVER put a
-  // service_role / `sb_secret_` key here. This is a deliberate exception to the
-  // "no Supabase literals in the repo" note in online-support-plan/phase-5 —
-  // don't "fix" it back to empty defaults.
+  // service_role / `sb_secret_` key here. The checked-in publishable defaults
+  // are deliberate; don't replace them with empty defaults.
   static const String supabaseUrl = String.fromEnvironment(
     'SUPABASE_URL',
     defaultValue: 'https://uhvemfdgxlhpalmkulnv.supabase.co',
@@ -45,8 +44,7 @@ class SupabaseService {
 
   static GoTrueClient get auth => client.auth;
 
-  static User? get currentUser =>
-      isConfigured ? client.auth.currentUser : null;
+  static User? get currentUser => isConfigured ? client.auth.currentUser : null;
 
   static String? get currentUserId => currentUser?.id;
 

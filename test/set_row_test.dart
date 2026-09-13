@@ -1,11 +1,4 @@
-import 'dart:io';
-import 'dart:convert';
-import 'dart:ui' as ui;
-
-import 'package:flutter/services.dart';
-
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gymapp/providers/settings_provider.dart';
@@ -14,35 +7,8 @@ import 'package:gymapp/theme/semantic_colors.dart';
 import 'package:gymapp/widgets/workout/set_entry_table.dart';
 
 void main() {
-  setUpAll(() async {
+  setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
-    // Optional local font for readable visual QA; CI uses Flutter's test font.
-    final fontPath = Platform.environment['OPENGYM_VISUAL_FONT'];
-    if (fontPath != null) {
-      final bytes = ByteData.sublistView(await File(fontPath).readAsBytes());
-      final assets = {
-        for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold'])
-          'Manrope-$weight.ttf': [
-            {'asset': 'Manrope-$weight.ttf'},
-          ],
-        for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold'])
-          'JetBrainsMono-$weight.ttf': [
-            {'asset': 'JetBrainsMono-$weight.ttf'},
-          ],
-      };
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMessageHandler('flutter/assets', (message) async {
-            final key = utf8.decode(message!.buffer.asUint8List());
-            if (key == 'AssetManifest.bin') {
-              return const StandardMessageCodec().encodeMessage(assets);
-            }
-            if (assets.containsKey(key)) return bytes;
-            return null;
-          });
-      for (final family in ['Ahem', 'Roboto']) {
-        await (FontLoader(family)..addFont(Future.value(bytes))).load();
-      }
-    }
   });
 
   Widget host(
@@ -60,14 +26,13 @@ void main() {
           data: MediaQuery.of(
             context,
           ).copyWith(textScaler: TextScaler.linear(scale)),
-          child: RepaintBoundary(key: const ValueKey('capture'), child: child!),
+          child: child!,
         ),
     home: Scaffold(
       appBar: AppBar(title: const Text('PUSH DAY')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: SetEntryTable(
-          exerciseName: 'Bench Press',
           sets: entries,
           onChanged: onChanged,
           onRpeChanged: onRpeChanged,
@@ -356,42 +321,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Save'), findsNothing);
     expect(changes.last, 99);
-  });
-
-  testWidgets('light and dark keypad visual review', (tester) async {
-    tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(320, 640);
-    addTearDown(tester.view.reset);
-    for (final brightness in Brightness.values) {
-      await tester.pumpWidget(
-        host(
-          const [
-            SetEntry(weight: 50, reps: 8, previous: '47.5 × 8', rpe: 5),
-            SetEntry(weight: 50, reps: 8, previous: '47.5 × 7', rpe: 8),
-            SetEntry(weight: 47.5, reps: 10, rpe: 10),
-          ],
-          (_, __, ___) {},
-          brightness: brightness,
-          onRpeChanged: (_, __) {},
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.bySemanticsLabel('Set 2 Kg'));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      final boundary = tester.renderObject<RenderRepaintBoundary>(
-        find.byKey(const ValueKey('capture')),
-      );
-      await tester.runAsync(() async {
-        final picture = await boundary.toImage();
-        final bytes = await picture.toByteData(format: ui.ImageByteFormat.png);
-        final file = File('build/set-entry-${brightness.name}.png');
-        await file.parent.create(recursive: true);
-        await file.writeAsBytes(bytes!.buffer.asUint8List());
-        picture.dispose();
-      });
-      await tap(tester, 'Save');
-    }
   });
 
   testWidgets('workout keypad edits and clears RPE without changing values', (

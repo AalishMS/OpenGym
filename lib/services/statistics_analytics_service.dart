@@ -45,14 +45,7 @@ class StatisticsAnalyticsService {
         !week.isAfter(current);
         week = DateTime(week.year, week.month, week.day + 7)
       )
-        WeeklyTrainingValue(
-          weekStart: week,
-          volumeLoad: totals[week] ?? 0,
-          totalReps: 0,
-          totalSets: 0,
-          durationSeconds: 0,
-          sessionsWithDuration: 0,
-        ),
+        WeeklyTrainingValue(weekStart: week, volumeLoad: totals[week] ?? 0),
     ]);
   }
 
@@ -141,95 +134,6 @@ class StatisticsAnalyticsService {
         (session) =>
             !session.date.isBefore(start) && session.date.isBefore(end),
       ),
-    );
-  }
-
-  TrainingOverview trainingOverview(
-    Iterable<WorkoutSession> sessions,
-    StatisticsPeriod period,
-    TrainingMetric metric, {
-    DateTime? now,
-    String? splitId,
-  }) {
-    final eligible = eligibleSessions(sessions, splitId: splitId);
-    final currentWeek = startOfWeek(now ?? DateTime.now());
-    final weekCount = period.weekCount;
-    DateTime start;
-    if (weekCount == null) {
-      start =
-          eligible.isEmpty
-              ? currentWeek
-              : startOfWeek(
-                eligible
-                    .map((s) => s.date)
-                    .reduce((a, b) => a.isBefore(b) ? a : b),
-              );
-    } else {
-      start = currentWeek.subtract(Duration(days: (weekCount - 1) * 7));
-    }
-    final end = currentWeek.add(const Duration(days: 7));
-    final buckets = <DateTime, _MutableWeek>{};
-    for (
-      var cursor = start;
-      cursor.isBefore(end);
-      cursor = cursor.add(const Duration(days: 7))
-    ) {
-      buckets[cursor] = _MutableWeek();
-    }
-    for (final session in eligible) {
-      if (session.date.isBefore(start) || !session.date.isBefore(end)) continue;
-      final bucket = buckets[startOfWeek(session.date)];
-      if (bucket == null) continue;
-      final stats = sessionStatistics(session);
-      bucket.volumeLoad += stats.volumeLoad;
-      bucket.totalReps += stats.totalReps;
-      bucket.totalSets += stats.totalSets;
-      final duration = session.durationSeconds;
-      if (duration != null) {
-        bucket.durationSeconds += duration;
-        bucket.sessionsWithDuration++;
-      }
-    }
-    final values = [
-      for (final entry in buckets.entries)
-        WeeklyTrainingValue(
-          weekStart: entry.key,
-          volumeLoad: entry.value.volumeLoad,
-          totalReps: entry.value.totalReps,
-          totalSets: entry.value.totalSets,
-          durationSeconds: entry.value.durationSeconds,
-          sessionsWithDuration: entry.value.sessionsWithDuration,
-        ),
-    ];
-
-    PeriodComparison? comparison;
-    if (weekCount != null) {
-      final current = values.fold<double>(
-        0,
-        (sum, week) => sum + week.valueFor(metric),
-      );
-      final previousStart = start.subtract(Duration(days: weekCount * 7));
-      var previous = 0.0;
-      for (final session in eligible) {
-        if (session.date.isBefore(previousStart) ||
-            !session.date.isBefore(start)) {
-          continue;
-        }
-        previous += _metricForSession(sessionStatistics(session), metric);
-      }
-      comparison = PeriodComparison(
-        currentValue: current,
-        previousValue: previous,
-        absoluteChange: current - previous,
-        percentageChange:
-            previous == 0 ? null : ((current - previous) / previous) * 100,
-      );
-    }
-
-    return TrainingOverview(
-      weeks: List.unmodifiable(values),
-      comparison: comparison,
-      hasDurationData: values.any((week) => week.sessionsWithDuration > 0),
     );
   }
 
@@ -399,24 +303,6 @@ class StatisticsAnalyticsService {
     final day = DateTime(local.year, local.month, local.day);
     return day.subtract(Duration(days: day.weekday - DateTime.monday));
   }
-
-  static double _metricForSession(
-    SessionStatistics stats,
-    TrainingMetric metric,
-  ) => switch (metric) {
-    TrainingMetric.volumeLoad => stats.volumeLoad,
-    TrainingMetric.sets => stats.totalSets.toDouble(),
-    TrainingMetric.reps => stats.totalReps.toDouble(),
-    TrainingMetric.duration => (stats.durationSeconds ?? 0).toDouble(),
-  };
-}
-
-class _MutableWeek {
-  double volumeLoad = 0;
-  int totalReps = 0;
-  int totalSets = 0;
-  int durationSeconds = 0;
-  int sessionsWithDuration = 0;
 }
 
 class _RecordState {

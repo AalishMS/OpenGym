@@ -16,18 +16,13 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   provider: ^6.1.1
-  cupertino_icons: ^1.0.8
   shared_preferences: ^2.2.2
-  fl_chart: ^0.66.0
   google_fonts: ^6.0.0
   lucide_icons_flutter: ^3.1.17
   file_picker: ^8.1.6
   share_plus: ^10.1.4
   uuid: ^4.3.0
   supabase_flutter: ^2.5.0
-  # Connectivity is only a retry hint for background sync. Local Hive data is
-  # always usable, and Supabase requests still determine actual reachability.
-  connectivity_plus: ^7.0.0
   # In-app updater: query the GitHub Releases API, read the installed version,
   # then download and hand off to the installer.
   #
@@ -50,16 +45,6 @@ dev_dependencies:
   hive_generator: ^2.0.1
   build_runner: ^2.4.7
   flutter_lints: ^4.0.0
-  flutter_launcher_icons: ^0.14.3
 
 flutter:
   uses-material-design: true
-  # No `assets:` block on purpose. The files in logo/ are icon *sources* - they
-  # are consumed by tool/generate_app_icon.dart and flutter_launcher_icons at
-  # build time, and the launcher icons themselves ship as compiled Android
-  # resources under android/app/src/main/res/, not as Flutter assets. Declaring
-  # `- logo/` bundled ~3.7MB of never-loaded images (a 2048px source JPG and two
-  # superseded logos among them) into every APK. Nothing in lib/ calls
-  # Image.asset, AssetImage or rootBundle, so none of it was ever read. That
-  # weight matters more than usual here: the app self-updates over the network,
-  # so every device re-downloaded it on every release.

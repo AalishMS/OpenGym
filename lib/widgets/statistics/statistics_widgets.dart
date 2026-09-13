@@ -8,31 +8,12 @@ import '../../utils/statistics_format.dart';
 
 class StatisticsSectionHeader extends StatelessWidget {
   final String title;
-  final String? supportingText;
 
-  const StatisticsSectionHeader({
-    super.key,
-    required this.title,
-    this.supportingText,
-  });
+  const StatisticsSectionHeader({super.key, required this.title});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
-        if (supportingText != null) ...[
-          const SizedBox(height: 4),
-          Text(
-            supportingText!,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: textSecondaryColor(context),
-            ),
-          ),
-        ],
-      ],
-    );
+    return Text(title, style: Theme.of(context).textTheme.titleLarge);
   }
 }
 

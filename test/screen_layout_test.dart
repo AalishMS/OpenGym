@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:gymapp/models/statistics.dart';
 
 import 'package:flutter/material.dart';
@@ -10,7 +9,6 @@ import 'package:provider/provider.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
-import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
@@ -22,30 +20,22 @@ import 'package:gymapp/screens/history_screen.dart';
 import 'package:gymapp/screens/stats_screen.dart';
 import 'package:gymapp/screens/settings_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
+
+import 'support/hive_test_harness.dart';
 import 'package:gymapp/services/update_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 
 void main() {
-  late Directory hiveDirectory;
+  final hiveHarness = HiveTestHarness();
 
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     GoogleFonts.config.allowRuntimeFetching = false;
-    hiveDirectory = await Directory.systemTemp.createTemp('opengym_layout_');
-    Hive.init(hiveDirectory.path);
-    Hive.registerAdapter(SetAdapter());
-    Hive.registerAdapter(SetTemplateAdapter());
-    Hive.registerAdapter(ExerciseAdapter());
-    Hive.registerAdapter(ExerciseTemplateAdapter());
-    Hive.registerAdapter(WorkoutPlanAdapter());
-    Hive.registerAdapter(WorkoutSessionAdapter());
-    await Hive.openBox<WorkoutPlan>(HiveService.plansBox);
-    await Hive.openBox<WorkoutSession>(HiveService.sessionsBox);
+    await hiveHarness.open();
   });
 
   tearDownAll(() async {
-    await Hive.close();
-    await hiveDirectory.delete(recursive: true);
+    await hiveHarness.close();
   });
 
   Widget host(

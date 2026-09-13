@@ -105,7 +105,7 @@ class AdoptLocalData {
   /// Starts or joins the current user's network reconciliation.
   ///
   /// Callers intentionally do not await this on the launch path. Dirty rows
-  /// remain queued when the request fails and connectivity/lifecycle events
+  /// remain queued when the request fails and later mutation/lifecycle events
   /// will retry later.
   static Future<void> syncInBackground() async {
     await prepareLocal();

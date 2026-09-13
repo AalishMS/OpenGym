@@ -55,3 +55,6 @@ app.*.map.json
 # Local launch config carries Supabase --dart-define values; never commit.
 .claude/launch.json
 .claude/settings.local.json
+
+# Temporary browser investigation artifacts.
+.playwright-mcp/

@@ -90,7 +90,7 @@ class SampleDataSeeder {
 
     for (var plan in plans) {
       plan.splitId = splitId;
-      await HiveService.addPlan(plan);
+      await HiveService.upsertPlan(plan);
     }
     return {
       for (final plan in plans)
@@ -912,7 +912,7 @@ class SampleDataSeeder {
     for (var session in sessions) {
       session.splitId = splitId;
       session.planId = planIds[session.planName.toLowerCase()];
-      await HiveService.addSession(session);
+      await HiveService.upsertSession(session);
     }
   }
 

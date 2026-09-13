@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -21,77 +20,28 @@ class SplitSwitcher extends StatefulWidget {
 }
 
 class _SplitSwitcherState extends State<SplitSwitcher> {
-  final LayerLink _layerLink = LayerLink();
-  OverlayEntry? _menuEntry;
+  final MenuController _menuController = MenuController();
 
-  bool get _isOpen => _menuEntry != null;
+  void _closeMenu() => _menuController.close();
 
-  @override
-  void dispose() {
-    _removeMenu();
-    super.dispose();
-  }
-
-  void _toggleMenu() => _isOpen ? _closeMenu() : _openMenu();
-
-  void _openMenu() {
-    final overlay = Overlay.of(context);
-    final availableWidth =
-        MediaQuery.sizeOf(context).width - (AppSpacing.lg * 2);
-    final menuWidth = math.min(292.0, availableWidth);
-    final disableAnimations = MediaQuery.disableAnimationsOf(context);
-    _menuEntry = OverlayEntry(
-      builder:
-          (overlayContext) => _SplitMenuOverlay(
-            layerLink: _layerLink,
-            width: menuWidth,
-            disableAnimations: disableAnimations,
-            onDismiss: _closeMenu,
-            onCreate: () {
-              _closeMenu();
-              SplitDialogs.showCreate(context);
-            },
-            onManage: () {
-              _closeMenu();
-              SplitDialogs.showManage(context);
-            },
-            onBrowse: () {
-              _closeMenu();
-              PresetBrowserDialog.show(context);
-            },
-            onSelect: (splitId) async {
-              _closeMenu();
-              try {
-                await context.read<SplitProvider>().setActiveSplit(splitId);
-              } catch (_) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      'Could not switch splits',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: onColor(errorColor(context)),
-                      ),
-                    ),
-                    backgroundColor: errorColor(context),
-                  ),
-                );
-              }
-            },
+  Future<void> _selectSplit(String splitId) async {
+    _closeMenu();
+    try {
+      await context.read<SplitProvider>().setActiveSplit(splitId);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not switch splits',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: onColor(errorColor(context)),
+            ),
           ),
-    );
-    overlay.insert(_menuEntry!);
-    setState(() {});
-  }
-
-  void _closeMenu() {
-    _removeMenu();
-    if (mounted) setState(() {});
-  }
-
-  void _removeMenu() {
-    _menuEntry?.remove();
-    _menuEntry = null;
+          backgroundColor: errorColor(context),
+        ),
+      );
+    }
   }
 
   @override
@@ -102,204 +52,121 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
     final disableAnimations = MediaQuery.disableAnimationsOf(context);
     if (active == null) return const SizedBox.shrink();
 
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: Semantics(
-        label: 'Active split ${active.name}',
-        hint: 'Opens the split switcher',
-        button: true,
-        expanded: _isOpen,
-        child: Tooltip(
-          message: 'Switch training split',
-          child: InkWell(
-            key: const ValueKey('split-switcher-button'),
-            onTap: _toggleMenu,
-            borderRadius: AppRadius.control,
-            splashColor: accent.withAlpha(36),
-            highlightColor: accent.withAlpha(18),
-            child: Container(
-              key: const ValueKey('split-switcher-content'),
-              constraints: const BoxConstraints(minHeight: 48, maxWidth: 180),
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-              alignment: Alignment.center,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Flexible(
-                    child: AnimatedSwitcher(
-                      duration:
-                          disableAnimations
-                              ? Duration.zero
-                              : const Duration(milliseconds: 150),
-                      transitionBuilder:
-                          (child, animation) => FadeTransition(
-                            opacity: animation,
-                            child: ScaleTransition(
-                              scale: Tween<double>(
-                                begin: 0.98,
-                                end: 1,
-                              ).animate(animation),
-                              child: child,
+    final availableWidth =
+        MediaQuery.sizeOf(context).width - (AppSpacing.lg * 2);
+    final menuWidth = math.min(292.0, availableWidth);
+
+    return MenuAnchor(
+      controller: _menuController,
+      alignmentOffset: const Offset(0, AppSpacing.xs),
+      style: const MenuStyle(
+        padding: WidgetStatePropertyAll(EdgeInsets.zero),
+        backgroundColor: WidgetStatePropertyAll(Colors.transparent),
+        elevation: WidgetStatePropertyAll(0),
+        shadowColor: WidgetStatePropertyAll(Colors.transparent),
+      ),
+      onOpen: () => setState(() {}),
+      onClose: () => setState(() {}),
+      menuChildren: [
+        _SplitMenu(
+          width: menuWidth,
+          provider: provider,
+          onCreate: () {
+            _closeMenu();
+            SplitDialogs.showCreate(context);
+          },
+          onManage: () {
+            _closeMenu();
+            SplitDialogs.showManage(context);
+          },
+          onBrowse: () {
+            _closeMenu();
+            PresetBrowserDialog.show(context);
+          },
+          onSelect: _selectSplit,
+        ),
+      ],
+      builder:
+          (context, controller, _) => Semantics(
+            label: 'Active split ${active.name}',
+            hint: 'Opens the split switcher',
+            button: true,
+            expanded: controller.isOpen,
+            child: Tooltip(
+              message: 'Switch training split',
+              child: InkWell(
+                key: const ValueKey('split-switcher-button'),
+                onTap:
+                    () =>
+                        controller.isOpen
+                            ? controller.close()
+                            : controller.open(),
+                borderRadius: AppRadius.control,
+                splashColor: accent.withAlpha(36),
+                highlightColor: accent.withAlpha(18),
+                child: Container(
+                  key: const ValueKey('split-switcher-content'),
+                  constraints: const BoxConstraints(
+                    minHeight: 48,
+                    maxWidth: 180,
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: AnimatedSwitcher(
+                          duration:
+                              disableAnimations
+                                  ? Duration.zero
+                                  : const Duration(milliseconds: 150),
+                          transitionBuilder:
+                              (child, animation) => FadeTransition(
+                                opacity: animation,
+                                child: ScaleTransition(
+                                  scale: Tween<double>(
+                                    begin: 0.98,
+                                    end: 1,
+                                  ).animate(animation),
+                                  child: child,
+                                ),
+                              ),
+                          child: Text(
+                            active.name,
+                            key: ValueKey(active.id),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(
+                              context,
+                            ).textTheme.titleSmall?.copyWith(
+                              color: textPrimaryColor(context),
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                      child: Text(
-                        active.name,
-                        key: ValueKey(active.id),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: textPrimaryColor(context),
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ),
+                      const SizedBox(width: AppSpacing.xs),
+                      AnimatedRotation(
+                        turns: controller.isOpen ? 0.5 : 0,
+                        duration:
+                            disableAnimations
+                                ? Duration.zero
+                                : const Duration(milliseconds: 150),
+                        child: Icon(
+                          LucideIcons.chevronDown,
+                          size: 16,
+                          color: accent,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: AppSpacing.xs),
-                  AnimatedRotation(
-                    turns: _isOpen ? 0.5 : 0,
-                    duration:
-                        disableAnimations
-                            ? Duration.zero
-                            : const Duration(milliseconds: 150),
-                    child: Icon(
-                      LucideIcons.chevronDown,
-                      size: 16,
-                      color: accent,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SplitMenuOverlay extends StatelessWidget {
-  final LayerLink layerLink;
-  final double width;
-  final bool disableAnimations;
-  final VoidCallback onDismiss;
-  final VoidCallback onCreate;
-  final VoidCallback onManage;
-  final VoidCallback onBrowse;
-  final ValueChanged<String> onSelect;
-
-  const _SplitMenuOverlay({
-    required this.layerLink,
-    required this.width,
-    required this.disableAnimations,
-    required this.onDismiss,
-    required this.onCreate,
-    required this.onManage,
-    required this.onBrowse,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            key: const ValueKey('split-menu-barrier'),
-            behavior: HitTestBehavior.translucent,
-            onTap: onDismiss,
-          ),
-        ),
-        CompositedTransformFollower(
-          link: layerLink,
-          showWhenUnlinked: false,
-          targetAnchor: Alignment.bottomRight,
-          followerAnchor: Alignment.topRight,
-          offset: const Offset(0, AppSpacing.xs),
-          child: _AnimatedSplitMenu(
-            width: width,
-            disableAnimations: disableAnimations,
-            onDismiss: onDismiss,
-            onCreate: onCreate,
-            onManage: onManage,
-            onBrowse: onBrowse,
-            onSelect: onSelect,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _AnimatedSplitMenu extends StatefulWidget {
-  final double width;
-  final bool disableAnimations;
-  final VoidCallback onDismiss;
-  final VoidCallback onCreate;
-  final VoidCallback onManage;
-  final VoidCallback onBrowse;
-  final ValueChanged<String> onSelect;
-
-  const _AnimatedSplitMenu({
-    required this.width,
-    required this.disableAnimations,
-    required this.onDismiss,
-    required this.onCreate,
-    required this.onManage,
-    required this.onBrowse,
-    required this.onSelect,
-  });
-
-  @override
-  State<_AnimatedSplitMenu> createState() => _AnimatedSplitMenuState();
-}
-
-class _AnimatedSplitMenuState extends State<_AnimatedSplitMenu>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration:
-        widget.disableAnimations
-            ? Duration.zero
-            : const Duration(milliseconds: 150),
-  )..forward();
-  late final Animation<double> _curve = CurvedAnimation(
-    parent: _controller,
-    curve: Curves.easeOutCubic,
-  );
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): widget.onDismiss,
-      },
-      child: Focus(
-        autofocus: true,
-        child: FadeTransition(
-          opacity: _curve,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.96, end: 1).animate(_curve),
-            alignment: Alignment.topRight,
-            child: Consumer<SplitProvider>(
-              builder:
-                  (context, provider, _) => _SplitMenu(
-                    width: widget.width,
-                    provider: provider,
-                    onCreate: widget.onCreate,
-                    onManage: widget.onManage,
-                    onBrowse: widget.onBrowse,
-                    onSelect: widget.onSelect,
-                  ),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

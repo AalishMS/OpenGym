@@ -714,7 +714,6 @@ class _ExerciseEditorCard extends StatelessWidget {
                 border: Border(top: BorderSide(color: border)),
               ),
               child: SetEntryTable(
-                exerciseName: exercise.name,
                 sets: [
                   for (var i = 0; i < exercise.sets.length; i++)
                     SetEntry(

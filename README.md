@@ -123,7 +123,7 @@ center.
 | [Dart](https://dart.dev) 3.5+ | Programming language |
 | [Provider](https://pub.dev/packages/provider) | State management (ChangeNotifier) |
 | [Hive](https://pub.dev/packages/hive) | Local NoSQL database |
-| [fl_chart](https://pub.dev/packages/fl_chart) | Interactive charts |
+| Flutter canvas | Lightweight dashboard sparkline rendering |
 | [Google Fonts](https://pub.dev/packages/google_fonts) | App typography |
 | [SharedPreferences](https://pub.dev/packages/shared_preferences) | Settings persistence |
 | [Supabase](https://supabase.com) | Auth, Postgres, and RLS for cloud sync |

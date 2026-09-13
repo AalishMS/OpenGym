@@ -16,25 +16,18 @@ class Exercise extends HiveObject {
 
   Exercise({required this.name, required this.sets, this.note});
 
-  Exercise copyWith({String? name, List<Set>? sets, String? note}) {
-    return Exercise(
-      name: name ?? this.name,
-      sets: sets ?? this.sets,
-      note: note ?? this.note,
-    );
-  }
-
   Map<String, dynamic> toJson() => {
-        'name': name,
-        'sets': sets.map((s) => s.toJson()).toList(),
-        'note': note,
-      };
+    'name': name,
+    'sets': sets.map((s) => s.toJson()).toList(),
+    'note': note,
+  };
 
   factory Exercise.fromJson(Map<String, dynamic> json) => Exercise(
-        name: json['name'] as String,
-        sets: (json['sets'] as List)
+    name: json['name'] as String,
+    sets:
+        (json['sets'] as List)
             .map((s) => Set.fromJson(s as Map<String, dynamic>))
             .toList(),
-        note: json['note'] as String?,
-      );
+    note: json['note'] as String?,
+  );
 }

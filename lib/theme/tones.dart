@@ -32,9 +32,8 @@ import 'dart:ui' show Color;
 // ---------------------------------------------------------------------------
 
 /// Gamma-encoded sRGB channel (0..1) → linear light.
-double _toLinear(double c) => c <= 0.04045
-    ? c / 12.92
-    : math.pow((c + 0.055) / 1.055, 2.4).toDouble();
+double _toLinear(double c) =>
+    c <= 0.04045 ? c / 12.92 : math.pow((c + 0.055) / 1.055, 2.4).toDouble();
 
 /// Linear light → gamma-encoded sRGB channel (0..1).
 ///
@@ -53,9 +52,8 @@ double _toGamma(double c) {
 /// `dart:math` has no cube root, and the sign guard matters: linear channels are
 /// non-negative, but the LMS intermediates can go slightly negative for colours
 /// near the gamut edge, and `pow(negative, 1/3)` is NaN.
-double _cbrt(double x) => x < 0
-    ? -math.pow(-x, 1 / 3).toDouble()
-    : math.pow(x, 1 / 3).toDouble();
+double _cbrt(double x) =>
+    x < 0 ? -math.pow(-x, 1 / 3).toDouble() : math.pow(x, 1 / 3).toDouble();
 
 // ---------------------------------------------------------------------------
 // OKLCh
@@ -95,7 +93,11 @@ Oklch oklchOf(Color color) {
   final lab1 = 1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_;
   final lab2 = 0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_;
 
-  return Oklch(lab0, math.sqrt(lab1 * lab1 + lab2 * lab2), math.atan2(lab2, lab1));
+  return Oklch(
+    lab0,
+    math.sqrt(lab1 * lab1 + lab2 * lab2),
+    math.atan2(lab2, lab1),
+  );
 }
 
 /// Builds an opaque [Color] from OKLCh, clamped into sRGB. See [_toGamma].
@@ -114,11 +116,14 @@ Color colorFromOklch(double l, double c, double h) {
   return Color.from(
     alpha: 1.0,
     red: _toGamma(
-        4.0767416621 * lCone - 3.3077115913 * mCone + 0.2309699292 * sCone),
+      4.0767416621 * lCone - 3.3077115913 * mCone + 0.2309699292 * sCone,
+    ),
     green: _toGamma(
-        -1.2684380046 * lCone + 2.6097574011 * mCone - 0.3413193965 * sCone),
+      -1.2684380046 * lCone + 2.6097574011 * mCone - 0.3413193965 * sCone,
+    ),
     blue: _toGamma(
-        -0.0041960863 * lCone - 0.7034186147 * mCone + 1.7076147010 * sCone),
+      -0.0041960863 * lCone - 0.7034186147 * mCone + 1.7076147010 * sCone,
+    ),
   );
 }
 
@@ -182,8 +187,8 @@ enum ToneAnchor {
 
 /// The number of bisection steps. 22 halvings resolve lightness to ~2.4e-7,
 /// far finer than the 1/255 the result quantises to — deliberately more than
-/// needed so this reproduces the verified comparison harness in
-/// `docs/color-study.html` exactly, rather than approximately. It runs a couple
+/// needed so this reproduces the checked-in golden values exactly, rather than
+/// approximately. It runs a couple
 /// of dozen times per theme build, so the cost is nil.
 const int _bisectionSteps = 22;
 

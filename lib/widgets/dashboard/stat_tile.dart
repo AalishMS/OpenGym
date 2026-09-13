@@ -12,20 +12,10 @@ class StatTile extends StatelessWidget {
   final String label;
   final String value;
 
-  /// Colour for the number. Defaults to the active theme accent.
-  final Color? accent;
-
-  const StatTile({
-    required this.label,
-    required this.value,
-    this.accent,
-    super.key,
-  });
+  const StatTile({required this.label, required this.value, super.key});
 
   @override
   Widget build(BuildContext context) {
-    final valueColor = accent ?? accentColor(context);
-
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
@@ -40,7 +30,7 @@ class StatTile extends StatelessWidget {
             style: GoogleFonts.jetBrainsMono(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: valueColor,
+              color: accentColor(context),
             ),
           ),
           const SizedBox(height: AppSpacing.xs),

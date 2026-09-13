@@ -1,10 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/workout_plan_provider.dart';
 import 'providers/workout_session_provider.dart';
-import 'providers/progression_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/split_provider.dart';
@@ -38,7 +35,6 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late WorkoutPlanProvider _workoutPlanProvider;
   late WorkoutSessionProvider _workoutSessionProvider;
-  late ProgressionProvider _progressionProvider;
   late SettingsProvider _settingsProvider;
   late SplitProvider _splitProvider;
 
@@ -49,15 +45,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _splitProvider = SplitProvider();
     _workoutPlanProvider = WorkoutPlanProvider(_splitProvider);
     _workoutSessionProvider = WorkoutSessionProvider(_splitProvider);
-    _progressionProvider = ProgressionProvider(_splitProvider);
     _settingsProvider = SettingsProvider();
-    unawaited(SyncService.instance.startConnectivityMonitoring());
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    unawaited(SyncService.instance.stopConnectivityMonitoring());
     super.dispose();
   }
 
@@ -75,7 +68,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ChangeNotifierProvider.value(value: _splitProvider),
         ChangeNotifierProvider.value(value: _workoutPlanProvider),
         ChangeNotifierProvider.value(value: _workoutSessionProvider),
-        ChangeNotifierProvider.value(value: _progressionProvider),
         ChangeNotifierProvider.value(value: _settingsProvider),
         // Created here rather than in _initialize because it holds no state
         // that has to exist before the first frame — the check itself is

@@ -54,15 +54,10 @@ class HiveService {
       _splitsBox.values.where((s) => s.deletedAt == null).toList()
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
-  static List<Split> getAllSplitsRaw() => _splitsBox.values.toList();
-
   static Split? getSplitById(String id) => _splitsBox.get(id);
 
   static SplitPreference? getSplitPreference(String userId) =>
       _splitPreferencesBox.get(userId);
-
-  static List<SplitPreference> getAllSplitPreferencesRaw() =>
-      _splitPreferencesBox.values.toList();
 
   static String? getActiveSplitId(String userId) {
     final preference = getSplitPreference(userId);
@@ -336,8 +331,6 @@ class HiveService {
   /// Returns a plan by id INCLUDING tombstones (get-by-key ignores deletedAt).
   static WorkoutPlan? getPlanById(String id) => _plansBox.get(id);
 
-  static Future<void> addPlan(WorkoutPlan plan) => upsertPlan(plan);
-
   static Future<void> upsertPlan(WorkoutPlan plan) async {
     plan.id ??= _uuid.v4();
     plan.updatedAt = DateTime.now();
@@ -397,9 +390,6 @@ class HiveService {
   }
 
   static WorkoutSession? getSessionById(String id) => _sessionsBox.get(id);
-
-  static Future<void> addSession(WorkoutSession session) =>
-      upsertSession(session);
 
   static Future<void> upsertSession(WorkoutSession session) async {
     session.id ??= _uuid.v4();
@@ -607,25 +597,6 @@ class HiveService {
     ).where((s) => s.date.isAfter(startDate)).length;
   }
 
-  static Map<int, int> getWorkoutFrequency(int weeksBack, String? splitId) {
-    final frequency = <int, int>{};
-    final now = DateTime.now();
-
-    for (int i = 0; i < weeksBack; i++) {
-      frequency[i] = 0;
-    }
-
-    for (var session in getCompletedSessions(splitId: splitId)) {
-      final daysDiff = now.difference(session.date).inDays;
-      final weekIndex = daysDiff ~/ 7;
-      if (weekIndex < weeksBack) {
-        frequency[weekIndex] = (frequency[weekIndex] ?? 0) + 1;
-      }
-    }
-
-    return frequency;
-  }
-
   // ---------------------------------------------------------------------------
   // Bulk / week helpers — now id-based.
   // ---------------------------------------------------------------------------
@@ -716,30 +687,6 @@ class HiveService {
       session.dirty = true;
       await _sessionsBox.put(session.id, session);
     }
-  }
-
-  static Future<void> replaceAllPlans(List<WorkoutPlan> plans) async {
-    await _plansBox.clear();
-    final map = <String, WorkoutPlan>{};
-    for (final p in plans) {
-      p.id ??= _uuid.v4();
-      p.updatedAt = DateTime.now();
-      p.dirty = true;
-      map[p.id!] = p;
-    }
-    await _plansBox.putAll(map);
-  }
-
-  static Future<void> replaceAllSessions(List<WorkoutSession> sessions) async {
-    await _sessionsBox.clear();
-    final map = <String, WorkoutSession>{};
-    for (final s in sessions) {
-      s.id ??= _uuid.v4();
-      s.updatedAt = DateTime.now();
-      s.dirty = true;
-      map[s.id!] = s;
-    }
-    await _sessionsBox.putAll(map);
   }
 
   static Future<void> replaceAllWorkoutData({

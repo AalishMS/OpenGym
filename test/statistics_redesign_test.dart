@@ -1,9 +1,5 @@
-import 'dart:io';
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -54,26 +50,8 @@ void main() {
     ],
   );
 
-  setUpAll(() async {
-    TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() {
     GoogleFonts.config.allowRuntimeFetching = false;
-    // Optional actual-font loading for local rendered previews; CI needs no fonts.
-    final fontDirectory = Platform.environment['OPENGYM_PREVIEW_FONTS'];
-    if (fontDirectory != null) {
-      final icons = File('$fontDirectory/MaterialIcons-Regular.otf');
-      if (await icons.exists()) {
-        final bytes = await icons.readAsBytes();
-        await (FontLoader('MaterialIcons')
-          ..addFont(Future.value(ByteData.sublistView(bytes)))).load();
-      }
-      for (final family in ['Manrope', 'JetBrainsMono']) {
-        final bytes = await File('$fontDirectory/$family.ttf').readAsBytes();
-        for (final weight in ['regular', '500', '600', '700']) {
-          await (FontLoader('${family}_$weight')
-            ..addFont(Future.value(ByteData.sublistView(bytes)))).load();
-        }
-      }
-    }
   });
 
   test(
@@ -172,10 +150,6 @@ void main() {
       WeeklyTrainingValue(
         weekStart: DateTime(2026, 1, 5 + i * 7),
         volumeLoad: (i + 1) * 120,
-        totalReps: 0,
-        totalSets: 0,
-        durationSeconds: 0,
-        sessionsWithDuration: 0,
       ),
   ];
 
@@ -382,71 +356,5 @@ void main() {
     );
     expect(find.text('800 kg'), findsOneWidget);
     expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('render previews across themes, widths, and large text', (
-    tester,
-  ) async {
-    final date = DateTime.now();
-    final data = _Sessions([
-      for (var i = 0; i < 22; i++)
-        WorkoutSession(
-          id: 'preview-$i',
-          date: date.subtract(Duration(days: (21 - i) * 4)),
-          planName: 'Push day',
-          exercises: [
-            Exercise(
-              name: 'Bench press',
-              sets: [
-                gym.Set(weight: 55 + (i ~/ 3) * 2.5, reps: 8),
-                gym.Set(weight: 55 + (i ~/ 3) * 2.5, reps: 8),
-                gym.Set(weight: 55 + (i ~/ 3) * 2.5, reps: 6),
-              ],
-            ),
-          ],
-        ),
-    ]);
-    final output = Platform.environment['OPENGYM_PREVIEW_DIR'];
-    for (final (width, scale, brightness) in [
-      (390.0, 1.0, Brightness.light),
-      (390.0, 1.0, Brightness.dark),
-      (320.0, 2.0, Brightness.light),
-      (1100.0, 1.0, Brightness.dark),
-    ]) {
-      tester.view.physicalSize = Size(width, 2200);
-      tester.view.devicePixelRatio = 1;
-      final key = GlobalKey();
-      await tester.pumpWidget(
-        ChangeNotifierProvider<WorkoutSessionProvider>.value(
-          value: data,
-          child: MaterialApp(
-            theme: buildTheme(const Color(0xFF00A2FF), brightness),
-            home: MediaQuery(
-              data: MediaQueryData(textScaler: TextScaler.linear(scale)),
-              child: RepaintBoundary(
-                key: key,
-                child: StatsScreen(key: ValueKey('$width-$scale-$brightness')),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-      if (output != null) {
-        final boundary =
-            key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-        await tester.runAsync(() async {
-          final image = await boundary.toImage();
-          final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-          await Directory(output).create(recursive: true);
-          await File(
-            '$output/stats-${brightness.name}-$width-${scale}x.png',
-          ).writeAsBytes(bytes!.buffer.asUint8List());
-          image.dispose();
-        });
-      }
-    }
-    tester.view.reset();
   });
 }

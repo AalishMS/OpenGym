@@ -289,8 +289,9 @@ class _HeaderMeshPainter extends CustomPainter {
 // Derivation (direction A)
 // ---------------------------------------------------------------------------
 
-/// The reviewed palette's fixed inputs — see `docs/color-study.html`. Neutrals
-/// grow from one pure-grey seed so both modes share a temperature (the old light
+/// The reviewed palette's fixed inputs are checked by the tone and contrast
+/// golden tests. Neutrals grow from one pure-grey seed so both modes share a
+/// temperature (the old light
 /// mode tinted its background 60° against a neutral surface, which read as
 /// dirty), and the seed stays achromatic on purpose: dark mode is meant to read
 /// as black, so the accent is the only thing in the app carrying a hue.

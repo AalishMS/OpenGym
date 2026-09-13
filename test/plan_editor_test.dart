@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,9 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:gymapp/data/plan_colors.dart';
-import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
-import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
@@ -19,8 +15,10 @@ import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 
+import 'support/hive_test_harness.dart';
+
 void main() {
-  late Directory hiveDirectory;
+  final hiveHarness = HiveTestHarness();
 
   setUpAll(() async {
     GoogleFonts.config.allowRuntimeFetching = false;
@@ -29,18 +27,7 @@ void main() {
       url: 'https://example.supabase.co',
       publishableKey: 'test-publishable-key',
     );
-    hiveDirectory = await Directory.systemTemp.createTemp(
-      'opengym_plan_editor_test_',
-    );
-    Hive.init(hiveDirectory.path);
-    Hive.registerAdapter(SetAdapter());
-    Hive.registerAdapter(SetTemplateAdapter());
-    Hive.registerAdapter(ExerciseAdapter());
-    Hive.registerAdapter(ExerciseTemplateAdapter());
-    Hive.registerAdapter(WorkoutPlanAdapter());
-    Hive.registerAdapter(WorkoutSessionAdapter());
-    await Hive.openBox<WorkoutPlan>(HiveService.plansBox);
-    await Hive.openBox<WorkoutSession>(HiveService.sessionsBox);
+    await hiveHarness.open();
   });
 
   setUp(() async {

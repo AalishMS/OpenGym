@@ -37,7 +37,7 @@ recognizable details rather than a theme that users need to understand. The
 | State management | Provider with `ChangeNotifier` |
 | Local storage | Hive |
 | Settings storage | SharedPreferences |
-| Charts | `fl_chart` |
+| Charts | Flutter canvas and custom chart widgets |
 | Auth and cloud sync | Supabase |
 | Typography | Readable app typography via `google_fonts` |
 
@@ -73,7 +73,6 @@ Provider is the only app-wide state pattern.
 | --- | --- |
 | `WorkoutPlanProvider` | Workout plan list and plan CRUD |
 | `WorkoutSessionProvider` | Session list, current week, session mutations |
-| `ProgressionProvider` | Last-session based progression suggestions |
 | `SettingsProvider` | Theme mode, accent color, units, auto-fill, refresh rate |
 
 Providers mutate data through repositories, reload local state, notify listeners,

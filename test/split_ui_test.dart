@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -9,9 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:gymapp/models/exercise.dart';
-import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
-import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/split.dart' as gym;
 import 'package:gymapp/models/split_preference.dart';
 import 'package:gymapp/models/workout_plan.dart';
@@ -25,10 +21,12 @@ import 'package:gymapp/screens/history_screen.dart';
 import 'package:gymapp/screens/home_screen.dart';
 import 'package:gymapp/screens/stats_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
+
+import 'support/hive_test_harness.dart';
 import 'package:gymapp/theme/app_theme.dart';
 
 void main() {
-  late Directory hiveDirectory;
+  final hiveHarness = HiveTestHarness();
 
   setUpAll(() async {
     GoogleFonts.config.allowRuntimeFetching = false;
@@ -37,16 +35,7 @@ void main() {
       url: 'https://example.supabase.co',
       publishableKey: 'test-publishable-key',
     );
-    hiveDirectory = await Directory.systemTemp.createTemp('opengym_split_ui_');
-    Hive.init(hiveDirectory.path);
-    Hive.registerAdapter(SetAdapter());
-    Hive.registerAdapter(SetTemplateAdapter());
-    Hive.registerAdapter(ExerciseAdapter());
-    Hive.registerAdapter(ExerciseTemplateAdapter());
-    Hive.registerAdapter(WorkoutPlanAdapter());
-    Hive.registerAdapter(WorkoutSessionAdapter());
-    await Hive.openBox<WorkoutPlan>(HiveService.plansBox);
-    await Hive.openBox<WorkoutSession>(HiveService.sessionsBox);
+    await hiveHarness.open();
   });
 
   setUp(() async {
@@ -55,8 +44,7 @@ void main() {
   });
 
   tearDownAll(() async {
-    await Hive.close();
-    await hiveDirectory.delete(recursive: true);
+    await hiveHarness.close();
   });
 
   testWidgets('header menu switches the complete visible workspace', (
@@ -355,9 +343,12 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
     await tester.pump();
-    expect(find.byKey(const ValueKey('split-menu')), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey('split-menu-barrier')));
-    await tester.pump();
+    final menu = find.byKey(const ValueKey('split-menu'));
+    expect(menu, findsOneWidget);
+    final menuRect = tester.getRect(menu);
+    final outsideX = menuRect.left > 20 ? 10.0 : menuRect.right + 10;
+    await tester.tapAt(Offset(outsideX, 10));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('split-menu')), findsNothing);
   });
 }

@@ -30,9 +30,9 @@ flutter analyze --no-fatal-warnings  # Run but don't fail on warnings
 ### Testing
 ```bash
 flutter test                          # Run all tests
-flutter test test/widget_test.dart    # Run single test file
+flutter test test/statistics_analytics_test.dart    # Run single test file
 flutter test --name="Basic"           # Run tests matching name pattern
-flutter test test/widget_test.dart --name="Basic widget test"
+flutter test test/statistics_analytics_test.dart --name="session calculations"
 ```
 
 ### Code Generation (Hive Models)

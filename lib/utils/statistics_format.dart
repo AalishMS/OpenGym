@@ -36,16 +36,6 @@ String formatVolumeLoad(double kilograms, String weightUnit) {
   return '${formatAnalyticsNumber(converted)} $weightUnit';
 }
 
-String formatTrainingValue(
-  double value,
-  TrainingMetric metric,
-  String weightUnit,
-) => switch (metric) {
-  TrainingMetric.volumeLoad => formatVolumeLoad(value, weightUnit),
-  TrainingMetric.sets || TrainingMetric.reps => formatAnalyticsNumber(value),
-  TrainingMetric.duration => formatStatisticsDuration(value.round()),
-};
-
 String formatExerciseValue(
   double value,
   ExerciseMetric metric,

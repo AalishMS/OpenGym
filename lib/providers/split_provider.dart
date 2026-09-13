@@ -47,8 +47,6 @@ class SplitProvider with ChangeNotifier {
 
   bool get canCreate => _splits.length < maxSplits;
 
-  bool get canInstallPreset => presetInstallBlockReason == null;
-
   String? get presetInstallBlockReason {
     final userId = _userIdProvider();
     final active = activeSplit;

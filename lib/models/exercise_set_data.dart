@@ -8,11 +8,4 @@ class ExerciseSetData {
   final double weight;
 
   ExerciseSetData({required this.reps, required this.weight});
-
-  ExerciseSetData copyWith({int? reps, double? weight}) {
-    return ExerciseSetData(
-      reps: reps ?? this.reps,
-      weight: weight ?? this.weight,
-    );
-  }
 }

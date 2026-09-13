@@ -64,9 +64,6 @@ class UnderlineTabStrip extends StatefulWidget {
 
   final double height;
 
-  /// Caps a long label before it pushes every other tab off-screen.
-  final double maxLabelWidth;
-
   const UnderlineTabStrip({
     super.key,
     required this.tabs,
@@ -75,7 +72,6 @@ class UnderlineTabStrip extends StatefulWidget {
     required this.rule,
     this.trailing,
     this.height = 48,
-    this.maxLabelWidth = 160,
   });
 
   @override
@@ -200,7 +196,6 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
                         data: widget.tabs[i],
                         selected: i == widget.selectedIndex,
                         color: widget.color,
-                        maxLabelWidth: widget.maxLabelWidth,
                       ),
                     if (widget.trailing != null)
                       Padding(
@@ -240,14 +235,11 @@ class _UnderlineTab extends StatelessWidget {
   final UnderlineTabData data;
   final bool selected;
   final Color color;
-  final double maxLabelWidth;
-
   const _UnderlineTab({
     super.key,
     required this.data,
     required this.selected,
     required this.color,
-    required this.maxLabelWidth,
   });
 
   @override
@@ -291,7 +283,7 @@ class _UnderlineTab extends StatelessWidget {
                     const SizedBox(width: 6),
                   ],
                   ConstrainedBox(
-                    constraints: BoxConstraints(maxWidth: maxLabelWidth),
+                    constraints: const BoxConstraints(maxWidth: 160),
                     child: Text(
                       data.label,
                       maxLines: 1,

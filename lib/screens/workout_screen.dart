@@ -605,9 +605,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final session = _getOrCreateSession();
     final exerciseCount = session.exercises.length;
     if (oldIndex < 0 || oldIndex >= exerciseCount) return;
-    if (oldIndex < newIndex) {
-      newIndex -= 1;
-    }
     if (newIndex < 0 || newIndex >= exerciseCount) return;
     final exercises = List<Exercise>.from(session.exercises);
     final exercise = exercises.removeAt(oldIndex);
@@ -891,7 +888,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                         itemCount:
                             session.exercises.length +
                             (session.isCompleted ? 0 : 1),
-                        onReorder: _reorderExercises,
+                        onReorderItem: _reorderExercises,
                         proxyDecorator: (child, index, animation) {
                           return Material(
                             color: surfaceColor(context),

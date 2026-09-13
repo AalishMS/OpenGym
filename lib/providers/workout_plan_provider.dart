@@ -1,12 +1,10 @@
 import 'package:flutter/foundation.dart';
 import '../models/workout_plan.dart';
-import '../repositories/workout_plan_repository.dart';
 import '../services/hive_service.dart';
 import '../services/sync_service.dart';
 import 'split_provider.dart';
 
 class WorkoutPlanProvider with ChangeNotifier {
-  final WorkoutPlanRepository _repository = WorkoutPlanRepository();
   final SplitProvider? _splitProvider;
   List<WorkoutPlan> _plans = [];
 
@@ -22,26 +20,26 @@ class WorkoutPlanProvider with ChangeNotifier {
     _plans =
         splitId == null
             ? HiveService.getPlans()
-            : _repository.getPlans(splitId);
+            : HiveService.getPlans(splitId: splitId);
     notifyListeners();
   }
 
   Future<void> addPlan(WorkoutPlan plan) async {
     if (_splitProvider != null) plan.splitId ??= _requireActiveSplit();
-    await _repository.addPlan(plan);
+    await HiveService.upsertPlan(plan);
     loadPlans();
     SyncService.instance.scheduleSync();
   }
 
   Future<void> updatePlan(WorkoutPlan plan) async {
     if (_splitProvider != null) plan.splitId ??= _requireActiveSplit();
-    await _repository.upsertPlan(plan);
+    await HiveService.upsertPlan(plan);
     loadPlans();
     SyncService.instance.scheduleSync();
   }
 
   Future<void> deletePlan(String id) async {
-    await _repository.softDeletePlan(id);
+    await HiveService.softDeletePlan(id);
     loadPlans();
     SyncService.instance.scheduleSync();
   }

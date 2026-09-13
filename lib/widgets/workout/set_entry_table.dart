@@ -28,7 +28,6 @@ enum _SetField { weight, reps, rpe }
 
 /// Shared by prescribed sets, live sets, and the set detail dialogs.
 class SetEntryTable extends StatelessWidget {
-  final String exerciseName;
   final List<SetEntry> sets;
   final void Function(int index, double weight, int reps) onChanged;
   final void Function(int index, int? rpe)? onRpeChanged;
@@ -39,7 +38,6 @@ class SetEntryTable extends StatelessWidget {
 
   const SetEntryTable({
     super.key,
-    required this.exerciseName,
     required this.sets,
     required this.onChanged,
     this.onRpeChanged,
@@ -277,8 +275,8 @@ class _EntryRow extends StatelessWidget {
           ),
         ),
       ),
-      _field(context, weight, 'Kg', false, onWeight),
-      _field(context, reps, 'Reps', false, onReps),
+      _field(context, weight, 'Kg', onWeight),
+      _field(context, reps, 'Reps', onReps),
       if (onRpe != null) _rpeReadout(context),
     ],
     trailing: trailing,
@@ -330,7 +328,6 @@ class _EntryRow extends StatelessWidget {
     BuildContext context,
     String value,
     String label,
-    bool active,
     VoidCallback onTap,
   ) => Semantics(
     label: 'Set ${index + 1} $label',
@@ -339,7 +336,6 @@ class _EntryRow extends StatelessWidget {
     onTap: onTap,
     value: value,
     button: true,
-    selected: active,
     child: Material(
       color: Colors.transparent,
       borderRadius: AppRadius.field,
@@ -353,12 +349,8 @@ class _EntryRow extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.xs),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color:
-                  active ? accentMutedColor(context) : backgroundColor(context),
-              border: Border.all(
-                color: active ? accentColor(context) : borderColor(context),
-                width: active ? 2 : 1,
-              ),
+              color: backgroundColor(context),
+              border: Border.all(color: borderColor(context)),
               borderRadius: AppRadius.field,
             ),
             child: FittedBox(
@@ -369,10 +361,7 @@ class _EntryRow extends StatelessWidget {
                   fontSize: 20,
                   fontFeatures: const [FontFeature.tabularFigures()],
                   fontWeight: FontWeight.bold,
-                  color:
-                      active
-                          ? onColor(accentMutedColor(context))
-                          : textPrimaryColor(context),
+                  color: textPrimaryColor(context),
                 ),
               ),
             ),

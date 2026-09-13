@@ -379,20 +379,16 @@ class _PresetCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Row(
                 children: [
-                  Icon(
-                    LucideIcons.userCheck,
-                    size: 13,
-                    color: accent,
-                  ),
+                  Icon(LucideIcons.userCheck, size: 13, color: accent),
                   const SizedBox(width: AppSpacing.xs),
                   Expanded(
                     child: Text(
                       preset.bestFit,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: textSecondary,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: textSecondary),
                     ),
                   ),
                 ],
@@ -406,7 +402,9 @@ class _PresetCard extends StatelessWidget {
                       children: [
                         Text(
                           '7-day rotation',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelSmall?.copyWith(
                             color: textSecondary.withAlpha(150),
                             fontSize: 10,
                             letterSpacing: 0.2,
@@ -526,7 +524,7 @@ class _PresetDetails extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sm),
         for (var index = 0; index < preset.plans.length; index++) ...[
-          _PlanExpansion(plan: preset.plans[index], position: index),
+          _PlanExpansion(plan: preset.plans[index]),
           if (index < preset.plans.length - 1)
             const SizedBox(height: AppSpacing.sm),
         ],
@@ -654,10 +652,9 @@ class _OverviewMetric extends StatelessWidget {
           caption,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: textSecondary,
-            fontSize: 10,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: textSecondary, fontSize: 10),
         ),
       ],
     );
@@ -697,9 +694,9 @@ class _PresetBestFitBanner extends StatelessWidget {
               bestFit,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: textPrimaryColor(context),
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: textPrimaryColor(context)),
             ),
           ),
         ],
@@ -710,9 +707,8 @@ class _PresetBestFitBanner extends StatelessWidget {
 
 class _PlanExpansion extends StatelessWidget {
   final WorkoutPresetPlan plan;
-  final int position;
 
-  const _PlanExpansion({required this.plan, required this.position});
+  const _PlanExpansion({required this.plan});
 
   @override
   Widget build(BuildContext context) {
@@ -790,9 +786,7 @@ class _ExercisePrescription extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       decoration:
           showDivider
-              ? BoxDecoration(
-                border: Border(top: BorderSide(color: border)),
-              )
+              ? BoxDecoration(border: Border(top: BorderSide(color: border)))
               : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -822,9 +816,9 @@ class _ExercisePrescription extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Seed ${exercise.seedReps.join(' / ')}  ·  RIR ${exercise.rir}  ·  Rest ${exercise.rest}',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: textSecondary,
-            ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: textSecondary),
           ),
           if (exercise.note != null) ...[
             const SizedBox(height: AppSpacing.xs),

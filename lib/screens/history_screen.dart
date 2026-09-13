@@ -415,7 +415,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
     setState(() => _isSaving = true);
     _session = _session.copyWith(planName: name);
     try {
-      await context.read<WorkoutSessionProvider>().updateSession(_session);
+      await context.read<WorkoutSessionProvider>().upsertSession(_session);
       if (!mounted) return;
       Navigator.pop(context, true);
     } catch (exception) {
@@ -651,7 +651,6 @@ class _EditableExerciseCard extends StatelessWidget {
           IgnorePointer(
             ignoring: !enabled,
             child: SetEntryTable(
-              exerciseName: exercise.name,
               sets: entries,
               onChanged: onChanged,
               onRpeChanged: onRpeChanged,

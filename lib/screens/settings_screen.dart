@@ -531,254 +531,151 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _loadSampleData(BuildContext context) async {
-    final surface = surfaceColor(context);
-    final border = borderColor(context);
-    final textSecondary = textSecondaryColor(context);
-    final accent = accentColor(context);
-
-    showDialog(
+  void _loadSampleData(BuildContext context) {
+    showDialog<void>(
       context: context,
       builder:
-          (ctx) => Dialog(
-            backgroundColor: surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: border, width: 1),
+          (ctx) => AlertDialog(
+            title: Text(
+              '> LOAD SAMPLE DATA?',
+              style: TextStyle(color: accentColor(ctx)),
             ),
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '> LOAD SAMPLE DATA?',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: accent,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'This will replace workout data in the active split with fresh sample plans and workouts.',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 12,
-                        color: textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OverflowBar(
-                      alignment: MainAxisAlignment.end,
-                      spacing: 8,
-                      overflowAlignment: OverflowBarAlignment.end,
-                      overflowSpacing: 8,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: Text(
-                            '[CANCEL]',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: textSecondary,
-                            ),
-                          ),
-                        ),
-                        ElevatedButton(
-                          onPressed: () async {
-                            Navigator.pop(ctx);
-                            try {
-                              if (widget.onLoadSampleData != null) {
-                                await widget.onLoadSampleData!();
-                              } else {
-                                final splitId =
-                                    context.read<SplitProvider>().activeSplitId;
-                                if (splitId == null) {
-                                  throw StateError(
-                                    'No active split available.',
-                                  );
-                                }
-                                await SampleDataSeeder.clearDataForSplit(
-                                  splitId,
-                                );
-                                await SampleDataSeeder.seedSampleData(
-                                  splitId: splitId,
-                                );
-                              }
-                            } catch (e) {
-                              if (!context.mounted) return;
-                              _showError(context, 'Sample data failed: $e');
-                              return;
-                            }
-                            if (context.mounted) {
-                              context.read<WorkoutPlanProvider>().loadPlans();
-                              context
-                                  .read<WorkoutSessionProvider>()
-                                  .loadSessions();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '> Sample data refreshed!',
-                                    style: GoogleFonts.jetBrainsMono(
-                                      color: onAccentColor(context),
-                                    ),
-                                  ),
-                                  backgroundColor: accentFillColor(context),
-                                ),
-                              );
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accentFillColor(context),
-                            foregroundColor: onAccentColor(context),
-                          ),
-                          child: Text(
-                            '[LOAD]',
-                            style: GoogleFonts.jetBrainsMono(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+            content: const Text(
+              'This will replace workout data in the active split with fresh sample plans and workouts.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('[CANCEL]'),
               ),
-            ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    if (widget.onLoadSampleData != null) {
+                      await widget.onLoadSampleData!();
+                    } else {
+                      final splitId =
+                          context.read<SplitProvider>().activeSplitId;
+                      if (splitId == null) {
+                        throw StateError('No active split available.');
+                      }
+                      await SampleDataSeeder.clearDataForSplit(splitId);
+                      await SampleDataSeeder.seedSampleData(splitId: splitId);
+                    }
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    _showError(context, 'Sample data failed: $e');
+                    return;
+                  }
+                  if (!context.mounted) return;
+                  context.read<WorkoutPlanProvider>().loadPlans();
+                  context.read<WorkoutSessionProvider>().loadSessions();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '> Sample data refreshed!',
+                        style: GoogleFonts.jetBrainsMono(
+                          color: onAccentColor(context),
+                        ),
+                      ),
+                      backgroundColor: accentFillColor(context),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentFillColor(ctx),
+                  foregroundColor: onAccentColor(ctx),
+                ),
+                child: const Text('[LOAD]'),
+              ),
+            ],
           ),
     );
   }
 
   void _exportData(BuildContext context) {
-    final surface = surfaceColor(context);
-    final border = borderColor(context);
-    final textSecondary = textSecondaryColor(context);
     final settings = context.read<SettingsProvider>();
-    final accent = accentColor(context);
-
-    showDialog(
+    showDialog<void>(
       context: context,
       builder:
-          (ctx) => Dialog(
-            backgroundColor: surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: border, width: 1),
+          (ctx) => AlertDialog(
+            title: Text(
+              '> EXPORT DATA?',
+              style: TextStyle(color: accentColor(ctx)),
             ),
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '> EXPORT DATA?',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: accent,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'This will create a backup file containing all your plans, '
-                      'sessions, and settings. Your current data will NOT be affected.',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 12,
-                        color: textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OverflowBar(
-                      alignment: MainAxisAlignment.end,
-                      spacing: 8,
-                      overflowAlignment: OverflowBarAlignment.end,
-                      overflowSpacing: 8,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: Text(
-                            '[CANCEL]',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: textSecondary,
-                            ),
-                          ),
-                        ),
-                        ElevatedButton(
-                          onPressed: () async {
-                            Navigator.pop(ctx);
-                            try {
-                              final splitProvider =
-                                  context.read<SplitProvider>();
-                              final activeSplitId = splitProvider.activeSplitId;
-                              if (activeSplitId == null) {
-                                throw StateError('No active split available.');
-                              }
-                              final result = BackupService.exportData(
-                                splits: HiveService.getSplits(),
-                                activeSplitId: activeSplitId,
-                                plans: HiveService.getPlans(),
-                                sessions: HiveService.getSessions(),
-                                settings: {
-                                  'themeMode': settings.themeMode.index,
-                                  'accentIndex': settings.accentIndex,
-                                  'weightUnit': settings.weightUnit,
-                                  'autoFillLast': settings.autoFillLast,
-                                  'highRefreshRate': settings.highRefreshRate,
-                                },
-                              );
-                              final bytes = utf8.encode(result.jsonString);
-                              await Share.shareXFiles([
-                                XFile.fromData(
-                                  bytes,
-                                  name: result.fileName,
-                                  mimeType: 'application/json',
-                                ),
-                              ], text: 'OpenGym Backup');
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '> Backup exported successfully',
-                                      style: GoogleFonts.jetBrainsMono(
-                                        color: onAccentColor(context),
-                                      ),
-                                    ),
-                                    backgroundColor: accentFillColor(context),
-                                  ),
-                                );
-                              }
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      '> Export failed: ${e.toString()}',
-                                      style: GoogleFonts.jetBrainsMono(
-                                        color: onColor(errorColor(context)),
-                                      ),
-                                    ),
-                                    backgroundColor: errorColor(context),
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accentFillColor(context),
-                            foregroundColor: onAccentColor(context),
-                          ),
-                          child: Text(
-                            '[EXPORT]',
-                            style: GoogleFonts.jetBrainsMono(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+            content: const Text(
+              'This will create a backup file containing all your plans, sessions, and settings. Your current data will NOT be affected.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('[CANCEL]'),
               ),
-            ),
+              ElevatedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    final splitProvider = context.read<SplitProvider>();
+                    final activeSplitId = splitProvider.activeSplitId;
+                    if (activeSplitId == null) {
+                      throw StateError('No active split available.');
+                    }
+                    final result = BackupService.exportData(
+                      splits: HiveService.getSplits(),
+                      activeSplitId: activeSplitId,
+                      plans: HiveService.getPlans(),
+                      sessions: HiveService.getSessions(),
+                      settings: {
+                        'themeMode': settings.themeMode.index,
+                        'accentIndex': settings.accentIndex,
+                        'weightUnit': settings.weightUnit,
+                        'autoFillLast': settings.autoFillLast,
+                        'highRefreshRate': settings.highRefreshRate,
+                      },
+                    );
+                    final bytes = utf8.encode(result.jsonString);
+                    await Share.shareXFiles([
+                      XFile.fromData(
+                        bytes,
+                        name: result.fileName,
+                        mimeType: 'application/json',
+                      ),
+                    ], text: 'OpenGym Backup');
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '> Backup exported successfully',
+                          style: GoogleFonts.jetBrainsMono(
+                            color: onAccentColor(context),
+                          ),
+                        ),
+                        backgroundColor: accentFillColor(context),
+                      ),
+                    );
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          '> Export failed: $e',
+                          style: GoogleFonts.jetBrainsMono(
+                            color: onColor(errorColor(context)),
+                          ),
+                        ),
+                        backgroundColor: errorColor(context),
+                      ),
+                    );
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: accentFillColor(ctx),
+                  foregroundColor: onAccentColor(ctx),
+                ),
+                child: const Text('[EXPORT]'),
+              ),
+            ],
           ),
     );
   }
@@ -826,147 +723,93 @@ class _SettingsScreenState extends State<SettingsScreen> {
         return;
       }
 
-      final surface = surfaceColor(context);
-      final border = borderColor(context);
-      final textSecondary = textSecondaryColor(context);
       final error = errorColor(context);
       final settings = context.read<SettingsProvider>();
 
-      showDialog(
+      showDialog<void>(
         context: context,
         builder:
-            (ctx) => Dialog(
-              backgroundColor: surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: AppRadius.card,
-                side: BorderSide(color: border, width: 1),
+            (ctx) => AlertDialog(
+              title: Text(
+                '> IMPORT BACKUP?',
+                style: TextStyle(color: errorColor(ctx)),
               ),
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '> IMPORT BACKUP?',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: error,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'This will REPLACE ALL of your current data including:\n'
-                        '• All workout plans\n'
-                        '• All workout history\n'
-                        '• App settings (theme, accent color, units)\n\n'
-                        'This action cannot be undone.',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 12,
-                          color: textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      OverflowBar(
-                        alignment: MainAxisAlignment.end,
-                        spacing: 8,
-                        overflowAlignment: OverflowBarAlignment.end,
-                        overflowSpacing: 8,
-                        children: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: Text(
-                              '[CANCEL]',
-                              style: GoogleFonts.jetBrainsMono(
-                                color: textSecondary,
-                              ),
-                            ),
-                          ),
-                          ElevatedButton(
-                            onPressed: () async {
-                              Navigator.pop(ctx);
-                              final planProvider =
-                                  context.read<WorkoutPlanProvider>();
-                              final sessionProvider =
-                                  context.read<WorkoutSessionProvider>();
-                              final splitProvider =
-                                  context.read<SplitProvider>();
-                              try {
-                                await HiveService.replaceAllWorkoutData(
-                                  userId: userId,
-                                  splits: importResult.splits!,
-                                  activeSplitId: importResult.activeSplitId!,
-                                  plans: importResult.plans!,
-                                  sessions: importResult.sessions!,
-                                );
-                                if (!context.mounted) return;
-                                final s = importResult.settings!;
-                                await settings.setThemeMode(
-                                  ThemeMode.values[s['themeMode'] as int],
-                                );
-                                await settings.setAccentColor(
-                                  s['accentIndex'] as int,
-                                );
-                                await settings.setWeightUnit(
-                                  s['weightUnit'] as String,
-                                );
-                                await settings.setAutoFillLast(
-                                  s['autoFillLast'] as bool,
-                                );
-                                await settings.setHighRefreshRate(
-                                  s['highRefreshRate'] as bool,
-                                );
-                                if (!context.mounted) return;
-                                splitProvider.loadSplits();
-                                planProvider.loadPlans();
-                                sessionProvider.loadSessions();
-                                SyncService.instance.scheduleSync();
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        '> Backup imported successfully',
-                                        style: GoogleFonts.jetBrainsMono(
-                                          color: onAccentColor(context),
-                                        ),
-                                      ),
-                                      backgroundColor: accentFillColor(context),
-                                    ),
-                                  );
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        '> Import failed: ${e.toString()}',
-                                        style: GoogleFonts.jetBrainsMono(
-                                          color: onColor(error),
-                                        ),
-                                      ),
-                                      backgroundColor: error,
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: error,
-                              foregroundColor: onColor(error),
-                            ),
-                            child: Text(
-                              '[IMPORT]',
-                              style: GoogleFonts.jetBrainsMono(),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+              content: const Text(
+                'This will REPLACE ALL of your current data including:\n'
+                '• All workout plans\n'
+                '• All workout history\n'
+                '• App settings (theme, accent color, units)\n\n'
+                'This action cannot be undone.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('[CANCEL]'),
                 ),
-              ),
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    final planProvider = context.read<WorkoutPlanProvider>();
+                    final sessionProvider =
+                        context.read<WorkoutSessionProvider>();
+                    final splitProvider = context.read<SplitProvider>();
+                    try {
+                      await HiveService.replaceAllWorkoutData(
+                        userId: userId,
+                        splits: importResult.splits!,
+                        activeSplitId: importResult.activeSplitId!,
+                        plans: importResult.plans!,
+                        sessions: importResult.sessions!,
+                      );
+                      if (!context.mounted) return;
+                      final s = importResult.settings!;
+                      await settings.setThemeMode(
+                        ThemeMode.values[s['themeMode'] as int],
+                      );
+                      await settings.setAccentColor(s['accentIndex'] as int);
+                      await settings.setWeightUnit(s['weightUnit'] as String);
+                      await settings.setAutoFillLast(s['autoFillLast'] as bool);
+                      await settings.setHighRefreshRate(
+                        s['highRefreshRate'] as bool,
+                      );
+                      if (!context.mounted) return;
+                      splitProvider.loadSplits();
+                      planProvider.loadPlans();
+                      sessionProvider.loadSessions();
+                      SyncService.instance.scheduleSync();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            '> Backup imported successfully',
+                            style: GoogleFonts.jetBrainsMono(
+                              color: onAccentColor(context),
+                            ),
+                          ),
+                          backgroundColor: accentFillColor(context),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            '> Import failed: $e',
+                            style: GoogleFonts.jetBrainsMono(
+                              color: onColor(error),
+                            ),
+                          ),
+                          backgroundColor: error,
+                        ),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: errorColor(ctx),
+                    foregroundColor: onColor(errorColor(ctx)),
+                  ),
+                  child: const Text('[IMPORT]'),
+                ),
+              ],
             ),
       );
     } catch (e) {
@@ -987,103 +830,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _confirmClearData(BuildContext context) {
-    final surface = surfaceColor(context);
-    final border = borderColor(context);
-    final textSecondary = textSecondaryColor(context);
-    final error = errorColor(context);
-
-    showDialog(
+    showDialog<void>(
       context: context,
       builder:
-          (ctx) => Dialog(
-            backgroundColor: surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: border, width: 1),
+          (ctx) => AlertDialog(
+            title: Text(
+              '> CLEAR ALL DATA?',
+              style: TextStyle(color: errorColor(ctx)),
             ),
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '> CLEAR ALL DATA?',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: error,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'This will delete all workout plans and history. This action cannot be undone.',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 12,
-                        color: textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OverflowBar(
-                      alignment: MainAxisAlignment.end,
-                      spacing: 8,
-                      overflowAlignment: OverflowBarAlignment.end,
-                      overflowSpacing: 8,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: Text(
-                            '[CANCEL]',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: textSecondary,
-                            ),
-                          ),
-                        ),
-                        ElevatedButton(
-                          onPressed: () async {
-                            try {
-                              await (widget.onClearData ??
-                                  SampleDataSeeder.clearAllData)();
-                            } catch (e) {
-                              if (!context.mounted) return;
-                              if (ctx.mounted) Navigator.pop(ctx);
-                              _showError(context, 'Clear data failed: $e');
-                              return;
-                            }
-                            if (!context.mounted) return;
-                            if (ctx.mounted) Navigator.pop(ctx);
-                            context.read<WorkoutPlanProvider>().loadPlans();
-                            context
-                                .read<WorkoutSessionProvider>()
-                                .loadSessions();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  '> All data cleared',
-                                  style: GoogleFonts.jetBrainsMono(
-                                    color: onAccentColor(context),
-                                  ),
-                                ),
-                                backgroundColor: accentFillColor(context),
-                              ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: error,
-                            foregroundColor: onColor(error),
-                          ),
-                          child: Text(
-                            '[CLEAR ALL]',
-                            style: GoogleFonts.jetBrainsMono(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+            content: const Text(
+              'This will delete all workout plans and history. This action cannot be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('[CANCEL]'),
               ),
-            ),
+              ElevatedButton(
+                onPressed: () async {
+                  try {
+                    await (widget.onClearData ??
+                        SampleDataSeeder.clearAllData)();
+                  } catch (e) {
+                    if (!context.mounted) return;
+                    if (ctx.mounted) Navigator.pop(ctx);
+                    _showError(context, 'Clear data failed: $e');
+                    return;
+                  }
+                  if (!context.mounted) return;
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  context.read<WorkoutPlanProvider>().loadPlans();
+                  context.read<WorkoutSessionProvider>().loadSessions();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '> All data cleared',
+                        style: GoogleFonts.jetBrainsMono(
+                          color: onAccentColor(context),
+                        ),
+                      ),
+                      backgroundColor: accentFillColor(context),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: errorColor(ctx),
+                  foregroundColor: onColor(errorColor(ctx)),
+                ),
+                child: const Text('[CLEAR ALL]'),
+              ),
+            ],
           ),
     );
   }

@@ -38,12 +38,7 @@ class ExerciseCard extends StatelessWidget {
     required this.onDeleteExercise,
   });
 
-  Widget action(
-    BuildContext context,
-    String label,
-    VoidCallback callback,
-    Widget child,
-  ) => Semantics(
+  Widget action(String label, VoidCallback callback, Widget child) => Semantics(
     button: true,
     container: true,
     excludeSemantics: true,
@@ -83,7 +78,6 @@ class ExerciseCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: action(
-                  context,
                   exercise.name,
                   () => onRename(exerciseIndex),
                   Align(
@@ -99,7 +93,6 @@ class ExerciseCard extends StatelessWidget {
                 ),
               ),
               action(
-                context,
                 'Exercise note',
                 () => onAddNote(exerciseIndex),
                 Icon(
@@ -114,7 +107,6 @@ class ExerciseCard extends StatelessWidget {
                 ),
               ),
               action(
-                context,
                 'Delete exercise',
                 () => onDeleteExercise(exerciseIndex),
                 Icon(
@@ -124,7 +116,6 @@ class ExerciseCard extends StatelessWidget {
                 ),
               ),
               action(
-                context,
                 'Add set',
                 () => onAddSet(exerciseIndex),
                 Tooltip(
@@ -146,7 +137,6 @@ class ExerciseCard extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: SetEntryTable(
-                exerciseName: exercise.name,
                 onEntryFinished: onEntryFinished,
                 sets: [
                   for (var i = 0; i < exercise.sets.length; i++)

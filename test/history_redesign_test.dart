@@ -1,86 +1,33 @@
-import 'dart:io';
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:google_fonts/src/google_fonts_base.dart' as google_fonts_base;
-import 'package:hive/hive.dart';
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gymapp/models/exercise.dart';
-import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
-import 'package:gymapp/models/set_template.dart';
-import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/history_screen.dart';
-import 'package:gymapp/services/hive_service.dart';
+
+import 'support/hive_test_harness.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/history/history_journal_data.dart';
 import 'package:gymapp/widgets/history/history_journal_widgets.dart';
 
 void main() {
-  late Directory hiveDirectory;
+  final hiveHarness = HiveTestHarness();
 
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    final previewFetch =
-        Platform.environment['OPENGYM_PREVIEW_ALLOW_FONT_FETCH'] == 'true';
-    GoogleFonts.config.allowRuntimeFetching = previewFetch;
-    if (previewFetch) {
-      final fontDirectory = Platform.environment['OPENGYM_PREVIEW_FONTS']!;
-      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(
-            const MethodChannel('plugins.flutter.io/path_provider'),
-            (call) async => fontDirectory,
-          );
-      final responses = <String, List<int>>{};
-      await for (final entity in Directory(fontDirectory).list()) {
-        if (entity is File && entity.path.endsWith('.ttf')) {
-          responses[entity.uri.pathSegments.last] = await entity.readAsBytes();
-        }
-      }
-      google_fonts_base.httpClient = _LocalFontClient(responses);
-    }
+    GoogleFonts.config.allowRuntimeFetching = false;
     SharedPreferences.setMockInitialValues({});
-    final fontDirectory = Platform.environment['OPENGYM_PREVIEW_FONTS'];
-    if (fontDirectory != null) {
-      final icons = File('$fontDirectory/MaterialIcons-Regular.otf');
-      if (await icons.exists()) {
-        final bytes = await icons.readAsBytes();
-        await (FontLoader('MaterialIcons')
-          ..addFont(Future.value(ByteData.sublistView(bytes)))).load();
-      }
-      for (final family in ['Manrope', 'JetBrainsMono']) {
-        final bytes = await File('$fontDirectory/$family.ttf').readAsBytes();
-        for (final weight in ['regular', '500', '600', '700']) {
-          await (FontLoader('${family}_$weight')
-            ..addFont(Future.value(ByteData.sublistView(bytes)))).load();
-        }
-      }
-    }
-    hiveDirectory = await Directory.systemTemp.createTemp('opengym_history_');
-    Hive.init(hiveDirectory.path);
-    Hive.registerAdapter(SetAdapter());
-    Hive.registerAdapter(SetTemplateAdapter());
-    Hive.registerAdapter(ExerciseAdapter());
-    Hive.registerAdapter(ExerciseTemplateAdapter());
-    Hive.registerAdapter(WorkoutPlanAdapter());
-    Hive.registerAdapter(WorkoutSessionAdapter());
-    await Hive.openBox<WorkoutPlan>(HiveService.plansBox);
-    await Hive.openBox<WorkoutSession>(HiveService.sessionsBox);
+    await hiveHarness.open();
   });
 
   tearDownAll(() async {
-    await Hive.close();
-    await hiveDirectory.delete(recursive: true);
+    await hiveHarness.close();
   });
 
   WorkoutSession session({
@@ -122,7 +69,6 @@ void main() {
     Size size = const Size(390, 800),
     Brightness brightness = Brightness.light,
     double textScale = 1,
-    GlobalKey? repaintKey,
   }) => MultiProvider(
     providers: [
       ChangeNotifierProvider<WorkoutSessionProvider>.value(value: provider),
@@ -130,22 +76,15 @@ void main() {
         value: settings ?? SettingsProvider(),
       ),
     ],
-    child: RepaintBoundary(
-      key: repaintKey,
-      child: MaterialApp(
-        key: ValueKey('history-host-${identityHashCode(provider)}'),
-        theme: buildTheme(const Color(0xFF00A2FF), brightness),
-        home: MediaQuery(
-          data: MediaQueryData(
-            size: size,
-            textScaler: TextScaler.linear(textScale),
-          ),
-          child: SizedBox(
-            width: size.width,
-            height: size.height,
-            child: screen,
-          ),
+    child: MaterialApp(
+      key: ValueKey('history-host-${identityHashCode(provider)}'),
+      theme: buildTheme(const Color(0xFF00A2FF), brightness),
+      home: MediaQuery(
+        data: MediaQueryData(
+          size: size,
+          textScaler: TextScaler.linear(textScale),
         ),
+        child: SizedBox(width: size.width, height: size.height, child: screen),
       ),
     ),
   );
@@ -546,7 +485,6 @@ void main() {
   testWidgets('journal, details, editing, and empty states do not overflow', (
     tester,
   ) async {
-    final output = Platform.environment['OPENGYM_PREVIEW_DIR'];
     addTearDown(tester.view.reset);
     tester.view.devicePixelRatio = 1;
     for (final brightness in Brightness.values) {
@@ -566,83 +504,33 @@ void main() {
           ),
         ]);
         tester.view.physicalSize = scenario.$1;
-        final repaintKey = GlobalKey();
         await tester.pumpWidget(
           host(
             provider,
             brightness: brightness,
             size: scenario.$1,
             textScale: scenario.$2,
-            repaintKey: repaintKey,
           ),
         );
         await tester.pump();
         expect(tester.takeException(), isNull);
-        if (output != null) {
-          await _writePreview(
-            tester,
-            repaintKey,
-            output,
-            'history-${brightness.name}-${scenario.$1.width}-${scenario.$2}x',
-          );
-        }
         await tester.tap(find.text('Long lower-body training session'));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        if (output != null && scenario.$1.width == 390) {
-          await _writePreview(
-            tester,
-            repaintKey,
-            output,
-            'history-details-${brightness.name}-${scenario.$2}x',
-          );
-        }
         await tester.tap(find.byTooltip('Workout actions'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Edit'));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        if (output != null && scenario.$1.width == 390) {
-          await _writePreview(
-            tester,
-            repaintKey,
-            output,
-            'history-edit-${brightness.name}-${scenario.$2}x',
-          );
-        }
       }
     }
 
-    final emptyKey = GlobalKey();
     tester.view.physicalSize = const Size(320, 800);
-    await tester.pumpWidget(
-      host(_Sessions([]), size: const Size(320, 800), repaintKey: emptyKey),
-    );
+    await tester.pumpWidget(host(_Sessions([]), size: const Size(320, 800)));
     await tester.pump();
     expect(find.text('No completed workouts'), findsOneWidget);
     expect(tester.takeException(), isNull);
-    if (output != null) {
-      await _writePreview(tester, emptyKey, output, 'history-empty-light-320');
-    }
   });
-}
-
-Future<void> _writePreview(
-  WidgetTester tester,
-  GlobalKey key,
-  String output,
-  String name,
-) async {
-  final boundary =
-      key.currentContext!.findRenderObject()! as RenderRepaintBoundary;
-  await tester.runAsync(() async {
-    final image = await boundary.toImage();
-    final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
-    await Directory(output).create(recursive: true);
-    await File('$output/$name.png').writeAsBytes(bytes!.buffer.asUint8List());
-    image.dispose();
-  });
-  await tester.pump();
 }
 
 class _Sessions extends WorkoutSessionProvider {
@@ -666,7 +554,7 @@ class _Sessions extends WorkoutSessionProvider {
   }
 
   @override
-  Future<void> updateSession(WorkoutSession updated) async {
+  Future<void> upsertSession(WorkoutSession updated) async {
     if (failUpdate) throw StateError('update failed');
     final index = _sessions.indexWhere((session) => session.id == updated.id);
     _sessions[index] = updated;
@@ -688,19 +576,4 @@ class _Settings extends SettingsProvider {
 
   @override
   String get weightUnit => unit;
-}
-
-class _LocalFontClient extends http.BaseClient {
-  _LocalFontClient(this.responses);
-
-  final Map<String, List<int>> responses;
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) async {
-    final bytes = responses[request.url.pathSegments.last];
-    return http.StreamedResponse(
-      Stream.value(bytes ?? const <int>[]),
-      bytes == null ? 404 : 200,
-    );
-  }
 }

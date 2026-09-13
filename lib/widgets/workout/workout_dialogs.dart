@@ -8,7 +8,6 @@ import '../../services/pr_tracking_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
-import '../../utils/format.dart';
 import 'set_entry_table.dart';
 
 class WorkoutDialogs {
@@ -68,107 +67,6 @@ class WorkoutDialogs {
                           style: Theme.of(context).textTheme.labelLarge,
                         ),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-    );
-  }
-
-  static void showAddExerciseDialog(
-    BuildContext context, {
-    required void Function(String name) onAdd,
-  }) {
-    final accent = accentColor(context);
-    final nameController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder:
-          (context) => Dialog(
-            backgroundColor: surfaceColor(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: borderColor(context), width: 1),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '> ADD EXERCISE',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: accent,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: nameController,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        labelText: 'Exercise name',
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: AppRadius.field,
-                          borderSide: BorderSide(
-                            color: borderColor(context),
-                            width: 1,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: AppRadius.field,
-                          borderSide: BorderSide(color: accent, width: 1),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OverflowBar(
-                      alignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text(
-                            'Cancel',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: textSecondaryColor(context),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () {
-                            final name = nameController.text.trim();
-                            if (name.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '> Enter exercise name',
-                                    style: GoogleFonts.jetBrainsMono(),
-                                  ),
-                                  backgroundColor: errorColor(context),
-                                ),
-                              );
-                              return;
-                            }
-                            Navigator.pop(context);
-                            onAdd(name);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accentFillColor(context),
-                            foregroundColor: onAccentColor(context),
-                          ),
-                          child: Text(
-                            'Add',
-                            style: GoogleFonts.jetBrainsMono(),
-                          ),
-                        ),
-                      ],
                     ),
                   ],
                 ),
@@ -692,398 +590,77 @@ class WorkoutDialogs {
   static Future<bool> showDeleteWeekDialog(
     BuildContext context, {
     required int week,
-  }) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder:
-          (context) => Dialog(
-            backgroundColor: surfaceColor(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: borderColor(context), width: 1),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '> DELETE WEEK?',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: errorColor(context),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'This will permanently delete this week\'s workout data.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: textSecondaryColor(context),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OverflowBar(
-                      alignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: Text(
-                            'Cancel',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: textSecondaryColor(context),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: errorColor(context),
-                            foregroundColor: onColor(errorColor(context)),
-                          ),
-                          child: Text(
-                            'Delete',
-                            style: GoogleFonts.jetBrainsMono(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-    );
-    return result ?? false;
-  }
+  }) => _showDestructiveConfirmation(
+    context,
+    title: '> DELETE WEEK?',
+    message: 'This will permanently delete this week\'s workout data.',
+    confirmLabel: 'Delete',
+  );
 
   static Future<bool> showDeleteExerciseDialog(
     BuildContext context, {
     required String exerciseName,
-  }) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder:
-          (context) => Dialog(
-            backgroundColor: surfaceColor(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: borderColor(context), width: 1),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '> DELETE EXERCISE?',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: errorColor(context),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'This will permanently delete "$exerciseName" and all its sets.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: textSecondaryColor(context),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OverflowBar(
-                      alignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: Text(
-                            'Cancel',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: textSecondaryColor(context),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: errorColor(context),
-                            foregroundColor: onColor(errorColor(context)),
-                          ),
-                          child: Text(
-                            'Delete',
-                            style: GoogleFonts.jetBrainsMono(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-    );
-    return result ?? false;
-  }
+  }) => _showDestructiveConfirmation(
+    context,
+    title: '> DELETE EXERCISE?',
+    message: 'This will permanently delete "$exerciseName" and all its sets.',
+    confirmLabel: 'Delete',
+  );
 
-  /// Confirms removing a plan from the plans list.
-  ///
-  /// The body says what actually happens rather than the usual "permanently
-  /// delete" boilerplate: [WorkoutPlanProvider.deletePlan] soft-deletes the plan
-  /// and leaves every logged session in History.
+  /// Confirms removing a plan while retaining logged sessions in History.
   static Future<bool> showDeletePlanDialog(
     BuildContext context, {
     required String planName,
+  }) => _showDestructiveConfirmation(
+    context,
+    title: '> DELETE PLAN?',
+    message:
+        'Removes "$planName" from your plans. Logged sessions stay in History.',
+    confirmLabel: 'Delete',
+  );
+
+  static Future<bool> showDiscardChangesDialog(BuildContext context) =>
+      _showDestructiveConfirmation(
+        context,
+        title: '> DISCARD CHANGES?',
+        message: 'This plan has unsaved edits. Leaving now throws them away.',
+        cancelLabel: 'Keep editing',
+        confirmLabel: 'Discard',
+      );
+
+  static Future<bool> _showDestructiveConfirmation(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required String confirmLabel,
+    String cancelLabel = 'Cancel',
   }) async {
     final result = await showDialog<bool>(
       context: context,
       builder:
-          (context) => Dialog(
-            backgroundColor: surfaceColor(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: borderColor(context), width: 1),
+          (dialogContext) => AlertDialog(
+            title: Text(
+              title,
+              style: TextStyle(color: errorColor(dialogContext)),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '> DELETE PLAN?',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: errorColor(context),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Removes "$planName" from your plans. '
-                      'Logged sessions stay in History.',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 12,
-                        color: textSecondaryColor(context),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OverflowBar(
-                      alignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: Text(
-                            'Cancel',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: textSecondaryColor(context),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: errorColor(context),
-                            foregroundColor: onColor(errorColor(context)),
-                          ),
-                          child: Text(
-                            'Delete',
-                            style: GoogleFonts.jetBrainsMono(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+            content: Text(message),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(cancelLabel),
               ),
-            ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: errorColor(dialogContext),
+                  foregroundColor: onColor(errorColor(dialogContext)),
+                ),
+                child: Text(confirmLabel),
+              ),
+            ],
           ),
     );
     return result ?? false;
-  }
-
-  /// Confirms leaving the plan editor with unsaved edits.
-  ///
-  /// Destructive in the same sense as [showDeletePlanDialog] — the edits are
-  /// gone once you leave — so it borrows the same red-titled shape, and
-  /// `[KEEP EDITING]` is the quiet way out because it is the safe one.
-  static Future<bool> showDiscardChangesDialog(BuildContext context) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder:
-          (context) => Dialog(
-            backgroundColor: surfaceColor(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: borderColor(context), width: 1),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '> DISCARD CHANGES?',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: errorColor(context),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'This plan has unsaved edits. Leaving now throws them away.',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 12,
-                        color: textSecondaryColor(context),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OverflowBar(
-                      alignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: Text(
-                            'Keep editing',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: textSecondaryColor(context),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: errorColor(context),
-                            foregroundColor: onColor(errorColor(context)),
-                          ),
-                          child: Text(
-                            'Discard',
-                            style: GoogleFonts.jetBrainsMono(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-    );
-    return result ?? false;
-  }
-
-  /// Types a weight and reps straight into one prescribed set in the plan
-  /// editor.
-  ///
-  /// The editor's rows adjust by stepper, which is fine for a nudge and awful
-  /// for a jump — reaching 70kg from 0 is 28 taps. Tapping the value gets here
-  /// instead.
-  ///
-  /// Deliberately not [showEditSetDialog]: that one edits a logged `gym.Set`
-  /// and carries RPE and a note, neither of which a plan prescribes. [accent]
-  /// comes in as a parameter so the dialog wears the plan's own colour rather
-  /// than the global accent.
-  static void showEditPlanSetDialog(
-    BuildContext context, {
-    required int setNumber,
-    required int reps,
-    required double weight,
-    required Color accent,
-    required void Function(int reps, double weight) onSave,
-  }) {
-    final weightController = TextEditingController(text: formatWeight(weight));
-    final repsController = TextEditingController(text: reps.toString());
-
-    showDialog<void>(
-      context: context,
-      builder:
-          (dialogContext) => Dialog(
-            backgroundColor: surfaceColor(dialogContext),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: borderColor(dialogContext), width: 1),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '> SET $setNumber',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: accent,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _DialogSetEntry(
-                      weightController: weightController,
-                      repsController: repsController,
-                    ),
-                    const SizedBox(height: 12),
-                    OverflowBar(
-                      alignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(dialogContext),
-                          child: Text(
-                            'Cancel',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: textSecondaryColor(dialogContext),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () {
-                            // An unparseable or blank field keeps what the set already
-                            // had, so a stray keystroke cannot silently zero a
-                            // prescription.
-                            final newWeight =
-                                double.tryParse(weightController.text.trim()) ??
-                                weight;
-                            final newReps =
-                                int.tryParse(repsController.text.trim()) ??
-                                reps;
-                            Navigator.pop(dialogContext);
-                            onSave(
-                              newReps.clamp(1, 999),
-                              newWeight.clamp(0, 999).toDouble(),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accentFillColor(context),
-                            foregroundColor: onAccentColor(context),
-                          ),
-                          child: Text(
-                            'Save',
-                            style: GoogleFonts.jetBrainsMono(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-    );
   }
 }
 
@@ -1290,7 +867,6 @@ class _DialogSetEntry extends StatefulWidget {
 class _DialogSetEntryState extends State<_DialogSetEntry> {
   @override
   Widget build(BuildContext context) => SetEntryTable(
-    exerciseName: 'Set details',
     showHistoryColumns: widget.showHistoryColumns,
     sets: [
       SetEntry(

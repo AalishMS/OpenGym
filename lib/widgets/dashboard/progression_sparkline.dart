@@ -1,4 +1,3 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
@@ -15,12 +14,9 @@ class ProgressionSparkline extends StatelessWidget {
 
   /// Max weight per session, oldest → newest.
   final List<double> values;
-  final double height;
-
   const ProgressionSparkline({
     required this.exercise,
     required this.values,
-    this.height = 80,
     super.key,
   });
 
@@ -65,32 +61,15 @@ class ProgressionSparkline extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sm),
         SizedBox(
-          height: height,
-          child: LineChart(
-            LineChartData(
+          height: 80,
+          child: CustomPaint(
+            painter: _SparklinePainter(
+              values: values,
               minY: min - pad,
               maxY: max + pad,
-              lineTouchData: const LineTouchData(enabled: false),
-              titlesData: const FlTitlesData(show: false),
-              borderData: FlBorderData(show: false),
-              gridData: const FlGridData(show: false),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: [
-                    for (var i = 0; i < values.length; i++)
-                      FlSpot(i.toDouble(), values[i]),
-                  ],
-                  isCurved: false,
-                  color: accent,
-                  barWidth: 1.5,
-                  dotData: const FlDotData(show: false),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    color: accent.withAlpha(30),
-                  ),
-                ),
-              ],
+              color: accent,
             ),
+            child: const SizedBox.expand(),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
@@ -118,5 +97,62 @@ class ProgressionSparkline extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _SparklinePainter extends CustomPainter {
+  const _SparklinePainter({
+    required this.values,
+    required this.minY,
+    required this.maxY,
+    required this.color,
+  });
+
+  final List<double> values;
+  final double minY;
+  final double maxY;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final range = maxY - minY;
+    final line = Path();
+    for (var i = 0; i < values.length; i++) {
+      final x = size.width * i / (values.length - 1);
+      final y = size.height * (1 - ((values[i] - minY) / range));
+      if (i == 0) {
+        line.moveTo(x, y);
+      } else {
+        line.lineTo(x, y);
+      }
+    }
+
+    final fill =
+        Path.from(line)
+          ..lineTo(size.width, size.height)
+          ..lineTo(0, size.height)
+          ..close();
+    canvas.drawPath(fill, Paint()..color = color.withAlpha(30));
+    canvas.drawPath(
+      line,
+      Paint()
+        ..color = color
+        ..strokeWidth = 1.5
+        ..style = PaintingStyle.stroke,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter oldDelegate) {
+    if (oldDelegate.color != color ||
+        oldDelegate.minY != minY ||
+        oldDelegate.maxY != maxY ||
+        oldDelegate.values.length != values.length) {
+      return true;
+    }
+    for (var i = 0; i < values.length; i++) {
+      if (oldDelegate.values[i] != values[i]) return true;
+    }
+    return false;
   }
 }

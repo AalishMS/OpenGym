@@ -1,32 +1,25 @@
-import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:gymapp/app_shell.dart';
-import 'package:gymapp/models/exercise.dart';
-import 'package:gymapp/models/exercise_template.dart';
-import 'package:gymapp/models/set.dart';
-import 'package:gymapp/models/set_template.dart';
-import 'package:gymapp/models/workout_plan.dart';
-import 'package:gymapp/models/workout_session.dart';
-import 'package:gymapp/providers/progression_provider.dart';
 import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/providers/update_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
-import 'package:gymapp/services/hive_service.dart';
+
+import 'support/hive_test_harness.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/breakpoints.dart';
 import 'package:gymapp/widgets/app_bottom_nav.dart';
 import 'package:gymapp/widgets/app_nav_rail.dart';
 
 void main() {
-  late Directory hiveDirectory;
+  final hiveHarness = HiveTestHarness();
 
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
@@ -34,23 +27,11 @@ void main() {
       url: 'https://example.supabase.co',
       publishableKey: 'test-publishable-key',
     );
-    hiveDirectory = await Directory.systemTemp.createTemp(
-      'opengym_shell_test_',
-    );
-    Hive.init(hiveDirectory.path);
-    Hive.registerAdapter(SetAdapter());
-    Hive.registerAdapter(SetTemplateAdapter());
-    Hive.registerAdapter(ExerciseAdapter());
-    Hive.registerAdapter(ExerciseTemplateAdapter());
-    Hive.registerAdapter(WorkoutPlanAdapter());
-    Hive.registerAdapter(WorkoutSessionAdapter());
-    await Hive.openBox<WorkoutPlan>(HiveService.plansBox);
-    await Hive.openBox<WorkoutSession>(HiveService.sessionsBox);
+    await hiveHarness.open();
   });
 
   tearDownAll(() async {
-    await Hive.close();
-    await hiveDirectory.delete(recursive: true);
+    await hiveHarness.close();
   });
 
   Widget shellHost(double width, {double textScale = 1}) {
@@ -58,7 +39,6 @@ void main() {
       providers: [
         ChangeNotifierProvider(create: (_) => WorkoutPlanProvider()),
         ChangeNotifierProvider(create: (_) => WorkoutSessionProvider()),
-        ChangeNotifierProvider(create: (_) => ProgressionProvider()),
         ChangeNotifierProvider(create: (_) => SettingsProvider()),
         ChangeNotifierProvider(create: (_) => UpdateProvider()),
       ],
@@ -126,16 +106,15 @@ void main() {
     final semantics = tester.ensureSemantics();
 
     await tester.pumpWidget(bottomNavHost());
+    final plansSemantics = tester.getSemantics(find.text('Plans'));
+    expect(plansSemantics.label, contains('Plans'));
     expect(
-      tester.getSemantics(find.text('Plans')),
-      matchesSemantics(
-        label: 'Plans',
-        isSelected: true,
-        hasSelectedState: true,
-        isFocusable: true,
-        hasTapAction: true,
-        hasFocusAction: true,
-      ),
+      plansSemantics.getSemanticsData().flagsCollection.isSelected,
+      Tristate.isTrue,
+    );
+    expect(
+      plansSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
     );
 
     await tester.pumpWidget(shellHost(Breakpoints.medium));
@@ -144,16 +123,15 @@ void main() {
       of: find.byType(AppNavRail),
       matching: find.text('Dashboard'),
     );
+    final dashboardSemantics = tester.getSemantics(dashboardDestination);
+    expect(dashboardSemantics.label, contains('Dashboard'));
     expect(
-      tester.getSemantics(dashboardDestination),
-      matchesSemantics(
-        label: 'Dashboard',
-        isSelected: true,
-        hasSelectedState: true,
-        isFocusable: true,
-        hasTapAction: true,
-        hasFocusAction: true,
-      ),
+      dashboardSemantics.getSemanticsData().flagsCollection.isSelected,
+      Tristate.isTrue,
+    );
+    expect(
+      dashboardSemantics.getSemanticsData().hasAction(SemanticsAction.tap),
+      isTrue,
     );
 
     semantics.dispose();

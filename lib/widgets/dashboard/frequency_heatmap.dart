@@ -7,28 +7,15 @@ import '../../theme/spacing.dart';
 
 /// GitHub-style contribution grid: one column per week, one square per day.
 ///
-/// Built by hand rather than with fl_chart — the cells are barely-rounded
-/// squares on a 1px grid at a size a chart library fights. Intensity climbs the
+/// The cells are barely-rounded squares on a 1px grid. Intensity climbs the
 /// theme's opaque accent washes (see [heatmapSteps]), so it recolours with the
 /// user's accent.
 ///
-/// [HiveService.getWorkoutFrequency] is per-*week*, so this buckets raw
-/// sessions by calendar day instead.
+/// Sessions are bucketed directly by calendar day.
 class FrequencyHeatmap extends StatelessWidget {
   final List<WorkoutSession> sessions;
 
-  /// Cell edge length in logical pixels.
-  final double cellSize;
-
-  /// Gap between cells.
-  final double gap;
-
-  const FrequencyHeatmap({
-    required this.sessions,
-    this.cellSize = 12,
-    this.gap = 3,
-    super.key,
-  });
+  const FrequencyHeatmap({required this.sessions, super.key});
 
   static const _dayLabels = ['M', '', 'W', '', 'F', '', 'S'];
 
@@ -52,7 +39,9 @@ class FrequencyHeatmap extends StatelessWidget {
     final lastMonday = today.subtract(Duration(days: today.weekday - 1));
 
     const labelWidth = 14.0;
-    final columnWidth = cellSize + gap;
+    const cellSize = 12.0;
+    const gap = 3.0;
+    const columnWidth = cellSize + gap;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -120,6 +109,8 @@ class FrequencyHeatmap extends StatelessWidget {
     required List<Color> steps,
     required Color border,
   }) {
+    const cellSize = 12.0;
+    const gap = 3.0;
     final future = date.isAfter(today);
     final count = counts[date] ?? 0;
 
@@ -139,9 +130,10 @@ class FrequencyHeatmap extends StatelessWidget {
     }
 
     return Padding(
-      padding: EdgeInsets.only(bottom: gap),
+      padding: const EdgeInsets.only(bottom: gap),
       child: Tooltip(
-        message: '${date.day}/${date.month}/${date.year} · '
+        message:
+            '${date.day}/${date.month}/${date.year} · '
             '$count workout${count == 1 ? '' : 's'}',
         waitDuration: const Duration(milliseconds: 400),
         child: Container(
@@ -166,11 +158,11 @@ class FrequencyHeatmap extends StatelessWidget {
 /// empty-cell transparent; 1–3 are the theme's opaque accent washes, even
 /// perceptual steps from the background up to the full fill.
 List<Color> heatmapSteps(BuildContext context) => [
-      Colors.transparent,
-      accentMutedColor(context),
-      accentDimColor(context),
-      accentFillColor(context),
-    ];
+  Colors.transparent,
+  accentMutedColor(context),
+  accentDimColor(context),
+  accentFillColor(context),
+];
 
 /// `LESS ▪▪▪▪ MORE` key for [FrequencyHeatmap].
 class HeatmapLegend extends StatelessWidget {

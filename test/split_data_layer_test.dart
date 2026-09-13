@@ -1,41 +1,25 @@
 import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gymapp/models/exercise.dart';
-import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
-import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/split.dart';
 import 'package:gymapp/models/split_preference.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
-import 'package:gymapp/repositories/stats_repository.dart';
 import 'package:gymapp/services/backup_service.dart';
 import 'package:gymapp/services/hive_service.dart';
+
+import 'support/hive_test_harness.dart';
 import 'package:gymapp/utils/split_identity.dart';
 
 void main() {
-  late Directory hiveDirectory;
+  final hiveHarness = HiveTestHarness();
 
   setUpAll(() async {
-    hiveDirectory = await Directory.systemTemp.createTemp('opengym_splits_');
-    Hive.init(hiveDirectory.path);
-    Hive.registerAdapter(SetAdapter());
-    Hive.registerAdapter(SetTemplateAdapter());
-    Hive.registerAdapter(ExerciseAdapter());
-    Hive.registerAdapter(ExerciseTemplateAdapter());
-    Hive.registerAdapter(WorkoutPlanAdapter());
-    Hive.registerAdapter(WorkoutSessionAdapter());
-    Hive.registerAdapter(SplitAdapter());
-    Hive.registerAdapter(SplitPreferenceAdapter());
-    await Hive.openBox<WorkoutPlan>(HiveService.plansBox);
-    await Hive.openBox<WorkoutSession>(HiveService.sessionsBox);
-    await Hive.openBox<Split>(HiveService.splitsBox);
-    await Hive.openBox<SplitPreference>(HiveService.splitPreferencesBox);
+    await hiveHarness.open(includeSplits: true);
   });
 
   setUp(() async {
@@ -47,8 +31,7 @@ void main() {
   });
 
   tearDownAll(() async {
-    await Hive.close();
-    await hiveDirectory.delete(recursive: true);
+    await hiveHarness.close();
   });
 
   test('legacy rows are assigned to the deterministic My Split', () async {
@@ -94,11 +77,10 @@ void main() {
     await HiveService.putSessionRaw(_session('s1', 'ppl', 100));
     await HiveService.putSessionRaw(_session('s2', 'ul', 60));
 
-    final stats = StatsRepository();
     expect(HiveService.getPlans(splitId: 'ppl').single.name, 'Push');
     expect(HiveService.getSessions(splitId: 'ul').single.id, 's2');
-    expect(stats.getExercisePR('Bench Press', 'ppl'), 100);
-    expect(stats.getExercisePR('Bench Press', 'ul'), 60);
+    expect(HiveService.getExercisePR('Bench Press', 'ppl'), 100);
+    expect(HiveService.getExercisePR('Bench Press', 'ul'), 60);
   });
 
   test('deleting a split tombstones only its descendants', () async {

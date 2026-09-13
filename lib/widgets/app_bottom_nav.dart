@@ -28,55 +28,36 @@ class AppBottomNav extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: surfaceColor(context),
         border: Border(top: BorderSide(color: borderColor(context))),
       ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: List.generate(4, (i) {
-            final active = i == currentIndex;
-            return Expanded(
-              child: Semantics(
-                selected: active,
-                child: InkWell(
-                  onTap: () => onTap(i),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _icons[i],
-                            size: 18,
-                            color: active ? accent : textSecondary,
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            _labels[i],
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.labelSmall?.copyWith(
-                              fontWeight:
-                                  active ? FontWeight.w700 : FontWeight.w500,
-                              color: active ? accent : textSecondary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+      child: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          height: 68,
+          backgroundColor: surfaceColor(context),
+          indicatorColor: Colors.transparent,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) {
+            final selected = states.contains(WidgetState.selected);
+            return Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: selected ? accent : textSecondary,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
             );
           }),
+          iconTheme: WidgetStateProperty.resolveWith((states) {
+            final selected = states.contains(WidgetState.selected);
+            return IconThemeData(
+              size: 18,
+              color: selected ? accent : textSecondary,
+            );
+          }),
+        ),
+        child: NavigationBar(
+          selectedIndex: currentIndex,
+          onDestinationSelected: onTap,
+          labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          destinations: [
+            for (var i = 0; i < _labels.length; i++)
+              NavigationDestination(icon: Icon(_icons[i]), label: _labels[i]),
+          ],
         ),
       ),
     );

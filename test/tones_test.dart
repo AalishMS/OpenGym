@@ -5,9 +5,8 @@ import 'package:gymapp/theme/tones.dart';
 
 /// Unit tests for the colour solver.
 ///
-/// The golden values below were produced by the comparison harness in
-/// `docs/color-study.html` — the same formula in JavaScript, whose output was
-/// reviewed and chosen (direction A). Asserting the hexes here, rather than only
+/// The golden values below capture the reviewed direction-A palette. Asserting
+/// the hexes here, rather than only
 /// the contrast properties, is what makes the Dart a *port* of the reviewed
 /// design instead of a second implementation that happens to pass.
 ///
@@ -31,21 +30,30 @@ void main() {
   /// even when both render to the same pixel.
   void expectHex(Color actual, int golden, {String? reason}) {
     final got = actual.toARGB32();
-    final label = '${reason ?? ''} got 0x${got.toRadixString(16)}, '
+    final label =
+        '${reason ?? ''} got 0x${got.toRadixString(16)}, '
         'want 0x${golden.toRadixString(16)}';
     for (final shift in [16, 8, 0]) {
-      expect((((got >> shift) & 0xFF) - ((golden >> shift) & 0xFF)).abs(),
-          lessThanOrEqualTo(1),
-          reason: label);
+      expect(
+        (((got >> shift) & 0xFF) - ((golden >> shift) & 0xFF)).abs(),
+        lessThanOrEqualTo(1),
+        reason: label,
+      );
     }
   }
 
   group('OKLCh conversion', () {
     test('round-trips every channel corner within 1/255', () {
       const samples = [
-        Color(0xFF000000), Color(0xFFFFFFFF), Color(0xFF808080),
-        Color(0xFFFF0000), Color(0xFF00FF00), Color(0xFF0000FF),
-        Color(0xFF00A8FF), Color(0xFF8B5CF6), Color(0xFF7C8AA0),
+        Color(0xFF000000),
+        Color(0xFFFFFFFF),
+        Color(0xFF808080),
+        Color(0xFFFF0000),
+        Color(0xFF00FF00),
+        Color(0xFF0000FF),
+        Color(0xFF00A8FF),
+        Color(0xFF8B5CF6),
+        Color(0xFF7C8AA0),
       ];
       for (final c in samples) {
         final o = oklchOf(c);
@@ -72,15 +80,21 @@ void main() {
 
   group('contrastRatio', () {
     test('spans 1:1 to 21:1', () {
-      expect(contrastRatio(const Color(0xFF000000), const Color(0xFFFFFFFF)),
-          closeTo(21.0, 0.01));
-      expect(contrastRatio(const Color(0xFF7C8AA0), const Color(0xFF7C8AA0)),
-          closeTo(1.0, 0.0001));
+      expect(
+        contrastRatio(const Color(0xFF000000), const Color(0xFFFFFFFF)),
+        closeTo(21.0, 0.01),
+      );
+      expect(
+        contrastRatio(const Color(0xFF7C8AA0), const Color(0xFF7C8AA0)),
+        closeTo(1.0, 0.0001),
+      );
     });
 
     test('is symmetric', () {
-      expect(contrastRatio(bgDark, surfaceDark),
-          closeTo(contrastRatio(surfaceDark, bgDark), 1e-9));
+      expect(
+        contrastRatio(bgDark, surfaceDark),
+        closeTo(contrastRatio(surfaceDark, bgDark), 1e-9),
+      );
     });
   });
 
@@ -98,15 +112,18 @@ void main() {
     ];
 
     /// What `onColor` used to do: flip at luminance 0.5.
-    Color oldRule(Color ground) => ground.computeLuminance() > 0.5
-        ? const Color(0xFF000000)
-        : const Color(0xFFFFFFFF);
+    Color oldRule(Color ground) =>
+        ground.computeLuminance() > 0.5
+            ? const Color(0xFF000000)
+            : const Color(0xFFFFFFFF);
 
     test('never picks the worse of black and white', () {
       for (final v in legacyVariants) {
-        expect(contrastRatio(bestForeground(v), v),
-            greaterThanOrEqualTo(contrastRatio(oldRule(v), v) - 1e-9),
-            reason: '$v');
+        expect(
+          contrastRatio(bestForeground(v), v),
+          greaterThanOrEqualTo(contrastRatio(oldRule(v), v) - 1e-9),
+          reason: '$v',
+        );
       }
     });
 
@@ -116,20 +133,30 @@ void main() {
       // than that, so the better candidate always clears 4.5.
       for (var i = 0; i <= 255; i++) {
         final g = Color.fromARGB(255, i, i, i);
-        expect(contrastRatio(bestForeground(g), g), greaterThanOrEqualTo(4.5),
-            reason: 'grey $i');
+        expect(
+          contrastRatio(bestForeground(g), g),
+          greaterThanOrEqualTo(4.5),
+          reason: 'grey $i',
+        );
       }
       for (final v in legacyVariants) {
-        expect(contrastRatio(bestForeground(v), v), greaterThanOrEqualTo(4.5),
-            reason: '$v');
+        expect(
+          contrastRatio(bestForeground(v), v),
+          greaterThanOrEqualTo(4.5),
+          reason: '$v',
+        );
       }
     });
 
     test('the old rule did fail AA — this is the bug being fixed', () {
-      final failures =
-          legacyVariants.where((v) => contrastRatio(oldRule(v), v) < 4.5);
-      expect(failures, isNotEmpty,
-          reason: 'if this passes, the premise of the fix is wrong');
+      final failures = legacyVariants.where(
+        (v) => contrastRatio(oldRule(v), v) < 4.5,
+      );
+      expect(
+        failures,
+        isNotEmpty,
+        reason: 'if this passes, the premise of the fix is wrong',
+      );
 
       // CYAN was the worst: white on #00CED1 is 1.95:1, black is 10.75:1.
       const cyan = Color(0xFF00CED1);
@@ -150,21 +177,42 @@ void main() {
 
       // dark
       expectHex(solved(bgDark, 1.45, true), 0xFF2F2F2E, reason: 'surface dark');
-      expectHex(solved(surfaceDark, 3.00, true), 0xFF787878,
-          reason: 'border dark');
-      expectHex(solved(bgDark, 13.0, true), 0xFFD4D4D4,
-          reason: 'textPrimary dark');
-      expectHex(solved(surfaceDark, 4.5, true), 0xFF969696,
-          reason: 'textSecondary dark');
+      expectHex(
+        solved(surfaceDark, 3.00, true),
+        0xFF787878,
+        reason: 'border dark',
+      );
+      expectHex(
+        solved(bgDark, 13.0, true),
+        0xFFD4D4D4,
+        reason: 'textPrimary dark',
+      );
+      expectHex(
+        solved(surfaceDark, 4.5, true),
+        0xFF969696,
+        reason: 'textSecondary dark',
+      );
       // light
-      expectHex(solved(bgLight, 1.20, false), 0xFFE2E2E2,
-          reason: 'surface light');
-      expectHex(solved(surfaceLight, 1.90, false), 0xFFA5A5A5,
-          reason: 'border light');
-      expectHex(solved(bgLight, 13.0, false), 0xFF2C2C2C,
-          reason: 'textPrimary light');
-      expectHex(solved(surfaceLight, 4.5, false), 0xFF646464,
-          reason: 'textSecondary light');
+      expectHex(
+        solved(bgLight, 1.20, false),
+        0xFFE2E2E2,
+        reason: 'surface light',
+      );
+      expectHex(
+        solved(surfaceLight, 1.90, false),
+        0xFFA5A5A5,
+        reason: 'border light',
+      );
+      expectHex(
+        solved(bgLight, 13.0, false),
+        0xFF2C2C2C,
+        reason: 'textPrimary light',
+      );
+      expectHex(
+        solved(surfaceLight, 4.5, false),
+        0xFF646464,
+        reason: 'textSecondary light',
+      );
     });
 
     test('reproduces the reviewed accent tones (direction A)', () {
@@ -237,46 +285,62 @@ void main() {
       expect(contrastRatio(surface, bgDark), closeTo(1.45, 0.02));
     });
 
-    test('meets its target for every accent seed, both modes, on both grounds',
-        () {
-      const seeds = [
-        Color(0xFF00A8FF), Color(0xFFFF9500), Color(0xFFFF5722),
-        Color(0xFFFF1493), Color(0xFF00CED1), Color(0xFF8B5CF6),
-        Color(0xFF7C8AA0), Color(0xFF22C55E),
-      ];
-      for (final seed in seeds) {
-        for (final (bg, surface, lighter) in [
-          (bgDark, surfaceDark, true),
-          (bgLight, surfaceLight, false),
-        ]) {
-          // Solved against whichever ground is harder, so both must pass.
-          final worse = contrastRatio(seed, bg) < contrastRatio(seed, surface)
-              ? bg
-              : surface;
-          final accent = solveForContrast(
-            seed: seed,
-            against: worse,
-            target: 4.5,
-            preferLighter: lighter,
-            anchor: ToneAnchor.seed,
-          );
-          expect(contrastRatio(accent, bg), greaterThanOrEqualTo(4.48),
-              reason: '$seed accent on background');
-          expect(contrastRatio(accent, surface), greaterThanOrEqualTo(4.48),
-              reason: '$seed accent on surface');
+    test(
+      'meets its target for every accent seed, both modes, on both grounds',
+      () {
+        const seeds = [
+          Color(0xFF00A8FF),
+          Color(0xFFFF9500),
+          Color(0xFFFF5722),
+          Color(0xFFFF1493),
+          Color(0xFF00CED1),
+          Color(0xFF8B5CF6),
+          Color(0xFF7C8AA0),
+          Color(0xFF22C55E),
+        ];
+        for (final seed in seeds) {
+          for (final (bg, surface, lighter) in [
+            (bgDark, surfaceDark, true),
+            (bgLight, surfaceLight, false),
+          ]) {
+            // Solved against whichever ground is harder, so both must pass.
+            final worse =
+                contrastRatio(seed, bg) < contrastRatio(seed, surface)
+                    ? bg
+                    : surface;
+            final accent = solveForContrast(
+              seed: seed,
+              against: worse,
+              target: 4.5,
+              preferLighter: lighter,
+              anchor: ToneAnchor.seed,
+            );
+            expect(
+              contrastRatio(accent, bg),
+              greaterThanOrEqualTo(4.48),
+              reason: '$seed accent on background',
+            );
+            expect(
+              contrastRatio(accent, surface),
+              greaterThanOrEqualTo(4.48),
+              reason: '$seed accent on surface',
+            );
+          }
         }
-      }
-    });
+      },
+    );
 
     test('preserves hue and chroma when the result stays in gamut', () {
       const seed = Color(0xFF7C8AA0); // low chroma, no clamping en route
       final before = oklchOf(seed);
-      final after = oklchOf(solveForContrast(
-        seed: seed,
-        against: surfaceDark,
-        target: 6.0,
-        preferLighter: true,
-      ));
+      final after = oklchOf(
+        solveForContrast(
+          seed: seed,
+          against: surfaceDark,
+          target: 6.0,
+          preferLighter: true,
+        ),
+      );
       expect(after.c, closeTo(before.c, 0.005));
       expect(after.h, closeTo(before.h, 0.02));
     });
@@ -294,12 +358,21 @@ void main() {
 
       final s = oklchOf(seed);
       final extreme = colorFromOklch(0.0, s.c, s.h);
-      expect(solved.toARGB32(), extreme.toARGB32(),
-          reason: 'must hand back the darkest tone of this hue, not give up');
-      expect(contrastRatio(solved, white), lessThan(21.0),
-          reason: 'if this passes, the target was reachable after all');
-      expect(contrastRatio(solved, white), greaterThan(19.0),
-          reason: 'best effort, not a shrug');
+      expect(
+        solved.toARGB32(),
+        extreme.toARGB32(),
+        reason: 'must hand back the darkest tone of this hue, not give up',
+      );
+      expect(
+        contrastRatio(solved, white),
+        lessThan(21.0),
+        reason: 'if this passes, the target was reachable after all',
+      );
+      expect(
+        contrastRatio(solved, white),
+        greaterThan(19.0),
+        reason: 'best effort, not a shrug',
+      );
 
       // And note what "extreme" means: L = 0 at this chroma is outside sRGB, so
       // the clamp lands on a very dark yellow-green rather than on black. The
@@ -313,11 +386,20 @@ void main() {
   group('toneBetween', () {
     /// The three realized step sizes of the heatmap ramp for [seed].
     List<double> rampSteps(Color seed) {
-      final l = [1 / 3, 2 / 3, 1.0]
-          .map((f) =>
-              oklchOf(toneBetween(seed: seed, from: bgDark, to: seed, fraction: f))
-                  .l)
-          .toList();
+      final l =
+          [1 / 3, 2 / 3, 1.0]
+              .map(
+                (f) =>
+                    oklchOf(
+                      toneBetween(
+                        seed: seed,
+                        from: bgDark,
+                        to: seed,
+                        fraction: f,
+                      ),
+                    ).l,
+              )
+              .toList();
       return [l[1] - l[0], l[2] - l[1]];
     }
 
@@ -327,8 +409,11 @@ void main() {
       // Purple is excluded and pinned in its own test below — it is the one
       // accent whose ramp leaves sRGB.
       const seeds = [
-        Color(0xFF00A8FF), Color(0xFFFF9500), Color(0xFF00CED1),
-        Color(0xFF7C8AA0), Color(0xFF22C55E),
+        Color(0xFF00A8FF),
+        Color(0xFFFF9500),
+        Color(0xFF00CED1),
+        Color(0xFF7C8AA0),
+        Color(0xFF22C55E),
       ];
       for (final seed in seeds) {
         final steps = rampSteps(seed);
@@ -363,13 +448,15 @@ void main() {
       // one.
       const seed = Color(0xFF7C8AA0);
       expect(
-        oklchOf(toneBetween(seed: seed, from: bgDark, to: seed, fraction: 0.0))
-            .l,
+        oklchOf(
+          toneBetween(seed: seed, from: bgDark, to: seed, fraction: 0.0),
+        ).l,
         closeTo(oklchOf(bgDark).l, 0.001),
       );
       expect(
-        oklchOf(toneBetween(seed: seed, from: bgDark, to: seed, fraction: 1.0))
-            .l,
+        oklchOf(
+          toneBetween(seed: seed, from: bgDark, to: seed, fraction: 1.0),
+        ).l,
         closeTo(oklchOf(seed).l, 0.001),
       );
     });

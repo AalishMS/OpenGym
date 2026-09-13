@@ -20,17 +20,6 @@ extension StatisticsPeriodLabel on StatisticsPeriod {
   };
 }
 
-enum TrainingMetric { volumeLoad, sets, reps, duration }
-
-extension TrainingMetricLabel on TrainingMetric {
-  String get label => switch (this) {
-    TrainingMetric.volumeLoad => 'Volume load',
-    TrainingMetric.sets => 'Sets',
-    TrainingMetric.reps => 'Reps',
-    TrainingMetric.duration => 'Duration',
-  };
-}
-
 enum ExerciseMetric {
   estimatedOneRepMax,
   bestWeight,
@@ -82,51 +71,10 @@ class SessionStatistics {
 class WeeklyTrainingValue {
   final DateTime weekStart;
   final double volumeLoad;
-  final int totalReps;
-  final int totalSets;
-  final int durationSeconds;
-  final int sessionsWithDuration;
 
   const WeeklyTrainingValue({
     required this.weekStart,
     required this.volumeLoad,
-    required this.totalReps,
-    required this.totalSets,
-    required this.durationSeconds,
-    required this.sessionsWithDuration,
-  });
-
-  double valueFor(TrainingMetric metric) => switch (metric) {
-    TrainingMetric.volumeLoad => volumeLoad,
-    TrainingMetric.sets => totalSets.toDouble(),
-    TrainingMetric.reps => totalReps.toDouble(),
-    TrainingMetric.duration => durationSeconds.toDouble(),
-  };
-}
-
-class PeriodComparison {
-  final double currentValue;
-  final double previousValue;
-  final double absoluteChange;
-  final double? percentageChange;
-
-  const PeriodComparison({
-    required this.currentValue,
-    required this.previousValue,
-    required this.absoluteChange,
-    required this.percentageChange,
-  });
-}
-
-class TrainingOverview {
-  final List<WeeklyTrainingValue> weeks;
-  final PeriodComparison? comparison;
-  final bool hasDurationData;
-
-  const TrainingOverview({
-    required this.weeks,
-    required this.comparison,
-    required this.hasDurationData,
   });
 }
 

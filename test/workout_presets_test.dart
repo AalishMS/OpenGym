@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,20 +5,20 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:gymapp/data/exercise_library.dart';
 import 'package:gymapp/data/workout_presets.dart';
-import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
-import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/split.dart';
 import 'package:gymapp/models/split_preference.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/services/hive_service.dart';
+
+import 'support/hive_test_harness.dart';
 import 'package:gymapp/services/workout_preset_installer.dart';
 import 'package:gymapp/utils/split_identity.dart';
 
 void main() {
-  late Directory hiveDirectory;
+  final hiveHarness = HiveTestHarness();
   const userId = 'preset-user';
 
   setUpAll(() async {
@@ -29,20 +27,7 @@ void main() {
       url: 'https://example.supabase.co',
       publishableKey: 'test-publishable-key',
     );
-    hiveDirectory = await Directory.systemTemp.createTemp('opengym_presets_');
-    Hive.init(hiveDirectory.path);
-    Hive.registerAdapter(SetAdapter());
-    Hive.registerAdapter(SetTemplateAdapter());
-    Hive.registerAdapter(ExerciseAdapter());
-    Hive.registerAdapter(ExerciseTemplateAdapter());
-    Hive.registerAdapter(WorkoutPlanAdapter());
-    Hive.registerAdapter(WorkoutSessionAdapter());
-    Hive.registerAdapter(SplitAdapter());
-    Hive.registerAdapter(SplitPreferenceAdapter());
-    await Hive.openBox<WorkoutPlan>(HiveService.plansBox);
-    await Hive.openBox<WorkoutSession>(HiveService.sessionsBox);
-    await Hive.openBox<Split>(HiveService.splitsBox);
-    await Hive.openBox<SplitPreference>(HiveService.splitPreferencesBox);
+    await hiveHarness.open(includeSplits: true);
   });
 
   setUp(() async {
@@ -53,8 +38,7 @@ void main() {
   });
 
   tearDownAll(() async {
-    await Hive.close();
-    await hiveDirectory.delete(recursive: true);
+    await hiveHarness.close();
   });
 
   test(
