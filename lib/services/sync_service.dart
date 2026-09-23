@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -337,11 +338,34 @@ class SyncService {
     return !local.isAfter(remote);
   }
 
-  String? _maxSequence(String? current, dynamic candidate) {
+  @visibleForTesting
+  static String? maxSequence(String? current, dynamic candidate) =>
+      _maxSequence(current, candidate);
+
+  static String? _maxSequence(String? current, dynamic candidate) {
     if (candidate == null) return current;
     final value = candidate.toString();
     if (current == null) return value;
-    return BigInt.parse(value) > BigInt.parse(current) ? value : current;
+
+    final currentDt = DateTime.tryParse(current);
+    final valueDt = DateTime.tryParse(value);
+    if (currentDt != null &&
+        valueDt != null &&
+        (value.contains('T') || current.contains('T'))) {
+      return valueDt.isAfter(currentDt) ? value : current;
+    }
+
+    final currentInt = BigInt.tryParse(current);
+    final valueInt = BigInt.tryParse(value);
+    if (currentInt != null && valueInt != null) {
+      return valueInt > currentInt ? value : current;
+    }
+
+    if (currentDt != null && valueDt != null) {
+      return valueDt.isAfter(currentDt) ? value : current;
+    }
+
+    return value.compareTo(current) > 0 ? value : current;
   }
 
   WorkoutPlan _planFromRow(Map<String, dynamic> row) {
