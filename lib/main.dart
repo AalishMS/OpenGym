@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'auth/auth_gate.dart';
 import 'providers/workout_plan_provider.dart';
 import 'providers/workout_session_provider.dart';
 import 'providers/settings_provider.dart';
@@ -9,24 +12,38 @@ import 'services/hive_service.dart';
 import 'services/adopt_local_data.dart';
 import 'services/supabase_service.dart';
 import 'services/sync_service.dart';
-import 'auth/auth_gate.dart';
+import 'screens/intro_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  bool showIntro = false;
   try {
+    showIntro = await loadIntroPending();
     await Future.wait([HiveService.init(), SupabaseService.init()]);
     await AdoptLocalData.prepareLocal();
   } catch (e) {
     debugPrint('Local startup error: $e');
   }
 
-  runApp(const MyApp());
+  runApp(MyApp(showIntro: showIntro));
+}
+
+/// Decide before Hive's startup migration marks a fresh installation as old.
+Future<bool> loadIntroPending() async {
+  final prefs = await SharedPreferences.getInstance();
+  final savedChoice = prefs.getBool('intro_pending_v1');
+  if (savedChoice != null) return savedChoice;
+  final pending = !prefs.containsKey('idkey_migration_v1_done');
+  await prefs.setBool('intro_pending_v1', pending);
+  return pending;
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key});
+  final bool showIntro;
+
+  const MyApp({this.showIntro = false, super.key});
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -37,11 +54,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late WorkoutSessionProvider _workoutSessionProvider;
   late SettingsProvider _settingsProvider;
   late SplitProvider _splitProvider;
+  late bool _showIntro;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _showIntro = widget.showIntro;
     _splitProvider = SplitProvider();
     _workoutPlanProvider = WorkoutPlanProvider(_splitProvider);
     _workoutSessionProvider = WorkoutSessionProvider(_splitProvider);
@@ -59,6 +78,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       SyncService.instance.syncNow();
     }
+  }
+
+  Future<void> _finishIntro() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('intro_pending_v1', false);
+    if (mounted) setState(() => _showIntro = false);
   }
 
   @override
@@ -87,7 +112,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             theme: buildTheme(seed, Brightness.light),
             darkTheme: buildTheme(seed, Brightness.dark),
             themeMode: settings.themeMode,
-            home: const AuthGate(),
+            home:
+                _showIntro
+                    ? IntroScreen(onFinish: _finishIntro)
+                    : const AuthGate(),
           );
         },
       ),
