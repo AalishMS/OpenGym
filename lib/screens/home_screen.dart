@@ -159,38 +159,22 @@ class HomeScreen extends StatelessWidget {
     WorkoutPlanProvider provider,
     Color accent,
   ) {
-    // Roll up each plan's training history once, keyed by its index in
-    // `provider.plans`, so the card footers don't each hit the repository.
+    // Roll up training history once, keyed by the plan's provider index.
     final sessions = context.watch<WorkoutSessionProvider>().sessions;
     final statsByIndex = {
       for (final stat in PlanStat.compute(provider.plans, sessions))
         stat.planIndex: stat,
     };
-    final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final usesLargeText = textScale > 1.3;
-
     return _CappedWidth(
-      child: GridView.builder(
+      maxWidth: 720,
+      child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,
           AppSpacing.lg,
           AppSpacing.lg,
-          AppSpacing.sm,
+          AppSpacing.xxl,
         ),
-        // Max-extent (not a fixed column count) so columns scale with the
-        // window: 2 on a phone, 5 at the capped desktop measure. A fixed
-        // `mainAxisExtent` replaces `childAspectRatio` — the old ratio made
-        // cards as tall as the column was wide, which on desktop meant two
-        // enormous, mostly-empty boxes.
-        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-          // Large accessibility text needs a wider card and more vertical
-          // breathing room. On compact phones this intentionally becomes one
-          // column instead of squeezing the card controls into two.
-          maxCrossAxisExtent: usesLargeText ? 340 : 260,
-          mainAxisExtent: usesLargeText ? 260 : 220,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-        ),
+        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
         itemCount: provider.plans.length,
         itemBuilder:
             (context, index) => _buildPlanCard(
@@ -217,8 +201,10 @@ class HomeScreen extends StatelessWidget {
     final textSecondary = textSecondaryColor(context);
     final planColor = planColorOf(plan.planColor, context);
 
-    final exerciseNames = plan.exercises.map((e) => e.name).toList();
-    final previewLines = exerciseNames.take(3).toList();
+    final exercisePreview = plan.exercises
+        .take(3)
+        .map((exercise) => exercise.name)
+        .join('  ·  ');
 
     void openWorkout() {
       Navigator.push(
@@ -234,154 +220,105 @@ class HomeScreen extends StatelessWidget {
       onLongPress: () => _showPlanOptions(context, plan, index, accent, stat),
       borderRadius: AppRadius.card,
       child: Container(
-        // Clips the full-bleed accent strip below to the rounded corners.
+        // Keep the card edge and its content within the same rounded shape.
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: surface,
           border: Border.all(color: border, width: 1),
           borderRadius: AppRadius.card,
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Index and title share a line — on its own row the `[01]`
-                    // cost 20px of height for four characters.
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(right: 48),
-                          child: Row(
-                            children: [
-                              Semantics(
-                                label: '${_titleCase(plan.name)} plan marker',
-                                child: Container(
-                                  width: 3,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    color: planColor,
-                                    borderRadius: AppRadius.micro,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(
-                                child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.baseline,
-                                  textBaseline: TextBaseline.alphabetic,
-                                  children: [
-                                    Text(
-                                      (index + 1).toString().padLeft(2, '0'),
-                                      style: AppTypography.trainingData(
-                                        fontSize: 9,
-                                        color: textSecondary,
-                                        letterSpacing: 0.08,
-                                      ),
-                                    ),
-                                    const SizedBox(width: AppSpacing.sm),
-                                    Expanded(
-                                      child: Text(
-                                        _titleCase(plan.name),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleSmall
-                                            ?.copyWith(color: textPrimary),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Positioned(
-                          top: -13,
-                          right: 0,
-                          child: IconButton(
-                            tooltip: 'Plan actions',
-                            onPressed:
-                                () => _showPlanOptions(
-                                  context,
-                                  plan,
-                                  index,
-                                  accent,
-                                  stat,
-                                ),
-                            icon: Icon(
-                              LucideIcons.ellipsis,
-                              size: 18,
-                              color: textSecondary,
-                            ),
-                          ),
-                        ),
-                      ],
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.sm,
+            AppSpacing.sm,
+            AppSpacing.lg,
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Semantics(
+                  label: '${_titleCase(plan.name)} plan marker',
+                  child: Container(
+                    width: 3,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: planColor,
+                      borderRadius: AppRadius.micro,
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      '${plan.exercises.length} exercises  ·  '
-                      '${_lastTrainedLabel(stat)}',
-                      style: AppTypography.trainingData(
-                        fontSize: 9,
-                        color: textSecondary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.xs),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _titleCase(plan.name),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleLarge?.copyWith(color: textPrimary),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    ...previewLines.map(
-                      (name) => Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
-                        child: Text(
-                          '· $name',
+                      if (exercisePreview.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          exercisePreview,
                           style: Theme.of(
                             context,
                           ).textTheme.bodySmall?.copyWith(color: textSecondary),
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ),
-                    if (exerciseNames.length > 3)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
-                        child: Text(
-                          '+${exerciseNames.length - 3} more',
-                          style: AppTypography.trainingData(
-                            fontSize: 9,
-                            color: textSecondary.withAlpha(128),
+                      ],
+                      const SizedBox(height: AppSpacing.sm),
+                      Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.xxs,
+                        children: [
+                          Text(
+                            '${plan.exercises.length} exercises',
+                            style: AppTypography.trainingData(
+                              fontSize: 10,
+                              color: textSecondary,
+                            ),
                           ),
-                        ),
+                          if (stat?.lastTrained != null)
+                            Text(
+                              _lastTrainedLabel(stat),
+                              style: AppTypography.trainingData(
+                                fontSize: 10,
+                                color: textSecondary,
+                              ),
+                            ),
+                        ],
                       ),
-                    const Spacer(),
-                    Text(
-                      _planFooter(plan, stat),
-                      style: AppTypography.trainingData(
-                        fontSize: 9,
-                        color: textSecondary,
-                        letterSpacing: 0.06,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+              IconButton(
+                tooltip: 'Plan actions',
+                onPressed:
+                    () => _showPlanOptions(context, plan, index, accent, stat),
+                icon: Icon(
+                  LucideIcons.ellipsis,
+                  size: 18,
+                  color: textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  /// `2D AGO · 3 SESSIONS · 5 EX`, degrading to just the exercise count for a
-  /// plan that has never been trained.
+  /// Short summary in the plan actions dialog.
   String _planFooter(WorkoutPlan plan, PlanStat? stat) {
     if (stat == null || stat.sessionCount == 0) {
       return '${plan.exercises.length} EXERCISES';
@@ -715,23 +652,21 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Centres its child and caps it at [Breakpoints.expanded].
-///
-/// The plans grid sizes columns by max extent, so an ultra-wide monitor gave it
-/// ten columns and a card's three-line preview stretched a hand-span across the
-/// desk. Header, grid, and footer button all sit in the same capped measure, so
-/// they share one left edge; only the header's ground and its rule still run
-/// full-bleed, because a rule is screen furniture rather than content.
+/// Centres content at a readable measure on wide screens.
 class _CappedWidth extends StatelessWidget {
   final Widget child;
+  final double maxWidth;
 
-  const _CappedWidth({required this.child});
+  const _CappedWidth({
+    required this.child,
+    this.maxWidth = Breakpoints.expanded,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: Breakpoints.expanded),
+        constraints: BoxConstraints(maxWidth: maxWidth),
         child: child,
       ),
     );
