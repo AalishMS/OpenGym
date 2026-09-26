@@ -10,6 +10,7 @@ import 'set_entry_table.dart';
 class ExerciseCard extends StatelessWidget {
   final Exercise exercise;
   final int exerciseIndex;
+  final bool reorderable;
   final Color accent;
   final List<gym.Set> previousSets;
   final VoidCallback? onEntryFinished;
@@ -26,6 +27,7 @@ class ExerciseCard extends StatelessWidget {
     super.key,
     required this.exercise,
     required this.exerciseIndex,
+    this.reorderable = false,
     required this.accent,
     this.previousSets = const [],
     this.onEntryFinished,
@@ -60,21 +62,41 @@ class ExerciseCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: accent),
-                  borderRadius: AppRadius.badge,
-                ),
-                child: Text(
-                  '${exerciseIndex + 1}',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12,
-                    color: accent,
-                    fontWeight: FontWeight.bold,
+              if (reorderable)
+                ReorderableDragStartListener(
+                  index: exerciseIndex,
+                  child: Tooltip(
+                    message: 'Drag to reorder ${exercise.name}',
+                    child: SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Icon(
+                        LucideIcons.gripVertical,
+                        size: 20,
+                        color: textSecondaryColor(context),
+                      ),
+                    ),
+                  ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: accent),
+                    borderRadius: AppRadius.badge,
+                  ),
+                  child: Text(
+                    '${exerciseIndex + 1}',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 12,
+                      color: accent,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(width: 12),
               Expanded(
                 child: action(

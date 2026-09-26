@@ -30,7 +30,8 @@ class _IntroScreenState extends State<IntroScreen> {
     ),
     (
       title: 'Log as you lift',
-      body: 'Record sets, reps, and weight while your workout is in progress.',
+      body:
+          'Record sets, reps, and weight. Swipe between weeks and drag exercises into order as you train.',
       label: 'Today\'s workout',
     ),
     (

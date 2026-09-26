@@ -14,6 +14,7 @@ import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/screens/home_screen.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/widgets/workout/exercise_card.dart';
 
 import 'support/hive_test_harness.dart';
 import 'package:gymapp/theme/app_theme.dart';
@@ -314,22 +315,37 @@ void main() {
     },
   );
 
-  testWidgets('workout reorder items use stable object identity keys', (
-    tester,
-  ) async {
+  testWidgets('workout drag handles reorder exercises', (tester) async {
     final plan = populatedPlan();
     await tester.pumpWidget(homeHost(plans: [plan]));
     await tester.tap(find.text('Push Day'));
     await tester.pumpAndSettle();
 
-    final dragItems =
-        tester
-            .widgetList<ReorderableDelayedDragStartListener>(
-              find.byType(ReorderableDelayedDragStartListener),
-            )
-            .toList();
-    expect(dragItems, isNotEmpty);
-    expect(dragItems.every((item) => item.key is ObjectKey), isTrue);
+    final handle = find.byTooltip('Drag to reorder Bench Press');
+    expect(handle, findsOneWidget);
+    final dragItems = find.byWidgetPredicate(
+      (widget) => widget is Container && widget.key is ObjectKey,
+    );
+    expect(dragItems, findsWidgets);
+
+    await tester.drag(handle, const Offset(0, 220));
+    await tester.pumpAndSettle();
+    final reordered = tester.widgetList<ExerciseCard>(
+      find.byType(ExerciseCard),
+    );
+    expect(reordered.first.exercise.name, 'Overhead Press');
+
+    // The final slot follows the non-draggable Add exercise tile.
+    tester
+        .widget<SliverReorderableList>(find.byType(SliverReorderableList))
+        .onReorderItem!(0, plan.exercises.length);
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
+    await tester.pumpAndSettle();
+    final endOrder = tester.widgetList<ExerciseCard>(find.byType(ExerciseCard));
+    expect(endOrder.last.exercise.name, 'Overhead Press');
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpAndSettle();
   });
 
   testWidgets('plan header swipe follows the active plan after reorder', (

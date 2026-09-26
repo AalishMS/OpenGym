@@ -605,10 +605,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     final session = _getOrCreateSession();
     final exerciseCount = session.exercises.length;
     if (oldIndex < 0 || oldIndex >= exerciseCount) return;
-    if (newIndex < 0 || newIndex >= exerciseCount) return;
+    // The final drop slot can land after the non-draggable Add exercise tile.
+    if (newIndex < 0 || newIndex > exerciseCount) return;
     final exercises = List<Exercise>.from(session.exercises);
     final exercise = exercises.removeAt(oldIndex);
-    exercises.insert(newIndex, exercise);
+    exercises.insert(newIndex.clamp(0, exercises.length), exercise);
+    if (oldIndex == exercises.indexOf(exercise)) return;
     _updateSession(session.copyWith(exercises: exercises));
   }
 
@@ -873,64 +875,81 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                       : null,
               child: IgnorePointer(
                 ignoring: session.isCompleted,
-                child: CustomScrollView(
-                  physics: const BouncingScrollPhysics(
-                    parent: AlwaysScrollableScrollPhysics(),
-                  ),
-                  slivers: [
-                    // State the gutter once, on the sliver, rather than as a
-                    // margin per item: the rounded cards need clearance from the
-                    // screen edges or their corners read as a clipping bug, and
-                    // the + ADD EXERCISE tile inherits the same inset for free.
-                    SliverPadding(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      sliver: SliverReorderableList(
-                        itemCount:
-                            session.exercises.length +
-                            (session.isCompleted ? 0 : 1),
-                        onReorderItem: _reorderExercises,
-                        proxyDecorator: (child, index, animation) {
-                          return Material(
-                            color: surfaceColor(context),
-                            borderRadius: AppRadius.card,
-                            child: child,
-                          );
-                        },
-                        itemBuilder: (context, index) {
-                          if (index == session.exercises.length) {
-                            return InkWell(
-                              key: const ValueKey('add_exercise_button'),
-                              onTap: _addEmptyExercise,
-                              borderRadius: AppRadius.button,
-                              child: Container(
-                                constraints: const BoxConstraints(
-                                  minHeight: 48,
-                                ),
-                                padding: const EdgeInsets.all(AppSpacing.lg),
-                                decoration: BoxDecoration(
-                                  color: surfaceColor(context),
-                                  border: Border.all(color: accent, width: 1),
-                                  borderRadius: AppRadius.button,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    'Add exercise',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(color: accent),
+                child: AnimatedSwitcher(
+                  duration:
+                      MediaQuery.disableAnimationsOf(context)
+                          ? Duration.zero
+                          : const Duration(milliseconds: 220),
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  layoutBuilder:
+                      (currentChild, previousChildren) => Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          for (final previous in previousChildren)
+                            ExcludeSemantics(
+                              child: IgnorePointer(child: previous),
+                            ),
+                          if (currentChild != null) currentChild,
+                        ],
+                      ),
+                  child: CustomScrollView(
+                    key: ValueKey(_currentWeek),
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    slivers: [
+                      // State the gutter once, on the sliver, rather than as a
+                      // margin per item: the rounded cards need clearance from the
+                      // screen edges or their corners read as a clipping bug, and
+                      // the + ADD EXERCISE tile inherits the same inset for free.
+                      SliverPadding(
+                        padding: const EdgeInsets.all(AppSpacing.md),
+                        sliver: SliverReorderableList(
+                          itemCount:
+                              session.exercises.length +
+                              (session.isCompleted ? 0 : 1),
+                          onReorderItem: _reorderExercises,
+                          proxyDecorator: (child, index, animation) {
+                            return Material(
+                              color: surfaceColor(context),
+                              borderRadius: AppRadius.card,
+                              child: child,
+                            );
+                          },
+                          itemBuilder: (context, index) {
+                            if (index == session.exercises.length) {
+                              return InkWell(
+                                key: const ValueKey('add_exercise_button'),
+                                onTap: _addEmptyExercise,
+                                borderRadius: AppRadius.button,
+                                child: Container(
+                                  constraints: const BoxConstraints(
+                                    minHeight: 48,
+                                  ),
+                                  padding: const EdgeInsets.all(AppSpacing.lg),
+                                  decoration: BoxDecoration(
+                                    color: surfaceColor(context),
+                                    border: Border.all(color: accent, width: 1),
+                                    borderRadius: AppRadius.button,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'Add exercise',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .labelLarge
+                                          ?.copyWith(color: accent),
+                                    ),
                                   ),
                                 ),
-                              ),
-                            );
-                          }
+                              );
+                            }
 
-                          final exercise = session.exercises[index];
+                            final exercise = session.exercises[index];
 
-                          return ReorderableDelayedDragStartListener(
-                            key: ObjectKey(exercise),
-                            index: index,
-                            child: Container(
+                            return Container(
+                              key: ObjectKey(exercise),
                               margin: const EdgeInsets.only(
                                 bottom: AppSpacing.sm,
                               ),
@@ -945,6 +964,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                               child: ExerciseCard(
                                 exercise: exercise,
                                 exerciseIndex: index,
+                                reorderable: !session.isCompleted,
                                 accent: accent,
                                 previousSets: previousExerciseSets(
                                   _sessionsWithDrafts(),
@@ -967,12 +987,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                                 onRename: _showExerciseRenameDialog,
                                 onDeleteExercise: _deleteExercise,
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
