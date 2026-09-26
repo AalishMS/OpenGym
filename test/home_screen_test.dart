@@ -21,6 +21,8 @@ import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/spacing.dart';
+import 'package:gymapp/utils/format.dart';
+import 'package:gymapp/utils/plan_stats.dart';
 import 'package:gymapp/widgets/underline_tab_strip.dart';
 
 void main() {
@@ -52,6 +54,7 @@ void main() {
 
   Widget homeHost({
     Size size = const Size(390, 800),
+    double textScale = 1,
     Brightness brightness = Brightness.dark,
     List<WorkoutPlan> plans = const [],
     List<WorkoutSession> sessions = const [],
@@ -75,7 +78,10 @@ void main() {
           child: SizedBox.fromSize(
             size: size,
             child: MediaQuery(
-              data: MediaQueryData(size: size),
+              data: MediaQueryData(
+                size: size,
+                textScaler: TextScaler.linear(textScale),
+              ),
               child: const HomeScreen(),
             ),
           ),
@@ -175,7 +181,8 @@ void main() {
     );
     expect(find.text('Push Day'), findsOneWidget);
     expect(find.textContaining('4 exercises'), findsOneWidget);
-    expect(find.textContaining('Last trained yesterday'), findsOneWidget);
+    expect(find.textContaining('12 sets'), findsOneWidget);
+    expect(find.text('Yesterday'), findsOneWidget);
     expect(find.textContaining('Bench Press'), findsOneWidget);
     expect(find.textContaining('Overhead Press'), findsOneWidget);
     expect(find.textContaining('Cable Fly'), findsOneWidget);
@@ -612,6 +619,153 @@ void main() {
       await tester.pump();
       expect(tester.takeException(), isNull, reason: '$size');
     }
+  });
+
+  List<WorkoutPlan> rotationPlans() => [
+    populatedPlan(),
+    populatedPlan().copyWith(
+      id: 'plan-2',
+      name: 'Pull Day',
+      planColor: kPlanColors[3],
+    ),
+    populatedPlan().copyWith(
+      id: 'plan-3',
+      name: 'Leg Day',
+      planColor: kPlanColors[6],
+    ),
+  ];
+
+  WorkoutSession pullSession(DateTime date) => WorkoutSession(
+    id: 'session-pull',
+    planId: 'plan-2',
+    planName: 'Pull Day',
+    date: date,
+    exercises: const [],
+  );
+
+  testWidgets('a single plan has no up next card', (tester) async {
+    final data = populatedData();
+    await tester.pumpWidget(
+      homeHost(plans: [data.plan], sessions: [data.session]),
+    );
+    expect(find.text('Up next'), findsNothing);
+    expect(find.text('Your plans'), findsOneWidget);
+  });
+
+  testWidgets('up next starts the plan after the last one trained', (
+    tester,
+  ) async {
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    await tester.pumpWidget(
+      homeHost(plans: rotationPlans(), sessions: [pullSession(yesterday)]),
+    );
+
+    expect(find.text('Up next'), findsOneWidget);
+    expect(find.text('Day 3 of 3'), findsOneWidget);
+
+    await tester.tap(find.text('Start workout'));
+    await tester.pumpAndSettle();
+    final workout = tester.widget<WorkoutScreen>(find.byType(WorkoutScreen));
+    expect(workout.plan.name, 'Leg Day');
+    expect(workout.planIndex, 2);
+  });
+
+  testWidgets('week strip and cards mark what was trained this week', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      homeHost(plans: rotationPlans(), sessions: [pullSession(DateTime.now())]),
+    );
+
+    expect(find.text('1 workout'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            (widget.properties.label ?? '').endsWith('today: Pull Day'),
+      ),
+      findsOneWidget,
+    );
+    // Only the Pull Day card is done this week, and says when.
+    expect(find.byIcon(LucideIcons.check), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
+  });
+
+  testWidgets('up next and plans fit every width, theme, and text size', (
+    tester,
+  ) async {
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    for (final brightness in Brightness.values) {
+      for (final size in [const Size(320, 700), const Size(1200, 800)]) {
+        for (final scale in [1.0, 2.0]) {
+          await tester.pumpWidget(
+            homeHost(
+              size: size,
+              textScale: scale,
+              brightness: brightness,
+              plans: rotationPlans(),
+              sessions: [pullSession(yesterday)],
+            ),
+          );
+          await tester.pump();
+          expect(find.text('Up next'), findsOneWidget);
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '$brightness $size ${scale}x',
+          );
+        }
+      }
+    }
+  });
+
+  group('PlanStat.nextInRotation', () {
+    List<WorkoutSession> trained(Map<String, int> daysAgoByPlan) => [
+      for (final entry in daysAgoByPlan.entries)
+        WorkoutSession(
+          planName: entry.key,
+          date: DateTime.now().subtract(Duration(days: entry.value)),
+          exercises: const [],
+        ),
+    ];
+
+    int next(Map<String, int> daysAgoByPlan) {
+      final plans = rotationPlans();
+      final stats = PlanStat.compute(plans, trained(daysAgoByPlan));
+      return PlanStat.nextInRotation(stats, plans.length);
+    }
+
+    test('starts at the first plan when nothing is trained', () {
+      expect(next({}), 0);
+    });
+
+    test('follows whichever plan was trained last', () {
+      expect(next({'Push Day': 1, 'Pull Day': 3}), 1);
+      expect(next({'Push Day': 3, 'Pull Day': 1}), 2);
+    });
+
+    test('wraps from the last plan back to the first', () {
+      expect(next({'Leg Day': 0}), 0);
+    });
+  });
+
+  group('formatDaysAgo', () {
+    final now = DateTime(2026, 9, 26, 9);
+
+    test('reads in sentence case at every range', () {
+      expect(formatDaysAgo(DateTime(2026, 9, 26, 7), now: now), 'Today');
+      expect(formatDaysAgo(DateTime(2026, 9, 25, 23), now: now), 'Yesterday');
+      expect(formatDaysAgo(DateTime(2026, 9, 21), now: now), '5 days ago');
+      expect(formatDaysAgo(DateTime(2026, 9, 5), now: now), '3 weeks ago');
+      expect(formatDaysAgo(DateTime(2026, 6, 1), now: now), '3 months ago');
+    });
+
+    test('a daylight saving change does not lose a day', () {
+      // Europe's clocks go forward overnight here, so in those time zones the
+      // two local midnights are 23 hours apart.
+      final after = DateTime(2026, 3, 30);
+      expect(formatDaysAgo(DateTime(2026, 3, 29), now: after), 'Yesterday');
+    });
   });
 }
 

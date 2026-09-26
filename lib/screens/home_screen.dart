@@ -9,7 +9,6 @@ import '../models/exercise_template.dart';
 import '../models/set_template.dart';
 import '../data/plan_colors.dart';
 import '../theme/app_theme.dart';
-import '../theme/app_typography.dart';
 import '../theme/breakpoints.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
@@ -19,6 +18,9 @@ import '../widgets/workout/workout_dialogs.dart';
 import '../widgets/splits/split_switcher.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_wordmark.dart';
+import '../widgets/home/plan_card.dart';
+import '../widgets/home/up_next_card.dart';
+import '../widgets/home/week_strip.dart';
 import 'plan_editor_screen.dart';
 import 'workout_screen.dart';
 import '../widgets/splits/preset_browser_dialog.dart';
@@ -108,47 +110,71 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildEmptyState(BuildContext context, WorkoutPlanProvider provider) {
-    final textSecondary = textSecondaryColor(context);
+    final textTheme = Theme.of(context).textTheme;
 
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'No plans yet',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: textPrimaryColor(context),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: surfaceColor(context),
+                  border: Border.all(color: borderColor(context), width: 1),
+                  borderRadius: AppRadius.card,
+                ),
+                child: Icon(
+                  LucideIcons.clipboardList,
+                  size: 32,
+                  color: accentColor(context),
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Create your first workout plan',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: textSecondary),
-            ),
-            const SizedBox(height: AppSpacing.xxl),
-            AppButton.secondary(
-              label: 'Create plan',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PlanEditorScreen.create(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppButton.text(
-              label: 'Choose a split',
-              onPressed: () {
-                PresetBrowserDialog.show(context);
-              },
-            ),
-          ],
+              const SizedBox(height: AppSpacing.xl),
+              Text(
+                'No plans yet',
+                textAlign: TextAlign.center,
+                style: textTheme.headlineSmall?.copyWith(
+                  color: textPrimaryColor(context),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Build a plan of your own, or start from a proven split '
+                'and make it yours.',
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: textSecondaryColor(context),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              SizedBox(
+                width: double.infinity,
+                child: AppButton.primary(
+                  label: 'Create plan',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PlanEditorScreen.create(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              AppButton.text(
+                label: 'Choose a split',
+                onPressed: () {
+                  PresetBrowserDialog.show(context);
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -159,254 +185,138 @@ class HomeScreen extends StatelessWidget {
     WorkoutPlanProvider provider,
     Color accent,
   ) {
+    final plans = provider.plans;
     // Roll up each plan's training history once, keyed by its index in
-    // `provider.plans`, so the card footers don't each hit the repository.
+    // `provider.plans`, so the cards don't each hit the repository.
     final sessions = context.watch<WorkoutSessionProvider>().sessions;
-    final statsByIndex = {
-      for (final stat in PlanStat.compute(provider.plans, sessions))
-        stat.planIndex: stat,
-    };
-    final textScale = MediaQuery.textScalerOf(context).scale(1);
-    final usesLargeText = textScale > 1.3;
+    final stats = PlanStat.compute(plans, sessions);
+    final statsByIndex = {for (final stat in stats) stat.planIndex: stat};
+    // With a single plan there is no rotation to point into: its card already
+    // is the next workout, and a second copy of it above would only repeat it.
+    final nextIndex =
+        plans.length > 1
+            ? PlanStat.nextInRotation(stats, plans.length)
+            : null;
 
     return _CappedWidth(
-      child: GridView.builder(
+      child: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,
           AppSpacing.lg,
           AppSpacing.lg,
-          AppSpacing.sm,
+          _fabClearance,
         ),
-        // Max-extent (not a fixed column count) so columns scale with the
-        // window: 2 on a phone, 5 at the capped desktop measure. A fixed
-        // `mainAxisExtent` replaces `childAspectRatio` — the old ratio made
-        // cards as tall as the column was wide, which on desktop meant two
-        // enormous, mostly-empty boxes.
-        gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
-          // Large accessibility text needs a wider card and more vertical
-          // breathing room. On compact phones this intentionally becomes one
-          // column instead of squeezing the card controls into two.
-          maxCrossAxisExtent: usesLargeText ? 340 : 260,
-          mainAxisExtent: usesLargeText ? 260 : 220,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-        ),
-        itemCount: provider.plans.length,
-        itemBuilder:
-            (context, index) => _buildPlanCard(
-              context,
-              provider.plans[index],
-              index,
-              accent,
-              statsByIndex[index],
+        children: [
+          if (nextIndex != null) ...[
+            UpNextCard(
+              plan: plans[nextIndex],
+              day: nextIndex + 1,
+              dayCount: plans.length,
+              stat: statsByIndex[nextIndex],
+              onStart:
+                  () => _openWorkout(context, plans[nextIndex], nextIndex),
+              footer: WeekStrip(plans: plans, sessions: sessions),
             ),
+            const SizedBox(height: AppSpacing.xl),
+          ],
+          _SectionHeading(title: 'Your plans', count: plans.length),
+          const SizedBox(height: AppSpacing.md),
+          _buildPlanGrid(context, plans, statsByIndex, accent),
+        ],
       ),
     );
   }
 
-  Widget _buildPlanCard(
+  /// Room under the last card for the floating create button, which otherwise
+  /// sits on top of the last card's summary line.
+  static const double _fabClearance = 96;
+
+  /// Narrowest a card gets before the grid drops a column.
+  static const double _minCardWidth = 340;
+  static const int _maxColumns = 3;
+
+  Widget _buildPlanGrid(
     BuildContext context,
-    WorkoutPlan plan,
-    int index,
+    List<WorkoutPlan> plans,
+    Map<int, PlanStat> statsByIndex,
     Color accent,
-    PlanStat? stat,
   ) {
-    final surface = surfaceColor(context);
-    final border = borderColor(context);
-    final textPrimary = textPrimaryColor(context);
-    final textSecondary = textSecondaryColor(context);
-    final planColor = planColorOf(plan.planColor, context);
+    Widget card(int index) => PlanCard(
+      plan: plans[index],
+      index: index,
+      stat: statsByIndex[index],
+      onOpen: () => _openWorkout(context, plans[index], index),
+      onShowActions:
+          () => _showPlanOptions(
+            context,
+            plans[index],
+            index,
+            accent,
+            statsByIndex[index],
+          ),
+    );
 
-    final exerciseNames = plan.exercises.map((e) => e.name).toList();
-    final previewLines = exerciseNames.take(3).toList();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fit = (constraints.maxWidth / _minCardWidth).floor();
+        final columns =
+            fit < 1 ? 1 : (fit > _maxColumns ? _maxColumns : fit);
 
-    void openWorkout() {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => WorkoutScreen(plan: plan, planIndex: index),
-        ),
-      );
-    }
-
-    return InkWell(
-      onTap: openWorkout,
-      onLongPress: () => _showPlanOptions(context, plan, index, accent, stat),
-      borderRadius: AppRadius.card,
-      child: Container(
-        // Clips the full-bleed accent strip below to the rounded corners.
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: surface,
-          border: Border.all(color: border, width: 1),
-          borderRadius: AppRadius.card,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Index and title share a line — on its own row the `[01]`
-                    // cost 20px of height for four characters.
-                    Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.only(right: 48),
-                          child: Row(
-                            children: [
-                              Semantics(
-                                label: '${_titleCase(plan.name)} plan marker',
-                                child: Container(
-                                  width: 3,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    color: planColor,
-                                    borderRadius: AppRadius.micro,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(
-                                child: Row(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.baseline,
-                                  textBaseline: TextBaseline.alphabetic,
-                                  children: [
-                                    Text(
-                                      (index + 1).toString().padLeft(2, '0'),
-                                      style: AppTypography.trainingData(
-                                        fontSize: 9,
-                                        color: textSecondary,
-                                        letterSpacing: 0.08,
-                                      ),
-                                    ),
-                                    const SizedBox(width: AppSpacing.sm),
-                                    Expanded(
-                                      child: Text(
-                                        _titleCase(plan.name),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleSmall
-                                            ?.copyWith(color: textPrimary),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Positioned(
-                          top: -13,
-                          right: 0,
-                          child: IconButton(
-                            tooltip: 'Plan actions',
-                            onPressed:
-                                () => _showPlanOptions(
-                                  context,
-                                  plan,
-                                  index,
-                                  accent,
-                                  stat,
-                                ),
-                            icon: Icon(
-                              LucideIcons.ellipsis,
-                              size: 18,
-                              color: textSecondary,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      '${plan.exercises.length} exercises  ·  '
-                      '${_lastTrainedLabel(stat)}',
-                      style: AppTypography.trainingData(
-                        fontSize: 9,
-                        color: textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    ...previewLines.map(
-                      (name) => Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
-                        child: Text(
-                          '· $name',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(color: textSecondary),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                    if (exerciseNames.length > 3)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
-                        child: Text(
-                          '+${exerciseNames.length - 3} more',
-                          style: AppTypography.trainingData(
-                            fontSize: 9,
-                            color: textSecondary.withAlpha(128),
-                          ),
-                        ),
-                      ),
-                    const Spacer(),
-                    Text(
-                      _planFooter(plan, stat),
-                      style: AppTypography.trainingData(
-                        fontSize: 9,
-                        color: textSecondary,
-                        letterSpacing: 0.06,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+        // Rows rather than a fixed-extent grid: a row is as tall as its tallest
+        // card, so large text grows the cards instead of clipping them, and the
+        // cards in a row still share one height.
+        final rows = <Widget>[];
+        for (var start = 0; start < plans.length; start += columns) {
+          if (rows.isNotEmpty) rows.add(const SizedBox(height: _cardGap));
+          if (columns == 1) {
+            rows.add(card(start));
+            continue;
+          }
+          rows.add(
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var column = 0; column < columns; column++) ...[
+                    if (column > 0) const SizedBox(width: _cardGap),
+                    Expanded(
+                      child:
+                          start + column < plans.length
+                              ? card(start + column)
+                              : const SizedBox.shrink(),
                     ),
                   ],
-                ),
+                ],
               ),
             ),
-          ],
-        ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: rows,
+        );
+      },
+    );
+  }
+
+  static const double _cardGap = 10;
+
+  void _openWorkout(BuildContext context, WorkoutPlan plan, int index) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkoutScreen(plan: plan, planIndex: index),
       ),
     );
   }
 
-  /// `2D AGO · 3 SESSIONS · 5 EX`, degrading to just the exercise count for a
-  /// plan that has never been trained.
-  String _planFooter(WorkoutPlan plan, PlanStat? stat) {
-    if (stat == null || stat.sessionCount == 0) {
-      return '${plan.exercises.length} EXERCISES';
-    }
-    return '${formatRelativeDay(stat.lastTrained!)}'
-        '  ·  ${stat.sessionCount} SESSIONS'
-        '  ·  ${plan.exercises.length} EX';
-  }
-
-  String _lastTrainedLabel(PlanStat? stat) {
-    if (stat?.lastTrained == null) return 'Never trained';
-    return 'Last trained ${formatRelativeDay(stat!.lastTrained!).toLowerCase()}';
-  }
-
-  String _titleCase(String name) {
-    return name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .map(
-          (word) =>
-              word.isEmpty
-                  ? word
-                  : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
-        )
-        .join(' ');
+  /// `4 exercises · last trained yesterday`, for the plan menu's header.
+  String _planSummary(WorkoutPlan plan, PlanStat? stat) {
+    final count = plan.exercises.length;
+    final exercises = count == 1 ? '1 exercise' : '$count exercises';
+    final last = stat?.lastTrained;
+    if (last == null) return '$exercises  ·  not trained yet';
+    return '$exercises  ·  last trained ${formatDaysAgo(last).toLowerCase()}';
   }
 
   void _showPlanOptions(
@@ -467,7 +377,7 @@ class HomeScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _titleCase(plan.name),
+                                  titleCase(plan.name),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context).textTheme.titleSmall
@@ -475,14 +385,11 @@ class HomeScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: AppSpacing.xxs),
                                 Text(
-                                  _planFooter(plan, stat),
+                                  _planSummary(plan, stat),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.trainingData(
-                                    fontSize: 9,
-                                    color: textSecondary,
-                                    letterSpacing: 0.06,
-                                  ),
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: textSecondary),
                                 ),
                               ],
                             ),
@@ -622,7 +529,7 @@ class HomeScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${_titleCase(plan.name)} color',
+                      '${titleCase(plan.name)} color',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 16),
@@ -717,11 +624,11 @@ class HomeScreen extends StatelessWidget {
 
 /// Centres its child and caps it at [Breakpoints.expanded].
 ///
-/// The plans grid sizes columns by max extent, so an ultra-wide monitor gave it
-/// ten columns and a card's three-line preview stretched a hand-span across the
-/// desk. Header, grid, and footer button all sit in the same capped measure, so
-/// they share one left edge; only the header's ground and its rule still run
-/// full-bleed, because a rule is screen furniture rather than content.
+/// Without a cap an ultra-wide monitor stretched the plans a hand-span across
+/// the desk. Header, up-next card, and plans all sit in the same capped
+/// measure, so they share one left edge; only the header's ground and its
+/// rule still run full-bleed, because a rule is screen furniture rather than
+/// content.
 class _CappedWidth extends StatelessWidget {
   final Widget child;
 
@@ -733,6 +640,45 @@ class _CappedWidth extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: Breakpoints.expanded),
         child: child,
+      ),
+    );
+  }
+}
+
+/// A list heading with its count set beside it as data: `Your plans  6`.
+class _SectionHeading extends StatelessWidget {
+  final String title;
+  final int count;
+
+  const _SectionHeading({required this.title, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      header: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Flexible(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: textPrimaryColor(context),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            '$count',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: textSecondaryColor(context),
+            ),
+          ),
+        ],
       ),
     );
   }

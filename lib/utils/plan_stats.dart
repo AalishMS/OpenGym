@@ -68,4 +68,21 @@ class PlanStat {
 
     return stats;
   }
+
+  /// Index of the plan the split's rotation points at next: the one after the
+  /// most recently trained plan, wrapping round to the first. With nothing
+  /// trained yet, that is the first plan.
+  ///
+  /// [stats] is [compute]'s output for the same [planCount] plans. Order does
+  /// not matter; the latest session is found explicitly.
+  static int nextInRotation(List<PlanStat> stats, int planCount) {
+    if (planCount == 0) return 0;
+    PlanStat? latest;
+    for (final stat in stats) {
+      final last = stat.lastTrained;
+      if (last == null) continue;
+      if (latest == null || last.isAfter(latest.lastTrained!)) latest = stat;
+    }
+    return latest == null ? 0 : (latest.planIndex + 1) % planCount;
+  }
 }
