@@ -12,6 +12,9 @@ import '../models/workout_session.dart';
 import 'hive_service.dart';
 import 'supabase_service.dart';
 
+/// What the signed-in user can safely infer about local and cloud data.
+enum SyncStatus { savedOnDevice, pending, synced }
+
 /// Last-write-wins synchronization for the complete split workspace graph.
 /// Split metadata is pulled before legacy bootstrap and parents are always
 /// pushed before plans/sessions. Deleted splits are pushed last so their server
@@ -33,11 +36,33 @@ class SyncService {
   Future<void>? _exclusiveMutation;
   Timer? _debounce;
   final StreamController<void> _changes = StreamController<void>.broadcast();
+  final StreamController<void> _statusChanges =
+      StreamController<void>.broadcast();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   Future<void>? _connectivityStart;
   bool? _connectivityAvailable;
+  String? _lastSuccessfulUserId;
+  String? _lastFailedUserId;
 
   Stream<void> get changes => _changes.stream;
+  Stream<void> get statusChanges => _statusChanges.stream;
+
+  SyncStatus get status {
+    final userId = SupabaseService.currentUserId;
+    if (userId == null) return SyncStatus.savedOnDevice;
+    if (HiveService.getDirtySplits(deleted: false).isNotEmpty ||
+        HiveService.getDirtySplits(deleted: true).isNotEmpty ||
+        HiveService.getDirtySplitPreferences().isNotEmpty ||
+        HiveService.getDirtyPlans().isNotEmpty ||
+        HiveService.getDirtySessions().isNotEmpty ||
+        _lastFailedUserId == userId) {
+      return SyncStatus.pending;
+    }
+    if (_activeSync != null || _lastSuccessfulUserId != userId) {
+      return SyncStatus.savedOnDevice;
+    }
+    return SyncStatus.synced;
+  }
 
   SupabaseClient get _db => SupabaseService.client;
   bool get _canSync =>
@@ -113,6 +138,7 @@ class SyncService {
     if (!_canSync) return;
     _debounce?.cancel();
     _debounce = Timer(const Duration(seconds: 2), syncNow);
+    _statusChanges.add(null);
   }
 
   /// Runs a multi-box local mutation without letting sync observe partial data.
@@ -151,6 +177,7 @@ class SyncService {
     if (active != null) return active;
     final sync = _runSyncCycle();
     _activeSync = sync;
+    _statusChanges.add(null);
     return sync;
   }
 
@@ -180,13 +207,17 @@ class SyncService {
       await _pullPreference(userId);
       await _pullPlans(userId);
       await _pullSessions(userId);
+      _lastSuccessfulUserId = userId;
+      _lastFailedUserId = null;
     } catch (e) {
       // Dirty records and cursors are intentionally retained for a later run.
+      _lastFailedUserId = userId;
       // ignore: avoid_print
       print('sync cycle error (will retry): $e');
     } finally {
       _activeSync = null;
       _changes.add(null);
+      _statusChanges.add(null);
     }
   }
 

@@ -498,7 +498,13 @@ void main() {
     await tester.ensureVisible(find.text('Clear all data'));
     await tester.tap(find.text('Clear all data'));
     await tester.pump();
-    expect(find.text('[CLEAR ALL]'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(Dialog),
+        matching: find.text('Clear all data'),
+      ),
+      findsOneWidget,
+    );
     expectNoOverflow(tester, 'clear confirmation at narrow width');
   });
 
@@ -568,11 +574,16 @@ void main() {
     await tester.ensureVisible(find.text('Load sample data'));
     await tester.tap(find.text('Load sample data'));
     await tester.pump();
-    await tester.tap(find.text('[LOAD]'));
+    await tester.tap(find.text('Load'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Clear all data'));
     await tester.pump();
-    await tester.tap(find.text('[CLEAR ALL]'));
+    await tester.tap(
+      find.descendant(
+        of: find.byType(Dialog),
+        matching: find.text('Clear all data'),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sign out'));
     await tester.pump();
@@ -599,7 +610,7 @@ void main() {
     await tester.ensureVisible(find.text('Load sample data'));
     await tester.tap(find.text('Load sample data'));
     await tester.pump();
-    await tester.tap(find.text('[LOAD]'));
+    await tester.tap(find.text('Load'));
     await tester.pumpAndSettle();
     expect(find.textContaining('sample failed'), findsOneWidget);
   });

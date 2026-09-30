@@ -101,7 +101,7 @@ class WorkoutDialogs {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '> ADD EXERCISE',
+                      'Add exercise',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -148,7 +148,7 @@ class WorkoutDialogs {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    '> Enter exercise name',
+                                    'Enter an exercise name',
                                     style: GoogleFonts.jetBrainsMono(),
                                   ),
                                   backgroundColor: errorColor(context),
@@ -203,7 +203,7 @@ class WorkoutDialogs {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '> RENAME EXERCISE',
+                      'Rename exercise',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -250,7 +250,7 @@ class WorkoutDialogs {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    '> Enter exercise name',
+                                    'Enter an exercise name',
                                     style: GoogleFonts.jetBrainsMono(),
                                   ),
                                   backgroundColor: errorColor(context),
@@ -315,7 +315,7 @@ class WorkoutDialogs {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '> ADD SET',
+                        'Add set',
                         style: GoogleFonts.jetBrainsMono(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -413,7 +413,7 @@ class WorkoutDialogs {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      '> Weight must be >= 0',
+                                      'Weight must be 0 or more',
                                       style: GoogleFonts.jetBrainsMono(),
                                     ),
                                     backgroundColor: errorColor(context),
@@ -426,7 +426,7 @@ class WorkoutDialogs {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      '> Reps must be > 0',
+                                      'Reps must be greater than 0',
                                       style: GoogleFonts.jetBrainsMono(),
                                     ),
                                     backgroundColor: errorColor(context),
@@ -509,7 +509,7 @@ class WorkoutDialogs {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '> NOTE',
+                    'Note',
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -582,7 +582,7 @@ class WorkoutDialogs {
               children: [
                 ListTile(
                   leading: Icon(LucideIcons.pencil, color: accent),
-                  title: Text('RENAME', style: GoogleFonts.jetBrainsMono()),
+                  title: Text('Rename', style: GoogleFonts.jetBrainsMono()),
                   onTap: () {
                     Navigator.pop(context);
                     onRename();
@@ -631,7 +631,7 @@ class WorkoutDialogs {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '> RENAME WEEK',
+                      'Rename week',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -710,7 +710,7 @@ class WorkoutDialogs {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '> DELETE WEEK?',
+                      'Delete week?',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -782,7 +782,7 @@ class WorkoutDialogs {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '> DELETE EXERCISE?',
+                      'Delete exercise?',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -859,7 +859,7 @@ class WorkoutDialogs {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '> DELETE PLAN?',
+                      'Delete plan?',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -915,7 +915,7 @@ class WorkoutDialogs {
   ///
   /// Destructive in the same sense as [showDeletePlanDialog] — the edits are
   /// gone once you leave — so it borrows the same red-titled shape, and
-  /// `[KEEP EDITING]` is the quiet way out because it is the safe one.
+  /// Keep editing is the quiet way out because it is the safe one.
   static Future<bool> showDiscardChangesDialog(BuildContext context) async {
     final result = await showDialog<bool>(
       context: context,
@@ -934,7 +934,7 @@ class WorkoutDialogs {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '> DISCARD CHANGES?',
+                      'Discard changes?',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -1024,7 +1024,7 @@ class WorkoutDialogs {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '> SET $setNumber',
+                      'Set $setNumber',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

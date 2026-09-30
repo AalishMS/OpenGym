@@ -128,6 +128,11 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Settings now shows signed-in users whether data is saved on the device,
+  waiting to sync, or synced. Sync failures keep the pending state until a full
+  cycle succeeds; local logging still proceeds offline.
+- Settings confirmations and workout dialogs use sentence-case titles and
+  plain action labels, including import and clear-all-data confirmations.
 - Rebuilt the in-app release prompt around the current OpenGym visual system:
   - Release notes are normalized into four short highlights, with the complete
     notes available through a clear GitHub action
