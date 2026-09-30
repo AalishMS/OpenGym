@@ -20,7 +20,7 @@ import '../widgets/app_button.dart';
 import '../widgets/app_wordmark.dart';
 import '../widgets/home/plan_card.dart';
 import '../widgets/home/up_next_card.dart';
-import '../widgets/home/week_strip.dart';
+import '../widgets/home/training_snapshot.dart';
 import 'plan_editor_screen.dart';
 import 'workout_screen.dart';
 import '../widgets/splits/preset_browser_dialog.dart';
@@ -212,7 +212,7 @@ class HomeScreen extends StatelessWidget {
               dayCount: plans.length,
               stat: statsByIndex[nextIndex],
               onStart: () => _openWorkout(context, plans[nextIndex], nextIndex),
-              footer: WeekStrip(plans: plans, sessions: sessions),
+              footer: TrainingSnapshot(plans: plans, sessions: sessions),
             ),
             const SizedBox(height: AppSpacing.xl),
           ] else ...[
@@ -223,7 +223,7 @@ class HomeScreen extends StatelessWidget {
                 border: Border.all(color: borderColor(context)),
                 borderRadius: AppRadius.card,
               ),
-              child: WeekStrip(plans: plans, sessions: sessions),
+              child: TrainingSnapshot(plans: plans, sessions: sessions),
             ),
             const SizedBox(height: AppSpacing.xl),
           ],

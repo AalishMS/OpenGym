@@ -23,6 +23,7 @@ import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/spacing.dart';
 import 'package:gymapp/utils/format.dart';
 import 'package:gymapp/utils/plan_stats.dart';
+import 'package:gymapp/widgets/home/training_snapshot.dart';
 import 'package:gymapp/widgets/underline_tab_strip.dart';
 
 void main() {
@@ -643,7 +644,7 @@ void main() {
     exercises: const [],
   );
 
-  testWidgets('a single plan shows the week without an up next card', (
+  testWidgets('a single plan shows training without an up next card', (
     tester,
   ) async {
     final data = populatedData();
@@ -655,7 +656,9 @@ void main() {
     );
     expect(find.text('Up next'), findsNothing);
     expect(find.text('This week'), findsOneWidget);
-    expect(find.text('1 workout'), findsOneWidget);
+    expect(find.text('1'), findsWidgets);
+    expect(find.text('workout'), findsOneWidget);
+    expect(find.text('Last workout'), findsOneWidget);
     expect(find.text('Your plans'), findsOneWidget);
   });
 
@@ -674,16 +677,9 @@ void main() {
     await tester.pumpWidget(homeHost(plans: plans, sessions: [draft]));
 
     expect(find.text('Day 1 of 3'), findsOneWidget);
-    expect(find.text('No workouts yet'), findsOneWidget);
+    expect(find.text('No workouts logged yet'), findsOneWidget);
+    expect(find.text('workouts'), findsOneWidget);
     expect(find.byIcon(LucideIcons.check), findsNothing);
-    expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is Semantics &&
-            (widget.properties.label ?? '').endsWith('today: no workout'),
-      ),
-      findsOneWidget,
-    );
   });
 
   testWidgets('up next starts the plan after the last one trained', (
@@ -704,25 +700,92 @@ void main() {
     expect(workout.planIndex, 2);
   });
 
-  testWidgets('week strip and cards mark what was trained this week', (
+  testWidgets('snapshot and cards mark what was trained this week', (
     tester,
   ) async {
     await tester.pumpWidget(
       homeHost(plans: rotationPlans(), sessions: [pullSession(DateTime.now())]),
     );
 
-    expect(find.text('1 workout'), findsOneWidget);
-    expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is Semantics &&
-            (widget.properties.label ?? '').endsWith('today: Pull Day'),
-      ),
-      findsOneWidget,
-    );
+    expect(find.text('workout'), findsOneWidget);
+    expect(find.text('Pull Day · Today'), findsOneWidget);
     // Only the Pull Day card is done this week, and says when.
     expect(find.byIcon(LucideIcons.check), findsOneWidget);
     expect(find.text('Today'), findsOneWidget);
+  });
+
+  testWidgets(
+    'snapshot counts performed sets and uses the latest completed session',
+    (tester) async {
+      final today = DateTime(2026, 9, 30);
+      final plan = populatedPlan();
+      final older = WorkoutSession(
+        date: today.subtract(const Duration(days: 8)),
+        planName: 'Leg Day',
+        exercises: const [],
+      );
+      final completed = WorkoutSession(
+        date: today,
+        planId: plan.id,
+        planName: plan.name,
+        exercises: [
+          Exercise(
+            name: 'Bench Press',
+            sets: [Set(reps: 8, weight: 50), Set(reps: 0, weight: 50)],
+          ),
+        ],
+      );
+      final draft = WorkoutSession(
+        date: today.add(const Duration(hours: 1)),
+        planName: 'Draft',
+        exercises: [
+          Exercise(name: 'Squat', sets: [Set(reps: 5, weight: 80)]),
+        ],
+        isCompleted: false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(const Color(0xFF00A8FF), Brightness.dark),
+          home: Scaffold(
+            body: TrainingSnapshot(
+              plans: [plan],
+              sessions: [draft, older, completed],
+              now: today,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('1'), findsNWidgets(2));
+      expect(find.text('workout'), findsOneWidget);
+      expect(find.text('set'), findsOneWidget);
+      expect(find.text('Push Day · Today'), findsOneWidget);
+      expect(find.textContaining('Draft'), findsNothing);
+    },
+  );
+
+  testWidgets('snapshot fits the narrow side of the up next card', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(const Color(0xFF00A8FF), Brightness.dark),
+        home: Scaffold(
+          body: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: SizedBox(
+              width: 254,
+              child: TrainingSnapshot(
+                plans: [populatedPlan()],
+                sessions: const [],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('up next and plans fit every width, theme, and text size', (
