@@ -439,6 +439,61 @@ void main() {
     }
   });
 
+  testWidgets('theme selector keeps its geometry and color roles across modes', (
+    tester,
+  ) async {
+    final settings = SettingsProvider();
+    Size segmentSize(String label) => tester.getSize(
+      find.ancestor(of: find.text(label), matching: find.byType(TextButton)),
+    );
+
+    await tester.pumpWidget(
+      host(
+        const SettingsScreen(),
+        size: const Size(390, 4000),
+        brightness: Brightness.light,
+        settingsProvider: settings,
+      ),
+    );
+    await tester.pump();
+    final before = [for (final label in ['Dark', 'Light', 'System']) segmentSize(label)];
+
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(
+      host(
+        const SettingsScreen(),
+        size: const Size(390, 4000),
+        brightness: Brightness.dark,
+        settingsProvider: settings,
+      ),
+    );
+    await tester.pump();
+
+    final selector = tester.widget<SegmentedButton<ThemeMode>>(
+      find.byType(SegmentedButton<ThemeMode>),
+    );
+    final context = tester.element(find.byType(SegmentedButton<ThemeMode>));
+    expect(selector.showSelectedIcon, isFalse);
+    expect(selector.selected, {ThemeMode.dark});
+    expect(
+      selector.style!.backgroundColor!.resolve({WidgetState.selected}),
+      accentFillColor(context),
+    );
+    expect(
+      selector.style!.foregroundColor!.resolve({WidgetState.selected}),
+      onAccentColor(context),
+    );
+    expect(
+      selector.style!.backgroundColor!.resolve({}),
+      surfaceColor(context),
+    );
+    expect(
+      [for (final label in ['Dark', 'Light', 'System']) segmentSize(label)],
+      before,
+    );
+  });
+
   testWidgets('workout switches use the page background', (tester) async {
     await tester.pumpWidget(
       host(const SettingsScreen(), size: const Size(390, 4000)),

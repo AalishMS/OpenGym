@@ -128,6 +128,8 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- The Settings theme selector keeps the same segment sizes when switching
+  modes; its selected and unselected colors use the app's theme roles.
 - Settings now shows signed-in users whether data is saved on the device,
   waiting to sync, or synced. Sync failures keep the pending state until a full
   cycle succeeds; local logging still proceeds offline.
