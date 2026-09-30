@@ -128,6 +128,9 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Home training summaries now count only completed workouts. Plan history and
+  rotation use plan IDs when available, falling back to names for legacy
+  sessions. The current-week strip remains visible for single-plan splits.
 - The Settings theme selector keeps the same segment sizes when switching
   modes; its selected and unselected colors use the app's theme roles.
 - Settings now shows signed-in users whether data is saved on the device,

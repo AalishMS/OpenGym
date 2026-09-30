@@ -643,13 +643,47 @@ void main() {
     exercises: const [],
   );
 
-  testWidgets('a single plan has no up next card', (tester) async {
+  testWidgets('a single plan shows the week without an up next card', (
+    tester,
+  ) async {
     final data = populatedData();
     await tester.pumpWidget(
-      homeHost(plans: [data.plan], sessions: [data.session]),
+      homeHost(
+        plans: [data.plan],
+        sessions: [data.session.copyWith(date: DateTime.now())],
+      ),
     );
     expect(find.text('Up next'), findsNothing);
+    expect(find.text('This week'), findsOneWidget);
+    expect(find.text('1 workout'), findsOneWidget);
     expect(find.text('Your plans'), findsOneWidget);
+  });
+
+  testWidgets('a draft does not advance rotation or count as trained', (
+    tester,
+  ) async {
+    final plans = rotationPlans();
+    final draft = WorkoutSession(
+      id: 'draft-pull',
+      planId: plans[1].id,
+      planName: plans[1].name,
+      date: DateTime.now(),
+      exercises: const [],
+      isCompleted: false,
+    );
+    await tester.pumpWidget(homeHost(plans: plans, sessions: [draft]));
+
+    expect(find.text('Day 1 of 3'), findsOneWidget);
+    expect(find.text('No workouts yet'), findsOneWidget);
+    expect(find.byIcon(LucideIcons.check), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            (widget.properties.label ?? '').endsWith('today: no workout'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('up next starts the plan after the last one trained', (
@@ -746,6 +780,30 @@ void main() {
 
     test('wraps from the last plan back to the first', () {
       expect(next({'Leg Day': 0}), 0);
+    });
+
+    test('uses plan ids after renames and with duplicate names', () {
+      final plans = rotationPlans();
+      final renamedSession = WorkoutSession(
+        planId: plans[1].id,
+        planName: 'Old Pull Day',
+        date: DateTime(2026, 9, 29),
+        exercises: const [],
+      );
+      final duplicateName = plans[0].copyWith(name: plans[1].name);
+      final stats = PlanStat.compute(
+        [duplicateName, plans[1], plans[2]],
+        [renamedSession],
+      );
+
+      expect(stats.singleWhere((stat) => stat.planIndex == 0).sessionCount, 0);
+      expect(stats.singleWhere((stat) => stat.planIndex == 1).sessionCount, 1);
+      expect(PlanStat.nextInRotation(stats, 3), 2);
+    });
+
+    test('falls back to names for sessions without plan ids', () {
+      final stats = PlanStat.compute(rotationPlans(), trained({'Pull Day': 0}));
+      expect(PlanStat.nextInRotation(stats, 3), 2);
     });
   });
 

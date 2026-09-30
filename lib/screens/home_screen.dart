@@ -194,9 +194,7 @@ class HomeScreen extends StatelessWidget {
     // With a single plan there is no rotation to point into: its card already
     // is the next workout, and a second copy of it above would only repeat it.
     final nextIndex =
-        plans.length > 1
-            ? PlanStat.nextInRotation(stats, plans.length)
-            : null;
+        plans.length > 1 ? PlanStat.nextInRotation(stats, plans.length) : null;
 
     return _CappedWidth(
       child: ListView(
@@ -213,9 +211,19 @@ class HomeScreen extends StatelessWidget {
               day: nextIndex + 1,
               dayCount: plans.length,
               stat: statsByIndex[nextIndex],
-              onStart:
-                  () => _openWorkout(context, plans[nextIndex], nextIndex),
+              onStart: () => _openWorkout(context, plans[nextIndex], nextIndex),
               footer: WeekStrip(plans: plans, sessions: sessions),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              decoration: BoxDecoration(
+                color: surfaceColor(context),
+                border: Border.all(color: borderColor(context)),
+                borderRadius: AppRadius.card,
+              ),
+              child: WeekStrip(plans: plans, sessions: sessions),
             ),
             const SizedBox(height: AppSpacing.xl),
           ],
@@ -259,8 +267,7 @@ class HomeScreen extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final fit = (constraints.maxWidth / _minCardWidth).floor();
-        final columns =
-            fit < 1 ? 1 : (fit > _maxColumns ? _maxColumns : fit);
+        final columns = fit < 1 ? 1 : (fit > _maxColumns ? _maxColumns : fit);
 
         // Rows rather than a fixed-extent grid: a row is as tall as its tallest
         // card, so large text grows the cards instead of clipping them, and the

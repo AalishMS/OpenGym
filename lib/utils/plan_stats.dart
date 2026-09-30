@@ -33,9 +33,17 @@ class PlanStat {
 
     for (var i = 0; i < plans.length; i++) {
       final plan = plans[i];
-      final planSessions = sessions
-          .where((s) => s.planName.toLowerCase() == plan.name.toLowerCase())
-          .toList();
+      final planSessions =
+          sessions
+              .where(
+                (session) =>
+                    session.isCompleted &&
+                    (session.planId != null && plan.id != null
+                        ? session.planId == plan.id
+                        : session.planName.toLowerCase() ==
+                            plan.name.toLowerCase()),
+              )
+              .toList();
 
       var volume = 0;
       DateTime? last;
@@ -48,13 +56,15 @@ class PlanStat {
         }
       }
 
-      stats.add(PlanStat(
-        plan: plan,
-        planIndex: i,
-        sessionCount: planSessions.length,
-        lastTrained: last,
-        volumeKg: volume,
-      ));
+      stats.add(
+        PlanStat(
+          plan: plan,
+          planIndex: i,
+          sessionCount: planSessions.length,
+          lastTrained: last,
+          volumeKg: volume,
+        ),
+      );
     }
 
     stats.sort((a, b) {

@@ -49,6 +49,7 @@ class WeekStrip extends StatelessWidget {
 
     final byDay = List.generate(7, (_) => <WorkoutSession>[]);
     for (final session in sessions) {
+      if (!session.isCompleted) continue;
       final offset = calendarDaysBetween(weekStart, session.date);
       if (offset >= 0 && offset < 7) byDay[offset].add(session);
     }
@@ -122,14 +123,17 @@ class WeekStrip extends StatelessWidget {
     return '$name: ${sessions.map((s) => titleCase(s.planName)).join(', ')}';
   }
 
-  /// A session names its plan by id when it has one and by name otherwise,
-  /// the same way `PlanStat` matches them. A session whose plan has since been
+  /// A session matches by id when both records have one, and by name for
+  /// legacy records without an id. A session whose plan has since been
   /// deleted falls back to the accent, like a plan with no colour of its own.
   Color _planColorFor(WorkoutSession session, BuildContext context) {
     final name = session.planName.toLowerCase();
     for (final plan in plans) {
-      final sameId = session.planId != null && session.planId == plan.id;
-      if (sameId || plan.name.toLowerCase() == name) {
+      final matches =
+          session.planId != null && plan.id != null
+              ? session.planId == plan.id
+              : plan.name.toLowerCase() == name;
+      if (matches) {
         return planColorOf(plan.planColor, context);
       }
     }
