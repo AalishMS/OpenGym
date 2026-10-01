@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../models/exercise.dart';
 import '../../models/statistics.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
@@ -37,32 +35,27 @@ class WorkoutDetailsSummary extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '${formatStatisticsDate(session.date)} · Week ${session.weekNumber}',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: textSecondaryColor(context)),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
           session.planName,
-          style: Theme.of(context).textTheme.displayMedium,
+          style: Theme.of(context).textTheme.headlineSmall,
         ),
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          '${formatStatisticsDate(session.date)} · Week ${session.weekNumber}',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.lg),
         _SessionReadout(
           items: [
             _SummaryData(
               label: 'Exercises',
-              icon: LucideIcons.dumbbell,
               value: session.exercises.length.toString(),
             ),
             _SummaryData(
               label: 'Performed sets',
-              icon: LucideIcons.layers,
               value: statistics.totalSets.toString(),
             ),
             _SummaryData(
               label: 'Duration',
-              icon: LucideIcons.timer,
               value:
                   session.durationSeconds == null
                       ? 'Not recorded'
@@ -70,7 +63,6 @@ class WorkoutDetailsSummary extends StatelessWidget {
             ),
             _SummaryData(
               label: 'Volume load',
-              icon: LucideIcons.weight,
               value: formatVolumeLoad(statistics.volumeLoad, weightUnit),
             ),
           ],
@@ -81,15 +73,10 @@ class WorkoutDetailsSummary extends StatelessWidget {
 }
 
 class _SummaryData {
-  final IconData icon;
   final String label;
   final String value;
 
-  const _SummaryData({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+  const _SummaryData({required this.label, required this.value});
 }
 
 class _SessionReadout extends StatelessWidget {
@@ -99,35 +86,30 @@ class _SessionReadout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
       key: const ValueKey('workout-details-readout'),
       decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border.all(color: borderColor(context)),
-        borderRadius: AppRadius.card,
+        border: Border(bottom: BorderSide(color: borderColor(context))),
       ),
-      child: ClipRRect(
-        borderRadius: AppRadius.card,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final textScale = MediaQuery.textScalerOf(context).scale(1);
-            final columnCount = constraints.maxWidth >= 640 * textScale ? 4 : 2;
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (var start = 0; start < items.length; start += columnCount)
-                  _SummaryRow(
-                    items: items.sublist(
-                      start,
-                      (start + columnCount).clamp(0, items.length),
-                    ),
-                    columnCount: columnCount,
-                    showTopRule: start > 0,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final textScale = MediaQuery.textScalerOf(context).scale(1);
+          final columnCount = constraints.maxWidth >= 640 * textScale ? 4 : 2;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var start = 0; start < items.length; start += columnCount)
+                _SummaryRow(
+                  items: items.sublist(
+                    start,
+                    (start + columnCount).clamp(0, items.length),
                   ),
-              ],
-            );
-          },
-        ),
+                  columnCount: columnCount,
+                  showTopRule: start > 0,
+                ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -189,19 +171,18 @@ class _SummaryItem extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.lg,
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.md,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(data.icon, size: 18, color: accentColor(context)),
-          const SizedBox(height: AppSpacing.md),
           Text(
             data.value,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
               color: textPrimaryColor(context),
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
           const SizedBox(height: AppSpacing.xs),
@@ -217,6 +198,7 @@ class _SummaryItem extends StatelessWidget {
   }
 }
 
+/// A saved exercise in the same continuous log layout as an active workout.
 class WorkoutExerciseDetails extends StatelessWidget {
   final Exercise exercise;
   final String weightUnit;
@@ -239,99 +221,54 @@ class WorkoutExerciseDetails extends StatelessWidget {
       (sum, set) => sum + set.weight * set.reps,
     );
     return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       decoration: BoxDecoration(
-        color: surfaceColor(context),
-        borderRadius: AppRadius.card,
+        border: Border(bottom: BorderSide(color: borderColor(context))),
       ),
-      foregroundDecoration: BoxDecoration(
-        border: Border.all(color: borderColor(context)),
-        borderRadius: AppRadius.card,
-      ),
-      child: ClipRRect(
-        borderRadius: AppRadius.card,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (exerciseNumber != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(AppSpacing.sm),
-                      decoration: BoxDecoration(
-                        color: accentFillColor(context),
-                        borderRadius: AppRadius.control,
-                      ),
-                      child: Text(
-                        '$exerciseNumber',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: onAccentColor(context),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.md),
-                  ],
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          exercise.name,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          '${performed.length} performed set${performed.length == 1 ? '' : 's'} · $totalReps reps',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            header: true,
+            label: exerciseNumber == null ? null : 'Exercise $exerciseNumber',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              child: Text(
+                exercise.name,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
-            if (note != null && note.isNotEmpty) ...[
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  0,
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                ),
-                child: _WorkoutNote(note: note, label: 'Exercise note'),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Text(
+              '${performed.length} performed set${performed.length == 1 ? '' : 's'} · $totalReps reps',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          if (note != null && note.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _WorkoutNote(note: note, label: 'Exercise note'),
+            ),
+          if (exercise.sets.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Text(
+                'No sets recorded',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
-            ],
-            Container(
-              color: backgroundColor(context),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg,
-                vertical: AppSpacing.md,
-              ),
+            )
+          else ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
               child: _SetHeader(weightUnit: weightUnit),
             ),
-            if (exercise.sets.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Text(
-                  'No sets recorded',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ),
             for (final entry in exercise.sets.indexed)
-              Container(
-                decoration: BoxDecoration(
-                  border:
-                      entry.$1 == 0
-                          ? null
-                          : Border(
-                            top: BorderSide(color: borderColor(context)),
-                          ),
-                ),
-                padding: const EdgeInsets.all(AppSpacing.lg),
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _SetValues(
                       index: entry.$1,
@@ -343,7 +280,11 @@ class WorkoutExerciseDetails extends StatelessWidget {
                     if ((entry.$2.note?.trim().isNotEmpty ?? false) &&
                         !_isPrMarker(entry.$2.note))
                       Padding(
-                        padding: const EdgeInsets.only(top: AppSpacing.md),
+                        padding: const EdgeInsets.only(
+                          left: 40,
+                          top: AppSpacing.xs,
+                          bottom: AppSpacing.xs,
+                        ),
                         child: _WorkoutNote(
                           note: entry.$2.note!.trim(),
                           label: 'Set ${entry.$1 + 1} note',
@@ -352,35 +293,27 @@ class WorkoutExerciseDetails extends StatelessWidget {
                   ],
                 ),
               ),
-            if (performed.length > 1)
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(top: BorderSide(color: borderColor(context))),
-                ),
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: Wrap(
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.xs,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Icon(
-                      LucideIcons.weight,
-                      size: 16,
-                      color: textSecondaryColor(context),
-                    ),
-                    Text(
-                      'Volume load',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    Text(
-                      formatVolumeLoad(volume, weightUnit),
-                      style: Theme.of(context).textTheme.titleSmall,
-                    ),
-                  ],
-                ),
-              ),
           ],
-        ),
+          if (performed.length > 1)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    'Volume load',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  Text(
+                    formatVolumeLoad(volume, weightUnit),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -393,33 +326,25 @@ class _WorkoutNote extends StatelessWidget {
   const _WorkoutNote({required this.note, required this.label});
 
   @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: label,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: backgroundColor(context),
-          borderRadius: AppRadius.field,
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(
-              LucideIcons.messageSquare,
-              size: 16,
-              color: textSecondaryColor(context),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(note, style: Theme.of(context).textTheme.bodySmall),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Semantics(
+    label: label,
+    child: Text(note, style: Theme.of(context).textTheme.bodySmall),
+  );
 }
+
+// Saved logs omit the live screen's Previous column. The other columns retain
+// its fixed set-number gutter, spacing, and weight/reps/RPE proportions.
+Widget _setColumns(List<Widget> cells) => Row(
+  children: [
+    SizedBox(width: 32, child: cells[0]),
+    const SizedBox(width: AppSpacing.sm),
+    Expanded(flex: 5, child: cells[1]),
+    const SizedBox(width: AppSpacing.sm),
+    Expanded(flex: 4, child: cells[2]),
+    const SizedBox(width: AppSpacing.sm),
+    Expanded(flex: 4, child: cells[3]),
+  ],
+);
 
 class _SetHeader extends StatelessWidget {
   final String weightUnit;
@@ -427,17 +352,17 @@ class _SetHeader extends StatelessWidget {
   const _SetHeader({required this.weightUnit});
 
   @override
-  Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.labelSmall;
-    return Row(
-      children: [
-        Expanded(flex: 2, child: Text('Set', style: style)),
-        Expanded(flex: 4, child: Text('Weight ($weightUnit)', style: style)),
-        Expanded(flex: 3, child: Text('Reps', style: style)),
-        Expanded(flex: 2, child: Text('RPE', style: style)),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => _setColumns([
+    for (final label in ['Set', 'Weight ($weightUnit)', 'Reps', 'RPE'])
+      Text(
+        label,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          fontWeight: FontWeight.w400,
+          color: textSecondaryColor(context),
+        ),
+      ),
+  ]);
 }
 
 class _SetValues extends StatelessWidget {
@@ -455,69 +380,82 @@ class _SetValues extends StatelessWidget {
     required this.isPrAttempt,
   });
 
+  Widget _value(BuildContext context, Widget child) => Container(
+    constraints: const BoxConstraints(minHeight: 44),
+    padding: const EdgeInsets.all(AppSpacing.xs),
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: surfaceColor(context),
+      borderRadius: AppRadius.field,
+    ),
+    child: FittedBox(fit: BoxFit.scaleDown, child: child),
+  );
+
   @override
   Widget build(BuildContext context) {
-    final style = AppTypography.trainingData(
-      fontSize: 14,
-      fontWeight: FontWeight.w600,
+    final style = Theme.of(context).textTheme.titleLarge!.copyWith(
+      fontSize: 18,
+      fontWeight: FontWeight.bold,
+      fontFeatures: const [FontFeature.tabularFigures()],
       color: textPrimaryColor(context),
     );
-    return Row(
-      children: [
-        Expanded(
-          flex: 2,
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: AppSpacing.xs,
-              ),
-              decoration: BoxDecoration(
-                color: backgroundColor(context),
-                borderRadius: AppRadius.badge,
-              ),
-              child: Text(
-                '${index + 1}',
-                style: style.copyWith(color: textSecondaryColor(context)),
-              ),
-            ),
-          ),
-        ),
-        Expanded(
-          flex: 4,
-          child: Row(
-            children: [
-              Flexible(child: Text(formatWeight(weight), style: style)),
-              if (isPrAttempt) ...[
-                const SizedBox(width: AppSpacing.xs),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: accentColor(context)),
-                    borderRadius: AppRadius.badge,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.xs,
-                      vertical: AppSpacing.xxs,
-                    ),
-                    child: Text(
-                      'PR',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: accentColor(context),
-                        fontWeight: FontWeight.w700,
-                        height: 1,
+    final quiet = Theme.of(context).textTheme.labelLarge?.copyWith(
+      fontWeight: FontWeight.w400,
+      fontFeatures: const [FontFeature.tabularFigures()],
+      color: textSecondaryColor(context),
+    );
+    return Semantics(
+      container: true,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
+        child: _setColumns([
+          Text('${index + 1}', textAlign: TextAlign.center, style: quiet),
+          _value(
+            context,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(formatWeight(weight), style: style),
+                if (isPrAttempt) ...[
+                  const SizedBox(width: AppSpacing.xs),
+                  Semantics(
+                    label: 'Personal record',
+                    excludeSemantics: true,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xs,
+                        vertical: AppSpacing.xxs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: accentFillColor(context),
+                        borderRadius: AppRadius.badge,
+                      ),
+                      child: Text(
+                        'PR',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: onAccentColor(context),
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
-        Expanded(flex: 3, child: Text('$reps', style: style)),
-        Expanded(flex: 2, child: Text(rpe?.toString() ?? '—', style: style)),
-      ],
+          _value(context, Text('$reps', style: style)),
+          Semantics(
+            label: 'Set ${index + 1} RPE',
+            value: rpe?.toString() ?? 'Not recorded',
+            excludeSemantics: true,
+            child: Text(
+              rpe?.toString() ?? '—',
+              textAlign: TextAlign.center,
+              style: quiet,
+            ),
+          ),
+        ]),
+      ),
     );
   }
 }

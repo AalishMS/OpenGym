@@ -311,7 +311,16 @@ class WorkoutDetailsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: backgroundColor(context),
       appBar: AppBar(
-        backgroundColor: surfaceColor(context),
+        backgroundColor: backgroundColor(context),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shadowColor: Colors.transparent,
+        leading: IconButton(
+          tooltip: 'Back',
+          icon: Icon(LucideIcons.arrowLeft, color: textSecondaryColor(context)),
+          onPressed: () => Navigator.pop(context),
+        ),
         title: const Text('Workout details'),
         actions: [
           if (session != null)
@@ -323,6 +332,10 @@ class WorkoutDetailsScreen extends StatelessWidget {
           if (session != null)
             PopupMenuButton<String>(
               tooltip: 'Workout actions',
+              icon: Icon(
+                LucideIcons.ellipsisVertical,
+                color: textSecondaryColor(context),
+              ),
               onSelected: (value) {
                 if (value == 'edit') _edit(context, session);
                 if (value == 'delete') _delete(context, session);
@@ -373,19 +386,19 @@ class WorkoutDetailsScreen extends StatelessWidget {
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 880),
                   child: ListView(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.sm,
+                      AppSpacing.lg,
+                      AppSpacing.xl,
+                    ),
                     children: [
                       WorkoutDetailsSummary(
                         statistics: const StatisticsAnalyticsService()
                             .sessionStatistics(session),
                         weightUnit: weightUnit,
                       ),
-                      const SizedBox(height: AppSpacing.xl),
-                      Text(
-                        'Exercises',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
+                      const SizedBox(height: AppSpacing.sm),
                       if (session.exercises.isEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(
@@ -396,14 +409,12 @@ class WorkoutDetailsScreen extends StatelessWidget {
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                         ),
-                      for (final entry in session.exercises.indexed) ...[
+                      for (final entry in session.exercises.indexed)
                         WorkoutExerciseDetails(
                           exercise: entry.$2,
                           exerciseNumber: entry.$1 + 1,
                           weightUnit: weightUnit,
                         ),
-                        const SizedBox(height: AppSpacing.md),
-                      ],
                     ],
                   ),
                 ),
