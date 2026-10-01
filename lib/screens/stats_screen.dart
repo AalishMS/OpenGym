@@ -29,7 +29,7 @@ class _StatsScreenState extends State<StatsScreen> {
   ExerciseMetric _metric = ExerciseMetric.estimatedOneRepMax;
   String? _weeklyExercise;
   String? _progressExercise;
-  bool _allExercises = false;
+  bool _allExercises = true;
   String? _lastSplit;
 
   @override
@@ -60,7 +60,7 @@ class _StatsScreenState extends State<StatsScreen> {
       _lastSplit = splitId;
       _weeklyExercise = null;
       _progressExercise = null;
-      _allExercises = false;
+      _allExercises = true;
     }
     final names = _analytics.exerciseNames(sessions);
     final defaultExercise = _analytics.latestExercise(sessions);
@@ -152,6 +152,30 @@ class _StatsScreenState extends State<StatsScreen> {
                                 labelFor:
                                     (name) =>
                                         name.isEmpty ? 'All exercises' : name,
+                                labelBuilder: (name) {
+                                  if (name.isNotEmpty) return null;
+                                  return Row(
+                                    children: [
+                                      Icon(
+                                        Icons.layers_outlined,
+                                        size: 18,
+                                        color: accentColor(context),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'All exercises',
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            color: accentColor(context),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                                 onChanged:
                                     (value) => setState(() {
                                       _allExercises = value.isEmpty;
@@ -318,6 +342,7 @@ class _Selector<T> extends StatelessWidget {
   final T value;
   final List<T> values;
   final String Function(T) labelFor;
+  final Widget? Function(T)? labelBuilder;
   final ValueChanged<T> onChanged;
   const _Selector({
     required this.fieldKey,
@@ -325,6 +350,7 @@ class _Selector<T> extends StatelessWidget {
     required this.value,
     required this.values,
     required this.labelFor,
+    this.labelBuilder,
     required this.onChanged,
   });
 
@@ -341,7 +367,12 @@ class _Selector<T> extends StatelessWidget {
     selectedItemBuilder:
         (context) => [
           for (final item in values)
-            Text(labelFor(item), maxLines: 1, overflow: TextOverflow.ellipsis),
+            labelBuilder?.call(item) ??
+                Text(
+                  labelFor(item),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
         ],
     items: [
       for (final item in values)
@@ -349,7 +380,7 @@ class _Selector<T> extends StatelessWidget {
           value: item,
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(labelFor(item)),
+            child: labelBuilder?.call(item) ?? Text(labelFor(item)),
           ),
         ),
     ],
