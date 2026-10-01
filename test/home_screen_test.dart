@@ -660,6 +660,7 @@ void main() {
     expect(find.text('workout'), findsOneWidget);
     expect(find.text('Last workout'), findsOneWidget);
     expect(find.text('Your plans'), findsOneWidget);
+    expect(tester.getSize(find.byType(TrainingSnapshot)).height, lessThan(130));
   });
 
   testWidgets('a draft does not advance rotation or count as trained', (
@@ -778,7 +779,9 @@ void main() {
               width: 254,
               child: TrainingSnapshot(
                 plans: [populatedPlan()],
-                sessions: const [],
+                sessions: [populatedData().session],
+                onOpenWeeklyTraining: () {},
+                onOpenLastWorkout: (_) {},
               ),
             ),
           ),

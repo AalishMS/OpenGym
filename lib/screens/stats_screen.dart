@@ -14,7 +14,9 @@ import '../widgets/statistics/statistics_widgets.dart';
 import '../widgets/statistics/training_charts.dart';
 
 class StatsScreen extends StatefulWidget {
-  const StatsScreen({super.key});
+  final int weeklyTrainingRequest;
+
+  const StatsScreen({this.weeklyTrainingRequest = 0, super.key});
 
   @override
   State<StatsScreen> createState() => _StatsScreenState();
@@ -22,12 +24,29 @@ class StatsScreen extends StatefulWidget {
 
 class _StatsScreenState extends State<StatsScreen> {
   static const _analytics = StatisticsAnalyticsService();
+  final ScrollController _scrollController = ScrollController();
   StatisticsPeriod _period = StatisticsPeriod.fourWeeks;
   ExerciseMetric _metric = ExerciseMetric.estimatedOneRepMax;
   String? _weeklyExercise;
   String? _progressExercise;
   bool _allExercises = false;
   String? _lastSplit;
+
+  @override
+  void didUpdateWidget(covariant StatsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.weeklyTrainingRequest == oldWidget.weeklyTrainingRequest) return;
+    _allExercises = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scrollController.hasClients) _scrollController.jumpTo(0);
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +115,8 @@ class _StatsScreenState extends State<StatsScreen> {
                 ),
               )
               : SingleChildScrollView(
+                key: const ValueKey('statistics-scroll'),
+                controller: _scrollController,
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
                 child: Center(
                   child: ConstrainedBox(

@@ -5,6 +5,7 @@ import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../providers/split_provider.dart';
 import '../models/workout_plan.dart';
+import '../models/workout_session.dart';
 import '../models/exercise_template.dart';
 import '../models/set_template.dart';
 import '../data/plan_colors.dart';
@@ -26,7 +27,14 @@ import 'workout_screen.dart';
 import '../widgets/splits/preset_browser_dialog.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? onOpenWeeklyTraining;
+  final ValueChanged<WorkoutSession>? onOpenLastWorkout;
+
+  const HomeScreen({
+    this.onOpenWeeklyTraining,
+    this.onOpenLastWorkout,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -212,18 +220,31 @@ class HomeScreen extends StatelessWidget {
               dayCount: plans.length,
               stat: statsByIndex[nextIndex],
               onStart: () => _openWorkout(context, plans[nextIndex], nextIndex),
-              footer: TrainingSnapshot(plans: plans, sessions: sessions),
+              footer: TrainingSnapshot(
+                plans: plans,
+                sessions: sessions,
+                onOpenWeeklyTraining: onOpenWeeklyTraining,
+                onOpenLastWorkout: onOpenLastWorkout,
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
           ] else ...[
             Container(
-              padding: const EdgeInsets.all(AppSpacing.lg),
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.sm,
+              ),
               decoration: BoxDecoration(
                 color: surfaceColor(context),
                 border: Border.all(color: borderColor(context)),
                 borderRadius: AppRadius.card,
               ),
-              child: TrainingSnapshot(plans: plans, sessions: sessions),
+              child: TrainingSnapshot(
+                plans: plans,
+                sessions: sessions,
+                onOpenWeeklyTraining: onOpenWeeklyTraining,
+                onOpenLastWorkout: onOpenLastWorkout,
+              ),
             ),
             const SizedBox(height: AppSpacing.xl),
           ],

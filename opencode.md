@@ -128,6 +128,10 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Slimmed Home's training snapshot into compact, tappable weekly workout/set
+  readouts and a latest-workout row. Weekly readouts switch to Statistics at the
+  Weekly training section with all exercises selected; the latest workout
+  opens its saved details over History, so Back returns to the History tab.
 - Replaced Home's seven-day calendar strip with a training snapshot showing
   completed workouts and performed sets this week, plus the latest completed
   workout. The latest plan keeps a small identity marker; drafts never count.

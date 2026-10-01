@@ -71,7 +71,10 @@ class UpNextCard extends StatelessWidget {
           final sideBySide = constraints.maxWidth >= _sideBySideWidth;
           final details = _details(context, planColor, sideBySide);
           final week = Padding(
-            padding: const EdgeInsets.all(AppSpacing.lg),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.sm,
+            ),
             child: footer,
           );
 

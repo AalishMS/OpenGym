@@ -14,11 +14,15 @@ import '../../utils/format.dart';
 class TrainingSnapshot extends StatelessWidget {
   final List<WorkoutPlan> plans;
   final List<WorkoutSession> sessions;
+  final VoidCallback? onOpenWeeklyTraining;
+  final ValueChanged<WorkoutSession>? onOpenLastWorkout;
   final DateTime? now;
 
   const TrainingSnapshot({
     required this.plans,
     required this.sessions,
+    this.onOpenWeeklyTraining,
+    this.onOpenLastWorkout,
     this.now,
     super.key,
   });
@@ -52,96 +56,129 @@ class TrainingSnapshot extends StatelessWidget {
     final primary = textPrimaryColor(context);
     final secondary = textSecondaryColor(context);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          children: [
-            Icon(LucideIcons.activity, size: 16, color: accentColor(context)),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Text(
-                'This week',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.titleSmall?.copyWith(
-                  color: primary,
-                  fontWeight: FontWeight.w700,
+    return Material(
+      type: MaterialType.transparency,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(LucideIcons.activity, size: 14, color: accentColor(context)),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'This week',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: textTheme.labelMedium?.copyWith(
+                    color: secondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              Expanded(
+                child: _SnapshotMetric(
+                  value: thisWeek.length,
+                  singular: 'workout',
+                  plural: 'workouts',
+                  onTap: onOpenWeeklyTraining,
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 28,
+                margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                color: borderColor(context),
+              ),
+              Expanded(
+                child: _SnapshotMetric(
+                  value: setCount,
+                  singular: 'set',
+                  plural: 'sets',
+                  onTap: onOpenWeeklyTraining,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Divider(height: 1, thickness: 1, color: borderColor(context)),
+          const SizedBox(height: AppSpacing.xs),
+          Semantics(
+            button: latest != null && onOpenLastWorkout != null,
+            label:
+                latest == null
+                    ? 'Last workout: no workouts logged yet'
+                    : 'Last workout: ${titleCase(latest.planName)}, ${formatDaysAgo(latest.date, now: today)}',
+            child: InkWell(
+              onTap:
+                  latest == null || onOpenLastWorkout == null
+                      ? null
+                      : () => onOpenLastWorkout!(latest!),
+              borderRadius: AppRadius.control,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 44),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 4,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color:
+                              latest == null
+                                  ? borderColor(context)
+                                  : _planColorFor(latest, context),
+                          borderRadius: AppRadius.micro,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: ExcludeSemantics(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Last workout',
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: secondary,
+                                ),
+                              ),
+                              Text(
+                                latest == null
+                                    ? 'No workouts logged yet'
+                                    : '${titleCase(latest.planName)} · ${formatDaysAgo(latest.date, now: today)}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: textTheme.labelMedium?.copyWith(
+                                  color: primary,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (latest != null && onOpenLastWorkout != null)
+                        Icon(
+                          LucideIcons.chevronRight,
+                          size: 16,
+                          color: secondary,
+                        ),
+                    ],
+                  ),
                 ),
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _SnapshotMetric(
-                value: thisWeek.length,
-                singular: 'workout',
-                plural: 'workouts',
-              ),
-            ),
-            Container(
-              width: 1,
-              height: 46,
-              margin: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              color: borderColor(context),
-            ),
-            Expanded(
-              child: _SnapshotMetric(
-                value: setCount,
-                singular: 'set',
-                plural: 'sets',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Divider(height: 1, thickness: 1, color: borderColor(context)),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: [
-            Container(
-              width: 4,
-              height: 30,
-              decoration: BoxDecoration(
-                color:
-                    latest == null
-                        ? borderColor(context)
-                        : _planColorFor(latest, context),
-                borderRadius: AppRadius.micro,
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Last workout',
-                    style: textTheme.labelSmall?.copyWith(color: secondary),
-                  ),
-                  const SizedBox(height: AppSpacing.xxs),
-                  Text(
-                    latest == null
-                        ? 'No workouts logged yet'
-                        : '${titleCase(latest.planName)} · ${formatDaysAgo(latest.date, now: today)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: textTheme.labelMedium?.copyWith(
-                      color: primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -162,40 +199,64 @@ class _SnapshotMetric extends StatelessWidget {
   final int value;
   final String singular;
   final String plural;
+  final VoidCallback? onTap;
 
   const _SnapshotMetric({
     required this.value,
     required this.singular,
     required this.plural,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          '$value',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: AppTypography.trainingData(
-            fontSize: 26,
-            fontWeight: FontWeight.w700,
-            height: 1.1,
-            color: textPrimaryColor(context),
+    final label = value == 1 ? singular : plural;
+    return Semantics(
+      button: onTap != null,
+      label: '$value $label this week',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppRadius.control,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+            child: ExcludeSemantics(
+              child: Row(
+                children: [
+                  Text(
+                    '$value',
+                    maxLines: 1,
+                    style: AppTypography.trainingData(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w700,
+                      height: 1.1,
+                      color: textPrimaryColor(context),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: textSecondaryColor(context),
+                      ),
+                    ),
+                  ),
+                  if (onTap != null)
+                    Icon(
+                      LucideIcons.arrowUpRight,
+                      size: 12,
+                      color: textSecondaryColor(context),
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          value == 1 ? singular : plural,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(
-            context,
-          ).textTheme.labelMedium?.copyWith(color: textSecondaryColor(context)),
-        ),
-      ],
+      ),
     );
   }
 }
