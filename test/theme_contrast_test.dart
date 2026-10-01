@@ -19,10 +19,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gymapp/data/plan_colors.dart';
+import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/semantic_colors.dart';
 import 'package:gymapp/theme/tones.dart';
+import 'package:gymapp/widgets/home/training_snapshot.dart';
 
 /// Solved tones quantise to 8 bits per channel, which can shave a hair off a
 /// ratio that is mathematically exact. Allow that much and no more — this is
@@ -75,6 +77,86 @@ void main() {
     // assertion here. Nothing below is about glyphs, so fall back to the default
     // font rather than reaching for the network.
     GoogleFonts.config.allowRuntimeFetching = false;
+  });
+
+  testWidgets('raised home surfaces keep text and accents legible', (
+    tester,
+  ) async {
+    for (final brightness in Brightness.values) {
+      for (final accent in SettingsProvider.accents) {
+        final context = await _contextFor(tester, accent.seed, brightness);
+        final surface = raisedSurfaceColor(context);
+        _expectContrast(
+          textPrimaryColor(context),
+          surface,
+          atLeast: 7,
+          what: '${accent.name} primary ink on raised surface',
+        );
+        _expectContrast(
+          textSecondaryColor(context),
+          surface,
+          atLeast: 4.5,
+          what: '${accent.name} secondary ink on raised surface',
+        );
+        _expectContrast(
+          accentColor(context),
+          surface,
+          atLeast: 4.5,
+          what: '${accent.name} accent ink on raised surface',
+        );
+      }
+    }
+  });
+
+  testWidgets('today keeps a neutral outline ground for every trained accent', (
+    tester,
+  ) async {
+    final today = DateTime(2026, 10, 1);
+    for (final brightness in Brightness.values) {
+      for (final accent in SettingsProvider.accents) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: buildTheme(accent.seed, brightness),
+            home: Scaffold(
+              body: TrainingSnapshot(
+                plans: const [],
+                sessions: [
+                  WorkoutSession(
+                    date: today,
+                    planName: 'Push',
+                    exercises: const [],
+                  ),
+                ],
+                now: today,
+                onOpenWeeklyTraining: () {},
+              ),
+            ),
+          ),
+        );
+        final day = find.byKey(const ValueKey('training-day-3'));
+        final context = tester.element(day);
+        final bar = tester.widget<Container>(
+          find.descendant(of: day, matching: find.byType(Container)),
+        );
+        final ground = (bar.decoration! as BoxDecoration).color!;
+        expect(ground, backgroundColor(context));
+        final label = tester.widget<Text>(
+          find.descendant(of: day, matching: find.byType(Text)),
+        );
+        _expectContrast(
+          label.style!.color!,
+          ground,
+          atLeast: 3,
+          what: '${accent.name} today outline on trained bar ground',
+        );
+        expect(
+          tester
+              .getSize(find.byKey(const ValueKey('weekly-training-link')))
+              .height,
+          greaterThanOrEqualTo(48),
+        );
+      }
+    }
   });
 
   group('accent roles meet their targets', () {

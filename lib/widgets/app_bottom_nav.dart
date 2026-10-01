@@ -13,13 +13,13 @@ class AppBottomNav extends StatelessWidget {
   });
 
   static const _icons = [
-    LucideIcons.clipboardList,
+    LucideIcons.house,
     LucideIcons.history,
     LucideIcons.trendingUp,
     LucideIcons.settings2,
   ];
 
-  static const _labels = ['Plans', 'History', 'Stats', 'Settings'];
+  static const _labels = ['Home', 'History', 'Stats', 'Settings'];
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +33,7 @@ class AppBottomNav extends StatelessWidget {
       child: NavigationBarTheme(
         data: NavigationBarThemeData(
           height: 68,
-          backgroundColor: surfaceColor(context),
+          backgroundColor: backgroundColor(context),
           indicatorColor: Colors.transparent,
           labelTextStyle: WidgetStateProperty.resolveWith((states) {
             final selected = states.contains(WidgetState.selected);

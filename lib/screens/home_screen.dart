@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
+
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../providers/split_provider.dart';
@@ -20,13 +21,14 @@ import '../widgets/splits/split_switcher.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_wordmark.dart';
 import '../widgets/home/plan_grid.dart';
+import '../widgets/home/home_plan_row.dart';
 import '../widgets/home/up_next_card.dart';
 import '../widgets/home/training_snapshot.dart';
 import 'plan_editor_screen.dart';
 import 'workout_screen.dart';
 import '../widgets/splits/preset_browser_dialog.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   final VoidCallback? onOpenWeeklyTraining;
   final ValueChanged<WorkoutSession>? onOpenLastWorkout;
 
@@ -37,6 +39,13 @@ class HomeScreen extends StatelessWidget {
   });
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  bool _managing = false;
+
+  @override
   Widget build(BuildContext context) {
     final accent = accentColor(context);
     final bg = backgroundColor(context);
@@ -44,17 +53,6 @@ class HomeScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: bg,
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: surfaceColor(context),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const PlanEditorScreen.create()),
-          );
-        },
-        tooltip: 'Create plan',
-        child: const Icon(LucideIcons.plus),
-      ),
       body: SafeArea(
         top: false,
         child: Column(
@@ -78,41 +76,40 @@ class HomeScreen extends StatelessWidget {
 
   Widget _buildHeader(BuildContext context, Color border) {
     final splitProvider = context.watch<SplitProvider?>();
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border(bottom: BorderSide(color: border, width: 1)),
-      ),
-      child: Stack(
-        children: [
-          Positioned.fill(child: headerMesh(context)),
-          Padding(
-            padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg,
-                vertical: AppSpacing.sm,
-              ),
-              child: _CappedWidth(
-                child: Row(
-                  children: [
-                    const Expanded(
-                      child: AppWordmark(
-                        fontSize: 18,
-                        maxLines: 1,
-                        overflow: TextOverflow.clip,
-                      ),
-                    ),
-                    if (splitProvider != null) ...[
-                      const SizedBox(width: AppSpacing.sm),
-                      const Flexible(child: SplitSwitcher()),
-                    ],
-                  ],
+    return Padding(
+      padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.md,
+        ),
+        child: _CappedWidth(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Expanded(
+                child: AppWordmark(
+                  fontSize: 20,
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
                 ),
               ),
-            ),
+              if (splitProvider != null) ...[
+                const SizedBox(width: AppSpacing.sm),
+                Flexible(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: raisedSurfaceColor(context),
+                      border: Border.all(color: border),
+                      borderRadius: AppRadius.control,
+                    ),
+                    child: const IntrinsicWidth(child: SplitSwitcher()),
+                  ),
+                ),
+              ],
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -194,84 +191,138 @@ class HomeScreen extends StatelessWidget {
     Color accent,
   ) {
     final plans = provider.plans;
-    // Roll up each plan's training history once, keyed by its index in
-    // `provider.plans`, so the cards don't each hit the repository.
     final sessions = context.watch<WorkoutSessionProvider>().sessions;
     final stats = PlanStat.compute(plans, sessions);
     final statsByIndex = {for (final stat in stats) stat.planIndex: stat};
-    // With a single plan there is no rotation to point into: its card already
-    // is the next workout, and a second copy of it above would only repeat it.
-    final nextIndex =
-        plans.length > 1 ? PlanStat.nextInRotation(stats, plans.length) : null;
+    final nextIndex = PlanStat.nextInRotation(stats, plans.length);
+    final today = DateTime.now();
+    final weekStart = startOfWeek(today);
+    final trainedDays = {
+      for (final stat in stats)
+        if (stat.lastTrained != null &&
+            !stat.lastTrained!.isBefore(weekStart) &&
+            calendarDaysBetween(stat.lastTrained!, today) >= 0)
+          stat.planIndex,
+    };
+    final timedSessions =
+        sessions
+            .where(
+              (session) =>
+                  session.isCompleted &&
+                  (session.durationSeconds ?? 0) > 0 &&
+                  (session.planId != null && plans[nextIndex].id != null
+                      ? session.planId == plans[nextIndex].id
+                      : session.planName.toLowerCase() ==
+                          plans[nextIndex].name.toLowerCase()),
+            )
+            .toList();
+    final durationMinutes =
+        timedSessions.isEmpty
+            ? null
+            : (timedSessions.fold<int>(
+                      0,
+                      (sum, session) => sum + session.durationSeconds!,
+                    ) /
+                    timedSessions.length /
+                    60)
+                .round()
+                .clamp(1, 99999);
+
+    void actions(int index) => _showPlanOptions(
+      context,
+      plans[index],
+      index,
+      accent,
+      statsByIndex[index],
+    );
 
     return _CappedWidth(
       child: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,
+          AppSpacing.sm,
           AppSpacing.lg,
-          AppSpacing.lg,
-          _fabClearance,
+          AppSpacing.xl,
         ),
         children: [
-          if (nextIndex != null) ...[
+          if (!_managing) ...[
             UpNextCard(
               plan: plans[nextIndex],
               day: nextIndex + 1,
               dayCount: plans.length,
               stat: statsByIndex[nextIndex],
+              trainedDays: trainedDays,
+              durationMinutes: durationMinutes,
               onStart: () => _openWorkout(context, plans[nextIndex], nextIndex),
-              footer: TrainingSnapshot(
-                plans: plans,
-                sessions: sessions,
-                onOpenWeeklyTraining: onOpenWeeklyTraining,
-                onOpenLastWorkout: onOpenLastWorkout,
-              ),
             ),
-            const SizedBox(height: AppSpacing.xl),
-          ] else ...[
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg,
-                vertical: AppSpacing.sm,
-              ),
-              decoration: BoxDecoration(
-                color: surfaceColor(context),
-                border: Border.all(color: borderColor(context)),
-                borderRadius: AppRadius.card,
-              ),
-              child: TrainingSnapshot(
-                plans: plans,
-                sessions: sessions,
-                onOpenWeeklyTraining: onOpenWeeklyTraining,
-                onOpenLastWorkout: onOpenLastWorkout,
-              ),
+            const SizedBox(height: AppSpacing.lg),
+            TrainingSnapshot(
+              plans: plans,
+              sessions: sessions,
+              onOpenWeeklyTraining: widget.onOpenWeeklyTraining,
+              onOpenLastWorkout: widget.onOpenLastWorkout,
             ),
             const SizedBox(height: AppSpacing.xl),
           ],
-          _SectionHeading(title: 'Your plans', count: plans.length),
-          const SizedBox(height: AppSpacing.md),
-          PlanGrid(
-            plans: plans,
-            stats: statsByIndex,
-            onOpen: (index) => _openWorkout(context, plans[index], index),
-            onShowActions:
-                (index) => _showPlanOptions(
-                  context,
-                  plans[index],
-                  index,
-                  accent,
-                  statsByIndex[index],
+          Row(
+            children: [
+              Expanded(
+                child: _SectionHeading(
+                  title: 'Your plans',
+                  count: plans.length,
                 ),
-            onMove: (fromId, toId) => _movePlan(context, fromId, toId),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              TextButton(
+                onPressed: () => setState(() => _managing = !_managing),
+                child: Text(_managing ? 'Done' : 'Manage'),
+              ),
+            ],
+          ),
+          if (_managing) ...[
+            const SizedBox(height: AppSpacing.sm),
+            PlanGrid(
+              plans: plans,
+              stats: statsByIndex,
+              onOpen: (index) => _openWorkout(context, plans[index], index),
+              onShowActions: actions,
+              onMove: (fromId, toId) => _movePlan(context, fromId, toId),
+            ),
+          ] else ...[
+            Divider(height: 1, color: borderColor(context)),
+            for (var index = 0; index < plans.length; index++) ...[
+              HomePlanRow(
+                key: ValueKey(plans[index].id),
+                plan: plans[index],
+                isNext: index == nextIndex,
+                onOpen: () => _openWorkout(context, plans[index], index),
+                onShowActions: () => actions(index),
+              ),
+              if (index < plans.length - 1 &&
+                  index != nextIndex &&
+                  index + 1 != nextIndex)
+                Divider(height: 1, color: borderColor(context)),
+            ],
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: TextButton.icon(
+              icon: const Icon(LucideIcons.plus, size: 18),
+              label: const Text('New plan'),
+              onPressed:
+                  () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PlanEditorScreen.create(),
+                    ),
+                  ),
+            ),
           ),
         ],
       ),
     );
   }
-
-  /// Room under the last card for the floating create button, which otherwise
-  /// sits on top of the last card's summary line.
-  static const double _fabClearance = 96;
 
   Future<void> _movePlan(
     BuildContext context,

@@ -110,7 +110,7 @@ void main() {
 
     expect(find.byType(AppBottomNav), findsOneWidget);
     expect(find.byType(AppNavRail), findsNothing);
-    for (final label in ['Plans', 'History', 'Stats', 'Settings']) {
+    for (final label in ['Home', 'History', 'Stats', 'Settings']) {
       expect(
         find.descendant(
           of: find.byType(AppBottomNav),
@@ -122,81 +122,93 @@ void main() {
     expect(find.text('Dashboard'), findsNothing);
   });
 
-  testWidgets('both snapshot metrics open weekly training statistics', (
-    tester,
-  ) async {
-    await tester.runAsync(seedHomeTraining);
-    await tester.pumpWidget(shellHost(390));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+  testWidgets(
+    'weekly summary opens statistics and resets its scroll on each visit',
+    (tester) async {
+      await tester.runAsync(seedHomeTraining);
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-    final snapshot = find.byType(TrainingSnapshot);
-    await tester.tap(
-      find.descendant(of: snapshot, matching: find.text('workout')),
-    );
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.byType(StatsScreen), findsOneWidget);
-    expect(find.text('Weekly training'), findsOneWidget);
-    expect(find.text('All exercises'), findsOneWidget);
-    expect(
-      tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
-      2,
-    );
-    final statsScroll =
-        tester
-            .widget<SingleChildScrollView>(
-              find.byKey(const ValueKey('statistics-scroll')),
-            )
-            .controller!;
-    statsScroll.jumpTo(300);
-    await tester.pump();
-    expect(statsScroll.offset, greaterThan(0));
+      final snapshot = find.byType(TrainingSnapshot);
+      await tester.tap(
+        find.descendant(
+          of: snapshot,
+          matching: find.byKey(const ValueKey('weekly-training-link')),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(StatsScreen), findsOneWidget);
+      expect(find.text('Weekly training'), findsOneWidget);
+      expect(find.text('All exercises'), findsOneWidget);
+      expect(
+        tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
+        2,
+      );
+      final statsScroll =
+          tester
+              .widget<SingleChildScrollView>(
+                find.byKey(const ValueKey('statistics-scroll')),
+              )
+              .controller!;
+      statsScroll.jumpTo(300);
+      await tester.pump();
+      expect(statsScroll.offset, greaterThan(0));
 
-    await tester.tap(
-      find.descendant(
-        of: find.byType(AppBottomNav),
-        matching: find.text('Plans'),
-      ),
-    );
-    await tester.pump();
-    await tester.tap(find.descendant(of: snapshot, matching: find.text('set')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Weekly training'), findsOneWidget);
-    expect(statsScroll.offset, 0);
-    expect(
-      tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
-      2,
-    );
-  });
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text('Home'),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.descendant(
+          of: snapshot,
+          matching: find.byKey(const ValueKey('weekly-training-link')),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Weekly training'), findsOneWidget);
+      expect(statsScroll.offset, 0);
+      expect(
+        tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
+        2,
+      );
+    },
+  );
 
-  testWidgets('last workout opens its History detail and returns to History', (
-    tester,
-  ) async {
-    await tester.runAsync(seedHomeTraining);
-    await tester.pumpWidget(shellHost(390));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+  testWidgets(
+    'a trained weekday opens its latest History detail and returns to History',
+    (tester) async {
+      await tester.runAsync(seedHomeTraining);
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
-    await tester.tap(
-      find.descendant(
-        of: find.byType(TrainingSnapshot),
-        matching: find.text('Push Day · Today'),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.byType(WorkoutDetailsScreen), findsOneWidget);
-    expect(find.text('Bench Press'), findsWidgets);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(TrainingSnapshot),
+          matching: find.byKey(
+            ValueKey('training-day-${DateTime.now().weekday - 1}'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(WorkoutDetailsScreen), findsOneWidget);
+      expect(find.text('Bench Press'), findsWidgets);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    expect(find.byType(HistoryScreen), findsOneWidget);
-    expect(
-      tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
-      1,
-    );
-  });
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      expect(find.byType(HistoryScreen), findsOneWidget);
+      expect(
+        tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
+        1,
+      );
+    },
+  );
 
   testWidgets('medium shell exposes the desktop rail and dashboard', (
     tester,
@@ -219,8 +231,8 @@ void main() {
     final semantics = tester.ensureSemantics();
 
     await tester.pumpWidget(bottomNavHost());
-    final plansSemantics = tester.getSemantics(find.text('Plans'));
-    expect(plansSemantics.label, contains('Plans'));
+    final plansSemantics = tester.getSemantics(find.text('Home'));
+    expect(plansSemantics.label, contains('Home'));
     expect(
       plansSemantics.getSemanticsData().flagsCollection.isSelected,
       Tristate.isTrue,
@@ -255,7 +267,7 @@ void main() {
   ) async {
     await tester.pumpWidget(bottomNavHost());
     final context = tester.element(find.byType(AppBottomNav));
-    final selected = tester.widget<Text>(find.text('Plans')).style!;
+    final selected = tester.widget<Text>(find.text('Home')).style!;
     final unselected = tester.widget<Text>(find.text('History')).style!;
 
     expect(selected.color, accentColor(context));

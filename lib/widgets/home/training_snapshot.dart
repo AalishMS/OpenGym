@@ -1,16 +1,16 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/plan_colors.dart';
 import '../../models/workout_plan.dart';
 import '../../models/workout_session.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 
-/// A compact readout of completed training, with the latest plan as its anchor.
+/// Completed sets by calendar day, with an outline identifying today.
 class TrainingSnapshot extends StatelessWidget {
   final List<WorkoutPlan> plans;
   final List<WorkoutSession> sessions;
@@ -31,232 +31,221 @@ class TrainingSnapshot extends StatelessWidget {
   Widget build(BuildContext context) {
     final today = now ?? DateTime.now();
     final weekStart = startOfWeek(today);
-    final completed = sessions.where((session) => session.isCompleted);
-    final thisWeek =
-        completed.where((session) {
-          final day = calendarDaysBetween(weekStart, session.date);
-          return day >= 0 && day < 7;
-        }).toList();
-    final setCount = thisWeek.fold<int>(
-      0,
-      (total, session) =>
-          total +
-          session.exercises.fold<int>(
-            0,
-            (sum, exercise) =>
-                sum + exercise.sets.where((set) => set.reps > 0).length,
-          ),
-    );
-    WorkoutSession? latest;
-    for (final session in completed) {
-      if (latest == null || session.date.isAfter(latest.date)) latest = session;
+    final todayIndex = calendarDaysBetween(weekStart, today);
+    final dailySets = List<int>.filled(7, 0);
+    final dailyWorkouts = List<int>.filled(7, 0);
+    final latestByDay = List<WorkoutSession?>.filled(7, null);
+    for (final session in sessions) {
+      if (!session.isCompleted) continue;
+      final index = calendarDaysBetween(weekStart, session.date);
+      if (index < 0 || index > todayIndex) continue;
+      dailyWorkouts[index]++;
+      dailySets[index] += session.exercises.fold<int>(
+        0,
+        (sum, exercise) =>
+            sum + exercise.sets.where((set) => set.reps > 0).length,
+      );
+      final latest = latestByDay[index];
+      if (latest == null || session.date.isAfter(latest.date)) {
+        latestByDay[index] = session;
+      }
     }
-
+    final workouts = dailyWorkouts.fold<int>(0, (sum, value) => sum + value);
+    final sets = dailySets.fold<int>(0, (sum, value) => sum + value);
+    final maxSets = dailySets.reduce(math.max);
     final textTheme = Theme.of(context).textTheme;
-    final primary = textPrimaryColor(context);
     final secondary = textSecondaryColor(context);
+    final todayColor = planSwatch(2, context);
+    const letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    const names = [
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ];
 
     return Material(
       type: MaterialType.transparency,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Icon(LucideIcons.activity, size: 14, color: accentColor(context)),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  'This week',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.labelMedium?.copyWith(
-                    color: secondary,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Row(
-            children: [
-              Expanded(
-                child: _SnapshotMetric(
-                  value: thisWeek.length,
-                  singular: 'workout',
-                  plural: 'workouts',
-                  onTap: onOpenWeeklyTraining,
-                ),
-              ),
-              Container(
-                width: 1,
-                height: 28,
-                margin: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-                color: borderColor(context),
-              ),
-              Expanded(
-                child: _SnapshotMetric(
-                  value: setCount,
-                  singular: 'set',
-                  plural: 'sets',
-                  onTap: onOpenWeeklyTraining,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Divider(height: 1, thickness: 1, color: borderColor(context)),
-          const SizedBox(height: AppSpacing.xs),
           Semantics(
-            button: latest != null && onOpenLastWorkout != null,
-            label:
-                latest == null
-                    ? 'Last workout: no workouts logged yet'
-                    : 'Last workout: ${titleCase(latest.planName)}, ${formatDaysAgo(latest.date, now: today)}',
+            button: onOpenWeeklyTraining != null,
+            label: 'View weekly training statistics',
             child: InkWell(
-              onTap:
-                  latest == null || onOpenLastWorkout == null
-                      ? null
-                      : () => onOpenLastWorkout!(latest!),
+              key: const ValueKey('weekly-training-link'),
+              onTap: onOpenWeeklyTraining,
               borderRadius: AppRadius.control,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 44),
+                constraints: const BoxConstraints(minHeight: 48),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                  child: Row(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    spacing: AppSpacing.md,
+                    runSpacing: AppSpacing.xs,
                     children: [
-                      Container(
-                        width: 4,
-                        height: 28,
-                        decoration: BoxDecoration(
-                          color:
-                              latest == null
-                                  ? borderColor(context)
-                                  : _planColorFor(latest, context),
-                          borderRadius: AppRadius.micro,
+                      Text(
+                        'This week',
+                        style: textTheme.bodyMedium?.copyWith(color: secondary),
+                      ),
+                      Text(
+                        '$workouts ${workouts == 1 ? 'workout' : 'workouts'} · '
+                        '$sets ${sets == 1 ? 'set' : 'sets'}',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: textPrimaryColor(context),
                         ),
                       ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: ExcludeSemantics(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Last workout',
-                                style: textTheme.labelSmall?.copyWith(
-                                  color: secondary,
-                                ),
-                              ),
-                              Text(
-                                latest == null
-                                    ? 'No workouts logged yet'
-                                    : '${titleCase(latest.planName)} · ${formatDaysAgo(latest.date, now: today)}',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: textTheme.labelMedium?.copyWith(
-                                  color: primary,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      if (latest != null && onOpenLastWorkout != null)
-                        Icon(
-                          LucideIcons.chevronRight,
-                          size: 16,
-                          color: secondary,
-                        ),
                     ],
                   ),
                 ),
               ),
             ),
           ),
+          const SizedBox(height: AppSpacing.md),
+          Semantics(
+            label: 'Completed sets by day. The outlined day is today.',
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var index = 0; index < 7; index++) ...[
+                  if (index > 0) const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Semantics(
+                      label:
+                          '${names[index]}: ${dailyWorkouts[index]} workouts, '
+                          '${dailySets[index]} sets${index == todayIndex ? ', today' : ''}',
+                      button:
+                          latestByDay[index] != null &&
+                          onOpenLastWorkout != null,
+                      child: Tooltip(
+                        message:
+                            '${names[index]} · ${dailyWorkouts[index]} workouts · ${dailySets[index]} sets',
+                        child: InkWell(
+                          key: ValueKey('training-day-$index'),
+                          onTap:
+                              latestByDay[index] == null ||
+                                      onOpenLastWorkout == null
+                                  ? null
+                                  : () =>
+                                      onOpenLastWorkout!(latestByDay[index]!),
+                          borderRadius: AppRadius.control,
+                          child: ExcludeSemantics(
+                            child: Column(
+                              children: [
+                                SizedBox(
+                                  height: 52,
+                                  child: Align(
+                                    alignment: Alignment.bottomCenter,
+                                    child: Container(
+                                      width: double.infinity,
+                                      height:
+                                          dailyWorkouts[index] > 0
+                                              ? 14 +
+                                                  (maxSets == 0
+                                                      ? 0
+                                                      : 38 *
+                                                          dailySets[index] /
+                                                          maxSets)
+                                              : index == todayIndex
+                                              ? 40
+                                              : 5,
+                                      decoration: BoxDecoration(
+                                        color:
+                                            index == todayIndex
+                                                ? backgroundColor(context)
+                                                : dailyWorkouts[index] > 0
+                                                ? accentFillColor(context)
+                                                : borderColor(context),
+                                        borderRadius: AppRadius.control,
+                                      ),
+                                      child:
+                                          index == todayIndex
+                                              ? CustomPaint(
+                                                painter: _TodayOutline(
+                                                  color: todayColor,
+                                                ),
+                                                // Leave a neutral gap between the outline and
+                                                // the bar so every accent keeps today legible.
+                                                child:
+                                                    dailyWorkouts[index] > 0
+                                                        ? Padding(
+                                                          padding:
+                                                              const EdgeInsets.all(
+                                                                3,
+                                                              ),
+                                                          child: DecoratedBox(
+                                                            decoration:
+                                                                BoxDecoration(
+                                                                  color:
+                                                                      accentFillColor(
+                                                                        context,
+                                                                      ),
+                                                                  borderRadius:
+                                                                      AppRadius
+                                                                          .micro,
+                                                                ),
+                                                          ),
+                                                        )
+                                                        : null,
+                                              )
+                                              : null,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: AppSpacing.sm),
+                                Text(
+                                  letters[index],
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color:
+                                        index == todayIndex
+                                            ? todayColor
+                                            : secondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
-
-  Color _planColorFor(WorkoutSession session, BuildContext context) {
-    final name = session.planName.toLowerCase();
-    for (final plan in plans) {
-      final matches =
-          session.planId != null && plan.id != null
-              ? session.planId == plan.id
-              : plan.name.toLowerCase() == name;
-      if (matches) return planColorOf(plan.planColor, context);
-    }
-    return planColorOf(null, context);
-  }
 }
 
-class _SnapshotMetric extends StatelessWidget {
-  final int value;
-  final String singular;
-  final String plural;
-  final VoidCallback? onTap;
-
-  const _SnapshotMetric({
-    required this.value,
-    required this.singular,
-    required this.plural,
-    required this.onTap,
-  });
+class _TodayOutline extends CustomPainter {
+  final Color color;
+  const _TodayOutline({required this.color});
 
   @override
-  Widget build(BuildContext context) {
-    final label = value == 1 ? singular : plural;
-    return Semantics(
-      button: onTap != null,
-      label: '$value $label this week',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadius.control,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-            child: ExcludeSemantics(
-              child: Row(
-                children: [
-                  Text(
-                    '$value',
-                    maxLines: 1,
-                    style: AppTypography.trainingData(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      height: 1.1,
-                      color: textPrimaryColor(context),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: textSecondaryColor(context),
-                      ),
-                    ),
-                  ),
-                  if (onTap != null)
-                    Icon(
-                      LucideIcons.arrowUpRight,
-                      size: 12,
-                      color: textSecondaryColor(context),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+  void paint(Canvas canvas, Size size) {
+    final paint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.5;
+    final rect = AppRadius.control.toRRect(Offset.zero & size).deflate(0.75);
+    final path = Path()..addRRect(rect);
+    for (final metric in path.computeMetrics()) {
+      for (double distance = 0; distance < metric.length; distance += 7) {
+        canvas.drawPath(
+          metric.extractPath(distance, math.min(distance + 4, metric.length)),
+          paint,
+        );
+      }
+    }
   }
+
+  @override
+  bool shouldRepaint(_TodayOutline oldDelegate) => oldDelegate.color != color;
 }

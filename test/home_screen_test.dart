@@ -14,6 +14,7 @@ import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/screens/home_screen.dart';
+import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
@@ -111,33 +112,30 @@ void main() {
     await tester.pumpWidget(
       homeHost(plans: [data.plan], sessions: [data.session]),
     );
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
     expect(find.text('[START]'), findsNothing);
     final size = tester.getSize(find.byTooltip('Plan actions'));
     expect(size.width, greaterThanOrEqualTo(48));
     expect(size.height, greaterThanOrEqualTo(48));
   });
 
-  testWidgets('create plan action is a compact bottom-right plus button', (
+  testWidgets('new plan is an inline action without an overlapping FAB', (
     tester,
   ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 800);
+    addTearDown(tester.view.reset);
     for (final brightness in Brightness.values) {
-      await tester.pumpWidget(homeHost(brightness: brightness));
-
-      final fab = find.byType(FloatingActionButton);
-      expect(fab, findsOneWidget);
-      expect(
-        tester.widget<FloatingActionButton>(fab).backgroundColor,
-        surfaceColor(tester.element(find.byType(HomeScreen))),
+      await tester.pumpWidget(
+        homeHost(brightness: brightness, plans: [populatedPlan()]),
       );
-      expect(
-        find.descendant(of: fab, matching: find.byIcon(Icons.add)),
-        findsNothing,
-      );
-      expect(
-        find.descendant(of: fab, matching: find.byIcon(LucideIcons.plus)),
-        findsOneWidget,
-      );
-      expect(find.text('[+ NEW PLAN]'), findsNothing);
+      expect(find.byType(FloatingActionButton), findsNothing);
+      final action = find.text('New plan');
+      await tester.scrollUntilVisible(action, 150);
+      await tester.tap(action);
+      await tester.pumpAndSettle();
+      expect(find.byType(PlanEditorScreen), findsOneWidget);
     }
   });
 
@@ -146,6 +144,8 @@ void main() {
     await tester.pumpWidget(
       homeHost(plans: [data.plan], sessions: [data.session]),
     );
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
 
     final overflow = find.byTooltip('Plan actions');
     final card = find.ancestor(
@@ -170,6 +170,8 @@ void main() {
     await tester.pumpWidget(
       homeHost(plans: [data.plan], sessions: [data.session]),
     );
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
     expect(find.text('Push Day'), findsOneWidget);
     expect(find.textContaining('4 exercises'), findsOneWidget);
     expect(find.textContaining('12 sets'), findsOneWidget);
@@ -195,6 +197,8 @@ void main() {
     await tester.pumpWidget(
       homeHost(size: const Size(1200, 800), plans: plans),
     );
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
 
     final source = find.byTooltip('Drag to reorder Push Day');
     final target = find.byTooltip('Drag to reorder Pull Day');
@@ -225,6 +229,8 @@ void main() {
       populatedPlan().copyWith(id: 'plan-2', name: 'Pull Day'),
     ];
     await tester.pumpWidget(homeHost(plans: plans));
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Plan actions').first);
     await tester.pumpAndSettle();
     expect(find.text('Move later'), findsOneWidget);
@@ -243,6 +249,8 @@ void main() {
   ) async {
     final plan = populatedPlan().copyWith(name: 'push day');
     await tester.pumpWidget(homeHost(plans: [plan]));
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
 
     expect(find.text('Push Day'), findsOneWidget);
     expect(find.text('push day'), findsNothing);
@@ -259,6 +267,8 @@ void main() {
     await tester.pumpWidget(
       homeHost(plans: [data.plan], sessions: [data.session]),
     );
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Plan actions'));
     await tester.pumpAndSettle();
     for (final label in [
@@ -279,16 +289,22 @@ void main() {
   testWidgets('card tap opens Workout and long press opens plan actions', (
     tester,
   ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 800);
+    addTearDown(tester.view.reset);
+
     final data = populatedData();
     await tester.pumpWidget(
       homeHost(plans: [data.plan], sessions: [data.session]),
     );
-    await tester.tap(find.text('Push Day'));
+    await tester.ensureVisible(find.text('Push Day').last);
+    await tester.tap(find.text('Push Day').last);
     await tester.pumpAndSettle();
     expect(find.byType(WorkoutScreen), findsOneWidget);
     Navigator.of(tester.element(find.byType(WorkoutScreen))).pop();
     await tester.pumpAndSettle();
-    await tester.longPress(find.text('Push Day'));
+    await tester.ensureVisible(find.text('Push Day').last);
+    await tester.longPress(find.text('Push Day').last);
     await tester.pumpAndSettle();
     expect(find.text('Change color'), findsOneWidget);
   });
@@ -296,6 +312,8 @@ void main() {
   testWidgets('plan color is limited to identity markers', (tester) async {
     final plan = populatedPlan();
     await tester.pumpWidget(homeHost(plans: [plan]));
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
 
     final homeContext = tester.element(find.byType(HomeScreen));
     final expectedHomeColor = planColorOf(plan.planColor, homeContext);
@@ -313,7 +331,7 @@ void main() {
       expectedHomeColor,
     );
 
-    await tester.tap(find.text('Push Day'));
+    await tester.tap(find.text('Push Day').last);
     await tester.pumpAndSettle();
 
     final title = tester.widget<Text>(
@@ -345,12 +363,17 @@ void main() {
   testWidgets(
     'workout add exercise uses the card surface and has a 48 pixel target',
     (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(390, 800);
+      addTearDown(tester.view.reset);
+
       for (final brightness in Brightness.values) {
         final plan = populatedPlan();
         await tester.pumpWidget(
           homeHost(brightness: brightness, plans: [plan]),
         );
-        await tester.tap(find.text('Push Day'));
+        await tester.ensureVisible(find.text('Push Day').last);
+        await tester.tap(find.text('Push Day').last);
         await tester.pumpAndSettle();
         await tester.drag(
           find.byType(CustomScrollView),
@@ -383,9 +406,14 @@ void main() {
   );
 
   testWidgets('workout drag handles reorder exercises', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 800);
+    addTearDown(tester.view.reset);
+
     final plan = populatedPlan();
     await tester.pumpWidget(homeHost(plans: [plan]));
-    await tester.tap(find.text('Push Day'));
+    await tester.ensureVisible(find.text('Push Day').last);
+    await tester.tap(find.text('Push Day').last);
     await tester.pumpAndSettle();
 
     final handle = find.byTooltip('Drag to reorder Bench Press');
@@ -640,6 +668,8 @@ void main() {
     await tester.pumpWidget(
       homeHost(plans: [data.plan], sessions: [data.session]),
     );
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Plan actions'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Change color'));
@@ -706,7 +736,7 @@ void main() {
     exercises: const [],
   );
 
-  testWidgets('a single plan shows training without an up next card', (
+  testWidgets('a single plan has a launcher and separate weekly activity', (
     tester,
   ) async {
     final data = populatedData();
@@ -716,13 +746,23 @@ void main() {
         sessions: [data.session.copyWith(date: DateTime.now())],
       ),
     );
-    expect(find.text('Up next'), findsNothing);
+    expect(find.text('Next up'), findsOneWidget);
+    expect(find.text('Start workout'), findsOneWidget);
     expect(find.text('This week'), findsOneWidget);
-    expect(find.text('1'), findsWidgets);
-    expect(find.text('workout'), findsOneWidget);
-    expect(find.text('Last workout'), findsOneWidget);
+    expect(find.text('1 workout · 0 sets'), findsOneWidget);
+    expect(find.text('Last workout'), findsNothing);
     expect(find.text('Your plans'), findsOneWidget);
-    expect(tester.getSize(find.byType(TrainingSnapshot)).height, lessThan(130));
+    expect(find.byTooltip('Plan actions'), findsNothing);
+    expect(find.byTooltip('Drag to reorder Push Day'), findsNothing);
+    await tester.ensureVisible(find.text('Manage'));
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Plan actions'), findsOneWidget);
+    expect(find.text('Start workout'), findsNothing);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Plan actions'), findsNothing);
+    expect(find.text('Start workout'), findsOneWidget);
   });
 
   testWidgets('a draft does not advance rotation or count as trained', (
@@ -739,9 +779,8 @@ void main() {
     );
     await tester.pumpWidget(homeHost(plans: plans, sessions: [draft]));
 
-    expect(find.text('Day 1 of 3'), findsOneWidget);
-    expect(find.text('No workouts logged yet'), findsOneWidget);
-    expect(find.text('workouts'), findsOneWidget);
+    expect(find.textContaining('Day 1 of 3'), findsOneWidget);
+    expect(find.text('0 workouts · 0 sets'), findsOneWidget);
     expect(find.byIcon(LucideIcons.check), findsNothing);
   });
 
@@ -753,8 +792,8 @@ void main() {
       homeHost(plans: rotationPlans(), sessions: [pullSession(yesterday)]),
     );
 
-    expect(find.text('Up next'), findsOneWidget);
-    expect(find.text('Day 3 of 3'), findsOneWidget);
+    expect(find.text('Next up'), findsOneWidget);
+    expect(find.textContaining('Day 3 of 3'), findsOneWidget);
 
     await tester.tap(find.text('Start workout'));
     await tester.pumpAndSettle();
@@ -763,22 +802,37 @@ void main() {
     expect(workout.planIndex, 2);
   });
 
-  testWidgets('snapshot and cards mark what was trained this week', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      homeHost(plans: rotationPlans(), sessions: [pullSession(DateTime.now())]),
-    );
-
-    expect(find.text('workout'), findsOneWidget);
-    expect(find.text('Pull Day · Today'), findsOneWidget);
-    // Only the Pull Day card is done this week, and says when.
-    expect(find.byIcon(LucideIcons.check), findsOneWidget);
-    expect(find.text('Today'), findsOneWidget);
-  });
+  testWidgets(
+    'weekly activity exposes trained days without repeated status labels',
+    (tester) async {
+      await tester.pumpWidget(
+        homeHost(
+          plans: rotationPlans(),
+          sessions: [pullSession(DateTime.now())],
+        ),
+      );
+      expect(find.text('1 workout · 0 sets'), findsOneWidget);
+      expect(find.text('Pull Day · Today'), findsNothing);
+      expect(find.text('Not trained yet'), findsNothing);
+      final day = DateTime.now().weekday - 1;
+      expect(find.byKey(ValueKey('training-day-$day')), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              (widget.properties.label ?? '').contains(
+                '1 workouts, 0 sets, today',
+              ),
+        ),
+        findsOneWidget,
+      );
+      await tester.scrollUntilVisible(find.text('Next'), 150);
+      expect(find.text('Next'), findsOneWidget);
+    },
+  );
 
   testWidgets(
-    'snapshot counts performed sets and uses the latest completed session',
+    'snapshot counts performed sets and excludes drafts and other weeks',
     (tester) async {
       final today = DateTime(2026, 9, 30);
       final plan = populatedPlan();
@@ -820,10 +874,15 @@ void main() {
         ),
       );
 
-      expect(find.text('1'), findsNWidgets(2));
-      expect(find.text('workout'), findsOneWidget);
-      expect(find.text('set'), findsOneWidget);
-      expect(find.text('Push Day · Today'), findsOneWidget);
+      expect(find.text('1 workout · 1 set'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              widget.properties.label == 'Wednesday: 1 workouts, 1 sets, today',
+        ),
+        findsOneWidget,
+      );
       expect(find.textContaining('Draft'), findsNothing);
     },
   );
@@ -870,7 +929,7 @@ void main() {
             ),
           );
           await tester.pump();
-          expect(find.text('Up next'), findsOneWidget);
+          expect(find.text('Next up'), findsOneWidget);
           expect(
             tester.takeException(),
             isNull,

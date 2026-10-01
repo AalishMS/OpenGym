@@ -120,6 +120,17 @@ Color surfaceColor(BuildContext context) {
       const Color(0xFF1A1A1A);
 }
 
+/// A raised neutral surface for the home launcher and its selected plan.
+/// Light mode lifts off the page toward paper; dark mode keeps the existing
+/// perceptual surface step. Readable ink remains solved by the theme.
+Color raisedSurfaceColor(BuildContext context) {
+  if (Theme.of(context).brightness == Brightness.dark) {
+    return surfaceColor(context);
+  }
+  final background = backgroundColor(context);
+  return toneOf(background, (oklchOf(background).l + 0.025).clamp(0.0, 1.0));
+}
+
 Color borderColor(BuildContext context) {
   return Theme.of(context).extension<AppColorScheme>()?.border ??
       const Color(0xFF2A2A2A);
