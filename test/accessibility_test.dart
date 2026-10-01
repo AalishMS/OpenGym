@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:gymapp/models/exercise.dart';
@@ -61,7 +62,8 @@ void main() {
     expect(tester.getSize(menu), const Size(48, 48));
     await tester.tap(menu);
     await tester.pumpAndSettle();
-    for (final label in ['Exercise note', 'Delete exercise', 'Delete set']) {
+    expect(find.text('Delete set'), findsNothing);
+    for (final label in ['Exercise note', 'Delete exercise']) {
       final item = find.ancestor(
         of: find.text(label),
         matching: find.byWidgetPredicate((widget) => widget is PopupMenuItem),
@@ -69,6 +71,16 @@ void main() {
       expect(tester.getSize(item).width, greaterThanOrEqualTo(48));
       expect(tester.getSize(item).height, greaterThanOrEqualTo(48));
     }
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    await tester.longPress(find.bySemanticsLabel('Set 1 Kg'));
+    await tester.pumpAndSettle();
+    final delete = find.ancestor(
+      of: find.text('Delete set'),
+      matching: find.byWidgetPredicate((widget) => widget is PopupMenuItem),
+    );
+    expect(tester.getSize(delete).width, greaterThanOrEqualTo(48));
+    expect(tester.getSize(delete).height, greaterThanOrEqualTo(48));
   });
 
   testWidgets('workout cards do not render set notes or target annotations', (
@@ -111,14 +123,15 @@ void main() {
       expect(calls, [action.value]);
     }
     calls.clear();
-    await tester.tap(
-      find.byTooltip('Exercise actions for Barbell bench press'),
+    final row = tester.getSemantics(
+      find.byKey(const ValueKey('set_entry_row_0')),
     );
-    await tester.pumpAndSettle();
-    tester.semantics.tap(find.semantics.byLabel('Delete set'));
+    final actionId = row.getSemanticsData().customSemanticsActionIds!.single;
+    expect(CustomSemanticsAction.getAction(actionId)!.label, 'Delete set');
+    row.owner!.performAction(row.id, SemanticsAction.customAction, actionId);
     await tester.pumpAndSettle();
     expect(calls, isEmpty);
-    tester.semantics.tap(find.semantics.byLabel('Set 1\n70 kg × 8'));
+    tester.semantics.tap(find.semantics.byLabel('Delete set'));
     await tester.pumpAndSettle();
     expect(calls, ['set:4:0']);
     semantics.dispose();

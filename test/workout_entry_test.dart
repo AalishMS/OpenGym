@@ -117,12 +117,25 @@ void main() {
     expect(duplicated.exercises.single.sets.last.weight, 45);
     expect(duplicated.exercises.single.sets.last.reps, 10);
     expect(duplicated.exercises.single.sets.last.rpe, 9);
+    await tester.longPress(find.bySemanticsLabel('Set 2 Reps'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete set'), findsOneWidget);
+    expect(find.byType(BottomSheet), findsNothing);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(
+      HiveService.getSessionForPlanAndWeek(
+        'Push',
+        2,
+        plan.splitId,
+      )!.exercises.single.sets,
+      hasLength(3),
+    );
     Future<void> deleteSet(int number) async {
-      await tester.tap(find.byTooltip('Exercise actions for Bench Press'));
+      await tester.longPress(find.bySemanticsLabel('Set $number Kg'));
       await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
       await tester.tap(find.text('Delete set'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ListTile, 'Set $number'));
       await tester.pumpAndSettle();
     }
 
@@ -136,6 +149,14 @@ void main() {
       2,
     );
     await deleteSet(2);
+    expect(
+      HiveService.getSessionForPlanAndWeek(
+        'Push',
+        2,
+        plan.splitId,
+      )!.exercises.single.sets.single.weight,
+      50,
+    );
     expect(
       HiveService.getSessionForPlanAndWeek(
         'Push',

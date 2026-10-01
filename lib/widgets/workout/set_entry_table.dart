@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
+
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
@@ -33,6 +35,58 @@ String entryWeight(double weight) =>
     weight.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
 
 enum _SetField { weight, reps, rpe }
+
+const double _kSetNumberWidth = 32;
+const double _kColumnGap = 8;
+const int _kPreviousFlex = 6;
+const int _kWeightFlex = 5;
+const int _kRepsFlex = 4;
+const int _kRpeFlex = 4;
+
+double _rpeColumnWidth(
+  double width, {
+  bool showHistoryColumns = true,
+  bool showPrevious = true,
+  bool numberIsAction = false,
+  bool trailing = false,
+}) {
+  final historyWidth =
+      showHistoryColumns
+          ? (numberIsAction ? 48 : _kSetNumberWidth) +
+              _kColumnGap +
+              (showPrevious ? _kColumnGap : 0)
+          : 0;
+  final flexibleWidth =
+      width - historyWidth - 2 * _kColumnGap - (trailing ? 48 : 0);
+  final flex =
+      _kWeightFlex +
+      _kRepsFlex +
+      _kRpeFlex +
+      (showHistoryColumns && showPrevious ? _kPreviousFlex : 0);
+  final rpeWidth = flexibleWidth * _kRpeFlex / flex;
+  return rpeWidth < 48 ? 48 : rpeWidth;
+}
+
+/// An exercise heading whose action is centered over the log's RPE column.
+class SetEntryHeading extends StatelessWidget {
+  final Widget title;
+  final Widget action;
+
+  const SetEntryHeading({super.key, required this.title, required this.action});
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final rpeWidth = _rpeColumnWidth(constraints.maxWidth);
+      return Row(
+        children: [
+          Expanded(child: title),
+          SizedBox(width: rpeWidth, height: 48, child: Center(child: action)),
+        ],
+      );
+    },
+  );
+}
 
 /// Shared by prescribed sets, live sets, and the set detail dialogs.
 class SetEntryTable extends StatelessWidget {
@@ -88,10 +142,47 @@ class SetEntryTable extends StatelessWidget {
     if (changed) onEntryFinished?.call();
   }
 
+  Future<void> _showDelete(
+    BuildContext context,
+    int index, {
+    Offset? position,
+  }) async {
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final row = context.findRenderObject()! as RenderBox;
+    final anchor = overlay.globalToLocal(
+      position ?? row.localToGlobal(row.size.center(Offset.zero)),
+    );
+    final delete = await showMenu<bool>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(anchor.dx, anchor.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          value: true,
+          height: 48,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.delete_outline, size: 18, color: errorColor(context)),
+              const SizedBox(width: AppSpacing.sm),
+              Text('Delete set', style: TextStyle(color: errorColor(context))),
+            ],
+          ),
+        ),
+      ],
+    );
+    if (delete == true && context.mounted) onDelete?.call(index);
+  }
+
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
       final numberIsAction = onDetails != null && onDelete != null;
+      final showTrailing =
+          onDetails != null || (onDelete != null && !continuousLog);
       final showPrevious =
           !numberIsAction ||
           constraints.maxWidth >=
@@ -99,7 +190,7 @@ class SetEntryTable extends StatelessWidget {
       return Column(
         children: [
           _EntryHeader(
-            trailing: onDetails != null || onDelete != null,
+            trailing: showTrailing,
             showHistoryColumns: showHistoryColumns,
             showRpe: onRpeChanged != null,
             numberIsAction: numberIsAction,
@@ -112,61 +203,107 @@ class SetEntryTable extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _EntryRow(
-                    showHistoryColumns: showHistoryColumns,
-                    showPrevious: showPrevious,
-                    continuousLog: continuousLog,
-                    index: index,
-                    previous: sets[index].previous,
-                    weight: entryWeight(sets[index].weight),
-                    reps: '${sets[index].reps}',
-                    rpe: sets[index].rpe,
-                    isPrMarker: sets[index].isPrMarker,
-                    onDetails:
-                        onDetails != null && onDelete != null
-                            ? () => onDetails!(index)
-                            : null,
-                    onWeight: () => _open(context, index, _SetField.weight),
-                    onReps: () => _open(context, index, _SetField.reps),
-                    onRpe:
-                        onRpeChanged == null
-                            ? null
-                            : () => _open(context, index, _SetField.rpe),
-                    trailing:
-                        onDetails != null || onDelete != null
-                            ? Semantics(
-                              label:
-                                  onDelete != null
-                                      ? 'Delete set'
-                                      : 'Set details',
-                              button: true,
-                              container: true,
-                              excludeSemantics: true,
-                              onTap: () => (onDelete ?? onDetails)!(index),
-                              child: IconButton(
-                                iconSize: 32,
-                                tooltip:
-                                    onDelete != null
-                                        ? 'Delete set'
-                                        : 'Set details',
-                                onPressed:
-                                    () => (onDelete ?? onDetails)!(index),
-                                icon:
-                                    onDelete == null && sets[index].rpe != null
-                                        ? _effort(context, sets[index].rpe!)
-                                        : Icon(
-                                          onDelete != null
-                                              ? Icons.close
-                                              : Icons.more_horiz,
-                                          size: 18,
-                                          color:
+                  Builder(
+                    builder:
+                        (rowContext) => Semantics(
+                          container: continuousLog && onDelete != null,
+                          label:
+                              continuousLog && onDelete != null
+                                  ? 'Set ${index + 1} actions'
+                                  : null,
+                          customSemanticsActions:
+                              continuousLog && onDelete != null
+                                  ? {
+                                    const CustomSemanticsAction(
+                                          label: 'Delete set',
+                                        ):
+                                        () => _showDelete(rowContext, index),
+                                  }
+                                  : null,
+                          child: GestureDetector(
+                            key: ValueKey('set_entry_row_$index'),
+                            behavior: HitTestBehavior.opaque,
+                            onLongPressStart:
+                                continuousLog && onDelete != null
+                                    ? (details) => _showDelete(
+                                      rowContext,
+                                      index,
+                                      position: details.globalPosition,
+                                    )
+                                    : null,
+                            child: _EntryRow(
+                              showHistoryColumns: showHistoryColumns,
+                              showPrevious: showPrevious,
+                              continuousLog: continuousLog,
+                              index: index,
+                              previous: sets[index].previous,
+                              weight: entryWeight(sets[index].weight),
+                              reps: '${sets[index].reps}',
+                              rpe: sets[index].rpe,
+                              isPrMarker: sets[index].isPrMarker,
+                              onDetails:
+                                  onDetails != null && onDelete != null
+                                      ? () => onDetails!(index)
+                                      : null,
+                              onWeight:
+                                  () => _open(context, index, _SetField.weight),
+                              onReps:
+                                  () => _open(context, index, _SetField.reps),
+                              onRpe:
+                                  onRpeChanged == null
+                                      ? null
+                                      : () =>
+                                          _open(context, index, _SetField.rpe),
+                              trailing:
+                                  showTrailing
+                                      ? Semantics(
+                                        label:
+                                            onDelete != null
+                                                ? 'Delete set'
+                                                : 'Set details',
+                                        button: true,
+                                        container: true,
+                                        excludeSemantics: true,
+                                        onTap:
+                                            () =>
+                                                (onDelete ?? onDetails)!(index),
+                                        child: IconButton(
+                                          iconSize: 32,
+                                          tooltip:
                                               onDelete != null
-                                                  ? errorColor(context)
-                                                  : textSecondaryColor(context),
+                                                  ? 'Delete set'
+                                                  : 'Set details',
+                                          onPressed:
+                                              () => (onDelete ?? onDetails)!(
+                                                index,
+                                              ),
+                                          icon:
+                                              onDelete == null &&
+                                                      sets[index].rpe != null
+                                                  ? _effort(
+                                                    context,
+                                                    sets[index].rpe!,
+                                                  )
+                                                  : Icon(
+                                                    onDelete != null
+                                                        ? Icons.close
+                                                        : Icons.more_horiz,
+                                                    size: 18,
+                                                    color:
+                                                        onDelete != null
+                                                            ? errorColor(
+                                                              context,
+                                                            )
+                                                            : textSecondaryColor(
+                                                              context,
+                                                            ),
+                                                  ),
                                         ),
-                              ),
-                            )
-                            : null,
+                                      )
+                                      : null,
+                            ),
+                          ),
+                        ),
                   ),
                   if ((sets[index].annotation?.trim().isNotEmpty ?? false) &&
                       !sets[index].isPrMarker)
@@ -219,25 +356,40 @@ Widget _columns(
   bool showRpe = false,
   bool numberIsAction = false,
   bool showPrevious = true,
-}) => Row(
-  children: [
-    if (showHistoryColumns) ...[
-      SizedBox(width: numberIsAction ? 48 : 32, child: cells[0]),
-      const SizedBox(width: 8),
-      if (showPrevious) ...[
-        Expanded(flex: 6, child: cells[1]),
-        const SizedBox(width: 8),
-      ],
-    ],
-    Expanded(flex: 5, child: cells[2]),
-    const SizedBox(width: 8),
-    Expanded(flex: showRpe ? 4 : 5, child: cells[3]),
-    if (showRpe) ...[
-      const SizedBox(width: 8),
-      Expanded(flex: 4, child: cells[4]),
-    ],
-    if (trailing != null) SizedBox(width: 48, child: trailing),
-  ],
+}) => LayoutBuilder(
+  builder:
+      (context, constraints) => Row(
+        children: [
+          if (showHistoryColumns) ...[
+            SizedBox(
+              width: numberIsAction ? 48 : _kSetNumberWidth,
+              child: cells[0],
+            ),
+            const SizedBox(width: _kColumnGap),
+            if (showPrevious) ...[
+              Expanded(flex: _kPreviousFlex, child: cells[1]),
+              const SizedBox(width: _kColumnGap),
+            ],
+          ],
+          Expanded(flex: _kWeightFlex, child: cells[2]),
+          const SizedBox(width: _kColumnGap),
+          Expanded(flex: showRpe ? _kRepsFlex : _kWeightFlex, child: cells[3]),
+          if (showRpe) ...[
+            const SizedBox(width: _kColumnGap),
+            SizedBox(
+              width: _rpeColumnWidth(
+                constraints.maxWidth,
+                showHistoryColumns: showHistoryColumns,
+                showPrevious: showPrevious,
+                numberIsAction: numberIsAction,
+                trailing: trailing != null,
+              ),
+              child: cells[4],
+            ),
+          ],
+          if (trailing != null) SizedBox(width: 48, child: trailing),
+        ],
+      ),
 );
 
 class _EntryHeader extends StatelessWidget {

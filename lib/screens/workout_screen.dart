@@ -841,17 +841,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 color: textSecondaryColor(context),
               ),
               onSelected: (value) {
-                if (value == 'finish') _stopWorkout();
                 if (value == 'discard') _discardCurrentWorkout();
               },
               itemBuilder:
                   (context) => [
-                    PopupMenuItem(
-                      value: 'finish',
-                      height: 48,
-                      enabled: session.hasStarted,
-                      child: const Text('Finish workout'),
-                    ),
                     PopupMenuItem(
                       value: 'discard',
                       height: 48,
@@ -997,6 +990,26 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               ),
             ),
           ),
+          if (!session.isCompleted)
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.xs,
+              ),
+              child: FilledButton.icon(
+                onPressed: session.hasStarted ? _stopWorkout : null,
+                icon: const Icon(LucideIcons.check, size: 18),
+                label: const Text('Finish workout'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: accentFillColor(context),
+                  foregroundColor: onAccentColor(context),
+                  minimumSize: const Size.fromHeight(48),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: AppRadius.button,
+                  ),
+                ),
+              ),
+            ),
           _buildWeekNavBar(accent),
         ],
       ),

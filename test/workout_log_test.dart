@@ -185,6 +185,20 @@ void main() {
             expect(tester.getRect(title).top, greaterThanOrEqualTo(0));
             expect(find.byTooltip('Delete set'), findsNothing);
             expect(find.bySemanticsLabel('Set 1 RPE value 8'), findsWidgets);
+            final card = find.byType(ExerciseCard).first;
+            final menu = find.descendant(
+              of: card,
+              matching: find.byTooltip('Exercise actions for Bench press'),
+            );
+            final rpe = find.descendant(of: card, matching: find.text('RPE'));
+            expect(
+              tester.getCenter(menu).dx,
+              closeTo(tester.getCenter(rpe).dx, 0.1),
+            );
+            expect(tester.getSize(menu).width, greaterThanOrEqualTo(48));
+            final finish = find.widgetWithText(FilledButton, 'Finish workout');
+            expect(finish, findsOneWidget);
+            expect(tester.getRect(finish).bottom, lessThanOrEqualTo(844));
 
             if (const bool.fromEnvironment('WORKOUT_PREVIEW') &&
                 width == 390 &&
@@ -226,12 +240,39 @@ void main() {
     await tester.tap(find.byTooltip('Exercise actions for Bench press'));
     await tester.pumpAndSettle();
     expect(find.text('Move up'), findsNothing);
+    expect(find.text('Delete set'), findsNothing);
     await tester.tap(find.text('Move down'));
     await tester.pumpAndSettle();
     final order = tester.widgetList<ExerciseCard>(find.byType(ExerciseCard));
     expect(order.first.exercise.name, 'Incline dumbbell press');
     expect(order.elementAt(1).exercise.name, 'Bench press');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('exercise menu edges remain tappable on narrow screens', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.runAsync(() => seed());
+    for (final width in [320.0, 390.0]) {
+      tester.view.physicalSize = Size(width, 844);
+      await tester.pumpWidget(host());
+      await tester.pumpAndSettle();
+      final menu = find.byTooltip('Exercise actions for Bench press');
+      final rect = tester.getRect(menu);
+      for (final edge in [
+          rect.centerLeft + const Offset(0.1, 0),
+          rect.centerRight - const Offset(0.1, 0),
+      ]) {
+        await tester.tapAt(edge);
+        await tester.pumpAndSettle();
+        expect(find.text('Rename exercise'), findsOneWidget);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+      }
+      expect(tester.takeException(), isNull);
+    }
   });
 
   testWidgets('completed log hides editing and workout management controls', (
@@ -245,64 +286,74 @@ void main() {
     expect(find.byTooltip('Exercise actions for Bench press'), findsNothing);
     expect(find.byTooltip('Workout actions'), findsNothing);
     expect(find.bySemanticsLabel('Start workout'), findsNothing);
+    expect(find.text('Finish workout'), findsNothing);
+    // Completed sessions deliberately ignore pointer events on the log.
+    await tester.longPress(
+      find.bySemanticsLabel('Set 1 Kg').first,
+      warnIfMissed: false,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Delete set'), findsNothing);
     expect(find.text('70'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('finish menu requires a started workout and keeps confirmation', (
-    tester,
-  ) async {
-    const channel = MethodChannel(
-      'com.aalishms.opengym/workout_timer_notification',
-    );
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (_) async => null);
-    addTearDown(() {
+  testWidgets(
+    'visible finish button requires a started workout and keeps confirmation',
+    (tester) async {
+      const channel = MethodChannel(
+        'com.aalishms.opengym/workout_timer_notification',
+      );
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(channel, null);
-    });
-    await tester.runAsync(() => seed());
-    await tester.pumpWidget(host());
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Workout actions'));
-    await tester.pumpAndSettle();
-    final finish = find.byWidgetPredicate(
-      (widget) => widget is PopupMenuItem && widget.value == 'finish',
-    );
-    expect(tester.widget<PopupMenuItem>(finish).enabled, isFalse);
-    await tester.binding.handlePopRoute();
-    await tester.pumpAndSettle();
+          .setMockMethodCallHandler(channel, (_) async => null);
+      addTearDown(() {
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null);
+      });
+      await tester.runAsync(() => seed());
+      await tester.pumpWidget(host());
+      await tester.pumpAndSettle();
+      final finish = find.widgetWithText(FilledButton, 'Finish workout');
+      expect(tester.widget<FilledButton>(finish).onPressed, isNull);
+      await tester.tap(find.byTooltip('Workout actions'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget is PopupMenuItem && widget.value == 'finish',
+        ),
+        findsNothing,
+      );
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
 
-    await tester.runAsync(() => seed(started: true));
-    await tester.pumpWidget(host());
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Workout actions'));
-    await tester.pumpAndSettle();
-    expect(tester.widget<PopupMenuItem>(finish).enabled, isTrue);
-    await tester.tap(find.text('Finish workout'));
-    await tester.pumpAndSettle();
-    expect(find.text('Log workout?'), findsOneWidget);
-    await tester.tap(find.text('Cancel'));
-    await tester.pumpAndSettle();
-    expect(
-      HiveService.getSessionForPlanAndWeek(
-        plan.name,
-        6,
-        plan.splitId,
-      )!.isCompleted,
-      isFalse,
-    );
+      await tester.runAsync(() => seed(started: true));
+      await tester.pumpWidget(host());
+      await tester.pumpAndSettle();
+      expect(tester.widget<FilledButton>(finish).onPressed, isNotNull);
+      await tester.tap(finish);
+      await tester.pumpAndSettle();
+      expect(find.text('Log workout?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(
+        HiveService.getSessionForPlanAndWeek(
+          plan.name,
+          6,
+          plan.splitId,
+        )!.isCompleted,
+        isFalse,
+      );
 
-    await tester.tap(find.byTooltip('Workout actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Finish workout'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Log workout'));
-    await tester.pumpAndSettle();
-    expect(writes.single.isCompleted, isTrue);
-    expect(find.byTooltip('Workout actions'), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
+      await tester.tap(finish);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Log workout'));
+      await tester.pumpAndSettle();
+      expect(writes.single.isCompleted, isTrue);
+      expect(find.byTooltip('Workout actions'), findsNothing);
+      expect(find.text('Finish workout'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }
 
 class _Plans extends WorkoutPlanProvider {
