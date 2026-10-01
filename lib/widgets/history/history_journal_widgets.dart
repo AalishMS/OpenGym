@@ -52,20 +52,26 @@ class HistoryMonthHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final count = group.workouts.length;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Text(
-            historyMonthLabel(group.month, group.year),
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.xs,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              historyMonthLabel(group.month, group.year),
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            Text(
+              '$count workout${count == 1 ? '' : 's'}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
         ),
-        const SizedBox(width: AppSpacing.md),
-        Text(
-          '$count workout${count == 1 ? '' : 's'}',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        const SizedBox(height: AppSpacing.sm),
+        Divider(height: 1, color: borderColor(context)),
       ],
     );
   }
@@ -128,7 +134,7 @@ class HistoryWorkoutRow extends StatelessWidget {
               return Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(width: 44, child: date),
+                  SizedBox(width: 52, child: date),
                   const SizedBox(width: AppSpacing.md),
                   details,
                   const _OpenIndicator(),
@@ -152,7 +158,7 @@ class _HistoryDate extends StatelessWidget {
   Widget build(BuildContext context) {
     final day = Text(
       date.day.toString().padLeft(2, '0'),
-      style: Theme.of(context).textTheme.headlineSmall,
+      style: Theme.of(context).textTheme.headlineMedium,
     );
     final weekday = Text(
       historyWeekday(date),
@@ -166,9 +172,15 @@ class _HistoryDate extends StatelessWidget {
         children: [day, const SizedBox(width: AppSpacing.sm), weekday],
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [day, weekday],
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: backgroundColor(context),
+        borderRadius: AppRadius.control,
+      ),
+      child: Column(
+        children: [day, const SizedBox(height: AppSpacing.xxs), weekday],
+      ),
     );
   }
 }
@@ -186,22 +198,38 @@ class _WorkoutSummaryContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final session = summary.session;
     final stats = summary.statistics;
-    final firstLine =
-        'Week ${session.weekNumber} · ${session.exercises.length} '
-        'exercise${session.exercises.length == 1 ? '' : 's'} · '
-        '${stats.totalSets} set${stats.totalSets == 1 ? '' : 's'}';
-    final secondLine = <String>[
-      if (session.durationSeconds != null)
-        formatStatisticsDuration(session.durationSeconds!),
-      'Volume load ${formatVolumeLoad(stats.volumeLoad, weightUnit)}',
-    ].join(' · ');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(session.planName, style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          'Week ${session.weekNumber}',
+          style: Theme.of(context).textTheme.labelSmall,
+        ),
         const SizedBox(height: AppSpacing.xs),
-        Text(firstLine, style: Theme.of(context).textTheme.bodySmall),
-        Text(secondLine, style: Theme.of(context).textTheme.bodySmall),
+        Text(session.planName, style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          '${session.exercises.length} exercise${session.exercises.length == 1 ? '' : 's'} · ${stats.totalSets} set${stats.totalSets == 1 ? '' : 's'}',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.sm,
+          children: [
+            _HistoryMetric(
+              icon: LucideIcons.weight,
+              label: 'Volume load',
+              value: formatVolumeLoad(stats.volumeLoad, weightUnit),
+            ),
+            if (session.durationSeconds != null)
+              _HistoryMetric(
+                icon: LucideIcons.timer,
+                label: 'Duration',
+                value: formatStatisticsDuration(session.durationSeconds!),
+              ),
+          ],
+        ),
         if (summary.hasPersonalRecord) ...[
           const SizedBox(height: AppSpacing.sm),
           DecoratedBox(
@@ -226,6 +254,36 @@ class _WorkoutSummaryContent extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _HistoryMetric extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _HistoryMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '$label: $value',
+      excludeSemantics: true,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: textSecondaryColor(context)),
+          const SizedBox(width: AppSpacing.xs),
+          Flexible(
+            child: Text(value, style: Theme.of(context).textTheme.labelMedium),
+          ),
+        ],
+      ),
     );
   }
 }

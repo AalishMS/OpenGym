@@ -15,6 +15,7 @@ import 'support/hive_test_harness.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/history/history_journal_data.dart';
 import 'package:gymapp/widgets/history/history_journal_widgets.dart';
+import 'package:gymapp/widgets/history/workout_details_widgets.dart';
 
 void main() {
   final hiveHarness = HiveTestHarness();
@@ -397,6 +398,49 @@ void main() {
       tester.getCenter(find.text('PR')).dy,
       moreOrLessEquals(tester.getCenter(find.text('80')).dy, epsilon: 1),
     );
+  });
+
+  testWidgets('exercise readouts exclude zero-rep sets and handle empty logs', (
+    tester,
+  ) async {
+    final exercise = Exercise(
+      name: 'Dumbbell press',
+      sets: [
+        Set(weight: 12.5, reps: 8, note: 'Pause at the bottom.'),
+        Set(weight: 20, reps: 5, rpe: 8),
+        Set(weight: 100, reps: 0),
+      ],
+    );
+    await tester.pumpWidget(
+      host(
+        _Sessions([]),
+        screen: Scaffold(
+          body: ListView(
+            children: [
+              WorkoutExerciseDetails(
+                exercise: exercise,
+                exerciseNumber: 1,
+                weightUnit: 'kg',
+              ),
+              WorkoutExerciseDetails(
+                exercise: Exercise(name: 'Unlogged exercise', sets: []),
+                exerciseNumber: 2,
+                weightUnit: 'kg',
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('2 performed sets · 13 reps'), findsOneWidget);
+    expect(find.text('200 kg'), findsOneWidget);
+    expect(find.text('100'), findsOneWidget);
+    expect(find.text('Pause at the bottom.'), findsOneWidget);
+    expect(find.text('0 performed sets · 0 reps'), findsOneWidget);
+    expect(find.text('No sets recorded'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('successful edit refreshes details and failed edit keeps draft', (

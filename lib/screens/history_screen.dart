@@ -73,6 +73,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final entries = <Object>[
       for (final group in journal.groups) ...[group, ...group.workouts],
     ];
+    final visibleCount = journal.groups.fold<int>(
+      0,
+      (count, group) => count + group.workouts.length,
+    );
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -105,6 +109,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   onClear: _clearSearch,
                 ),
               ),
+              if (journal.eligibleSessions.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _query.trim().isEmpty
+                          ? '${journal.eligibleSessions.length} completed workout${journal.eligibleSessions.length == 1 ? '' : 's'}'
+                          : '$visibleCount matching workout${visibleCount == 1 ? '' : 's'}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ),
               Expanded(
                 child:
                     journal.isEmpty
@@ -296,6 +315,12 @@ class WorkoutDetailsScreen extends StatelessWidget {
         title: const Text('Workout details'),
         actions: [
           if (session != null)
+            AppIconButton(
+              label: 'Edit workout',
+              icon: LucideIcons.pencil,
+              onPressed: () => _edit(context, session),
+            ),
+          if (session != null)
             PopupMenuButton<String>(
               tooltip: 'Workout actions',
               onSelected: (value) {
@@ -356,9 +381,25 @@ class WorkoutDetailsScreen extends StatelessWidget {
                         weightUnit: weightUnit,
                       ),
                       const SizedBox(height: AppSpacing.xl),
-                      for (final exercise in session.exercises) ...[
+                      Text(
+                        'Exercises',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      if (session.exercises.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: AppSpacing.xl,
+                          ),
+                          child: Text(
+                            'No exercises recorded',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      for (final entry in session.exercises.indexed) ...[
                         WorkoutExerciseDetails(
-                          exercise: exercise,
+                          exercise: entry.$2,
+                          exerciseNumber: entry.$1 + 1,
                           weightUnit: weightUnit,
                         ),
                         const SizedBox(height: AppSpacing.md),
