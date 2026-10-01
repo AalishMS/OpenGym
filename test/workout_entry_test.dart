@@ -78,7 +78,9 @@ void main() {
     expect(find.text('steady'), findsNothing);
     expect(find.textContaining('TARGET'), findsNothing);
     expect(find.bySemanticsLabel('Set details'), findsNothing);
-    expect(find.bySemanticsLabel('Delete set'), findsNWidgets(2));
+    expect(find.bySemanticsLabel('Delete set'), findsNothing);
+    expect(find.text('Add set'), findsOneWidget);
+    expect(find.text('Bench Press'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('Set 1 Kg').last);
     await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('Set 1 RPE 7'));
@@ -115,8 +117,16 @@ void main() {
     expect(duplicated.exercises.single.sets.last.weight, 45);
     expect(duplicated.exercises.single.sets.last.reps, 10);
     expect(duplicated.exercises.single.sets.last.rpe, 9);
-    await tester.tap(find.bySemanticsLabel('Delete set').last);
-    await tester.pumpAndSettle();
+    Future<void> deleteSet(int number) async {
+      await tester.tap(find.byTooltip('Exercise actions for Bench Press'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete set'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, 'Set $number'));
+      await tester.pumpAndSettle();
+    }
+
+    await deleteSet(3);
     expect(
       HiveService.getSessionForPlanAndWeek(
         'Push',
@@ -125,8 +135,7 @@ void main() {
       )!.exercises.single.sets.length,
       2,
     );
-    await tester.tap(find.bySemanticsLabel('Delete set').last);
-    await tester.pumpAndSettle();
+    await deleteSet(2);
     expect(
       HiveService.getSessionForPlanAndWeek(
         'Push',
@@ -135,8 +144,7 @@ void main() {
       )!.exercises.single.sets.length,
       1,
     );
-    await tester.tap(find.bySemanticsLabel('Delete set'));
-    await tester.pumpAndSettle();
+    await deleteSet(1);
     expect(find.text('No sets added yet'), findsOneWidget);
     expect(
       HiveService.getSessionForPlanAndWeek(

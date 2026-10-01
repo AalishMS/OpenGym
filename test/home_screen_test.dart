@@ -338,8 +338,8 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is Text &&
-            widget.data == 'PUSH DAY' &&
-            widget.style?.fontSize == 14,
+            widget.data == 'Push Day' &&
+            widget.style?.fontSize == 18,
       ),
     );
     final context = tester.element(find.byType(WorkoutScreen));
@@ -360,52 +360,44 @@ void main() {
     );
   });
 
-  testWidgets(
-    'workout add exercise uses the card surface and has a 48 pixel target',
-    (tester) async {
-      tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(390, 800);
-      addTearDown(tester.view.reset);
+  testWidgets('workout add exercise is a quiet action with a 48 pixel target', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 800);
+    addTearDown(tester.view.reset);
 
-      for (final brightness in Brightness.values) {
-        final plan = populatedPlan();
-        await tester.pumpWidget(
-          homeHost(brightness: brightness, plans: [plan]),
-        );
-        await tester.ensureVisible(find.text('Push Day').last);
-        await tester.tap(find.text('Push Day').last);
-        await tester.pumpAndSettle();
-        await tester.drag(
-          find.byType(CustomScrollView),
-          const Offset(0, -1000),
-        );
-        await tester.pumpAndSettle();
+    for (final brightness in Brightness.values) {
+      final plan = populatedPlan();
+      await tester.pumpWidget(homeHost(brightness: brightness, plans: [plan]));
+      await tester.ensureVisible(find.text('Push Day').last);
+      await tester.tap(find.text('Push Day').last);
+      await tester.pumpAndSettle();
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
+      await tester.pumpAndSettle();
 
-        final addTile = find.text('Add exercise');
-        expect(
-          find.ancestor(
-            of: addTile,
-            matching: find.byType(ReorderableDelayedDragStartListener),
-          ),
-          findsNothing,
-        );
-        final target = find.ancestor(
+      final addTile = find.text('Add exercise');
+      expect(
+        find.ancestor(
           of: addTile,
-          matching: find.byType(InkWell),
-        );
-        final container = tester.widget<Container>(
-          find.descendant(of: target, matching: find.byType(Container)).first,
-        );
-        expect(
-          (container.decoration! as BoxDecoration).color,
-          surfaceColor(tester.element(find.byType(WorkoutScreen))),
-        );
-        expect(tester.getSize(target).height, greaterThanOrEqualTo(48));
-      }
-    },
-  );
+          matching: find.byType(ReorderableDelayedDragStartListener),
+        ),
+        findsNothing,
+      );
+      final target = find.byKey(const ValueKey('add_exercise_button'));
+      final button = tester.widget<TextButton>(target);
+      expect(
+        button.style!.foregroundColor!.resolve({}),
+        accentColor(tester.element(find.byType(WorkoutScreen))),
+      );
+      expect(button.style!.backgroundColor?.resolve({}), isNull);
+      expect(tester.getSize(target).height, greaterThanOrEqualTo(48));
+    }
+  });
 
-  testWidgets('workout drag handles reorder exercises', (tester) async {
+  testWidgets('holding an exercise heading reorders the workout', (
+    tester,
+  ) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 800);
     addTearDown(tester.view.reset);
@@ -416,14 +408,20 @@ void main() {
     await tester.tap(find.text('Push Day').last);
     await tester.pumpAndSettle();
 
-    final handle = find.byTooltip('Drag to reorder Bench Press');
+    final handle = find.byTooltip('Hold to reorder Bench Press');
     expect(handle, findsOneWidget);
     final dragItems = find.byWidgetPredicate(
       (widget) => widget is Container && widget.key is ObjectKey,
     );
     expect(dragItems, findsWidgets);
 
-    await tester.drag(handle, const Offset(0, 220));
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.moveTo(
+      tester.getCenter(dragItems.at(1)) + const Offset(0, 32),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await gesture.up();
     await tester.pumpAndSettle();
     final reordered = tester.widgetList<ExerciseCard>(
       find.byType(ExerciseCard),
@@ -477,8 +475,8 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is Text &&
-            widget.data == 'PULL DAY' &&
-            widget.style?.fontSize == 14,
+            widget.data == 'Pull Day' &&
+            widget.style?.fontSize == 18,
       ),
       const Offset(100, 0),
       1000,
@@ -490,8 +488,8 @@ void main() {
       find.byWidgetPredicate(
         (widget) =>
             widget is Text &&
-            widget.data == 'LEG DAY' &&
-            widget.style?.fontSize == 14,
+            widget.data == 'Leg Day' &&
+            widget.style?.fontSize == 18,
       ),
       findsOneWidget,
     );
@@ -622,7 +620,7 @@ void main() {
     expect(tabs.selectedIndex, 0);
   });
 
-  testWidgets('long workout title stays clear of the centered timer', (
+  testWidgets('long workout title stays clear of the timer below it', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -653,9 +651,10 @@ void main() {
     final appBar = tester.widget<AppBar>(find.byType(AppBar));
 
     expect(appBar.titleSpacing, AppSpacing.sm);
+    expect(tester.getRect(title).overlaps(tester.getRect(timer)), isFalse);
     expect(
-      tester.getRect(title).right + AppSpacing.sm,
-      lessThanOrEqualTo(tester.getRect(timer).left),
+      tester.getRect(timer).top,
+      greaterThanOrEqualTo(tester.getRect(title).bottom),
     );
     expect(tester.takeException(), isNull);
   });

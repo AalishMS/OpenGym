@@ -48,20 +48,26 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(host());
-    expect(find.text('Add set'), findsNothing);
+    expect(find.text('Add set'), findsOneWidget);
     expect(find.byIcon(LucideIcons.plus), findsOneWidget);
-    for (final label in [
-      'Exercise note',
-      'Delete exercise',
-      'Add set',
-      'Set 1 Kg',
-      'Set 1 Reps',
-      'Delete set',
-    ]) {
+    for (final label in ['Add set', 'Set 1 Kg', 'Set 1 Reps']) {
       final control = find.bySemanticsLabel(label);
       expect(control, findsOneWidget);
       expect(tester.getSize(control).width, greaterThanOrEqualTo(48));
       expect(tester.getSize(control).height, greaterThanOrEqualTo(48));
+    }
+    expect(find.bySemanticsLabel('Delete set'), findsNothing);
+    final menu = find.byTooltip('Exercise actions for Barbell bench press');
+    expect(tester.getSize(menu), const Size(48, 48));
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+    for (final label in ['Exercise note', 'Delete exercise', 'Delete set']) {
+      final item = find.ancestor(
+        of: find.text(label),
+        matching: find.byWidgetPredicate((widget) => widget is PopupMenuItem),
+      );
+      expect(tester.getSize(item).width, greaterThanOrEqualTo(48));
+      expect(tester.getSize(item).height, greaterThanOrEqualTo(48));
     }
   });
 
@@ -92,13 +98,29 @@ void main() {
           'Exercise note': 'note:4',
           'Add set': 'add:4',
           'Delete exercise': 'delete:4',
-          'Delete set': 'set:4:0',
         }.entries) {
       calls.clear();
+      if (action.key != 'Add set') {
+        await tester.tap(
+          find.byTooltip('Exercise actions for Barbell bench press'),
+        );
+        await tester.pumpAndSettle();
+      }
       tester.semantics.tap(find.semantics.byLabel(action.key));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(calls, [action.value]);
     }
+    calls.clear();
+    await tester.tap(
+      find.byTooltip('Exercise actions for Barbell bench press'),
+    );
+    await tester.pumpAndSettle();
+    tester.semantics.tap(find.semantics.byLabel('Delete set'));
+    await tester.pumpAndSettle();
+    expect(calls, isEmpty);
+    tester.semantics.tap(find.semantics.byLabel('Set 1\n70 kg × 8'));
+    await tester.pumpAndSettle();
+    expect(calls, ['set:4:0']);
     semantics.dispose();
   });
 

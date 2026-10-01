@@ -43,6 +43,7 @@ class SetEntryTable extends StatelessWidget {
   final ValueChanged<int>? onDelete;
   final VoidCallback? onEntryFinished;
   final bool showHistoryColumns;
+  final bool continuousLog;
 
   const SetEntryTable({
     super.key,
@@ -53,6 +54,7 @@ class SetEntryTable extends StatelessWidget {
     this.onDelete,
     this.onEntryFinished,
     this.showHistoryColumns = true,
+    this.continuousLog = false,
   });
 
   Future<void> _open(BuildContext context, int index, _SetField field) async {
@@ -102,16 +104,18 @@ class SetEntryTable extends StatelessWidget {
             showRpe: onRpeChanged != null,
             numberIsAction: numberIsAction,
             showPrevious: showPrevious,
+            continuousLog: continuousLog,
           ),
           for (var index = 0; index < sets.length; index++)
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: EdgeInsets.only(bottom: continuousLog ? 4 : 8),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _EntryRow(
                     showHistoryColumns: showHistoryColumns,
                     showPrevious: showPrevious,
+                    continuousLog: continuousLog,
                     index: index,
                     previous: sets[index].previous,
                     weight: entryWeight(sets[index].weight),
@@ -242,12 +246,14 @@ class _EntryHeader extends StatelessWidget {
   final bool showRpe;
   final bool numberIsAction;
   final bool showPrevious;
+  final bool continuousLog;
   const _EntryHeader({
     this.trailing = false,
     this.showHistoryColumns = true,
     this.showRpe = false,
     this.numberIsAction = false,
     this.showPrevious = true,
+    this.continuousLog = false,
   });
 
   @override
@@ -255,13 +261,23 @@ class _EntryHeader extends StatelessWidget {
     padding: const EdgeInsets.only(bottom: 8),
     child: _columns(
       [
-        for (final label in ['Set', 'Prev', 'Kg', 'Reps', if (showRpe) 'RPE'])
+        for (final label in [
+          'Set',
+          continuousLog ? 'Previous' : 'Prev',
+          'Kg',
+          'Reps',
+          if (showRpe) 'RPE',
+        ])
           Text(
             label,
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleSmall!.copyWith(
-              color: textSecondaryColor(context),
-            ),
+            style: (continuousLog
+                    ? Theme.of(context).textTheme.labelMedium!
+                    : Theme.of(context).textTheme.titleSmall!)
+                .copyWith(
+                  fontWeight: continuousLog ? FontWeight.w400 : null,
+                  color: textSecondaryColor(context),
+                ),
           ),
       ],
       trailing: trailing ? const SizedBox() : null,
@@ -287,6 +303,7 @@ class _EntryRow extends StatelessWidget {
   final Widget? trailing;
   final bool showHistoryColumns;
   final bool showPrevious;
+  final bool continuousLog;
 
   const _EntryRow({
     required this.index,
@@ -302,6 +319,7 @@ class _EntryRow extends StatelessWidget {
     this.trailing,
     this.showHistoryColumns = true,
     this.showPrevious = true,
+    this.continuousLog = false,
   });
 
   @override
@@ -310,14 +328,17 @@ class _EntryRow extends StatelessWidget {
       _setNumber(context),
       Semantics(
         label: 'Previous set ${index + 1}: ${previous ?? 'no history'}',
-        child: Text(
-          previous ?? '—',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: textSecondaryColor(context),
-            fontFeatures: const [FontFeature.tabularFigures()],
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            previous ?? '—',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+              fontSize: continuousLog ? 13 : 16,
+              fontWeight: continuousLog ? FontWeight.w400 : FontWeight.w600,
+              color: textSecondaryColor(context),
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
         ),
       ),
@@ -339,7 +360,8 @@ class _EntryRow extends StatelessWidget {
         Text(
           '${index + 1}',
           style: Theme.of(context).textTheme.titleMedium!.copyWith(
-            fontWeight: FontWeight.w700,
+            fontWeight: continuousLog ? FontWeight.w400 : FontWeight.w700,
+            color: continuousLog ? textSecondaryColor(context) : null,
             fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
@@ -402,7 +424,8 @@ class _EntryRow extends StatelessWidget {
   }
 
   Widget _rpeReadout(BuildContext context) {
-    final value = rpe == null ? '@—' : '@$rpe';
+    final value =
+        continuousLog ? '${rpe ?? '—'}' : (rpe == null ? '@—' : '@$rpe');
     return Semantics(
       label:
           rpe == null
@@ -423,13 +446,14 @@ class _EntryRow extends StatelessWidget {
             height: 48,
             child: Center(
               child:
-                  rpe == null
+                  continuousLog || rpe == null
                       ? Text(
                         value,
                         maxLines: 1,
                         softWrap: false,
                         style: Theme.of(context).textTheme.labelLarge!.copyWith(
-                          fontWeight: FontWeight.w700,
+                          fontWeight:
+                              continuousLog ? FontWeight.w400 : FontWeight.w700,
                           color: textSecondaryColor(context),
                         ),
                       )
@@ -466,8 +490,14 @@ class _EntryRow extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.xs),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: backgroundColor(context),
-              border: Border.all(color: borderColor(context)),
+              color:
+                  continuousLog
+                      ? surfaceColor(context)
+                      : backgroundColor(context),
+              border:
+                  continuousLog
+                      ? null
+                      : Border.all(color: borderColor(context)),
               borderRadius: AppRadius.field,
             ),
             child: FittedBox(
@@ -475,7 +505,7 @@ class _EntryRow extends StatelessWidget {
               child: Text(
                 value.isEmpty ? '—' : value,
                 style: Theme.of(context).textTheme.titleLarge!.copyWith(
-                  fontSize: 20,
+                  fontSize: continuousLog ? 18 : 20,
                   fontFeatures: const [FontFeature.tabularFigures()],
                   fontWeight: FontWeight.bold,
                   color: textPrimaryColor(context),

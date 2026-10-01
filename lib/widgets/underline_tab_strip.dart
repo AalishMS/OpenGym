@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/spacing.dart';
@@ -215,7 +214,7 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
     // own here, or the splash paints into the Scaffold's Material *behind* the
     // bar's opaque ground and a tap looks like it did nothing.
     return Material(
-      color: surfaceColor(context),
+      color: backgroundColor(context),
       child: DecoratedBox(
         decoration: BoxDecoration(
           // A single-edge border is a rule, not a box: one unbroken hairline
@@ -274,11 +273,9 @@ class _UnderlineTab extends StatelessWidget {
                   if (data.index != null) ...[
                     Text(
                       data.index!,
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 9,
-                        letterSpacing: 0.08,
-                        color: textSecondary,
-                      ),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelSmall!.copyWith(color: textSecondary),
                     ),
                     const SizedBox(width: 6),
                   ],
@@ -288,11 +285,9 @@ class _UnderlineTab extends StatelessWidget {
                       data.label,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11,
-                        letterSpacing: 0.04,
+                      style: Theme.of(context).textTheme.labelMedium!.copyWith(
                         fontWeight:
-                            selected ? FontWeight.bold : FontWeight.normal,
+                            selected ? FontWeight.w600 : FontWeight.w400,
                         color: selected ? color : textSecondary,
                       ),
                     ),

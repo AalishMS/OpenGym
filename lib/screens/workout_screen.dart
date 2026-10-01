@@ -725,7 +725,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Widget build(BuildContext context) {
     final session = _getOrCreateSession();
     final accent = accentColor(context);
-    final surface = surfaceColor(context);
 
     final planProvider = context.watch<WorkoutPlanProvider>();
     final plans = planProvider.plans;
@@ -740,51 +739,69 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     );
     final planColor = planColorOf(activePlan.planColor, context);
     final elapsed = formatDuration(session.elapsedSeconds());
-    final timerStyle = GoogleFonts.jetBrainsMono(
-      fontSize: 15,
-      fontWeight: FontWeight.w700,
+    final timerStyle = Theme.of(context).textTheme.bodySmall!.copyWith(
+      fontFeatures: const [FontFeature.tabularFigures()],
       color: textPrimaryColor(context),
     );
-    final timerPainter = TextPainter(
-      text: TextSpan(text: elapsed, style: timerStyle),
-      maxLines: 1,
-      textDirection: Directionality.of(context),
-    )..layout();
-    // The title starts after the standard leading slot and our title spacing.
-    // Cap it at the timer's left edge so long names ellipsize before the two
-    // independently positioned AppBar elements can touch.
-    final planHeaderMaxWidth =
-        MediaQuery.sizeOf(context).width / 2 -
-        timerPainter.width / 2 -
-        AppSpacing.md -
-        kToolbarHeight -
-        AppSpacing.sm;
+    final titleStyle = Theme.of(context).textTheme.headlineSmall!;
+    final textScaler = MediaQuery.textScalerOf(context);
+    final toolbarHeight = (textScaler.scale(titleStyle.fontSize!) *
+                (titleStyle.height ?? 1) +
+            textScaler.scale(timerStyle.fontSize!) * (timerStyle.height ?? 1) +
+            AppSpacing.xs +
+            AppSpacing.lg * 2)
+        .clamp(80.0, double.infinity);
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
       appBar: AppBar(
-        backgroundColor: surface,
+        backgroundColor: backgroundColor(context),
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         shadowColor: Colors.transparent,
-        flexibleSpace: Stack(
+        toolbarHeight: toolbarHeight,
+        titleSpacing: AppSpacing.sm,
+        leading: IconButton(
+          tooltip: 'Back',
+          icon: Icon(LucideIcons.arrowLeft, color: textSecondaryColor(context)),
+          onPressed: () {
+            _autoSave();
+            Navigator.pop(context);
+          },
+        ),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Positioned.fill(
-              child: headerFlexibleSpace(context, bottomInset: 48),
+            _PlanHeader(
+              plan: activePlan,
+              fallbackIndex: plans.indexWhere(
+                (plan) => plan.id == activePlan.id,
+              ),
+              color: planColor,
             ),
-            Positioned.fill(
-              bottom: 48,
-              child: SafeArea(
-                bottom: false,
-                child: IgnorePointer(
-                  child: Center(
-                    child: Semantics(
-                      liveRegion: !session.isCompleted,
-                      label:
-                          session.isCompleted
-                              ? 'Recorded duration $elapsed'
-                              : 'Elapsed time $elapsed',
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    'Week $_currentWeek',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Flexible(
+                  flex: 2,
+                  child: Semantics(
+                    label:
+                        session.isCompleted
+                            ? 'Recorded duration $elapsed'
+                            : 'Elapsed time $elapsed',
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
                       child: Text(
                         elapsed,
                         key: const ValueKey('workout_elapsed_time'),
@@ -793,60 +810,48 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                     ),
                   ),
                 ),
-              ),
+              ],
             ),
           ],
-        ),
-        toolbarHeight: 60,
-        titleSpacing: AppSpacing.sm,
-        leading: IconButton(
-          icon: Icon(LucideIcons.arrowLeft, color: accent),
-          onPressed: () {
-            _autoSave();
-            Navigator.pop(context);
-          },
-        ),
-        title: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: planHeaderMaxWidth.clamp(0, double.infinity),
-          ),
-          child: _PlanHeader(
-            plan: activePlan,
-            fallbackIndex: plans.indexWhere((plan) => plan.id == activePlan.id),
-            color: planColor,
-          ),
         ),
         actions: [
           if (!session.isCompleted) ...[
             Semantics(
               button: true,
               label: session.isTimerRunning ? 'Pause workout' : 'Start workout',
-              child: IconButton(
-                tooltip: session.isTimerRunning ? 'Pause' : 'Play',
+              child: TextButton(
                 onPressed: _toggleTimer,
-                icon: Icon(
-                  session.isTimerRunning ? LucideIcons.pause : LucideIcons.play,
-                  color: accent,
+                style: TextButton.styleFrom(
+                  foregroundColor: accent,
+                  minimumSize: const Size(64, 48),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm,
+                  ),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: AppRadius.button,
+                  ),
                 ),
-              ),
-            ),
-            Semantics(
-              button: true,
-              enabled: session.hasStarted,
-              label: 'Stop and log workout',
-              child: IconButton(
-                tooltip: 'Stop',
-                onPressed: session.hasStarted ? _stopWorkout : null,
-                icon: Icon(LucideIcons.square, color: accent),
+                child: Text(session.isTimerRunning ? 'Pause' : 'Start'),
               ),
             ),
             PopupMenuButton<String>(
               tooltip: 'Workout actions',
+              icon: Icon(
+                LucideIcons.ellipsisVertical,
+                color: textSecondaryColor(context),
+              ),
               onSelected: (value) {
+                if (value == 'finish') _stopWorkout();
                 if (value == 'discard') _discardCurrentWorkout();
               },
               itemBuilder:
                   (context) => [
+                    PopupMenuItem(
+                      value: 'finish',
+                      height: 48,
+                      enabled: session.hasStarted,
+                      child: const Text('Finish workout'),
+                    ),
                     PopupMenuItem(
                       value: 'discard',
                       height: 48,
@@ -899,12 +904,12 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                       parent: AlwaysScrollableScrollPhysics(),
                     ),
                     slivers: [
-                      // State the gutter once, on the sliver, rather than as a
-                      // margin per item: the rounded cards need clearance from the
-                      // screen edges or their corners read as a clipping bug, and
-                      // the + ADD EXERCISE tile inherits the same inset for free.
+                      // One gutter keeps the exercise tables aligned as a log.
                       SliverPadding(
-                        padding: const EdgeInsets.all(AppSpacing.md),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                          vertical: AppSpacing.sm,
+                        ),
                         sliver: SliverReorderableList(
                           itemCount:
                               session.exercises.length +
@@ -919,28 +924,16 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                           },
                           itemBuilder: (context, index) {
                             if (index == session.exercises.length) {
-                              return InkWell(
+                              return TextButton.icon(
                                 key: const ValueKey('add_exercise_button'),
-                                onTap: _addEmptyExercise,
-                                borderRadius: AppRadius.button,
-                                child: Container(
-                                  constraints: const BoxConstraints(
-                                    minHeight: 48,
-                                  ),
-                                  padding: const EdgeInsets.all(AppSpacing.lg),
-                                  decoration: BoxDecoration(
-                                    color: surfaceColor(context),
-                                    border: Border.all(color: accent, width: 1),
+                                onPressed: _addEmptyExercise,
+                                icon: const Icon(LucideIcons.plus, size: 18),
+                                label: const Text('Add exercise'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: accent,
+                                  minimumSize: const Size.fromHeight(48),
+                                  shape: const RoundedRectangleBorder(
                                     borderRadius: AppRadius.button,
-                                  ),
-                                  child: Center(
-                                    child: Text(
-                                      'Add exercise',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .labelLarge
-                                          ?.copyWith(color: accent),
-                                    ),
                                   ),
                                 ),
                               );
@@ -950,21 +943,28 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
                             return Container(
                               key: ObjectKey(exercise),
-                              margin: const EdgeInsets.only(
-                                bottom: AppSpacing.sm,
-                              ),
                               decoration: BoxDecoration(
-                                color: surfaceColor(context),
-                                border: Border.all(
-                                  color: borderColor(context),
-                                  width: 1,
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: borderColor(context),
+                                  ),
                                 ),
-                                borderRadius: AppRadius.card,
                               ),
                               child: ExerciseCard(
                                 exercise: exercise,
                                 exerciseIndex: index,
                                 reorderable: !session.isCompleted,
+                                readOnly: session.isCompleted,
+                                onMoveUp:
+                                    index > 0
+                                        ? () =>
+                                            _reorderExercises(index, index - 1)
+                                        : null,
+                                onMoveDown:
+                                    index < session.exercises.length - 1
+                                        ? () =>
+                                            _reorderExercises(index, index + 1)
+                                        : null,
                                 accent: accent,
                                 previousSets: previousExerciseSets(
                                   _sessionsWithDrafts(),
@@ -1038,10 +1038,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         tabs: [
           for (var index = 0; index < plans.length; index++)
             UnderlineTabData(
-              // The index is the swipe order between plans, and it echoes the
-              // [01] on the home cards.
-              index: (index + 1).toString().padLeft(2, '0'),
-              label: plans[index].name.toUpperCase(),
+              label: plans[index].name,
               onTap:
                   plans[index].id == activePlan.id
                       ? null
@@ -1072,7 +1069,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     return Container(
       // The ground reaches into the safe-area inset; only the tabs stop short
       // of it, so there is no bare strip of background under the bar.
-      color: surfaceColor(context),
+      color: backgroundColor(context),
       child: SafeArea(
         top: false,
         child: UnderlineTabStrip(
@@ -1083,7 +1080,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
           tabs: [
             for (var index = 0; index < _weeks.length; index++)
               UnderlineTabData(
-                label: 'WEEK ${_weeks[index]}',
+                label: 'Week ${_weeks[index]}',
                 // Routed through _onWeekChanged, same as a swipe: tapping used
                 // to move the index without saving the week you were leaving or
                 // loading the one you arrived at.
@@ -1110,12 +1107,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                   child: Center(
                     child: Text(
-                      '+ WEEK ${_weeks.length + 1}',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 11,
-                        letterSpacing: 0.04,
-                        color: accent,
-                      ),
+                      '+ Week ${_weeks.last + 1}',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelMedium?.copyWith(color: accent),
                     ),
                   ),
                 ),
@@ -1315,12 +1310,10 @@ class _PlanHeader extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           Flexible(
             child: Text(
-              plan.name.toUpperCase(),
+              plan.name,
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
+              style: Theme.of(context).textTheme.headlineSmall!.copyWith(
                 color: textPrimaryColor(context),
               ),
             ),
