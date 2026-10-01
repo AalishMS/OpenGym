@@ -439,9 +439,54 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
     super.dispose();
   }
 
-  void _removeExercise(int index) {
+  Future<bool> _confirmDelete({
+    required String title,
+    required String message,
+  }) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    return await showDialog<bool>(
+          context: context,
+          builder:
+              (dialogContext) => AlertDialog(
+                title: Text(title),
+                content: Text(
+                  '$message Changes apply when you save the workout.',
+                ),
+                actions: [
+                  AppButton.text(
+                    label: 'Cancel',
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                  ),
+                  AppButton.destructive(
+                    label: 'Delete',
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                  ),
+                ],
+              ),
+        ) ??
+        false;
+  }
+
+  Future<void> _removeExercise(int index) async {
+    final exercise = _session.exercises[index];
+    final confirmed = await _confirmDelete(
+      title: 'Delete exercise?',
+      message: 'Delete “${exercise.name}” and all its sets from this workout?',
+    );
+    if (!mounted || !confirmed || _isSaving) return;
     final exercises = List<Exercise>.from(_session.exercises)..removeAt(index);
     setState(() => _session = _session.copyWith(exercises: exercises));
+  }
+
+  Future<void> _removeSet(int exerciseIndex, int setIndex) async {
+    final exercise = _session.exercises[exerciseIndex];
+    final confirmed = await _confirmDelete(
+      title: 'Delete set?',
+      message: 'Delete set ${setIndex + 1} from “${exercise.name}”?',
+    );
+    if (!mounted || !confirmed || _isSaving) return;
+    final sets = List<gym.Set>.of(exercise.sets)..removeAt(setIndex);
+    _replaceSets(exerciseIndex, sets);
   }
 
   Future<void> _save() async {
@@ -512,12 +557,17 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                'Weights are edited in kilograms.',
+                'Weights are edited in kilograms. Tap a value to edit, or a set number for notes.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: AppSpacing.xl),
               Text('Exercises', style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: AppSpacing.md),
+              if (_session.exercises.isEmpty)
+                Text(
+                  'No exercises in this workout',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               for (final entry in _session.exercises.indexed)
                 _EditableExerciseCard(
                   key: ValueKey('edit-exercise-${entry.$1}-${entry.$2.name}'),
@@ -525,6 +575,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                   entries: _entriesFor(entry.$2),
                   enabled: !_isSaving,
                   onRemove: () => _removeExercise(entry.$1),
+                  onDeleteSet: (setIndex) => _removeSet(entry.$1, setIndex),
                   onChanged: (setIndex, weight, reps) {
                     final sets = List<gym.Set>.of(
                       _session.exercises[entry.$1].sets,
@@ -623,11 +674,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
         sets[setIndex] = updated;
         _replaceSets(exerciseIndex, sets);
       },
-      onDelete: () {
-        final sets = List<gym.Set>.of(_session.exercises[exerciseIndex].sets)
-          ..removeAt(setIndex);
-        _replaceSets(exerciseIndex, sets);
-      },
+      onDelete: () => _removeSet(exerciseIndex, setIndex),
     );
   }
 }
@@ -637,6 +684,7 @@ class _EditableExerciseCard extends StatelessWidget {
   final List<SetEntry> entries;
   final bool enabled;
   final VoidCallback onRemove;
+  final ValueChanged<int> onDeleteSet;
   final void Function(int index, double weight, int reps) onChanged;
   final void Function(int index, int? rpe) onRpeChanged;
   final ValueChanged<int> onDetails;
@@ -647,6 +695,7 @@ class _EditableExerciseCard extends StatelessWidget {
     required this.entries,
     required this.enabled,
     required this.onRemove,
+    required this.onDeleteSet,
     required this.onChanged,
     required this.onRpeChanged,
     required this.onDetails,
@@ -673,11 +722,11 @@ class _EditableExerciseCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   exercise.name,
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
               AppIconButton(
-                label: 'Remove ${exercise.name}',
+                label: 'Delete ${exercise.name}',
                 icon: LucideIcons.trash2,
                 color: errorColor(context),
                 onPressed: enabled ? onRemove : null,
@@ -689,15 +738,25 @@ class _EditableExerciseCard extends StatelessWidget {
             Text(note, style: Theme.of(context).textTheme.bodySmall),
           ],
           const SizedBox(height: AppSpacing.md),
-          IgnorePointer(
-            ignoring: !enabled,
-            child: SetEntryTable(
-              sets: entries,
-              onChanged: onChanged,
-              onRpeChanged: onRpeChanged,
-              onDetails: onDetails,
+          if (entries.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              child: Text(
+                'No sets recorded',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
             ),
-          ),
+          if (entries.isNotEmpty)
+            IgnorePointer(
+              ignoring: !enabled,
+              child: SetEntryTable(
+                sets: entries,
+                onChanged: onChanged,
+                onRpeChanged: onRpeChanged,
+                onDetails: onDetails,
+                onDelete: onDeleteSet,
+              ),
+            ),
           AppButton.text(
             label: 'Add set',
             icon: const Icon(LucideIcons.plus, size: 18),

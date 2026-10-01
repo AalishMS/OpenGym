@@ -19,6 +19,14 @@ class SetEntry {
     this.annotation,
     this.rpe,
   });
+
+  bool get isPrMarker {
+    final note = annotation?.trim().toLowerCase().replaceAll(
+      RegExp(r'[.!]+$'),
+      '',
+    );
+    return note == 'pr' || note == 'new pr' || note == 'pr attempt';
+  }
 }
 
 String entryWeight(double weight) =>
@@ -79,69 +87,98 @@ class SetEntryTable extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    children: [
-      _EntryHeader(
-        trailing: onDetails != null || onDelete != null,
-        showHistoryColumns: showHistoryColumns,
-        showRpe: onRpeChanged != null,
-      ),
-      for (var index = 0; index < sets.length; index++)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _EntryRow(
-                showHistoryColumns: showHistoryColumns,
-                index: index,
-                previous: sets[index].previous,
-                weight: entryWeight(sets[index].weight),
-                reps: '${sets[index].reps}',
-                rpe: sets[index].rpe,
-                onWeight: () => _open(context, index, _SetField.weight),
-                onReps: () => _open(context, index, _SetField.reps),
-                onRpe:
-                    onRpeChanged == null
-                        ? null
-                        : () => _open(context, index, _SetField.rpe),
-                trailing:
-                    onDetails != null || onDelete != null
-                        ? Semantics(
-                          label:
-                              onDelete != null ? 'Delete set' : 'Set details',
-                          button: true,
-                          container: true,
-                          excludeSemantics: true,
-                          onTap: () => (onDelete ?? onDetails)!(index),
-                          child: IconButton(
-                            iconSize: 32,
-                            tooltip:
-                                onDelete != null ? 'Delete set' : 'Set details',
-                            onPressed: () => (onDelete ?? onDetails)!(index),
-                            icon:
-                                onDelete == null && sets[index].rpe != null
-                                    ? _effort(context, sets[index].rpe!)
-                                    : Icon(
-                                      onDelete != null
-                                          ? Icons.close
-                                          : Icons.more_horiz,
-                                      size: 18,
-                                      color: textSecondaryColor(context),
-                                    ),
-                          ),
-                        )
-                        : null,
-              ),
-              if (sets[index].annotation != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 40, top: 6),
-                  child: Text(sets[index].annotation!, style: _quiet(context)),
-                ),
-            ],
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final numberIsAction = onDetails != null && onDelete != null;
+      final showPrevious =
+          !numberIsAction ||
+          constraints.maxWidth >=
+              400 * MediaQuery.textScalerOf(context).scale(1);
+      return Column(
+        children: [
+          _EntryHeader(
+            trailing: onDetails != null || onDelete != null,
+            showHistoryColumns: showHistoryColumns,
+            showRpe: onRpeChanged != null,
+            numberIsAction: numberIsAction,
+            showPrevious: showPrevious,
           ),
-        ),
-    ],
+          for (var index = 0; index < sets.length; index++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _EntryRow(
+                    showHistoryColumns: showHistoryColumns,
+                    showPrevious: showPrevious,
+                    index: index,
+                    previous: sets[index].previous,
+                    weight: entryWeight(sets[index].weight),
+                    reps: '${sets[index].reps}',
+                    rpe: sets[index].rpe,
+                    isPrMarker: sets[index].isPrMarker,
+                    onDetails:
+                        onDetails != null && onDelete != null
+                            ? () => onDetails!(index)
+                            : null,
+                    onWeight: () => _open(context, index, _SetField.weight),
+                    onReps: () => _open(context, index, _SetField.reps),
+                    onRpe:
+                        onRpeChanged == null
+                            ? null
+                            : () => _open(context, index, _SetField.rpe),
+                    trailing:
+                        onDetails != null || onDelete != null
+                            ? Semantics(
+                              label:
+                                  onDelete != null
+                                      ? 'Delete set'
+                                      : 'Set details',
+                              button: true,
+                              container: true,
+                              excludeSemantics: true,
+                              onTap: () => (onDelete ?? onDetails)!(index),
+                              child: IconButton(
+                                iconSize: 32,
+                                tooltip:
+                                    onDelete != null
+                                        ? 'Delete set'
+                                        : 'Set details',
+                                onPressed:
+                                    () => (onDelete ?? onDetails)!(index),
+                                icon:
+                                    onDelete == null && sets[index].rpe != null
+                                        ? _effort(context, sets[index].rpe!)
+                                        : Icon(
+                                          onDelete != null
+                                              ? Icons.close
+                                              : Icons.more_horiz,
+                                          size: 18,
+                                          color:
+                                              onDelete != null
+                                                  ? errorColor(context)
+                                                  : textSecondaryColor(context),
+                                        ),
+                              ),
+                            )
+                            : null,
+                  ),
+                  if ((sets[index].annotation?.trim().isNotEmpty ?? false) &&
+                      !sets[index].isPrMarker)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 40, top: 6),
+                      child: Text(
+                        sets[index].annotation!,
+                        style: _quiet(context),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      );
+    },
   );
 }
 
@@ -176,13 +213,17 @@ Widget _columns(
   Widget? trailing,
   bool showHistoryColumns = true,
   bool showRpe = false,
+  bool numberIsAction = false,
+  bool showPrevious = true,
 }) => Row(
   children: [
     if (showHistoryColumns) ...[
-      SizedBox(width: 32, child: cells[0]),
+      SizedBox(width: numberIsAction ? 48 : 32, child: cells[0]),
       const SizedBox(width: 8),
-      Expanded(flex: 6, child: cells[1]),
-      const SizedBox(width: 8),
+      if (showPrevious) ...[
+        Expanded(flex: 6, child: cells[1]),
+        const SizedBox(width: 8),
+      ],
     ],
     Expanded(flex: 5, child: cells[2]),
     const SizedBox(width: 8),
@@ -199,10 +240,14 @@ class _EntryHeader extends StatelessWidget {
   final bool trailing;
   final bool showHistoryColumns;
   final bool showRpe;
+  final bool numberIsAction;
+  final bool showPrevious;
   const _EntryHeader({
     this.trailing = false,
     this.showHistoryColumns = true,
     this.showRpe = false,
+    this.numberIsAction = false,
+    this.showPrevious = true,
   });
 
   @override
@@ -222,6 +267,8 @@ class _EntryHeader extends StatelessWidget {
       trailing: trailing ? const SizedBox() : null,
       showHistoryColumns: showHistoryColumns,
       showRpe: showRpe,
+      numberIsAction: numberIsAction,
+      showPrevious: showPrevious,
     ),
   );
 }
@@ -232,11 +279,14 @@ class _EntryRow extends StatelessWidget {
   final String weight;
   final String reps;
   final int? rpe;
+  final bool isPrMarker;
+  final VoidCallback? onDetails;
   final VoidCallback onWeight;
   final VoidCallback onReps;
   final VoidCallback? onRpe;
   final Widget? trailing;
   final bool showHistoryColumns;
+  final bool showPrevious;
 
   const _EntryRow({
     required this.index,
@@ -244,24 +294,20 @@ class _EntryRow extends StatelessWidget {
     required this.weight,
     required this.reps,
     this.rpe,
+    this.isPrMarker = false,
+    this.onDetails,
     required this.onWeight,
     required this.onReps,
     this.onRpe,
     this.trailing,
     this.showHistoryColumns = true,
+    this.showPrevious = true,
   });
 
   @override
   Widget build(BuildContext context) => _columns(
     [
-      Text(
-        '${index + 1}',
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.titleMedium!.copyWith(
-          fontWeight: FontWeight.w700,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
-      ),
+      _setNumber(context),
       Semantics(
         label: 'Previous set ${index + 1}: ${previous ?? 'no history'}',
         child: Text(
@@ -282,7 +328,78 @@ class _EntryRow extends StatelessWidget {
     trailing: trailing,
     showHistoryColumns: showHistoryColumns,
     showRpe: onRpe != null,
+    numberIsAction: onDetails != null,
+    showPrevious: showPrevious,
   );
+
+  Widget _setNumber(BuildContext context) {
+    final number = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          '${index + 1}',
+          style: Theme.of(context).textTheme.titleMedium!.copyWith(
+            fontWeight: FontWeight.w700,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+        if (isPrMarker) ...[
+          const SizedBox(height: AppSpacing.xxs),
+          Semantics(
+            label: 'Personal record',
+            excludeSemantics: true,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xs,
+                  vertical: AppSpacing.xxs,
+                ),
+                decoration: BoxDecoration(
+                  color: accentFillColor(context),
+                  borderRadius: AppRadius.badge,
+                ),
+                child: Text(
+                  'PR',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: onAccentColor(context),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+    if (onDetails == null) return Center(child: number);
+    return Semantics(
+      label: 'Set ${index + 1} details${isPrMarker ? ', personal record' : ''}',
+      button: true,
+      excludeSemantics: true,
+      onTap: onDetails,
+      child: Tooltip(
+        message: 'Set ${index + 1} details',
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: AppRadius.control,
+          child: InkWell(
+            borderRadius: AppRadius.control,
+            onTap: onDetails,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 48),
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+              decoration: BoxDecoration(
+                border: Border.all(color: borderColor(context)),
+                borderRadius: AppRadius.control,
+              ),
+              child: Center(child: number),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _rpeReadout(BuildContext context) {
     final value = rpe == null ? '@—' : '@$rpe';

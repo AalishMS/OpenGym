@@ -489,6 +489,195 @@ void main() {
     );
   });
 
+  testWidgets('editor confirms exercise deletion and saves only on Save', (
+    tester,
+  ) async {
+    final original = session(
+      id: 'exercise-delete',
+      name: 'Push',
+      date: DateTime(2026, 9, 11),
+    );
+    final provider = _Sessions([original]);
+    await tester.pumpWidget(host(provider));
+    await tester.tap(find.text('Push'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Edit workout'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Delete Bench Press'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete exercise?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bench Press'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Delete Bench Press'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(find.text('No exercises in this workout'), findsOneWidget);
+    expect(provider.sessions.single.exercises, hasLength(1));
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(provider.sessions.single.exercises, isEmpty);
+    expect(find.text('No exercises recorded'), findsOneWidget);
+  });
+
+  testWidgets(
+    'editor has compact PRs, set details, and confirmed set deletion',
+    (tester) async {
+      final original = session(
+        id: 'set-delete',
+        name: 'Push',
+        date: DateTime(2026, 9, 11),
+      ).copyWith(
+        exercises: [
+          Exercise(
+            name: 'Bench Press',
+            sets: [
+              Set(weight: 80, reps: 5, rpe: 9, note: 'New PR!'),
+              Set(weight: 60, reps: 8, rpe: 7, note: 'Controlled tempo'),
+            ],
+          ),
+        ],
+      );
+      final provider = _Sessions([original]);
+      await tester.pumpWidget(host(provider));
+      await tester.tap(find.text('Push'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Edit workout'));
+      await tester.pumpAndSettle();
+      expect(find.text('New PR!'), findsNothing);
+      expect(find.text('PR'), findsOneWidget);
+      expect(find.byTooltip('Delete set'), findsNWidgets(2));
+      expect(find.text('Controlled tempo'), findsOneWidget);
+      final rowTop = tester.getTopLeft(find.byTooltip('Delete set').first).dy;
+      final rowBottom =
+          tester.getBottomLeft(find.byTooltip('Delete set').first).dy;
+      expect(
+        tester.getCenter(find.text('PR')).dy,
+        inInclusiveRange(rowTop, rowBottom),
+      );
+
+      await tester.tap(find.byTooltip('Set 1 details'));
+      await tester.pumpAndSettle();
+      expect(find.text('Edit set'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField).last).controller?.text,
+        'New PR!',
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Delete set').first);
+      await tester.pumpAndSettle();
+      expect(find.text('Delete set?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Delete set'), findsNWidgets(2));
+
+      await tester.tap(find.byTooltip('Delete set').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Delete set'), findsOneWidget);
+      expect(find.text('PR'), findsNothing);
+      expect(provider.sessions.single.exercises.single.sets, hasLength(2));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      final remaining = provider.sessions.single.exercises.single.sets.single;
+      expect(remaining.weight, 60);
+      expect(remaining.reps, 8);
+      expect(remaining.rpe, 7);
+      expect(remaining.note, 'Controlled tempo');
+      expect(original.exercises.single.sets, hasLength(2));
+    },
+  );
+
+  testWidgets(
+    'deleting through set details also confirms and handles the last set',
+    (tester) async {
+      final original = session(
+        id: 'last-set',
+        name: 'Push',
+        date: DateTime(2026, 9, 11),
+        setNote: 'New PR!',
+      );
+      final provider = _Sessions([original]);
+      await tester.pumpWidget(host(provider));
+      await tester.tap(find.text('Push'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Edit workout'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Set 1 details'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete set?'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Delete set'), findsOneWidget);
+      await tester.tap(find.byTooltip('Delete set'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(OutlinedButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(find.text('No sets recorded'), findsOneWidget);
+      expect(find.text('Add set'), findsOneWidget);
+      expect(find.text('Reps'), findsNothing);
+      expect(provider.sessions.single.exercises.single.sets, hasLength(1));
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(provider.sessions.single.exercises.single.sets, isEmpty);
+    },
+  );
+
+  testWidgets('editor PR controls fit small screens and enlarged text', (
+    tester,
+  ) async {
+    addTearDown(tester.view.reset);
+    tester.view.devicePixelRatio = 1;
+    for (final brightness in Brightness.values) {
+      for (final scenario in [
+        (const Size(320, 800), 1.0),
+        (const Size(390, 1000), 2.0),
+        (const Size(1000, 800), 1.0),
+      ]) {
+        final original = session(
+          id: 'pr-layout',
+          name: 'Push',
+          date: DateTime(2026, 9, 11),
+          setNote: 'New PR!',
+          rpe: 8,
+        );
+        tester.view.physicalSize = scenario.$1;
+        await tester.pumpWidget(
+          host(
+            _Sessions([original]),
+            screen: EditSessionScreen(session: original),
+            brightness: brightness,
+            size: scenario.$1,
+            textScale: scenario.$2,
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('PR'), findsOneWidget);
+        expect(find.text('New PR!'), findsNothing);
+        expect(
+          tester.getSize(find.byTooltip('Set 1 details')).width,
+          greaterThanOrEqualTo(48),
+        );
+        expect(
+          tester.getSize(find.byTooltip('Set 1 details')).height,
+          greaterThanOrEqualTo(48),
+        );
+        expect(
+          find.text('Prev'),
+          scenario.$1.width >= 1000 ? findsOneWidget : findsNothing,
+        );
+        expect(tester.takeException(), isNull);
+      }
+    }
+  });
+
   testWidgets('delete supports cancel, failure retry, and confirmed removal', (
     tester,
   ) async {
