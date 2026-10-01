@@ -40,6 +40,29 @@ class WorkoutPlanProvider with ChangeNotifier {
     SyncService.instance.scheduleSync();
   }
 
+  Future<void> reorderPlans(int oldIndex, int newIndex) async {
+    if (oldIndex == newIndex) return;
+    final reordered = List<WorkoutPlan>.of(_plans);
+    final moved = reordered.removeAt(oldIndex);
+    reordered.insert(newIndex, moved);
+    final ordered = [
+      for (var index = 0; index < reordered.length; index++)
+        reordered[index].copyWith(position: index),
+    ];
+
+    _plans = ordered;
+    notifyListeners();
+    try {
+      await SyncService.instance.runExclusiveLocalMutation(
+        () => HiveService.savePlanOrder(ordered),
+      );
+      SyncService.instance.scheduleSync();
+    } catch (_) {
+      loadPlans();
+      rethrow;
+    }
+  }
+
   Future<void> deletePlan(String id) async {
     await _repository.softDeletePlan(id);
     loadPlans();

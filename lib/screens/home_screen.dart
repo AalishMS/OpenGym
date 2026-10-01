@@ -270,20 +270,85 @@ class HomeScreen extends StatelessWidget {
     Map<int, PlanStat> statsByIndex,
     Color accent,
   ) {
-    Widget card(int index) => PlanCard(
-      plan: plans[index],
-      index: index,
-      stat: statsByIndex[index],
-      onOpen: () => _openWorkout(context, plans[index], index),
-      onShowActions:
-          () => _showPlanOptions(
-            context,
-            plans[index],
-            index,
-            accent,
-            statsByIndex[index],
+    Widget card(int index) {
+      final plan = plans[index];
+      final planId = plan.id!;
+      final handle = Tooltip(
+        message: 'Drag to reorder ${titleCase(plan.name)}',
+        child: SizedBox(
+          width: 48,
+          height: 48,
+          child: Icon(
+            LucideIcons.gripVertical,
+            size: 18,
+            color: textSecondaryColor(context),
           ),
-    );
+        ),
+      );
+
+      return DragTarget<String>(
+        onWillAcceptWithDetails: (details) => details.data != planId,
+        onAcceptWithDetails:
+            (details) => _movePlan(context, details.data, planId),
+        builder:
+            (context, candidates, _) => DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: AppRadius.card,
+                border:
+                    candidates.isEmpty
+                        ? null
+                        : Border.all(color: accentColor(context), width: 2),
+              ),
+              child: PlanCard(
+                plan: plan,
+                index: index,
+                stat: statsByIndex[index],
+                onOpen: () => _openWorkout(context, plan, index),
+                onShowActions:
+                    () => _showPlanOptions(
+                      context,
+                      plan,
+                      index,
+                      accent,
+                      statsByIndex[index],
+                    ),
+                reorderHandle:
+                    plans.length < 2
+                        ? null
+                        : Draggable<String>(
+                          data: planId,
+                          feedback: Material(
+                            color: surfaceColor(context),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: AppRadius.control,
+                              side: BorderSide(color: accentColor(context)),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppSpacing.md),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    LucideIcons.gripVertical,
+                                    size: 18,
+                                    color: textSecondaryColor(context),
+                                  ),
+                                  const SizedBox(width: AppSpacing.sm),
+                                  Text(titleCase(plan.name)),
+                                ],
+                              ),
+                            ),
+                          ),
+                          childWhenDragging: Opacity(
+                            opacity: 0.4,
+                            child: handle,
+                          ),
+                          child: handle,
+                        ),
+              ),
+            ),
+      );
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -329,6 +394,35 @@ class HomeScreen extends StatelessWidget {
 
   static const double _cardGap = 10;
 
+  Future<void> _movePlan(
+    BuildContext context,
+    String fromId,
+    String toId,
+  ) async {
+    final provider = context.read<WorkoutPlanProvider>();
+    final plans = provider.plans;
+    final oldIndex = plans.indexWhere((plan) => plan.id == fromId);
+    final newIndex = plans.indexWhere((plan) => plan.id == toId);
+    if (oldIndex < 0 || newIndex < 0 || oldIndex == newIndex) return;
+    try {
+      await provider.reorderPlans(oldIndex, newIndex);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save plan order')),
+        );
+      }
+    }
+  }
+
+  void _movePlanOneStep(BuildContext context, String planId, int step) {
+    final plans = context.read<WorkoutPlanProvider>().plans;
+    final index = plans.indexWhere((plan) => plan.id == planId);
+    final target = index + step;
+    if (index < 0 || target < 0 || target >= plans.length) return;
+    _movePlan(context, planId, plans[target].id!);
+  }
+
   void _openWorkout(BuildContext context, WorkoutPlan plan, int index) {
     Navigator.push(
       context,
@@ -355,6 +449,7 @@ class HomeScreen extends StatelessWidget {
     PlanStat? stat,
   ) {
     final planColor = planColorOf(plan.planColor, context);
+    final planCount = context.read<WorkoutPlanProvider>().plans.length;
     final border = borderColor(context);
     final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
@@ -499,6 +594,26 @@ class HomeScreen extends StatelessWidget {
                         );
                       },
                     ),
+                    if (index > 0)
+                      _PlanActionRow(
+                        icon: LucideIcons.arrowUp,
+                        label: 'Move earlier',
+                        color: textPrimary,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _movePlanOneStep(context, plan.id!, -1);
+                        },
+                      ),
+                    if (index < planCount - 1)
+                      _PlanActionRow(
+                        icon: LucideIcons.arrowDown,
+                        label: 'Move later',
+                        color: textPrimary,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _movePlanOneStep(context, plan.id!, 1);
+                        },
+                      ),
                     // A rule and the error colour set the one irreversible action
                     // apart; deleting also asks first, which it never used to.
                     Divider(height: 1, thickness: 1, color: border),

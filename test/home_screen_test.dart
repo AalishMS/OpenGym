@@ -191,6 +191,63 @@ void main() {
     expect(find.byTooltip('Plan actions'), findsOneWidget);
   });
 
+  testWidgets('dragging a plan onto another card changes grid order', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.reset);
+    final plans = [
+      populatedPlan(),
+      populatedPlan().copyWith(id: 'plan-2', name: 'Pull Day'),
+      populatedPlan().copyWith(id: 'plan-3', name: 'Leg Day'),
+    ];
+    await tester.pumpWidget(
+      homeHost(size: const Size(1200, 800), plans: plans),
+    );
+
+    final source = find.byTooltip('Drag to reorder Push Day');
+    final target = find.byTooltip('Drag to reorder Pull Day');
+    expect(source, findsOneWidget);
+    expect(target, findsOneWidget);
+    expect(tester.getSize(source), const Size(48, 48));
+
+    await tester.dragFrom(
+      tester.getCenter(source),
+      tester.getCenter(target) - tester.getCenter(source),
+    );
+    await tester.pumpAndSettle();
+
+    final provider = Provider.of<WorkoutPlanProvider>(
+      tester.element(find.byType(HomeScreen)),
+      listen: false,
+    );
+    expect(provider.plans.map((plan) => plan.id), [
+      'plan-2',
+      'plan-1',
+      'plan-3',
+    ]);
+  });
+
+  testWidgets('plan actions offer a move control', (tester) async {
+    final plans = [
+      populatedPlan(),
+      populatedPlan().copyWith(id: 'plan-2', name: 'Pull Day'),
+    ];
+    await tester.pumpWidget(homeHost(plans: plans));
+    await tester.tap(find.byTooltip('Plan actions').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Move later'), findsOneWidget);
+
+    await tester.tap(find.text('Move later'));
+    await tester.pumpAndSettle();
+    final provider = Provider.of<WorkoutPlanProvider>(
+      tester.element(find.byType(HomeScreen)),
+      listen: false,
+    );
+    expect(provider.plans.first.id, 'plan-2');
+  });
+
   testWidgets('plan names use title case without changing stored names', (
     tester,
   ) async {
@@ -904,6 +961,13 @@ class _PlanProvider extends WorkoutPlanProvider {
 
   @override
   List<WorkoutPlan> get plans => values;
+
+  @override
+  Future<void> reorderPlans(int oldIndex, int newIndex) async {
+    final reordered = List<WorkoutPlan>.of(values);
+    reordered.insert(newIndex, reordered.removeAt(oldIndex));
+    replacePlans(reordered);
+  }
 }
 
 class _SessionProvider extends WorkoutSessionProvider {

@@ -29,6 +29,7 @@ class PlanCard extends StatelessWidget {
   final PlanStat? stat;
   final VoidCallback onOpen;
   final VoidCallback onShowActions;
+  final Widget? reorderHandle;
 
   /// Now, for deciding whether the plan was trained this week. Tests pin it.
   final DateTime? now;
@@ -39,6 +40,7 @@ class PlanCard extends StatelessWidget {
     required this.stat,
     required this.onOpen,
     required this.onShowActions,
+    this.reorderHandle,
     this.now,
     super.key,
   });
@@ -124,6 +126,7 @@ class PlanCard extends StatelessWidget {
                     color: textSecondary,
                   ),
                 ),
+                if (reorderHandle != null) reorderHandle!,
               ],
             ),
           ),

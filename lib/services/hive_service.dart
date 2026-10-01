@@ -345,6 +345,24 @@ class HiveService {
     await _plansBox.put(plan.id, plan);
   }
 
+  /// Save a split's display order as one Hive batch.
+  static Future<void> savePlanOrder(List<WorkoutPlan> plans) async {
+    final now = DateTime.now();
+    final updates = <String, WorkoutPlan>{};
+    for (var index = 0; index < plans.length; index++) {
+      final plan = plans[index];
+      final id = plan.id;
+      if (id == null) {
+        throw StateError('A plan must be saved before reordering.');
+      }
+      updates[id] =
+          plan.copyWith(position: index)
+            ..updatedAt = now
+            ..dirty = true;
+    }
+    await _plansBox.putAll(updates);
+  }
+
   /// Raw primitives used by the preset installer while sync is gated.
   static Future<void> putPlansRaw(Map<String, WorkoutPlan> plans) =>
       _plansBox.putAll(plans);
