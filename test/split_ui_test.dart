@@ -68,7 +68,17 @@ void main() {
       find.byKey(const ValueKey('split-switcher-content')),
     );
     expect(switcherContent.color, isNull);
-    expect(switcherContent.decoration, isNull);
+    final switcherDecoration = switcherContent.decoration! as BoxDecoration;
+    expect(
+      switcherDecoration.color,
+      raisedSurfaceColor(tester.element(find.text('PPL'))),
+    );
+    expect(
+      tester
+          .getSize(find.byKey(const ValueKey('split-switcher-content')))
+          .height,
+      36,
+    );
     expect(find.text('Ppl Plan'), findsOneWidget);
     expect(find.text('Ul Plan'), findsNothing);
     expect(

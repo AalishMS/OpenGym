@@ -49,7 +49,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final accent = accentColor(context);
     final bg = backgroundColor(context);
-    final border = borderColor(context);
 
     return Scaffold(
       backgroundColor: bg,
@@ -57,7 +56,7 @@ class _HomeScreenState extends State<HomeScreen> {
         top: false,
         child: Column(
           children: [
-            _buildHeader(context, border),
+            _buildHeader(context),
             Expanded(
               child: Consumer<WorkoutPlanProvider>(
                 builder: (context, provider, child) {
@@ -74,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildHeader(BuildContext context, Color border) {
+  Widget _buildHeader(BuildContext context) {
     final splitProvider = context.watch<SplitProvider?>();
     return Padding(
       padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
@@ -96,16 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               if (splitProvider != null) ...[
                 const SizedBox(width: AppSpacing.sm),
-                Flexible(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: raisedSurfaceColor(context),
-                      border: Border.all(color: border),
-                      borderRadius: AppRadius.control,
-                    ),
-                    child: const IntrinsicWidth(child: SplitSwitcher()),
-                  ),
-                ),
+                const Flexible(child: IntrinsicWidth(child: SplitSwitcher())),
               ],
             ],
           ),

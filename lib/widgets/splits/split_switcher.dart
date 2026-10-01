@@ -104,64 +104,77 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
                 borderRadius: AppRadius.control,
                 splashColor: accent.withAlpha(36),
                 highlightColor: accent.withAlpha(18),
-                child: Container(
-                  key: const ValueKey('split-switcher-content'),
-                  constraints: const BoxConstraints(
-                    minHeight: 48,
-                    maxWidth: 180,
-                  ),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                  ),
-                  alignment: Alignment.center,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Flexible(
-                        child: AnimatedSwitcher(
-                          duration:
-                              disableAnimations
-                                  ? Duration.zero
-                                  : const Duration(milliseconds: 150),
-                          transitionBuilder:
-                              (child, animation) => FadeTransition(
-                                opacity: animation,
-                                child: ScaleTransition(
-                                  scale: Tween<double>(
-                                    begin: 0.98,
-                                    end: 1,
-                                  ).animate(animation),
-                                  child: child,
+                // Keep the tap area roomy around a more compact visible button.
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 48),
+                  child: Center(
+                    heightFactor: 1,
+                    child: Container(
+                      key: const ValueKey('split-switcher-content'),
+                      constraints: const BoxConstraints(
+                        minHeight: 36,
+                        maxWidth: 180,
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.sm,
+                        vertical: AppSpacing.xs,
+                      ),
+                      decoration: BoxDecoration(
+                        color: raisedSurfaceColor(context),
+                        border: Border.all(color: borderColor(context)),
+                        borderRadius: AppRadius.control,
+                      ),
+                      alignment: Alignment.center,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(
+                            child: AnimatedSwitcher(
+                              duration:
+                                  disableAnimations
+                                      ? Duration.zero
+                                      : const Duration(milliseconds: 150),
+                              transitionBuilder:
+                                  (child, animation) => FadeTransition(
+                                    opacity: animation,
+                                    child: ScaleTransition(
+                                      scale: Tween<double>(
+                                        begin: 0.98,
+                                        end: 1,
+                                      ).animate(animation),
+                                      child: child,
+                                    ),
+                                  ),
+                              child: Text(
+                                active.name,
+                                key: ValueKey(active.id),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.titleSmall?.copyWith(
+                                  color: textPrimaryColor(context),
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                          child: Text(
-                            active.name,
-                            key: ValueKey(active.id),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleSmall?.copyWith(
-                              color: textPrimaryColor(context),
-                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ),
+                          const SizedBox(width: AppSpacing.xs),
+                          AnimatedRotation(
+                            turns: controller.isOpen ? 0.5 : 0,
+                            duration:
+                                disableAnimations
+                                    ? Duration.zero
+                                    : const Duration(milliseconds: 150),
+                            child: Icon(
+                              LucideIcons.chevronDown,
+                              size: 16,
+                              color: accent,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: AppSpacing.xs),
-                      AnimatedRotation(
-                        turns: controller.isOpen ? 0.5 : 0,
-                        duration:
-                            disableAnimations
-                                ? Duration.zero
-                                : const Duration(milliseconds: 150),
-                        child: Icon(
-                          LucideIcons.chevronDown,
-                          size: 16,
-                          color: accent,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),

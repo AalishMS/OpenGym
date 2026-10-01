@@ -37,7 +37,7 @@ class HomePlanRow extends StatelessWidget {
       planColorOf(plan.planColor, context).withAlpha(32),
       raisedSurfaceColor(context),
     );
-    final nextColor = planSwatch(2, context);
+    final nextColor = textSecondaryColor(context);
     final nextGround = Color.alphaBlend(
       nextColor.withAlpha(28),
       raisedSurfaceColor(context),

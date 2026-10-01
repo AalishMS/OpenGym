@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/exercise_library.dart';
-import '../../data/plan_colors.dart';
 import '../../models/workout_plan.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
@@ -36,7 +35,8 @@ class UpNextCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
-    final nextColor = planSwatch(2, context);
+    // Neutral emphasis pairs with every user-selected accent.
+    final nextColor = textPrimaryColor(context);
     final last = stat?.lastTrained;
     final names = plan.exercises.map((e) => e.name.toLowerCase()).toSet();
     final groups =

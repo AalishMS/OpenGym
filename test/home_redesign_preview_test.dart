@@ -18,6 +18,7 @@ import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/providers/split_provider.dart';
+import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/screens/home_screen.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/app_bottom_nav.dart';
@@ -154,10 +155,19 @@ void main() {
       session(0, 14, 'push'),
       session(6, 17, 'full-body', duration: 3300),
     ];
-    for (final brightness in Brightness.values) {
+    for (final (brightness, accent) in [
+      for (final brightness in Brightness.values)
+        for (final accent in SettingsProvider.accents) (brightness, accent),
+    ]) {
       final boundary = GlobalKey();
       await tester.pumpWidget(
-        _host(plans, sessions, brightness, boundary: boundary),
+        _host(
+          plans,
+          sessions,
+          brightness,
+          boundary: boundary,
+          seed: accent.seed,
+        ),
       );
       await tester.pumpAndSettle();
       expect(find.text('Start workout'), findsOneWidget);
@@ -173,7 +183,7 @@ void main() {
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
           await Directory('build/previews').create(recursive: true);
           await File(
-            'build/previews/home_${brightness.name}.png',
+            'build/previews/home_${brightness.name}_${accent.name.toLowerCase().replaceAll(' ', '_')}.png',
           ).writeAsBytes(bytes!.buffer.asUint8List());
           image.dispose();
         });
@@ -187,6 +197,7 @@ Widget _host(
   List<WorkoutSession> sessions,
   Brightness brightness, {
   GlobalKey? boundary,
+  Color seed = const Color(0xFF008D8D),
 }) => MultiProvider(
   key: UniqueKey(),
   providers: [
@@ -198,7 +209,7 @@ Widget _host(
   ],
   child: MaterialApp(
     key: UniqueKey(),
-    theme: buildTheme(const Color(0xFF008D8D), brightness),
+    theme: buildTheme(seed, brightness),
     home: RepaintBoundary(
       key: boundary,
       child: Scaffold(

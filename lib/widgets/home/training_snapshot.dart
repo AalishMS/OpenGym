@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../data/plan_colors.dart';
 import '../../models/workout_plan.dart';
 import '../../models/workout_session.dart';
 import '../../theme/app_theme.dart';
@@ -55,7 +54,7 @@ class TrainingSnapshot extends StatelessWidget {
     final maxSets = dailySets.reduce(math.max);
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
-    final todayColor = planSwatch(2, context);
+    final todayColor = textPrimaryColor(context);
     const letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
     const names = [
       'Monday',
