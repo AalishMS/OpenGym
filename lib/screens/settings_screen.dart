@@ -31,7 +31,7 @@ class SettingsScreen extends StatefulWidget {
     this.onSignOut,
   });
 
-  final Future<void> Function()? onClearData;
+  final Future<void> Function(String splitId)? onClearData;
   final Future<void> Function()? onLoadSampleData;
   final Future<void> Function()? onSignOut;
 
@@ -275,8 +275,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const _SectionHeader(title: 'Danger zone'),
                 _buildSettingsTile(
                   icon: LucideIcons.trash2,
-                  title: 'Clear all data',
-                  subtitle: 'Delete all plans and workout history',
+                  title: 'Clear current split data',
+                  subtitle: 'Delete plans and history in the current split',
                   onTap: () => _confirmClearData(context),
                   isDestructive: true,
                 ),
@@ -886,16 +886,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _confirmClearData(BuildContext context) {
+    final split = context.read<SplitProvider>().activeSplit;
+    if (split == null) {
+      _showError(context, 'Select a split before clearing its data.');
+      return;
+    }
     showDialog<void>(
       context: context,
       builder:
           (ctx) => AlertDialog(
             title: Text(
-              'Clear all data?',
+              'Clear split data?',
               style: TextStyle(color: errorColor(ctx)),
             ),
-            content: const Text(
-              'This will delete all workout plans and history. This action cannot be undone.',
+            content: Text(
+              'This will delete all workout plans and history in "${split.name}". '
+              'Other splits will be kept. This action cannot be undone.',
             ),
             actions: [
               TextButton(
@@ -906,7 +912,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onPressed: () async {
                   try {
                     await (widget.onClearData ??
-                        SampleDataSeeder.clearAllData)();
+                        SampleDataSeeder.clearDataForSplit)(split.id);
                   } catch (e) {
                     if (!context.mounted) return;
                     if (ctx.mounted) Navigator.pop(ctx);
@@ -920,7 +926,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'All data cleared',
+                        'Data cleared for "${split.name}"',
                         style: GoogleFonts.jetBrainsMono(
                           color: onAccentColor(context),
                         ),
@@ -933,7 +939,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   backgroundColor: errorColor(ctx),
                   foregroundColor: onColor(errorColor(ctx)),
                 ),
-                child: const Text('Clear all data'),
+                child: const Text('Clear split data'),
               ),
             ],
           ),

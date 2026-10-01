@@ -5,12 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/models/split.dart' as gym;
+import 'package:gymapp/providers/split_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/providers/settings_provider.dart';
@@ -31,7 +35,15 @@ void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     GoogleFonts.config.allowRuntimeFetching = false;
-    await hiveHarness.open();
+    SharedPreferences.setMockInitialValues({});
+    await Supabase.initialize(
+      url: 'https://example.supabase.co',
+      publishableKey: 'test-publishable-key',
+    );
+    await hiveHarness.open(includeSplits: true);
+    await HiveService.putSplitRaw(
+      gym.Split(id: 'current', name: 'Current split', createdAt: DateTime(2026)),
+    );
   });
 
   tearDownAll(() async {
@@ -51,6 +63,10 @@ void main() {
   }) {
     return MultiProvider(
       providers: [
+        if (screen is SettingsScreen)
+          ChangeNotifierProvider<SplitProvider>(
+            create: (_) => SplitProvider(userIdProvider: () => null),
+          ),
         ChangeNotifierProvider<WorkoutPlanProvider>(
           create: (_) => _Plans(plans),
         ),
@@ -401,7 +417,7 @@ void main() {
         expect(size.width, greaterThanOrEqualTo(48));
         expect(size.height, greaterThanOrEqualTo(48));
       }
-      expect(find.text('Clear all data'), findsOneWidget);
+      expect(find.text('Clear current split data'), findsOneWidget);
       expect(find.text('CHECK FOR UPDATES'), findsNothing);
     },
   );
@@ -521,7 +537,7 @@ void main() {
       'Load sample data',
       'Export data',
       'Import data',
-      'Clear all data',
+      'Clear current split data',
       'Check for updates',
     ]) {
       final target = find.ancestor(
@@ -540,13 +556,13 @@ void main() {
       host(const SettingsScreen(), size: const Size(220, 500), textScale: 2),
     );
     await tester.pump();
-    await tester.ensureVisible(find.text('Clear all data'));
-    await tester.tap(find.text('Clear all data'));
+    await tester.ensureVisible(find.text('Clear current split data'));
+    await tester.tap(find.text('Clear current split data'));
     await tester.pump();
     expect(
       find.descendant(
         of: find.byType(Dialog),
-        matching: find.text('Clear all data'),
+        matching: find.text('Clear split data'),
       ),
       findsOneWidget,
     );
@@ -592,7 +608,7 @@ void main() {
       host(const SettingsScreen(), size: const Size(390, 4000)),
     );
     await tester.pump();
-    final title = find.text('Clear all data');
+    final title = find.text('Clear current split data');
     final context = tester.element(title);
     expect(tester.widget<Text>(title).style?.color, errorColor(context));
   });
@@ -607,7 +623,10 @@ void main() {
     await tester.pumpWidget(
       host(
         SettingsScreen(
-          onClearData: () async => clearCalls++,
+          onClearData: (splitId) async {
+            expect(splitId, 'current');
+            clearCalls++;
+          },
           onLoadSampleData: () async => sampleCalls++,
           onSignOut: () async => signOutCalls++,
         ),
@@ -621,12 +640,12 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Load'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Clear all data'));
+    await tester.tap(find.text('Clear current split data'));
     await tester.pump();
     await tester.tap(
       find.descendant(
         of: find.byType(Dialog),
-        matching: find.text('Clear all data'),
+        matching: find.text('Clear split data'),
       ),
     );
     await tester.pumpAndSettle();
@@ -637,13 +656,77 @@ void main() {
     expect(signOutCalls, 1);
   });
 
+  testWidgets('clearing settings data preserves the other split', (tester) async {
+    await tester.runAsync(() async {
+      await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
+      await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
+      await HiveService.putSplitRaw(
+        gym.Split(id: 'other', name: 'Other split', createdAt: DateTime(2026, 2)),
+      );
+      for (final splitId in ['current', 'other']) {
+        await HiveService.putPlanRaw(
+          WorkoutPlan(
+            id: '$splitId-plan',
+            splitId: splitId,
+            name: 'Push',
+            exercises: [],
+          ),
+        );
+        await HiveService.putSessionRaw(
+          WorkoutSession(
+            id: '$splitId-session',
+            splitId: splitId,
+            planName: 'Push',
+            date: DateTime(2026),
+            exercises: [],
+          ),
+        );
+      }
+    });
+    final otherPlan = HiveService.getPlanById('other-plan')!.toJson();
+    final otherSession = HiveService.getSessionById('other-session')!.toJson();
+    await tester.pumpWidget(
+      host(const SettingsScreen(), size: const Size(390, 4000)),
+    );
+    await tester.pump();
+    await tester.ensureVisible(find.text('Clear current split data'));
+    await tester.tap(find.text('Clear current split data'));
+    await tester.pump();
+    expect(find.textContaining('in "Current split"'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(HiveService.getPlans(splitId: 'current'), hasLength(1));
+
+    await tester.tap(find.text('Clear current split data'));
+    await tester.pump();
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Clear split data'));
+      for (int attempt = 0; attempt < 100; attempt++) {
+        if (HiveService.getSessionById('current-session')!.deletedAt != null) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    });
+    await tester.pumpAndSettle();
+
+    expect(HiveService.getPlans(splitId: 'current'), isEmpty);
+    expect(HiveService.getSessions(splitId: 'current'), isEmpty);
+    expect(HiveService.getPlanById('current-plan')!.dirty, isTrue);
+    expect(HiveService.getSessionById('current-session')!.dirty, isTrue);
+    expect(HiveService.getPlanById('other-plan')!.toJson(), otherPlan);
+    expect(HiveService.getSessionById('other-session')!.toJson(), otherSession);
+    expect(HiveService.getSplits(), hasLength(2));
+    expect(find.text('Data cleared for "Current split"'), findsOneWidget);
+  });
+
   testWidgets('settings callback failures are shown to the user', (
     tester,
   ) async {
     await tester.pumpWidget(
       host(
         SettingsScreen(
-          onClearData: () async => throw StateError('clear failed'),
+          onClearData: (splitId) async => throw StateError('clear failed'),
           onLoadSampleData: () async => throw StateError('sample failed'),
           onSignOut: () async => throw StateError('sign out failed'),
         ),
