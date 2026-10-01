@@ -101,7 +101,7 @@ class WorkoutDialogs {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '> RENAME EXERCISE',
+                      'Rename exercise',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -148,7 +148,7 @@ class WorkoutDialogs {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text(
-                                    '> Enter exercise name',
+                                    'Enter an exercise name',
                                     style: GoogleFonts.jetBrainsMono(),
                                   ),
                                   backgroundColor: errorColor(context),
@@ -213,7 +213,7 @@ class WorkoutDialogs {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '> ADD SET',
+                        'Add set',
                         style: GoogleFonts.jetBrainsMono(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -311,7 +311,7 @@ class WorkoutDialogs {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      '> Weight must be >= 0',
+                                      'Weight must be 0 or more',
                                       style: GoogleFonts.jetBrainsMono(),
                                     ),
                                     backgroundColor: errorColor(context),
@@ -324,7 +324,7 @@ class WorkoutDialogs {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      '> Reps must be > 0',
+                                      'Reps must be greater than 0',
                                       style: GoogleFonts.jetBrainsMono(),
                                     ),
                                     backgroundColor: errorColor(context),
@@ -407,7 +407,7 @@ class WorkoutDialogs {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '> NOTE',
+                    'Note',
                     style: GoogleFonts.jetBrainsMono(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
@@ -480,7 +480,7 @@ class WorkoutDialogs {
               children: [
                 ListTile(
                   leading: Icon(LucideIcons.pencil, color: accent),
-                  title: Text('RENAME', style: GoogleFonts.jetBrainsMono()),
+                  title: Text('Rename', style: GoogleFonts.jetBrainsMono()),
                   onTap: () {
                     Navigator.pop(context);
                     onRename();
@@ -529,7 +529,7 @@ class WorkoutDialogs {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '> RENAME WEEK',
+                      'Rename week',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -592,7 +592,7 @@ class WorkoutDialogs {
     required int week,
   }) => _showDestructiveConfirmation(
     context,
-    title: '> DELETE WEEK?',
+    title: 'Delete week?',
     message: 'This will permanently delete this week\'s workout data.',
     confirmLabel: 'Delete',
   );
@@ -602,7 +602,7 @@ class WorkoutDialogs {
     required String exerciseName,
   }) => _showDestructiveConfirmation(
     context,
-    title: '> DELETE EXERCISE?',
+    title: 'Delete exercise?',
     message: 'This will permanently delete "$exerciseName" and all its sets.',
     confirmLabel: 'Delete',
   );
@@ -613,7 +613,7 @@ class WorkoutDialogs {
     required String planName,
   }) => _showDestructiveConfirmation(
     context,
-    title: '> DELETE PLAN?',
+    title: 'Delete plan?',
     message:
         'Removes "$planName" from your plans. Logged sessions stay in History.',
     confirmLabel: 'Delete',
@@ -622,7 +622,7 @@ class WorkoutDialogs {
   static Future<bool> showDiscardChangesDialog(BuildContext context) =>
       _showDestructiveConfirmation(
         context,
-        title: '> DISCARD CHANGES?',
+        title: 'Discard changes?',
         message: 'This plan has unsaved edits. Leaving now throws them away.',
         cancelLabel: 'Keep editing',
         confirmLabel: 'Discard',

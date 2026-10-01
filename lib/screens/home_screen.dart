@@ -5,11 +5,11 @@ import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../providers/split_provider.dart';
 import '../models/workout_plan.dart';
+import '../models/workout_session.dart';
 import '../models/exercise_template.dart';
 import '../models/set_template.dart';
 import '../data/plan_colors.dart';
 import '../theme/app_theme.dart';
-import '../theme/app_typography.dart';
 import '../theme/breakpoints.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
@@ -19,12 +19,22 @@ import '../widgets/workout/workout_dialogs.dart';
 import '../widgets/splits/split_switcher.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_wordmark.dart';
+import '../widgets/home/plan_grid.dart';
+import '../widgets/home/up_next_card.dart';
+import '../widgets/home/training_snapshot.dart';
 import 'plan_editor_screen.dart';
 import 'workout_screen.dart';
 import '../widgets/splits/preset_browser_dialog.dart';
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? onOpenWeeklyTraining;
+  final ValueChanged<WorkoutSession>? onOpenLastWorkout;
+
+  const HomeScreen({
+    this.onOpenWeeklyTraining,
+    this.onOpenLastWorkout,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -108,47 +118,71 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildEmptyState(BuildContext context, WorkoutPlanProvider provider) {
-    final textSecondary = textSecondaryColor(context);
+    final textTheme = Theme.of(context).textTheme;
 
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'No plans yet',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: textPrimaryColor(context),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: surfaceColor(context),
+                  border: Border.all(color: borderColor(context), width: 1),
+                  borderRadius: AppRadius.card,
+                ),
+                child: Icon(
+                  LucideIcons.clipboardList,
+                  size: 32,
+                  color: accentColor(context),
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Create your first workout plan',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyMedium?.copyWith(color: textSecondary),
-            ),
-            const SizedBox(height: AppSpacing.xxl),
-            AppButton.secondary(
-              label: 'Create plan',
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const PlanEditorScreen.create(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: AppSpacing.md),
-            AppButton.text(
-              label: 'Choose a split',
-              onPressed: () {
-                PresetBrowserDialog.show(context);
-              },
-            ),
-          ],
+              const SizedBox(height: AppSpacing.xl),
+              Text(
+                'No plans yet',
+                textAlign: TextAlign.center,
+                style: textTheme.headlineSmall?.copyWith(
+                  color: textPrimaryColor(context),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Build a plan of your own, or start from a proven split '
+                'and make it yours.',
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: textSecondaryColor(context),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              SizedBox(
+                width: double.infinity,
+                child: AppButton.primary(
+                  label: 'Create plan',
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const PlanEditorScreen.create(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              AppButton.text(
+                label: 'Choose a split',
+                onPressed: () {
+                  PresetBrowserDialog.show(context);
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -159,191 +193,131 @@ class HomeScreen extends StatelessWidget {
     WorkoutPlanProvider provider,
     Color accent,
   ) {
-    // Roll up training history once, keyed by the plan's provider index.
+    final plans = provider.plans;
+    // Roll up each plan's training history once, keyed by its index in
+    // `provider.plans`, so the cards don't each hit the repository.
     final sessions = context.watch<WorkoutSessionProvider>().sessions;
-    final statsByIndex = {
-      for (final stat in PlanStat.compute(provider.plans, sessions))
-        stat.planIndex: stat,
-    };
+    final stats = PlanStat.compute(plans, sessions);
+    final statsByIndex = {for (final stat in stats) stat.planIndex: stat};
+    // With a single plan there is no rotation to point into: its card already
+    // is the next workout, and a second copy of it above would only repeat it.
+    final nextIndex =
+        plans.length > 1 ? PlanStat.nextInRotation(stats, plans.length) : null;
+
     return _CappedWidth(
-      maxWidth: 720,
-      child: ListView.separated(
+      child: ListView(
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,
           AppSpacing.lg,
           AppSpacing.lg,
-          AppSpacing.xxl,
+          _fabClearance,
         ),
-        separatorBuilder: (_, _) => const SizedBox(height: AppSpacing.sm),
-        itemCount: provider.plans.length,
-        itemBuilder:
-            (context, index) => _buildPlanCard(
-              context,
-              provider.plans[index],
-              index,
-              accent,
-              statsByIndex[index],
+        children: [
+          if (nextIndex != null) ...[
+            UpNextCard(
+              plan: plans[nextIndex],
+              day: nextIndex + 1,
+              dayCount: plans.length,
+              stat: statsByIndex[nextIndex],
+              onStart: () => _openWorkout(context, plans[nextIndex], nextIndex),
+              footer: TrainingSnapshot(
+                plans: plans,
+                sessions: sessions,
+                onOpenWeeklyTraining: onOpenWeeklyTraining,
+                onOpenLastWorkout: onOpenLastWorkout,
+              ),
             ),
+            const SizedBox(height: AppSpacing.xl),
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.sm,
+              ),
+              decoration: BoxDecoration(
+                color: surfaceColor(context),
+                border: Border.all(color: borderColor(context)),
+                borderRadius: AppRadius.card,
+              ),
+              child: TrainingSnapshot(
+                plans: plans,
+                sessions: sessions,
+                onOpenWeeklyTraining: onOpenWeeklyTraining,
+                onOpenLastWorkout: onOpenLastWorkout,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+          ],
+          _SectionHeading(title: 'Your plans', count: plans.length),
+          const SizedBox(height: AppSpacing.md),
+          PlanGrid(
+            plans: plans,
+            stats: statsByIndex,
+            onOpen: (index) => _openWorkout(context, plans[index], index),
+            onShowActions:
+                (index) => _showPlanOptions(
+                  context,
+                  plans[index],
+                  index,
+                  accent,
+                  statsByIndex[index],
+                ),
+            onMove: (fromId, toId) => _movePlan(context, fromId, toId),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildPlanCard(
+  /// Room under the last card for the floating create button, which otherwise
+  /// sits on top of the last card's summary line.
+  static const double _fabClearance = 96;
+
+  Future<void> _movePlan(
     BuildContext context,
-    WorkoutPlan plan,
-    int index,
-    Color accent,
-    PlanStat? stat,
-  ) {
-    final surface = surfaceColor(context);
-    final border = borderColor(context);
-    final textPrimary = textPrimaryColor(context);
-    final textSecondary = textSecondaryColor(context);
-    final planColor = planColorOf(plan.planColor, context);
-
-    final exercisePreview = plan.exercises
-        .take(3)
-        .map((exercise) => exercise.name)
-        .join('  ·  ');
-
-    void openWorkout() {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => WorkoutScreen(plan: plan, planIndex: index),
-        ),
-      );
+    String fromId,
+    String toId,
+  ) async {
+    final provider = context.read<WorkoutPlanProvider>();
+    final plans = provider.plans;
+    final oldIndex = plans.indexWhere((plan) => plan.id == fromId);
+    final newIndex = plans.indexWhere((plan) => plan.id == toId);
+    if (oldIndex < 0 || newIndex < 0 || oldIndex == newIndex) return;
+    try {
+      await provider.reorderPlans(oldIndex, newIndex);
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not save plan order')),
+        );
+      }
     }
+  }
 
-    return InkWell(
-      onTap: openWorkout,
-      onLongPress: () => _showPlanOptions(context, plan, index, accent, stat),
-      borderRadius: AppRadius.card,
-      child: Container(
-        // Keep the card edge and its content within the same rounded shape.
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
-          color: surface,
-          border: Border.all(color: border, width: 1),
-          borderRadius: AppRadius.card,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.sm,
-            AppSpacing.sm,
-            AppSpacing.lg,
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.sm),
-                child: Semantics(
-                  label: '${_titleCase(plan.name)} plan marker',
-                  child: Container(
-                    width: 3,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: planColor,
-                      borderRadius: AppRadius.micro,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: AppSpacing.xs),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _titleCase(plan.name),
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleLarge?.copyWith(color: textPrimary),
-                      ),
-                      if (exercisePreview.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          exercisePreview,
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(color: textSecondary),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                      const SizedBox(height: AppSpacing.sm),
-                      Wrap(
-                        spacing: AppSpacing.sm,
-                        runSpacing: AppSpacing.xxs,
-                        children: [
-                          Text(
-                            '${plan.exercises.length} exercises',
-                            style: AppTypography.trainingData(
-                              fontSize: 10,
-                              color: textSecondary,
-                            ),
-                          ),
-                          if (stat?.lastTrained != null)
-                            Text(
-                              _lastTrainedLabel(stat),
-                              style: AppTypography.trainingData(
-                                fontSize: 10,
-                                color: textSecondary,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Plan actions',
-                onPressed:
-                    () => _showPlanOptions(context, plan, index, accent, stat),
-                icon: Icon(
-                  LucideIcons.ellipsis,
-                  size: 18,
-                  color: textSecondary,
-                ),
-              ),
-            ],
-          ),
-        ),
+  void _movePlanOneStep(BuildContext context, String planId, int step) {
+    final plans = context.read<WorkoutPlanProvider>().plans;
+    final index = plans.indexWhere((plan) => plan.id == planId);
+    final target = index + step;
+    if (index < 0 || target < 0 || target >= plans.length) return;
+    _movePlan(context, planId, plans[target].id!);
+  }
+
+  void _openWorkout(BuildContext context, WorkoutPlan plan, int index) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => WorkoutScreen(plan: plan, planIndex: index),
       ),
     );
   }
 
-  /// Short summary in the plan actions dialog.
-  String _planFooter(WorkoutPlan plan, PlanStat? stat) {
-    if (stat == null || stat.sessionCount == 0) {
-      return '${plan.exercises.length} EXERCISES';
-    }
-    return '${formatRelativeDay(stat.lastTrained!)}'
-        '  ·  ${stat.sessionCount} SESSIONS'
-        '  ·  ${plan.exercises.length} EX';
-  }
-
-  String _lastTrainedLabel(PlanStat? stat) {
-    if (stat?.lastTrained == null) return 'Never trained';
-    return 'Last trained ${formatRelativeDay(stat!.lastTrained!).toLowerCase()}';
-  }
-
-  String _titleCase(String name) {
-    return name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .map(
-          (word) =>
-              word.isEmpty
-                  ? word
-                  : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
-        )
-        .join(' ');
+  /// `4 exercises · last trained yesterday`, for the plan menu's header.
+  String _planSummary(WorkoutPlan plan, PlanStat? stat) {
+    final count = plan.exercises.length;
+    final exercises = count == 1 ? '1 exercise' : '$count exercises';
+    final last = stat?.lastTrained;
+    if (last == null) return '$exercises  ·  not trained yet';
+    return '$exercises  ·  last trained ${formatDaysAgo(last).toLowerCase()}';
   }
 
   void _showPlanOptions(
@@ -354,6 +328,7 @@ class HomeScreen extends StatelessWidget {
     PlanStat? stat,
   ) {
     final planColor = planColorOf(plan.planColor, context);
+    final planCount = context.read<WorkoutPlanProvider>().plans.length;
     final border = borderColor(context);
     final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
@@ -404,7 +379,7 @@ class HomeScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  _titleCase(plan.name),
+                                  titleCase(plan.name),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context).textTheme.titleSmall
@@ -412,14 +387,11 @@ class HomeScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: AppSpacing.xxs),
                                 Text(
-                                  _planFooter(plan, stat),
+                                  _planSummary(plan, stat),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: AppTypography.trainingData(
-                                    fontSize: 9,
-                                    color: textSecondary,
-                                    letterSpacing: 0.06,
-                                  ),
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(color: textSecondary),
                                 ),
                               ],
                             ),
@@ -501,6 +473,26 @@ class HomeScreen extends StatelessWidget {
                         );
                       },
                     ),
+                    if (index > 0)
+                      _PlanActionRow(
+                        icon: LucideIcons.arrowUp,
+                        label: 'Move earlier',
+                        color: textPrimary,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _movePlanOneStep(context, plan.id!, -1);
+                        },
+                      ),
+                    if (index < planCount - 1)
+                      _PlanActionRow(
+                        icon: LucideIcons.arrowDown,
+                        label: 'Move later',
+                        color: textPrimary,
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _movePlanOneStep(context, plan.id!, 1);
+                        },
+                      ),
                     // A rule and the error colour set the one irreversible action
                     // apart; deleting also asks first, which it never used to.
                     Divider(height: 1, thickness: 1, color: border),
@@ -559,7 +551,7 @@ class HomeScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${_titleCase(plan.name)} color',
+                      '${titleCase(plan.name)} color',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: 16),
@@ -652,22 +644,63 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
-/// Centres content at a readable measure on wide screens.
+/// Centres its child and caps it at [Breakpoints.expanded].
+///
+/// Without a cap an ultra-wide monitor stretched the plans a hand-span across
+/// the desk. Header, up-next card, and plans all sit in the same capped
+/// measure, so they share one left edge; only the header's ground and its
+/// rule still run full-bleed, because a rule is screen furniture rather than
+/// content.
 class _CappedWidth extends StatelessWidget {
   final Widget child;
-  final double maxWidth;
 
-  const _CappedWidth({
-    required this.child,
-    this.maxWidth = Breakpoints.expanded,
-  });
+  const _CappedWidth({required this.child});
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
+        constraints: const BoxConstraints(maxWidth: Breakpoints.expanded),
         child: child,
+      ),
+    );
+  }
+}
+
+/// A list heading with its count set beside it as data: `Your plans  6`.
+class _SectionHeading extends StatelessWidget {
+  final String title;
+  final int count;
+
+  const _SectionHeading({required this.title, required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      header: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Flexible(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: textPrimaryColor(context),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            '$count',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: textSecondaryColor(context),
+            ),
+          ),
+        ],
       ),
     );
   }

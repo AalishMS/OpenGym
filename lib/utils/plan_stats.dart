@@ -33,9 +33,17 @@ class PlanStat {
 
     for (var i = 0; i < plans.length; i++) {
       final plan = plans[i];
-      final planSessions = sessions
-          .where((s) => s.planName.toLowerCase() == plan.name.toLowerCase())
-          .toList();
+      final planSessions =
+          sessions
+              .where(
+                (session) =>
+                    session.isCompleted &&
+                    (session.planId != null && plan.id != null
+                        ? session.planId == plan.id
+                        : session.planName.toLowerCase() ==
+                            plan.name.toLowerCase()),
+              )
+              .toList();
 
       var volume = 0;
       DateTime? last;
@@ -48,13 +56,15 @@ class PlanStat {
         }
       }
 
-      stats.add(PlanStat(
-        plan: plan,
-        planIndex: i,
-        sessionCount: planSessions.length,
-        lastTrained: last,
-        volumeKg: volume,
-      ));
+      stats.add(
+        PlanStat(
+          plan: plan,
+          planIndex: i,
+          sessionCount: planSessions.length,
+          lastTrained: last,
+          volumeKg: volume,
+        ),
+      );
     }
 
     stats.sort((a, b) {
@@ -67,5 +77,22 @@ class PlanStat {
     });
 
     return stats;
+  }
+
+  /// Index of the plan the split's rotation points at next: the one after the
+  /// most recently trained plan, wrapping round to the first. With nothing
+  /// trained yet, that is the first plan.
+  ///
+  /// [stats] is [compute]'s output for the same [planCount] plans. Order does
+  /// not matter; the latest session is found explicitly.
+  static int nextInRotation(List<PlanStat> stats, int planCount) {
+    if (planCount == 0) return 0;
+    PlanStat? latest;
+    for (final stat in stats) {
+      final last = stat.lastTrained;
+      if (last == null) continue;
+      if (latest == null || last.isAfter(latest.lastTrained!)) latest = stat;
+    }
+    return latest == null ? 0 : (latest.planIndex + 1) % planCount;
   }
 }

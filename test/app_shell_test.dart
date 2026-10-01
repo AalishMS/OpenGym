@@ -2,11 +2,21 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:gymapp/app_shell.dart';
+import 'package:gymapp/models/exercise.dart';
+import 'package:gymapp/models/exercise_template.dart';
+import 'package:gymapp/models/set.dart';
+import 'package:gymapp/models/workout_plan.dart';
+import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/screens/history_screen.dart';
+import 'package:gymapp/screens/stats_screen.dart';
+import 'package:gymapp/services/hive_service.dart';
+
 import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/providers/update_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
@@ -17,6 +27,7 @@ import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/breakpoints.dart';
 import 'package:gymapp/widgets/app_bottom_nav.dart';
 import 'package:gymapp/widgets/app_nav_rail.dart';
+import 'package:gymapp/widgets/home/training_snapshot.dart';
 
 void main() {
   final hiveHarness = HiveTestHarness();
@@ -33,6 +44,32 @@ void main() {
   tearDownAll(() async {
     await hiveHarness.close();
   });
+
+  setUp(() async {
+    await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
+    await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
+  });
+
+  Future<void> seedHomeTraining() async {
+    final plan = WorkoutPlan(
+      id: 'shell-plan',
+      name: 'Push Day',
+      exercises: [ExerciseTemplate(name: 'Bench Press', sets: 1)],
+    );
+    final session = WorkoutSession(
+      id: 'shell-session',
+      planId: plan.id,
+      planName: plan.name,
+      date: DateTime.now(),
+      exercises: [
+        Exercise(name: 'Bench Press', sets: [Set(reps: 8, weight: 50)]),
+      ],
+    );
+    await Hive.box<WorkoutPlan>(HiveService.plansBox).put(plan.id, plan);
+    await Hive.box<WorkoutSession>(
+      HiveService.sessionsBox,
+    ).put(session.id, session);
+  }
 
   Widget shellHost(double width, {double textScale = 1}) {
     return MultiProvider(
@@ -83,6 +120,82 @@ void main() {
       );
     }
     expect(find.text('Dashboard'), findsNothing);
+  });
+
+  testWidgets('both snapshot metrics open weekly training statistics', (
+    tester,
+  ) async {
+    await tester.runAsync(seedHomeTraining);
+    await tester.pumpWidget(shellHost(390));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final snapshot = find.byType(TrainingSnapshot);
+    await tester.tap(
+      find.descendant(of: snapshot, matching: find.text('workout')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.byType(StatsScreen), findsOneWidget);
+    expect(find.text('Weekly training'), findsOneWidget);
+    expect(find.text('All exercises'), findsOneWidget);
+    expect(
+      tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
+      2,
+    );
+    final statsScroll =
+        tester
+            .widget<SingleChildScrollView>(
+              find.byKey(const ValueKey('statistics-scroll')),
+            )
+            .controller!;
+    statsScroll.jumpTo(300);
+    await tester.pump();
+    expect(statsScroll.offset, greaterThan(0));
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AppBottomNav),
+        matching: find.text('Plans'),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.descendant(of: snapshot, matching: find.text('set')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Weekly training'), findsOneWidget);
+    expect(statsScroll.offset, 0);
+    expect(
+      tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
+      2,
+    );
+  });
+
+  testWidgets('last workout opens its History detail and returns to History', (
+    tester,
+  ) async {
+    await tester.runAsync(seedHomeTraining);
+    await tester.pumpWidget(shellHost(390));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(TrainingSnapshot),
+        matching: find.text('Push Day · Today'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(WorkoutDetailsScreen), findsOneWidget);
+    expect(find.text('Bench Press'), findsWidgets);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(HistoryScreen), findsOneWidget);
+    expect(
+      tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
+      1,
+    );
   });
 
   testWidgets('medium shell exposes the desktop rail and dashboard', (

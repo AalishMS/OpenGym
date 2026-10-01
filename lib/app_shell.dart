@@ -18,6 +18,7 @@ import 'services/workout_timer_notification_service.dart';
 import 'theme/breakpoints.dart';
 import 'widgets/app_bottom_nav.dart';
 import 'widgets/app_nav_rail.dart';
+import 'widgets/history/history_journal_data.dart';
 import 'widgets/update_dialog.dart';
 
 class AppShell extends StatefulWidget {
@@ -31,19 +32,49 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   // Index into [_screens]. Dashboard is index 0 (desktop-only); the phone
   // bottom bar addresses screens 1–4.
   int _currentIndex = 0;
+  int _weeklyTrainingRequest = 0;
+  bool _openingHistoryWorkout = false;
 
   /// Guards against a second prompt if this State is rebuilt.
   bool _updatePromptShown = false;
   StreamSubscription<WorkoutTimerNotificationEvent>? _timerSubscription;
   int? _handledTimerIntentRevision;
 
-  final List<Widget> _screens = const [
-    DashboardScreen(),
-    HomeScreen(),
-    HistoryScreen(),
-    StatsScreen(),
-    SettingsScreen(),
+  List<Widget> get _screens => [
+    const DashboardScreen(),
+    HomeScreen(
+      onOpenWeeklyTraining: _openWeeklyTraining,
+      onOpenLastWorkout: _openLastWorkout,
+    ),
+    const HistoryScreen(),
+    StatsScreen(weeklyTrainingRequest: _weeklyTrainingRequest),
+    const SettingsScreen(),
   ];
+
+  void _openWeeklyTraining() {
+    setState(() {
+      _currentIndex = 3;
+      _weeklyTrainingRequest++;
+    });
+  }
+
+  void _openLastWorkout(WorkoutSession session) {
+    if (_openingHistoryWorkout) return;
+    _openingHistoryWorkout = true;
+    setState(() => _currentIndex = 2);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder:
+              (_) => WorkoutDetailsScreen(
+                sessionIdentity: historySessionIdentity(session),
+              ),
+        ),
+      );
+      _openingHistoryWorkout = false;
+    });
+  }
 
   @override
   void initState() {

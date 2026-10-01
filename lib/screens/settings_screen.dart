@@ -117,9 +117,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          failed
-              ? '> ${updates.error ?? 'Update check failed'}'
-              : "> You're up to date",
+          failed ? updates.error ?? 'Update check failed' : "You're up to date",
           style: GoogleFonts.jetBrainsMono(color: onColor(ground)),
         ),
         backgroundColor: ground,
@@ -144,7 +142,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          '> $message',
+          message,
           style: GoogleFonts.jetBrainsMono(color: onColor(errorColor(context))),
         ),
         backgroundColor: errorColor(context),
@@ -165,7 +163,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: surface,
         flexibleSpace: headerFlexibleSpace(context),
         title: Text(
-          '> SETTINGS',
+          'Settings',
           style: GoogleFonts.jetBrainsMono(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -228,6 +226,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: 'Restore from a backup file (replaces all data)',
                   onTap: () => _importData(context),
                 ),
+                if (_signedInEmail() != null) ...[
+                  const _SectionHeader(title: 'Account'),
+                  StreamBuilder<void>(
+                    stream: SyncService.instance.statusChanges,
+                    builder: (context, _) {
+                      final status = SyncService.instance.status;
+                      final label = switch (status) {
+                        SyncStatus.savedOnDevice => 'Saved on device',
+                        SyncStatus.pending => 'Sync pending',
+                        SyncStatus.synced => 'Synced',
+                      };
+                      final detail = switch (status) {
+                        SyncStatus.savedOnDevice =>
+                          'Your data is saved on this device',
+                        SyncStatus.pending => 'Waiting to finish syncing',
+                        SyncStatus.synced => 'Your data is up to date',
+                      };
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Row(
+                          children: [
+                            Icon(LucideIcons.cloud, color: accent, size: 20),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    label,
+                                    style:
+                                        Theme.of(context).textTheme.titleSmall,
+                                  ),
+                                  Text(
+                                    detail,
+                                    style:
+                                        Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
                 const _SectionHeader(title: 'Danger zone'),
                 _buildSettingsTile(
                   icon: LucideIcons.trash2,
@@ -321,7 +365,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     () => settings.setThemeMode(selection.first),
                   ),
               multiSelectionEnabled: false,
-              showSelectedIcon: true,
+              showSelectedIcon: false,
+              style: SegmentedButton.styleFrom(
+                backgroundColor: surfaceColor(context),
+                foregroundColor: textPrimaryColor(context),
+                selectedBackgroundColor: accentFillColor(context),
+                selectedForegroundColor: onAccentColor(context),
+                side: BorderSide(color: borderColor(context)),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: AppRadius.control,
+                ),
+                minimumSize: const Size(72, 48),
+                textStyle: Theme.of(context).textTheme.labelLarge,
+              ),
             ),
           ),
         ],
@@ -537,7 +593,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder:
           (ctx) => AlertDialog(
             title: Text(
-              '> LOAD SAMPLE DATA?',
+              'Load sample data?',
               style: TextStyle(color: accentColor(ctx)),
             ),
             content: const Text(
@@ -546,7 +602,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('[CANCEL]'),
+                child: const Text('Cancel'),
               ),
               ElevatedButton(
                 onPressed: () async {
@@ -574,7 +630,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        '> Sample data refreshed!',
+                        'Sample data refreshed',
                         style: GoogleFonts.jetBrainsMono(
                           color: onAccentColor(context),
                         ),
@@ -587,7 +643,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   backgroundColor: accentFillColor(ctx),
                   foregroundColor: onAccentColor(ctx),
                 ),
-                child: const Text('[LOAD]'),
+                child: const Text('Load'),
               ),
             ],
           ),
@@ -601,7 +657,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder:
           (ctx) => AlertDialog(
             title: Text(
-              '> EXPORT DATA?',
+              'Export data?',
               style: TextStyle(color: accentColor(ctx)),
             ),
             content: const Text(
@@ -610,7 +666,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('[CANCEL]'),
+                child: const Text('Cancel'),
               ),
               ElevatedButton(
                 onPressed: () async {
@@ -646,7 +702,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          '> Backup exported successfully',
+                          'Backup exported successfully',
                           style: GoogleFonts.jetBrainsMono(
                             color: onAccentColor(context),
                           ),
@@ -659,7 +715,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          '> Export failed: $e',
+                          'Export failed: $e',
                           style: GoogleFonts.jetBrainsMono(
                             color: onColor(errorColor(context)),
                           ),
@@ -673,7 +729,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   backgroundColor: accentFillColor(ctx),
                   foregroundColor: onAccentColor(ctx),
                 ),
-                child: const Text('[EXPORT]'),
+                child: const Text('Export'),
               ),
             ],
           ),
@@ -705,7 +761,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '> ${importResult.errorMessage}',
+                importResult.errorMessage ?? 'Import failed',
                 style: GoogleFonts.jetBrainsMono(
                   color: onColor(errorColor(context)),
                 ),
@@ -731,7 +787,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         builder:
             (ctx) => AlertDialog(
               title: Text(
-                '> IMPORT BACKUP?',
+                'Import backup?',
                 style: TextStyle(color: errorColor(ctx)),
               ),
               content: const Text(
@@ -744,7 +800,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text('[CANCEL]'),
+                  child: const Text('Cancel'),
                 ),
                 ElevatedButton(
                   onPressed: () async {
@@ -780,7 +836,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            '> Backup imported successfully',
+                            'Backup imported successfully',
                             style: GoogleFonts.jetBrainsMono(
                               color: onAccentColor(context),
                             ),
@@ -793,7 +849,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            '> Import failed: $e',
+                            'Import failed: $e',
                             style: GoogleFonts.jetBrainsMono(
                               color: onColor(error),
                             ),
@@ -807,7 +863,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     backgroundColor: errorColor(ctx),
                     foregroundColor: onColor(errorColor(ctx)),
                   ),
-                  child: const Text('[IMPORT]'),
+                  child: const Text('Import'),
                 ),
               ],
             ),
@@ -817,7 +873,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              '> Import failed: ${e.toString()}',
+              'Import failed: ${e.toString()}',
               style: GoogleFonts.jetBrainsMono(
                 color: onColor(errorColor(context)),
               ),
@@ -835,7 +891,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder:
           (ctx) => AlertDialog(
             title: Text(
-              '> CLEAR ALL DATA?',
+              'Clear all data?',
               style: TextStyle(color: errorColor(ctx)),
             ),
             content: const Text(
@@ -844,7 +900,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('[CANCEL]'),
+                child: const Text('Cancel'),
               ),
               ElevatedButton(
                 onPressed: () async {
@@ -864,7 +920,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        '> All data cleared',
+                        'All data cleared',
                         style: GoogleFonts.jetBrainsMono(
                           color: onAccentColor(context),
                         ),
@@ -877,7 +933,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   backgroundColor: errorColor(ctx),
                   foregroundColor: onColor(errorColor(ctx)),
                 ),
-                child: const Text('[CLEAR ALL]'),
+                child: const Text('Clear all data'),
               ),
             ],
           ),

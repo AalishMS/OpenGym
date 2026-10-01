@@ -274,7 +274,7 @@ void main() {
     await tester.enterText(find.byType(TextField).first, 'Push Day');
     await tester.tapAt(const Offset(32, 48));
     await tester.pumpAndSettle();
-    expect(find.text('> DISCARD CHANGES?'), findsOneWidget);
+    expect(find.text('Discard changes?'), findsOneWidget);
     await tester.tap(find.text('Keep editing'));
     await tester.pumpAndSettle();
     expect(find.text('Push Day'), findsOneWidget);

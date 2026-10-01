@@ -6,6 +6,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import 'package:gymapp/models/exercise_template.dart';
+import 'package:gymapp/models/exercise.dart';
+import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
@@ -19,6 +21,9 @@ import 'package:gymapp/widgets/workout/exercise_card.dart';
 import 'support/hive_test_harness.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/spacing.dart';
+import 'package:gymapp/utils/format.dart';
+import 'package:gymapp/utils/plan_stats.dart';
+import 'package:gymapp/widgets/home/training_snapshot.dart';
 import 'package:gymapp/widgets/underline_tab_strip.dart';
 
 void main() {
@@ -40,6 +45,7 @@ void main() {
 
   Widget homeHost({
     Size size = const Size(390, 800),
+    double textScale = 1,
     Brightness brightness = Brightness.dark,
     List<WorkoutPlan> plans = const [],
     List<WorkoutSession> sessions = const [],
@@ -63,7 +69,10 @@ void main() {
           child: SizedBox.fromSize(
             size: size,
             child: MediaQuery(
-              data: MediaQueryData(size: size),
+              data: MediaQueryData(
+                size: size,
+                textScaler: TextScaler.linear(textScale),
+              ),
               child: const HomeScreen(),
             ),
           ),
@@ -163,12 +172,70 @@ void main() {
     );
     expect(find.text('Push Day'), findsOneWidget);
     expect(find.textContaining('4 exercises'), findsOneWidget);
-    expect(find.textContaining('Last trained yesterday'), findsOneWidget);
+    expect(find.textContaining('12 sets'), findsOneWidget);
+    expect(find.text('Yesterday'), findsOneWidget);
     expect(find.textContaining('Bench Press'), findsOneWidget);
     expect(find.textContaining('Overhead Press'), findsOneWidget);
     expect(find.textContaining('Cable Fly'), findsOneWidget);
     expect(find.text('[START]'), findsNothing);
     expect(find.byTooltip('Plan actions'), findsOneWidget);
+  });
+
+  testWidgets('dragging a plan onto another card changes grid order', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1200, 800);
+    addTearDown(tester.view.reset);
+    final plans = [
+      populatedPlan(),
+      populatedPlan().copyWith(id: 'plan-2', name: 'Pull Day'),
+      populatedPlan().copyWith(id: 'plan-3', name: 'Leg Day'),
+    ];
+    await tester.pumpWidget(
+      homeHost(size: const Size(1200, 800), plans: plans),
+    );
+
+    final source = find.byTooltip('Drag to reorder Push Day');
+    final target = find.byTooltip('Drag to reorder Pull Day');
+    expect(source, findsOneWidget);
+    expect(target, findsOneWidget);
+    expect(tester.getSize(source), const Size(48, 48));
+
+    await tester.dragFrom(
+      tester.getCenter(source),
+      tester.getCenter(target) - tester.getCenter(source),
+    );
+    await tester.pumpAndSettle();
+
+    final provider = Provider.of<WorkoutPlanProvider>(
+      tester.element(find.byType(HomeScreen)),
+      listen: false,
+    );
+    expect(provider.plans.map((plan) => plan.id), [
+      'plan-2',
+      'plan-1',
+      'plan-3',
+    ]);
+  });
+
+  testWidgets('plan actions offer a move control', (tester) async {
+    final plans = [
+      populatedPlan(),
+      populatedPlan().copyWith(id: 'plan-2', name: 'Pull Day'),
+    ];
+    await tester.pumpWidget(homeHost(plans: plans));
+    await tester.tap(find.byTooltip('Plan actions').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Move later'), findsOneWidget);
+
+    await tester.tap(find.text('Move later'));
+    await tester.pumpAndSettle();
+    final provider = Provider.of<WorkoutPlanProvider>(
+      tester.element(find.byType(HomeScreen)),
+      listen: false,
+    );
+    expect(provider.plans.first.id, 'plan-2');
   });
 
   testWidgets('plan names use title case without changing stored names', (
@@ -616,6 +683,276 @@ void main() {
       expect(tester.takeException(), isNull, reason: '$size');
     }
   });
+
+  List<WorkoutPlan> rotationPlans() => [
+    populatedPlan(),
+    populatedPlan().copyWith(
+      id: 'plan-2',
+      name: 'Pull Day',
+      planColor: kPlanColors[3],
+    ),
+    populatedPlan().copyWith(
+      id: 'plan-3',
+      name: 'Leg Day',
+      planColor: kPlanColors[6],
+    ),
+  ];
+
+  WorkoutSession pullSession(DateTime date) => WorkoutSession(
+    id: 'session-pull',
+    planId: 'plan-2',
+    planName: 'Pull Day',
+    date: date,
+    exercises: const [],
+  );
+
+  testWidgets('a single plan shows training without an up next card', (
+    tester,
+  ) async {
+    final data = populatedData();
+    await tester.pumpWidget(
+      homeHost(
+        plans: [data.plan],
+        sessions: [data.session.copyWith(date: DateTime.now())],
+      ),
+    );
+    expect(find.text('Up next'), findsNothing);
+    expect(find.text('This week'), findsOneWidget);
+    expect(find.text('1'), findsWidgets);
+    expect(find.text('workout'), findsOneWidget);
+    expect(find.text('Last workout'), findsOneWidget);
+    expect(find.text('Your plans'), findsOneWidget);
+    expect(tester.getSize(find.byType(TrainingSnapshot)).height, lessThan(130));
+  });
+
+  testWidgets('a draft does not advance rotation or count as trained', (
+    tester,
+  ) async {
+    final plans = rotationPlans();
+    final draft = WorkoutSession(
+      id: 'draft-pull',
+      planId: plans[1].id,
+      planName: plans[1].name,
+      date: DateTime.now(),
+      exercises: const [],
+      isCompleted: false,
+    );
+    await tester.pumpWidget(homeHost(plans: plans, sessions: [draft]));
+
+    expect(find.text('Day 1 of 3'), findsOneWidget);
+    expect(find.text('No workouts logged yet'), findsOneWidget);
+    expect(find.text('workouts'), findsOneWidget);
+    expect(find.byIcon(LucideIcons.check), findsNothing);
+  });
+
+  testWidgets('up next starts the plan after the last one trained', (
+    tester,
+  ) async {
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    await tester.pumpWidget(
+      homeHost(plans: rotationPlans(), sessions: [pullSession(yesterday)]),
+    );
+
+    expect(find.text('Up next'), findsOneWidget);
+    expect(find.text('Day 3 of 3'), findsOneWidget);
+
+    await tester.tap(find.text('Start workout'));
+    await tester.pumpAndSettle();
+    final workout = tester.widget<WorkoutScreen>(find.byType(WorkoutScreen));
+    expect(workout.plan.name, 'Leg Day');
+    expect(workout.planIndex, 2);
+  });
+
+  testWidgets('snapshot and cards mark what was trained this week', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      homeHost(plans: rotationPlans(), sessions: [pullSession(DateTime.now())]),
+    );
+
+    expect(find.text('workout'), findsOneWidget);
+    expect(find.text('Pull Day · Today'), findsOneWidget);
+    // Only the Pull Day card is done this week, and says when.
+    expect(find.byIcon(LucideIcons.check), findsOneWidget);
+    expect(find.text('Today'), findsOneWidget);
+  });
+
+  testWidgets(
+    'snapshot counts performed sets and uses the latest completed session',
+    (tester) async {
+      final today = DateTime(2026, 9, 30);
+      final plan = populatedPlan();
+      final older = WorkoutSession(
+        date: today.subtract(const Duration(days: 8)),
+        planName: 'Leg Day',
+        exercises: const [],
+      );
+      final completed = WorkoutSession(
+        date: today,
+        planId: plan.id,
+        planName: plan.name,
+        exercises: [
+          Exercise(
+            name: 'Bench Press',
+            sets: [Set(reps: 8, weight: 50), Set(reps: 0, weight: 50)],
+          ),
+        ],
+      );
+      final draft = WorkoutSession(
+        date: today.add(const Duration(hours: 1)),
+        planName: 'Draft',
+        exercises: [
+          Exercise(name: 'Squat', sets: [Set(reps: 5, weight: 80)]),
+        ],
+        isCompleted: false,
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(const Color(0xFF00A8FF), Brightness.dark),
+          home: Scaffold(
+            body: TrainingSnapshot(
+              plans: [plan],
+              sessions: [draft, older, completed],
+              now: today,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('1'), findsNWidgets(2));
+      expect(find.text('workout'), findsOneWidget);
+      expect(find.text('set'), findsOneWidget);
+      expect(find.text('Push Day · Today'), findsOneWidget);
+      expect(find.textContaining('Draft'), findsNothing);
+    },
+  );
+
+  testWidgets('snapshot fits the narrow side of the up next card', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(const Color(0xFF00A8FF), Brightness.dark),
+        home: Scaffold(
+          body: MediaQuery(
+            data: const MediaQueryData(textScaler: TextScaler.linear(2)),
+            child: SizedBox(
+              width: 254,
+              child: TrainingSnapshot(
+                plans: [populatedPlan()],
+                sessions: [populatedData().session],
+                onOpenWeeklyTraining: () {},
+                onOpenLastWorkout: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('up next and plans fit every width, theme, and text size', (
+    tester,
+  ) async {
+    final yesterday = DateTime.now().subtract(const Duration(days: 1));
+    for (final brightness in Brightness.values) {
+      for (final size in [const Size(320, 700), const Size(1200, 800)]) {
+        for (final scale in [1.0, 2.0]) {
+          await tester.pumpWidget(
+            homeHost(
+              size: size,
+              textScale: scale,
+              brightness: brightness,
+              plans: rotationPlans(),
+              sessions: [pullSession(yesterday)],
+            ),
+          );
+          await tester.pump();
+          expect(find.text('Up next'), findsOneWidget);
+          expect(
+            tester.takeException(),
+            isNull,
+            reason: '$brightness $size ${scale}x',
+          );
+        }
+      }
+    }
+  });
+
+  group('PlanStat.nextInRotation', () {
+    List<WorkoutSession> trained(Map<String, int> daysAgoByPlan) => [
+      for (final entry in daysAgoByPlan.entries)
+        WorkoutSession(
+          planName: entry.key,
+          date: DateTime.now().subtract(Duration(days: entry.value)),
+          exercises: const [],
+        ),
+    ];
+
+    int next(Map<String, int> daysAgoByPlan) {
+      final plans = rotationPlans();
+      final stats = PlanStat.compute(plans, trained(daysAgoByPlan));
+      return PlanStat.nextInRotation(stats, plans.length);
+    }
+
+    test('starts at the first plan when nothing is trained', () {
+      expect(next({}), 0);
+    });
+
+    test('follows whichever plan was trained last', () {
+      expect(next({'Push Day': 1, 'Pull Day': 3}), 1);
+      expect(next({'Push Day': 3, 'Pull Day': 1}), 2);
+    });
+
+    test('wraps from the last plan back to the first', () {
+      expect(next({'Leg Day': 0}), 0);
+    });
+
+    test('uses plan ids after renames and with duplicate names', () {
+      final plans = rotationPlans();
+      final renamedSession = WorkoutSession(
+        planId: plans[1].id,
+        planName: 'Old Pull Day',
+        date: DateTime(2026, 9, 29),
+        exercises: const [],
+      );
+      final duplicateName = plans[0].copyWith(name: plans[1].name);
+      final stats = PlanStat.compute(
+        [duplicateName, plans[1], plans[2]],
+        [renamedSession],
+      );
+
+      expect(stats.singleWhere((stat) => stat.planIndex == 0).sessionCount, 0);
+      expect(stats.singleWhere((stat) => stat.planIndex == 1).sessionCount, 1);
+      expect(PlanStat.nextInRotation(stats, 3), 2);
+    });
+
+    test('falls back to names for sessions without plan ids', () {
+      final stats = PlanStat.compute(rotationPlans(), trained({'Pull Day': 0}));
+      expect(PlanStat.nextInRotation(stats, 3), 2);
+    });
+  });
+
+  group('formatDaysAgo', () {
+    final now = DateTime(2026, 9, 26, 9);
+
+    test('reads in sentence case at every range', () {
+      expect(formatDaysAgo(DateTime(2026, 9, 26, 7), now: now), 'Today');
+      expect(formatDaysAgo(DateTime(2026, 9, 25, 23), now: now), 'Yesterday');
+      expect(formatDaysAgo(DateTime(2026, 9, 21), now: now), '5 days ago');
+      expect(formatDaysAgo(DateTime(2026, 9, 5), now: now), '3 weeks ago');
+      expect(formatDaysAgo(DateTime(2026, 6, 1), now: now), '3 months ago');
+    });
+
+    test('a daylight saving change does not lose a day', () {
+      // Europe's clocks go forward overnight here, so in those time zones the
+      // two local midnights are 23 hours apart.
+      final after = DateTime(2026, 3, 30);
+      expect(formatDaysAgo(DateTime(2026, 3, 29), now: after), 'Yesterday');
+    });
+  });
 }
 
 class _PlanProvider extends WorkoutPlanProvider {
@@ -629,6 +966,13 @@ class _PlanProvider extends WorkoutPlanProvider {
 
   @override
   List<WorkoutPlan> get plans => values;
+
+  @override
+  Future<void> reorderPlans(int oldIndex, int newIndex) async {
+    final reordered = List<WorkoutPlan>.of(values);
+    reordered.insert(newIndex, reordered.removeAt(oldIndex));
+    replacePlans(reordered);
+  }
 }
 
 class _SessionProvider extends WorkoutSessionProvider {
