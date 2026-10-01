@@ -19,7 +19,7 @@ import '../widgets/workout/workout_dialogs.dart';
 import '../widgets/splits/split_switcher.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_wordmark.dart';
-import '../widgets/home/plan_card.dart';
+import '../widgets/home/plan_grid.dart';
 import '../widgets/home/up_next_card.dart';
 import '../widgets/home/training_snapshot.dart';
 import 'plan_editor_screen.dart';
@@ -250,7 +250,20 @@ class HomeScreen extends StatelessWidget {
           ],
           _SectionHeading(title: 'Your plans', count: plans.length),
           const SizedBox(height: AppSpacing.md),
-          _buildPlanGrid(context, plans, statsByIndex, accent),
+          PlanGrid(
+            plans: plans,
+            stats: statsByIndex,
+            onOpen: (index) => _openWorkout(context, plans[index], index),
+            onShowActions:
+                (index) => _showPlanOptions(
+                  context,
+                  plans[index],
+                  index,
+                  accent,
+                  statsByIndex[index],
+                ),
+            onMove: (fromId, toId) => _movePlan(context, fromId, toId),
+          ),
         ],
       ),
     );
@@ -259,140 +272,6 @@ class HomeScreen extends StatelessWidget {
   /// Room under the last card for the floating create button, which otherwise
   /// sits on top of the last card's summary line.
   static const double _fabClearance = 96;
-
-  /// Narrowest a card gets before the grid drops a column.
-  static const double _minCardWidth = 340;
-  static const int _maxColumns = 3;
-
-  Widget _buildPlanGrid(
-    BuildContext context,
-    List<WorkoutPlan> plans,
-    Map<int, PlanStat> statsByIndex,
-    Color accent,
-  ) {
-    Widget card(int index) {
-      final plan = plans[index];
-      final planId = plan.id!;
-      final handle = Tooltip(
-        message: 'Drag to reorder ${titleCase(plan.name)}',
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: Icon(
-            LucideIcons.gripVertical,
-            size: 18,
-            color: textSecondaryColor(context),
-          ),
-        ),
-      );
-
-      return DragTarget<String>(
-        onWillAcceptWithDetails: (details) => details.data != planId,
-        onAcceptWithDetails:
-            (details) => _movePlan(context, details.data, planId),
-        builder:
-            (context, candidates, _) => DecoratedBox(
-              decoration: BoxDecoration(
-                borderRadius: AppRadius.card,
-                border:
-                    candidates.isEmpty
-                        ? null
-                        : Border.all(color: accentColor(context), width: 2),
-              ),
-              child: PlanCard(
-                plan: plan,
-                index: index,
-                stat: statsByIndex[index],
-                onOpen: () => _openWorkout(context, plan, index),
-                onShowActions:
-                    () => _showPlanOptions(
-                      context,
-                      plan,
-                      index,
-                      accent,
-                      statsByIndex[index],
-                    ),
-                reorderHandle:
-                    plans.length < 2
-                        ? null
-                        : Draggable<String>(
-                          data: planId,
-                          feedback: Material(
-                            color: surfaceColor(context),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: AppRadius.control,
-                              side: BorderSide(color: accentColor(context)),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(AppSpacing.md),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    LucideIcons.gripVertical,
-                                    size: 18,
-                                    color: textSecondaryColor(context),
-                                  ),
-                                  const SizedBox(width: AppSpacing.sm),
-                                  Text(titleCase(plan.name)),
-                                ],
-                              ),
-                            ),
-                          ),
-                          childWhenDragging: Opacity(
-                            opacity: 0.4,
-                            child: handle,
-                          ),
-                          child: handle,
-                        ),
-              ),
-            ),
-      );
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final fit = (constraints.maxWidth / _minCardWidth).floor();
-        final columns = fit < 1 ? 1 : (fit > _maxColumns ? _maxColumns : fit);
-
-        // Rows rather than a fixed-extent grid: a row is as tall as its tallest
-        // card, so large text grows the cards instead of clipping them, and the
-        // cards in a row still share one height.
-        final rows = <Widget>[];
-        for (var start = 0; start < plans.length; start += columns) {
-          if (rows.isNotEmpty) rows.add(const SizedBox(height: _cardGap));
-          if (columns == 1) {
-            rows.add(card(start));
-            continue;
-          }
-          rows.add(
-            IntrinsicHeight(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (var column = 0; column < columns; column++) ...[
-                    if (column > 0) const SizedBox(width: _cardGap),
-                    Expanded(
-                      child:
-                          start + column < plans.length
-                              ? card(start + column)
-                              : const SizedBox.shrink(),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          );
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: rows,
-        );
-      },
-    );
-  }
-
-  static const double _cardGap = 10;
 
   Future<void> _movePlan(
     BuildContext context,

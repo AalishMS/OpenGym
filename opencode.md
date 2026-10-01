@@ -128,6 +128,11 @@ Repository layer wrapping HiveService for clean architecture:
 - None reported yet
 
 ## Recent Changes
+- Polished Home plan reordering with a lifted full-card drag preview, haptic
+  feedback, a fading source card, and a drop highlight that keeps its size.
+  Cards animate between positions across grid rows and through the menu's
+  move actions, including interrupted moves and save rollbacks. Responsive
+  row heights, large text, RTL layout, and reduced motion remain supported.
 - Slimmed Home's training snapshot into compact, tappable weekly workout/set
   readouts and a latest-workout row. Weekly readouts switch to Statistics at the
   Weekly training section with all exercises selected; the latest workout
