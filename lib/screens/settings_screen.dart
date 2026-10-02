@@ -22,6 +22,8 @@ import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../widgets/update_dialog.dart';
+import '../widgets/action_progress.dart';
+import '../widgets/persistence_dialog.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -42,6 +44,58 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
+  String? _busyAction;
+  bool _confirmingMutation = false;
+
+  Future<void> _confirmMutation({
+    required String title,
+    required String message,
+    required String actionLabel,
+    required String progressLabel,
+    required String successMessage,
+    required Future<void> Function() persist,
+    bool destructive = false,
+  }) async {
+    if (_busyAction != null || _confirmingMutation) return;
+    setState(() => _confirmingMutation = true);
+    try {
+      final saved = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (_) => PersistenceDialog(
+              title: title,
+              content: Text(message),
+              actionLabel: actionLabel,
+              progressLabel: progressLabel,
+              failureMessage:
+                  'Could not complete this action. Try again or cancel.',
+              onPersist: () async {
+                if (mounted) setState(() => _busyAction = progressLabel);
+                try {
+                  await persist();
+                } finally {
+                  if (mounted) setState(() => _busyAction = null);
+                }
+              },
+              destructive: destructive,
+            ),
+      );
+      if (saved == true && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(successMessage)));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busyAction = null;
+          _confirmingMutation = false;
+        });
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -129,13 +183,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _runSettingsAction(
     BuildContext context,
-    Future<void> Function() action,
-  ) async {
+    Future<void> Function() action, {
+    String progressLabel = 'Saving settings',
+  }) async {
+    if (_busyAction != null || _confirmingMutation) return;
+    setState(() => _busyAction = progressLabel);
     try {
       await action();
     } catch (e) {
       if (!context.mounted) return;
-      _showError(context, 'Settings action failed: $e');
+      debugPrint('$progressLabel failed: $e');
+      _showError(context, 'Could not complete this action. Try again.');
+    } finally {
+      if (mounted) setState(() => _busyAction = null);
     }
   }
 
@@ -174,178 +234,210 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         automaticallyImplyLeading: false,
       ),
-      body: Consumer<SettingsProvider>(
-        builder: (context, settings, child) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _SectionHeader(title: 'Appearance'),
-                _buildThemeSection(context, settings),
-                _buildAccentColorSection(context, settings),
-                const _SectionHeader(title: 'Workout'),
-                _buildSwitchTile(
-                  context: context,
-                  icon: LucideIcons.gauge,
-                  title: 'High refresh rate',
-                  subtitle: 'Enable 90/120 Hz display support',
-                  value: settings.highRefreshRate,
-                  onChanged:
-                      (value) => _runSettingsAction(
-                        context,
-                        () => settings.setHighRefreshRate(value),
-                      ),
-                ),
-                _buildSwitchTile(
-                  context: context,
-                  icon: LucideIcons.zap,
-                  title: 'Auto-fill last weights',
-                  subtitle: 'Automatically fill weight from previous workout',
-                  value: settings.autoFillLast,
-                  onChanged:
-                      (value) => _runSettingsAction(
-                        context,
-                        () => settings.setAutoFillLast(value),
-                      ),
-                ),
-                const _SectionHeader(title: 'Data'),
-                _buildSettingsTile(
-                  icon: LucideIcons.flaskConical,
-                  title: 'Load sample data',
-                  subtitle: 'Add sample plans and workouts for testing',
-                  onTap: () => _loadSampleData(context),
-                ),
-                _buildSettingsTile(
-                  icon: LucideIcons.upload,
-                  title: 'Export data',
-                  subtitle: 'Backup all plans, sessions, and settings',
-                  onTap: () => _exportData(context),
-                ),
-                _buildSettingsTile(
-                  icon: LucideIcons.download,
-                  title: 'Import data',
-                  subtitle: 'Restore from a backup file (replaces all data)',
-                  onTap: () => _importData(context),
-                ),
-                if (_signedInEmail() != null) ...[
-                  const _SectionHeader(title: 'Account'),
-                  StreamBuilder<void>(
-                    stream: SyncService.instance.statusChanges,
-                    builder: (context, _) {
-                      final status = SyncService.instance.status;
-                      final label = switch (status) {
-                        SyncStatus.savedOnDevice => 'Saved on device',
-                        SyncStatus.pending => 'Sync pending',
-                        SyncStatus.synced => 'Synced',
-                      };
-                      final detail = switch (status) {
-                        SyncStatus.savedOnDevice =>
-                          'Your data is saved on this device',
-                        SyncStatus.pending => 'Waiting to finish syncing',
-                        SyncStatus.synced => 'Your data is up to date',
-                      };
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Row(
-                          children: [
-                            Icon(LucideIcons.cloud, color: accent, size: 20),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    label,
-                                    style:
-                                        Theme.of(context).textTheme.titleSmall,
-                                  ),
-                                  Text(
-                                    detail,
-                                    style:
-                                        Theme.of(context).textTheme.bodySmall,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ],
-                const _SectionHeader(title: 'Danger zone'),
-                _buildSettingsTile(
-                  icon: LucideIcons.trash2,
-                  title: 'Clear current split data',
-                  subtitle: 'Delete plans and history in the current split',
-                  onTap: () => _confirmClearData(context),
-                  isDestructive: true,
-                ),
-                if (widget.onSignOut != null || _signedInEmail() != null)
-                  _buildSettingsTile(
-                    icon: LucideIcons.logOut,
-                    title: 'Sign out',
-                    subtitle:
-                        widget.onSignOut != null
-                            ? 'Sign out of OpenGym'
-                            : _signedInEmail() ?? 'Signed in',
-                    onTap: () async {
-                      await _runSettingsAction(
-                        context,
-                        widget.onSignOut ?? SupabaseService.signOut,
-                      );
-                      // AuthGate reacts and shows LoginScreen automatically.
-                    },
-                  ),
-                const _SectionHeader(title: 'Updates'),
-                _buildSettingsTile(
-                  icon: LucideIcons.download,
-                  title: 'Check for updates',
-                  subtitle: _updateSubtitle(updates),
-                  onTap: () => _handleUpdateCheck(context, updates),
-                  valueIsMono: true,
-                ),
-                const _SectionHeader(title: 'About'),
-                if (widget.onReplayTutorial != null)
-                  _buildSettingsTile(
-                    icon: LucideIcons.circleHelp,
-                    title: 'Replay tutorial',
-                    subtitle: 'A quick guide to using OpenGym',
-                    onTap:
-                        () => _runSettingsAction(
-                          context,
-                          widget.onReplayTutorial!,
-                        ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Version',
-                        style: Theme.of(context).textTheme.labelLarge,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        updates.installedVersionLabel,
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 14,
-                          color: textPrimaryColor(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  'Made by Aalish',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-              ],
+      body: Column(
+        children: [
+          if (_busyAction != null)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: ActionProgress(_busyAction!),
             ),
-          );
-        },
+          Expanded(
+            child: AbsorbPointer(
+              absorbing: _busyAction != null || _confirmingMutation,
+              child: Consumer<SettingsProvider>(
+                builder: (context, settings, child) {
+                  return SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _SectionHeader(title: 'Appearance'),
+                        _buildThemeSection(context, settings),
+                        _buildAccentColorSection(context, settings),
+                        const _SectionHeader(title: 'Workout'),
+                        _buildSwitchTile(
+                          context: context,
+                          icon: LucideIcons.gauge,
+                          title: 'High refresh rate',
+                          subtitle: 'Enable 90/120 Hz display support',
+                          value: settings.highRefreshRate,
+                          onChanged:
+                              (value) => _runSettingsAction(
+                                context,
+                                () => settings.setHighRefreshRate(value),
+                              ),
+                        ),
+                        _buildSwitchTile(
+                          context: context,
+                          icon: LucideIcons.zap,
+                          title: 'Auto-fill last weights',
+                          subtitle:
+                              'Automatically fill weight from previous workout',
+                          value: settings.autoFillLast,
+                          onChanged:
+                              (value) => _runSettingsAction(
+                                context,
+                                () => settings.setAutoFillLast(value),
+                              ),
+                        ),
+                        const _SectionHeader(title: 'Data'),
+                        _buildSettingsTile(
+                          icon: LucideIcons.flaskConical,
+                          title: 'Load sample data',
+                          subtitle: 'Add sample plans and workouts for testing',
+                          onTap: () => _loadSampleData(context),
+                        ),
+                        _buildSettingsTile(
+                          icon: LucideIcons.upload,
+                          title: 'Export data',
+                          subtitle: 'Backup all plans, sessions, and settings',
+                          onTap: () => _exportData(context),
+                        ),
+                        _buildSettingsTile(
+                          icon: LucideIcons.download,
+                          title: 'Import data',
+                          subtitle:
+                              'Restore from a backup file (replaces all data)',
+                          onTap: () => _importData(context),
+                        ),
+                        if (_signedInEmail() != null) ...[
+                          const _SectionHeader(title: 'Account'),
+                          StreamBuilder<void>(
+                            stream: SyncService.instance.statusChanges,
+                            builder: (context, _) {
+                              final status = SyncService.instance.status;
+                              final label = switch (status) {
+                                SyncStatus.savedOnDevice => 'Saved on device',
+                                SyncStatus.pending => 'Sync pending',
+                                SyncStatus.synced => 'Synced',
+                              };
+                              final detail = switch (status) {
+                                SyncStatus.savedOnDevice =>
+                                  'Your data is saved on this device',
+                                SyncStatus.pending =>
+                                  'Waiting to finish syncing',
+                                SyncStatus.synced => 'Your data is up to date',
+                              };
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      LucideIcons.cloud,
+                                      color: accent,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            label,
+                                            style:
+                                                Theme.of(
+                                                  context,
+                                                ).textTheme.titleSmall,
+                                          ),
+                                          Text(
+                                            detail,
+                                            style:
+                                                Theme.of(
+                                                  context,
+                                                ).textTheme.bodySmall,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                        const _SectionHeader(title: 'Danger zone'),
+                        _buildSettingsTile(
+                          icon: LucideIcons.trash2,
+                          title: 'Clear current split data',
+                          subtitle:
+                              'Delete plans and history in the current split',
+                          onTap: () => _confirmClearData(context),
+                          isDestructive: true,
+                        ),
+                        if (widget.onSignOut != null ||
+                            _signedInEmail() != null)
+                          _buildSettingsTile(
+                            icon: LucideIcons.logOut,
+                            title: 'Sign out',
+                            subtitle:
+                                widget.onSignOut != null
+                                    ? 'Sign out of OpenGym'
+                                    : _signedInEmail() ?? 'Signed in',
+                            onTap: () async {
+                              await _runSettingsAction(
+                                context,
+                                widget.onSignOut ?? SupabaseService.signOut,
+                                progressLabel: 'Signing out',
+                              );
+                              // AuthGate reacts and shows LoginScreen automatically.
+                            },
+                          ),
+                        const _SectionHeader(title: 'Updates'),
+                        _buildSettingsTile(
+                          icon: LucideIcons.download,
+                          title: 'Check for updates',
+                          subtitle: _updateSubtitle(updates),
+                          onTap: () => _handleUpdateCheck(context, updates),
+                          valueIsMono: true,
+                        ),
+                        const _SectionHeader(title: 'About'),
+                        if (widget.onReplayTutorial != null)
+                          _buildSettingsTile(
+                            icon: LucideIcons.circleHelp,
+                            title: 'Replay tutorial',
+                            subtitle: 'A quick guide to using OpenGym',
+                            onTap:
+                                () => _runSettingsAction(
+                                  context,
+                                  widget.onReplayTutorial!,
+                                  progressLabel: 'Opening tutorial',
+                                ),
+                          ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Version',
+                                style: Theme.of(context).textTheme.labelLarge,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                updates.installedVersionLabel,
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 14,
+                                  color: textPrimaryColor(context),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Text(
+                          'Made by Aalish',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -390,7 +482,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   borderRadius: AppRadius.control,
                 ),
                 minimumSize: const Size(72, 48),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 12,
+                ),
                 textStyle: Theme.of(context).textTheme.labelLarge,
               ),
             ),
@@ -603,300 +698,157 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _loadSampleData(BuildContext context) {
-    showDialog<void>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: Text(
-              'Load sample data?',
-              style: TextStyle(color: accentColor(ctx)),
-            ),
-            content: const Text(
-              'This will replace workout data in the active split with fresh sample plans and workouts.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  try {
-                    if (widget.onLoadSampleData != null) {
-                      await widget.onLoadSampleData!();
-                    } else {
-                      final splitId =
-                          context.read<SplitProvider>().activeSplitId;
-                      if (splitId == null) {
-                        throw StateError('No active split available.');
-                      }
-                      await SampleDataSeeder.clearDataForSplit(splitId);
-                      await SampleDataSeeder.seedSampleData(splitId: splitId);
-                    }
-                  } catch (e) {
-                    if (!context.mounted) return;
-                    _showError(context, 'Sample data failed: $e');
-                    return;
-                  }
-                  if (!context.mounted) return;
-                  context.read<WorkoutPlanProvider>().loadPlans();
-                  context.read<WorkoutSessionProvider>().loadSessions();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Sample data refreshed',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: onAccentColor(context),
-                        ),
-                      ),
-                      backgroundColor: accentFillColor(context),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentFillColor(ctx),
-                  foregroundColor: onAccentColor(ctx),
-                ),
-                child: const Text('Load'),
-              ),
-            ],
-          ),
+    final splitId = context.read<SplitProvider>().activeSplitId;
+    final plans = context.read<WorkoutPlanProvider>();
+    final sessions = context.read<WorkoutSessionProvider>();
+    _confirmMutation(
+      title: 'Load sample data?',
+      message:
+          'This will replace workout data in the active split with fresh sample plans and workouts.',
+      actionLabel: 'Load',
+      progressLabel: 'Loading sample data',
+      successMessage: 'Sample data refreshed',
+      persist: () async {
+        try {
+          if (widget.onLoadSampleData != null) {
+            await widget.onLoadSampleData!();
+          } else {
+            if (splitId == null) throw StateError('No active split available.');
+            await SampleDataSeeder.clearDataForSplit(splitId);
+            await SampleDataSeeder.seedSampleData(splitId: splitId);
+          }
+        } finally {
+          plans.loadPlans();
+          sessions.loadSessions();
+        }
+      },
     );
   }
 
   void _exportData(BuildContext context) {
     final settings = context.read<SettingsProvider>();
-    showDialog<void>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: Text(
-              'Export data?',
-              style: TextStyle(color: accentColor(ctx)),
-            ),
-            content: const Text(
-              'This will create a backup file containing all your plans, sessions, and settings. Your current data will NOT be affected.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  Navigator.pop(ctx);
-                  try {
-                    final splitProvider = context.read<SplitProvider>();
-                    final activeSplitId = splitProvider.activeSplitId;
-                    if (activeSplitId == null) {
-                      throw StateError('No active split available.');
-                    }
-                    final result = BackupService.exportData(
-                      splits: HiveService.getSplits(),
-                      activeSplitId: activeSplitId,
-                      plans: HiveService.getPlans(),
-                      sessions: HiveService.getSessions(),
-                      settings: {
-                        'themeMode': settings.themeMode.index,
-                        'accentIndex': settings.accentIndex,
-                        'weightUnit': settings.weightUnit,
-                        'autoFillLast': settings.autoFillLast,
-                        'highRefreshRate': settings.highRefreshRate,
-                      },
-                    );
-                    final bytes = utf8.encode(result.jsonString);
-                    await Share.shareXFiles([
-                      XFile.fromData(
-                        bytes,
-                        name: result.fileName,
-                        mimeType: 'application/json',
-                      ),
-                    ], text: 'OpenGym Backup');
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Backup exported successfully',
-                          style: GoogleFonts.jetBrainsMono(
-                            color: onAccentColor(context),
-                          ),
-                        ),
-                        backgroundColor: accentFillColor(context),
-                      ),
-                    );
-                  } catch (e) {
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Export failed: $e',
-                          style: GoogleFonts.jetBrainsMono(
-                            color: onColor(errorColor(context)),
-                          ),
-                        ),
-                        backgroundColor: errorColor(context),
-                      ),
-                    );
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: accentFillColor(ctx),
-                  foregroundColor: onAccentColor(ctx),
-                ),
-                child: const Text('Export'),
-              ),
-            ],
+    final splits = context.read<SplitProvider>();
+    _confirmMutation(
+      title: 'Export data?',
+      message:
+          'Create a backup containing all your plans, sessions, and settings.',
+      actionLabel: 'Export',
+      progressLabel: 'Exporting backup',
+      successMessage: 'Backup exported successfully',
+      persist: () async {
+        final activeSplitId = splits.activeSplitId;
+        if (activeSplitId == null) {
+          throw StateError('No active split available.');
+        }
+        final result = BackupService.exportData(
+          splits: HiveService.getSplits(),
+          activeSplitId: activeSplitId,
+          plans: HiveService.getPlans(),
+          sessions: HiveService.getSessions(),
+          settings: {
+            'themeMode': settings.themeMode.index,
+            'accentIndex': settings.accentIndex,
+            'weightUnit': settings.weightUnit,
+            'autoFillLast': settings.autoFillLast,
+            'highRefreshRate': settings.highRefreshRate,
+          },
+        );
+        await Share.shareXFiles([
+          XFile.fromData(
+            utf8.encode(result.jsonString),
+            name: result.fileName,
+            mimeType: 'application/json',
           ),
+        ], text: 'OpenGym Backup');
+      },
     );
   }
 
-  void _importData(BuildContext context) async {
+  Future<void> _importData(BuildContext context) async {
+    if (_busyAction != null || _confirmingMutation) return;
+    setState(() => _busyAction = 'Reading backup');
     try {
       final pickResult = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
       );
-      if (!context.mounted) return;
-      if (pickResult == null || pickResult.files.isEmpty) return;
-
-      final pickedFile = pickResult.files.single;
-      String jsonString;
-      if (pickedFile.bytes != null) {
-        jsonString = utf8.decode(pickedFile.bytes!);
-      } else {
-        jsonString = await File(pickedFile.path!).readAsString();
-      }
-      if (!context.mounted) return;
-
-      final userId = SupabaseService.currentUserId ?? 'local';
-      final importResult = BackupService.importData(jsonString, userId: userId);
-      if (!importResult.success) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                importResult.errorMessage ?? 'Import failed',
-                style: GoogleFonts.jetBrainsMono(
-                  color: onColor(errorColor(context)),
-                ),
-              ),
-              backgroundColor: errorColor(context),
-            ),
-          );
-        }
+      if (!context.mounted || pickResult == null || pickResult.files.isEmpty) {
         return;
       }
-
-      final settingsError = _validateImportedSettings(importResult.settings!);
+      final pickedFile = pickResult.files.single;
+      final jsonString =
+          pickedFile.bytes != null
+              ? utf8.decode(pickedFile.bytes!)
+              : await File(pickedFile.path!).readAsString();
+      if (!context.mounted) return;
+      final userId = SupabaseService.currentUserId ?? 'local';
+      final imported = BackupService.importData(jsonString, userId: userId);
+      if (!imported.success) {
+        _showError(
+          context,
+          imported.errorMessage ??
+              'Could not read the backup. Choose another file.',
+        );
+        return;
+      }
+      final settingsError = _validateImportedSettings(imported.settings!);
       if (settingsError != null) {
         _showError(context, settingsError);
         return;
       }
-
-      final error = errorColor(context);
       final settings = context.read<SettingsProvider>();
-
-      showDialog<void>(
-        context: context,
-        builder:
-            (ctx) => AlertDialog(
-              title: Text(
-                'Import backup?',
-                style: TextStyle(color: errorColor(ctx)),
-              ),
-              content: const Text(
-                'This will REPLACE ALL of your current data including:\n'
-                '• All workout plans\n'
-                '• All workout history\n'
-                '• App settings (theme, accent color, units)\n\n'
-                'This action cannot be undone.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
-                    final planProvider = context.read<WorkoutPlanProvider>();
-                    final sessionProvider =
-                        context.read<WorkoutSessionProvider>();
-                    final splitProvider = context.read<SplitProvider>();
-                    try {
-                      await HiveService.replaceAllWorkoutData(
-                        userId: userId,
-                        splits: importResult.splits!,
-                        activeSplitId: importResult.activeSplitId!,
-                        plans: importResult.plans!,
-                        sessions: importResult.sessions!,
-                      );
-                      if (!context.mounted) return;
-                      final s = importResult.settings!;
-                      await settings.setThemeMode(
-                        ThemeMode.values[s['themeMode'] as int],
-                      );
-                      await settings.setAccentColor(s['accentIndex'] as int);
-                      await settings.setWeightUnit(s['weightUnit'] as String);
-                      await settings.setAutoFillLast(s['autoFillLast'] as bool);
-                      await settings.setHighRefreshRate(
-                        s['highRefreshRate'] as bool,
-                      );
-                      if (!context.mounted) return;
-                      splitProvider.loadSplits();
-                      planProvider.loadPlans();
-                      sessionProvider.loadSessions();
-                      SyncService.instance.scheduleSync();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Backup imported successfully',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: onAccentColor(context),
-                            ),
-                          ),
-                          backgroundColor: accentFillColor(context),
-                        ),
-                      );
-                    } catch (e) {
-                      if (!context.mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Import failed: $e',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: onColor(error),
-                            ),
-                          ),
-                          backgroundColor: error,
-                        ),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: errorColor(ctx),
-                    foregroundColor: onColor(errorColor(ctx)),
-                  ),
-                  child: const Text('Import'),
-                ),
-              ],
-            ),
+      final plans = context.read<WorkoutPlanProvider>();
+      final sessions = context.read<WorkoutSessionProvider>();
+      final splits = context.read<SplitProvider>();
+      setState(() => _busyAction = null);
+      await _confirmMutation(
+        title: 'Import backup?',
+        message:
+            'This will replace all workout plans, history, and app settings. This action cannot be undone.',
+        actionLabel: 'Import',
+        progressLabel: 'Importing backup',
+        successMessage: 'Backup imported successfully',
+        destructive: true,
+        persist: () async {
+          // Retain this validated backup in the dialog for retries.
+          try {
+            await HiveService.replaceAllWorkoutData(
+              userId: userId,
+              splits: imported.splits!,
+              activeSplitId: imported.activeSplitId!,
+              plans: imported.plans!,
+              sessions: imported.sessions!,
+            );
+            final values = imported.settings!;
+            await settings.setThemeMode(
+              ThemeMode.values[values['themeMode'] as int],
+            );
+            await settings.setAccentColor(values['accentIndex'] as int);
+            await settings.setWeightUnit(values['weightUnit'] as String);
+            await settings.setAutoFillLast(values['autoFillLast'] as bool);
+            await settings.setHighRefreshRate(
+              values['highRefreshRate'] as bool,
+            );
+            SyncService.instance.scheduleSync();
+          } finally {
+            // A settings write may fail after the workout data was replaced.
+            // Always reconcile the visible workspace with persisted data.
+            splits.loadSplits();
+            plans.loadPlans();
+            sessions.loadSessions();
+          }
+        },
       );
-    } catch (e) {
+    } catch (error) {
+      debugPrint('Failed to read backup: $error');
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Import failed: ${e.toString()}',
-              style: GoogleFonts.jetBrainsMono(
-                color: onColor(errorColor(context)),
-              ),
-            ),
-            backgroundColor: errorColor(context),
-          ),
+        _showError(
+          context,
+          'Could not read the backup. Try choosing the file again.',
         );
       }
+    } finally {
+      if (mounted) setState(() => _busyAction = null);
     }
   }
 
@@ -906,58 +858,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _showError(context, 'Select a split before clearing its data.');
       return;
     }
-    showDialog<void>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            title: Text(
-              'Clear split data?',
-              style: TextStyle(color: errorColor(ctx)),
-            ),
-            content: Text(
-              'This will delete all workout plans and history in "${split.name}". '
-              'Other splits will be kept. This action cannot be undone.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: const Text('Cancel'),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  try {
-                    await (widget.onClearData ??
-                        SampleDataSeeder.clearDataForSplit)(split.id);
-                  } catch (e) {
-                    if (!context.mounted) return;
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    _showError(context, 'Clear data failed: $e');
-                    return;
-                  }
-                  if (!context.mounted) return;
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  context.read<WorkoutPlanProvider>().loadPlans();
-                  context.read<WorkoutSessionProvider>().loadSessions();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Data cleared for "${split.name}"',
-                        style: GoogleFonts.jetBrainsMono(
-                          color: onAccentColor(context),
-                        ),
-                      ),
-                      backgroundColor: accentFillColor(context),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: errorColor(ctx),
-                  foregroundColor: onColor(errorColor(ctx)),
-                ),
-                child: const Text('Clear split data'),
-              ),
-            ],
-          ),
+    final plans = context.read<WorkoutPlanProvider>();
+    final sessions = context.read<WorkoutSessionProvider>();
+    _confirmMutation(
+      title: 'Clear split data?',
+      message:
+          'This will delete all workout plans and history in "${split.name}". Other splits will be kept. This action cannot be undone.',
+      actionLabel: 'Clear split data',
+      progressLabel: 'Clearing split data',
+      successMessage: 'Data cleared for "${split.name}"',
+      destructive: true,
+      persist: () async {
+        try {
+          await (widget.onClearData ?? SampleDataSeeder.clearDataForSplit)(
+            split.id,
+          );
+        } finally {
+          plans.loadPlans();
+          sessions.loadSessions();
+        }
+      },
     );
   }
 

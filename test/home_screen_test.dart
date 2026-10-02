@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -20,6 +19,8 @@ import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
 
 import 'support/hive_test_harness.dart';
+import 'support/pump_with_storage.dart';
+import 'support/test_fonts.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/spacing.dart';
 import 'package:gymapp/utils/format.dart';
@@ -31,7 +32,7 @@ void main() {
   final hiveHarness = HiveTestHarness();
 
   setUpAll(() async {
-    GoogleFonts.config.allowRuntimeFetching = false;
+    await loadTestFonts();
     await hiveHarness.open();
   });
 
@@ -430,7 +431,7 @@ void main() {
     );
     await tester.pump(const Duration(milliseconds: 300));
     await gesture.up();
-    await tester.pumpAndSettle();
+    await pumpWithStorage(tester);
     final reordered = tester.widgetList<ExerciseCard>(
       find.byType(ExerciseCard),
     );
@@ -440,7 +441,7 @@ void main() {
     tester
         .widget<SliverReorderableList>(find.byType(SliverReorderableList))
         .onReorderItem!(0, plan.exercises.length);
-    await tester.pumpAndSettle();
+    await pumpWithStorage(tester);
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
     await tester.pumpAndSettle();
     final endOrder = tester.widgetList<ExerciseCard>(find.byType(ExerciseCard));
@@ -489,7 +490,7 @@ void main() {
       const Offset(100, 0),
       1000,
     );
-    await tester.pumpAndSettle();
+    await pumpWithStorage(tester);
 
     expect(find.byType(WorkoutScreen), findsOneWidget);
     expect(
@@ -1054,4 +1055,9 @@ class _SessionProvider extends WorkoutSessionProvider {
   final List<WorkoutSession> values;
   @override
   List<WorkoutSession> get sessions => values;
+
+  // These tests exercise navigation and layout; real writes are covered by
+  // workout_entry_test and controlled failures by async_mutation_feedback_test.
+  @override
+  Future<void> upsertSession(WorkoutSession session) async {}
 }

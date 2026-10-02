@@ -25,6 +25,7 @@ import '../utils/format.dart';
 import '../utils/set_history.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/exercise_picker_sheet.dart';
+import '../widgets/action_progress.dart';
 import '../widgets/workout/exercise_card.dart';
 import '../widgets/workout/workout_dialogs.dart';
 
@@ -53,6 +54,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};
   bool _hasUnsavedChanges = false;
+  int _draftRevision = 0;
+  Future<bool>? _saveFuture;
+  bool _isNavigating = false;
+  bool _isSaving = false;
+  String? _saveError;
+  String? _timerAction;
+  bool _confirmingFinish = false;
   Timer? _ticker;
   WorkoutSessionProvider? _sessionProvider;
   bool _didShowInitialLogConfirmation = false;
@@ -81,7 +89,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   void _reloadCurrentSession() {
-    if (!mounted) return;
+    // A provider notification may belong to an older write still in flight.
+    if (!mounted || _hasUnsavedChanges || _isSaving || _timerAction != null) {
+      return;
+    }
     final saved = _savedSessionForWeek(_currentWeek);
     if (saved == null) return;
     _weekSessions[_currentWeek] = saved;
@@ -187,41 +198,103 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   Future<void> _onWeekChanged(int newIndex) async {
-    await _autoSave();
-    setState(() {
-      _currentWeekIndex = newIndex;
+    await _saveBeforeNavigation(() {
+      setState(() => _currentWeekIndex = newIndex);
+      _loadSessionForCurrentWeek();
     });
-    _loadSessionForCurrentWeek();
   }
 
   Future<void> _addNewWeek() async {
-    await _autoSave();
-    final lastWeek = _weeks.last;
-    setState(() {
-      _weeks.add(lastWeek + 1);
-      _currentWeekIndex = _weeks.length - 1;
+    await _saveBeforeNavigation(() {
+      final lastWeek = _weeks.last;
+      setState(() {
+        _weeks.add(lastWeek + 1);
+        _currentWeekIndex = _weeks.length - 1;
+      });
+      _loadSessionForCurrentWeek();
     });
   }
 
-  Future<void> _autoSave() async {
-    var session = _getOrCreateSession();
-    if (session.isCompleted) return;
-    final hasSets = session.exercises.any((e) => e.sets.isNotEmpty);
+  Future<bool> _autoSave() =>
+      _saveFuture ??= _persistDraft().whenComplete(() => _saveFuture = null);
 
-    if (hasSets || _hasUnsavedChanges) {
-      // Stamp identity so repeated autosaves upsert ONE row per (plan, week).
-      // upsertSession assigns a UUID on first save and reuses it thereafter.
-      session = session.copyWith(
-        planId: widget.plan.id,
-        planName: widget.plan.name,
-        weekNumber: _currentWeek,
-        splitId: widget.plan.splitId,
-      );
-      _weekSessions[_currentWeek] = session; // keep the id-stamped instance
-      await context.read<WorkoutSessionProvider>().upsertSession(session);
-      _hasUnsavedChanges = false;
+  Future<bool> _persistDraft() async {
+    final provider = context.read<WorkoutSessionProvider>();
+    setState(() {
+      _isSaving = true;
+      _saveError = null;
+    });
+    try {
+      while (mounted) {
+        var session = _getOrCreateSession();
+        if (session.isCompleted) return true;
+        final hasSets = session.exercises.any((e) => e.sets.isNotEmpty);
+        if (!hasSets && !_hasUnsavedChanges) return true;
+        final revision = _draftRevision;
+        final week = _currentWeek;
+        // Keep the identity assigned by the first write for subsequent edits.
+        session = session.copyWith(
+          planId: widget.plan.id,
+          planName: widget.plan.name,
+          weekNumber: week,
+          splitId: widget.plan.splitId,
+        );
+        _weekSessions[week] = session;
+        await provider.upsertSession(session);
+        if (revision == _draftRevision) {
+          _hasUnsavedChanges = false;
+          return true;
+        }
+        // Edits made during that write must be flushed before navigation.
+      }
+    } catch (exception) {
+      debugPrint('Failed to save workout draft: $exception');
+      _hasUnsavedChanges = true;
+      if (mounted) {
+        setState(
+          () =>
+              _saveError =
+                  'Could not save the workout. Your edits are still here.',
+        );
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not save the workout. Your edits are still here. Try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+    return false;
+  }
+
+  Future<void> _saveBeforeNavigation(
+    VoidCallback navigate, {
+    bool leavesScreen = false,
+  }) async {
+    if (_isNavigating || _timerAction != null || !mounted) return;
+    setState(() => _isNavigating = true);
+    final saved = await _autoSave();
+    if (!mounted) return;
+    if (saved) navigate();
+    if (!saved || !leavesScreen) {
+      setState(() => _isNavigating = false);
     }
   }
+
+  Future<void> _handleBack() =>
+      _saveBeforeNavigation(() => Navigator.pop(context), leavesScreen: true);
+
+  Future<void> _switchPlan(WorkoutPlan plan, int index) =>
+      _saveBeforeNavigation(
+        () => Navigator.pushReplacement(
+          context,
+          FadePageRoute(page: WorkoutScreen(plan: plan, planIndex: index)),
+        ),
+        leavesScreen: true,
+      );
 
   void _showPRDialog(List<PRResult> prs) {
     WorkoutDialogs.showPRDialog(context, prs);
@@ -280,12 +353,41 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     if (_getOrCreateSession().isCompleted) return;
     _weekSessions[_currentWeek] = session;
     _hasUnsavedChanges = true;
+    _draftRevision++;
     setState(() {});
   }
 
   Future<void> _toggleTimer() async {
+    if (_timerAction != null || _isNavigating || _isSaving) return;
     final current = _getOrCreateSession();
     if (current.isCompleted) return;
+    setState(
+      () =>
+          _timerAction =
+              current.isTimerRunning ? 'Pausing workout' : 'Starting workout',
+    );
+    try {
+      await _persistTimerChange(current);
+    } catch (error) {
+      debugPrint('Failed to change workout timer: $error');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not change the timer. Your workout is still here. Try again.',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _timerAction = null);
+    }
+  }
+
+  Future<void> _persistTimerChange(WorkoutSession current) async {
+    // Save entered sets first. Timer state is published only after its write.
+    if (!await _autoSave() || !mounted) return;
+    current = _getOrCreateSession();
+    final week = _currentWeek;
     final now = DateTime.now();
 
     if (current.isTimerRunning) {
@@ -293,10 +395,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         timerStartedAt: null,
         durationSeconds: current.elapsedSeconds(now),
       );
-      _weekSessions[_currentWeek] = paused;
-      _syncTicker(paused);
       await context.read<WorkoutSessionProvider>().upsertSession(paused);
-      await WorkoutTimerNotificationService.instance.pause(paused);
+      _weekSessions[week] = paused;
+      _syncTicker(paused);
+      _hasUnsavedChanges = false;
+      await _updateTimerNotification(
+        () => WorkoutTimerNotificationService.instance.pause(paused),
+      );
       if (mounted) setState(() {});
       return;
     }
@@ -331,75 +436,117 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       planId: widget.plan.id,
       splitId: widget.plan.splitId,
     );
-    _weekSessions[_currentWeek] = started;
-    _syncTicker(started);
     await context.read<WorkoutSessionProvider>().upsertSession(started);
-    final notificationsAllowed =
-        current.hasStarted ||
-        await WorkoutTimerNotificationService.instance.requestPermission();
-    await WorkoutTimerNotificationService.instance.show(started);
-    if (!notificationsAllowed && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Allow notifications to use workout timer controls outside the app.',
+    _weekSessions[week] = started;
+    _syncTicker(started);
+    _hasUnsavedChanges = false;
+    await _updateTimerNotification(() async {
+      final notificationsAllowed =
+          current.hasStarted ||
+          await WorkoutTimerNotificationService.instance.requestPermission();
+      await WorkoutTimerNotificationService.instance.show(started);
+      if (!notificationsAllowed && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Allow notifications to use workout timer controls outside the app.',
+            ),
           ),
-        ),
-      );
-    }
+        );
+      }
+    });
     if (mounted) setState(() {});
   }
 
+  Future<void> _updateTimerNotification(Future<void> Function() update) async {
+    try {
+      await update();
+    } catch (error) {
+      debugPrint('Failed to update timer notification: $error');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Workout saved. Notification controls could not be updated. Use the timer here.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _stopWorkout() async {
+    if (_timerAction != null || _isNavigating || _isSaving) return;
     final draft = _getOrCreateSession();
     if (draft.isCompleted || !draft.hasStarted) return;
     final duration = formatDuration(draft.elapsedSeconds());
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: const Text('Log workout?'),
-            content: Text('Record this workout with a duration of $duration?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Log workout'),
-              ),
-            ],
-          ),
-    );
-    if (confirmed != true || !mounted) {
-      await WorkoutTimerNotificationService.instance.acknowledgeStop();
-      return;
-    }
-
+    setState(() {
+      _timerAction = 'Logging workout';
+      _confirmingFinish = true;
+    });
     try {
-      final provider = context.read<WorkoutSessionProvider>();
-      final result = await WorkoutCompletionService.complete(
-        draft,
-        upsert: provider.upsertSession,
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder:
+            (dialogContext) => AlertDialog(
+              title: const Text('Log workout?'),
+              content: Text(
+                'Record this workout with a duration of $duration?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Log workout'),
+                ),
+              ],
+            ),
       );
-      _weekSessions[_currentWeek] = result.session;
-      _syncTicker(result.session);
-      await WorkoutTimerNotificationService.instance.dismiss();
-      if (!mounted) return;
-      setState(() {});
-      if (result.personalRecords.isNotEmpty) {
-        _showPRDialog(result.personalRecords);
+      if (confirmed != true || !mounted) {
+        await WorkoutTimerNotificationService.instance.acknowledgeStop();
+        return;
       }
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Workout could not be logged. Your draft is unchanged.',
+      setState(() => _confirmingFinish = false);
+
+      try {
+        final provider = context.read<WorkoutSessionProvider>();
+        final result = await WorkoutCompletionService.complete(
+          draft,
+          upsert: provider.upsertSession,
+        );
+        _weekSessions[_currentWeek] = result.session;
+        _syncTicker(result.session);
+        await _updateTimerNotification(
+          WorkoutTimerNotificationService.instance.dismiss,
+        );
+        if (!mounted) return;
+        setState(() {});
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Workout logged')));
+        if (result.personalRecords.isNotEmpty) {
+          _showPRDialog(result.personalRecords);
+        }
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Workout could not be logged. Your draft is unchanged.',
+            ),
           ),
-        ),
-      );
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _timerAction = null;
+          _confirmingFinish = false;
+        });
+      }
     }
   }
 
@@ -434,6 +581,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 
   Future<void> _discardCurrentWorkout() async {
+    if (_timerAction != null || _isNavigating || _isSaving) return;
     final draft = _getOrCreateSession();
     if (draft.isCompleted || !await _confirmDiscard(draft) || !mounted) return;
     _ticker?.cancel();
@@ -621,6 +769,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   void _reorderExercises(int oldIndex, int newIndex) {
     final session = _getOrCreateSession();
+    if (session.isCompleted) return;
     final exerciseCount = session.exercises.length;
     if (oldIndex < 0 || oldIndex >= exerciseCount) return;
     // The final drop slot can land after the non-draggable Add exercise tile.
@@ -630,6 +779,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
     exercises.insert(newIndex.clamp(0, exercises.length), exercise);
     if (oldIndex == exercises.indexOf(exercise)) return;
     _updateSession(session.copyWith(exercises: exercises));
+    _autoSave();
   }
 
   void _showWeekOptionsMenu(BuildContext context, int index, int week) {
@@ -732,10 +882,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       exerciseName: exercise.name,
     );
 
-    if (confirmed) {
+    if (confirmed && mounted && !session.isCompleted) {
       final updatedExercises = List<Exercise>.from(session.exercises);
       updatedExercises.removeAt(exerciseIndex);
       _updateSession(session.copyWith(exercises: updatedExercises));
+      await _autoSave();
     }
   }
 
@@ -770,284 +921,324 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             AppSpacing.lg * 2)
         .clamp(80.0, double.infinity);
 
-    return Scaffold(
-      backgroundColor: backgroundColor(context),
-      appBar: AppBar(
-        backgroundColor: backgroundColor(context),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-        toolbarHeight: toolbarHeight,
-        titleSpacing: AppSpacing.sm,
-        leading: IconButton(
-          tooltip: 'Back',
-          icon: Icon(LucideIcons.arrowLeft, color: textSecondaryColor(context)),
-          onPressed: () {
-            _autoSave();
-            Navigator.pop(context);
-          },
-        ),
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _PlanHeader(
-              plan: activePlan,
-              fallbackIndex: plans.indexWhere(
-                (plan) => plan.id == activePlan.id,
-              ),
-              color: planColor,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    'Week $_currentWeek',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Flexible(
-                  flex: 2,
-                  child: Semantics(
-                    label:
-                        session.isCompleted
-                            ? 'Recorded duration $elapsed'
-                            : 'Elapsed time $elapsed',
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        elapsed,
-                        key: const ValueKey('workout_elapsed_time'),
-                        style: timerStyle,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-        actions: [
-          if (!session.isCompleted) ...[
-            if (MediaQuery.sizeOf(context).width < 400 &&
-                textScaler.scale(1) > 1.5)
-              IconButton(
-                tooltip:
-                    session.isTimerRunning
-                        ? 'Pause workout'
-                        : 'Start workout',
-                onPressed: _toggleTimer,
-                color: accent,
-                constraints: const BoxConstraints(
-                  minWidth: 48,
-                  minHeight: 48,
-                ),
-                icon: Icon(
-                  session.isTimerRunning
-                      ? LucideIcons.pause
-                      : LucideIcons.play,
-                  size: 22,
-                ),
-              )
-            else
-              Semantics(
-                button: true,
-                label:
-                    session.isTimerRunning
-                        ? 'Pause workout'
-                        : 'Start workout',
-                child: TextButton(
-                  onPressed: _toggleTimer,
-                  style: TextButton.styleFrom(
-                    foregroundColor: accent,
-                    minimumSize: const Size(64, 48),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                    ),
-                    shape: const RoundedRectangleBorder(
-                      borderRadius: AppRadius.button,
-                    ),
-                  ),
-                  child: Text(session.isTimerRunning ? 'Pause' : 'Start'),
-                ),
-              ),
-            IconButton(
-              tooltip: 'Finish workout',
-              onPressed:
-                  session.hasStarted
-                      ? _stopWorkout
-                      : null,
-              color: accent,
-              disabledColor: textSecondaryColor(context),
-              constraints: const BoxConstraints(
-                minWidth: 48,
-                minHeight: 48,
-              ),
-              icon: const Icon(LucideIcons.check, size: 22),
-            ),
-            PopupMenuButton<String>(
-              tooltip: 'Workout actions',
+    return PopScope(
+      canPop: session.isCompleted && !_isNavigating,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _handleBack();
+      },
+      child: AbsorbPointer(
+        absorbing: _isNavigating || _timerAction != null,
+        child: Scaffold(
+          backgroundColor: backgroundColor(context),
+          appBar: AppBar(
+            backgroundColor: backgroundColor(context),
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            surfaceTintColor: Colors.transparent,
+            shadowColor: Colors.transparent,
+            toolbarHeight: toolbarHeight,
+            titleSpacing: AppSpacing.sm,
+            leading: IconButton(
+              tooltip: 'Back',
               icon: Icon(
-                LucideIcons.ellipsisVertical,
+                LucideIcons.arrowLeft,
                 color: textSecondaryColor(context),
               ),
-              onSelected: (value) {
-                if (value == 'discard') _discardCurrentWorkout();
-              },
-              itemBuilder:
-                  (context) => [
-                    PopupMenuItem(
-                      value: 'discard',
-                      height: 48,
+              onPressed: _handleBack,
+            ),
+            title: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _PlanHeader(
+                  plan: activePlan,
+                  fallbackIndex: plans.indexWhere(
+                    (plan) => plan.id == activePlan.id,
+                  ),
+                  color: planColor,
+                  onSwitchPlan: (index) => _switchPlan(plans[index], index),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  children: [
+                    Flexible(
                       child: Text(
-                        'Discard workout',
-                        style: TextStyle(color: errorColor(context)),
+                        'Week $_currentWeek',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Flexible(
+                      flex: 2,
+                      child: Semantics(
+                        label:
+                            session.isCompleted
+                                ? 'Recorded duration $elapsed'
+                                : 'Elapsed time $elapsed',
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            elapsed,
+                            key: const ValueKey('workout_elapsed_time'),
+                            style: timerStyle,
+                          ),
+                        ),
                       ),
                     ),
                   ],
+                ),
+              ],
             ),
-          ],
-        ],
-        bottom: _buildPlanTabBar(accent, plans, activePlan),
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _GestureClaimingContainer(
-              onSwipeLeft:
-                  _currentWeekIndex < _weeks.length - 1
-                      ? () => _onWeekChanged(_currentWeekIndex + 1)
-                      : null,
-              onSwipeRight:
-                  _currentWeekIndex > 0
-                      ? () => _onWeekChanged(_currentWeekIndex - 1)
-                      : null,
-              child: IgnorePointer(
-                ignoring: session.isCompleted,
-                child: AnimatedSwitcher(
-                  duration:
-                      MediaQuery.disableAnimationsOf(context)
-                          ? Duration.zero
-                          : const Duration(milliseconds: 220),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  layoutBuilder:
-                      (currentChild, previousChildren) => Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          for (final previous in previousChildren)
-                            ExcludeSemantics(
-                              child: IgnorePointer(child: previous),
-                            ),
-                          if (currentChild != null) currentChild,
-                        ],
-                      ),
-                  child: CustomScrollView(
-                    key: ValueKey(_currentWeek),
-                    physics: const BouncingScrollPhysics(
-                      parent: AlwaysScrollableScrollPhysics(),
+            actions: [
+              if (!session.isCompleted) ...[
+                if (MediaQuery.sizeOf(context).width < 400 &&
+                    textScaler.scale(1) > 1.5)
+                  IconButton(
+                    tooltip:
+                        session.isTimerRunning
+                            ? 'Pause workout'
+                            : 'Start workout',
+                    onPressed:
+                        _isSaving || _timerAction != null ? null : _toggleTimer,
+                    color: accent,
+                    constraints: const BoxConstraints(
+                      minWidth: 48,
+                      minHeight: 48,
                     ),
-                    slivers: [
-                      // One gutter keeps the exercise tables aligned as a log.
-                      SliverPadding(
+                    icon: Icon(
+                      session.isTimerRunning
+                          ? LucideIcons.pause
+                          : LucideIcons.play,
+                      size: 22,
+                    ),
+                  )
+                else
+                  Semantics(
+                    button: true,
+                    label:
+                        session.isTimerRunning
+                            ? 'Pause workout'
+                            : 'Start workout',
+                    child: TextButton(
+                      onPressed:
+                          _isSaving || _timerAction != null
+                              ? null
+                              : _toggleTimer,
+                      style: TextButton.styleFrom(
+                        foregroundColor: accent,
+                        minimumSize: const Size(64, 48),
                         padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
-                          vertical: AppSpacing.sm,
+                          horizontal: AppSpacing.sm,
                         ),
-                        sliver: SliverReorderableList(
-                          itemCount:
-                              session.exercises.length +
-                              (session.isCompleted ? 0 : 1),
-                          onReorderItem: _reorderExercises,
-                          proxyDecorator: (child, index, animation) {
-                            return Material(
-                              color: surfaceColor(context),
-                              borderRadius: AppRadius.card,
-                              child: child,
-                            );
-                          },
-                          itemBuilder: (context, index) {
-                            if (index == session.exercises.length) {
-                              return TextButton.icon(
-                                key: const ValueKey('add_exercise_button'),
-                                onPressed: _addEmptyExercise,
-                                icon: const Icon(LucideIcons.plus, size: 18),
-                                label: const Text('Add exercise'),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: accent,
-                                  minimumSize: const Size.fromHeight(48),
-                                  shape: const RoundedRectangleBorder(
-                                    borderRadius: AppRadius.button,
-                                  ),
-                                ),
-                              );
-                            }
-
-                            final exercise = session.exercises[index];
-
-                            return Container(
-                              key: ObjectKey(exercise),
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  bottom: BorderSide(
-                                    color: borderColor(context),
-                                  ),
-                                ),
-                              ),
-                              child: ExerciseCard(
-                                exercise: exercise,
-                                exerciseIndex: index,
-                                reorderable: !session.isCompleted,
-                                readOnly: session.isCompleted,
-                                onMoveUp:
-                                    index > 0
-                                        ? () =>
-                                            _reorderExercises(index, index - 1)
-                                        : null,
-                                onMoveDown:
-                                    index < session.exercises.length - 1
-                                        ? () =>
-                                            _reorderExercises(index, index + 1)
-                                        : null,
-                                accent: accent,
-                                previousSets: previousExerciseSets(
-                                  _sessionsWithDrafts(),
-                                  exercise.name,
-                                  splitId: widget.plan.splitId,
-                                  planId: widget.plan.id,
-                                  planName: widget.plan.name,
-                                  beforeWeek: _currentWeek,
-                                  includeDrafts: true,
-                                ),
-                                onSetChanged: _changeSetValues,
-                                onSetRpeChanged: _changeSetRpe,
-                                onEntryFinished: () {
-                                  if (mounted) _autoSave();
-                                },
-                                onAddSet: (i) => _addSet(i),
-                                onDeleteSet:
-                                    (i, setIndex) => _deleteSet(i, setIndex),
-                                onAddNote: _addExerciseNote,
-                                onRename: _showExerciseRenameDialog,
-                                onDeleteExercise: _deleteExercise,
-                              ),
-                            );
-                          },
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: AppRadius.button,
                         ),
+                      ),
+                      child: Text(session.isTimerRunning ? 'Pause' : 'Start'),
+                    ),
+                  ),
+                IconButton(
+                  tooltip: 'Finish workout',
+                  onPressed:
+                      session.hasStarted && !_isSaving && _timerAction == null
+                          ? _stopWorkout
+                          : null,
+                  color: accent,
+                  disabledColor: textSecondaryColor(context),
+                  constraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  icon: const Icon(LucideIcons.check, size: 22),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'Workout actions',
+                  icon: Icon(
+                    LucideIcons.ellipsisVertical,
+                    color: textSecondaryColor(context),
+                  ),
+                  onSelected: (value) {
+                    if (value == 'discard') _discardCurrentWorkout();
+                  },
+                  itemBuilder:
+                      (context) => [
+                        PopupMenuItem(
+                          value: 'discard',
+                          height: 48,
+                          child: Text(
+                            'Discard workout',
+                            style: TextStyle(color: errorColor(context)),
+                          ),
+                        ),
+                      ],
+                ),
+              ],
+            ],
+            bottom: _buildPlanTabBar(accent, plans, activePlan),
+          ),
+          body: Column(
+            children: [
+              if (_isSaving || (_timerAction != null && !_confirmingFinish))
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: ActionProgress(_timerAction ?? 'Saving workout'),
+                ),
+              if (_saveError != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Semantics(
+                          liveRegion: true,
+                          child: Text(_saveError!),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _isSaving ? null : _autoSave,
+                        child: const Text('Retry'),
                       ),
                     ],
                   ),
                 ),
+              Expanded(
+                child: _GestureClaimingContainer(
+                  onSwipeLeft:
+                      _currentWeekIndex < _weeks.length - 1
+                          ? () => _onWeekChanged(_currentWeekIndex + 1)
+                          : null,
+                  onSwipeRight:
+                      _currentWeekIndex > 0
+                          ? () => _onWeekChanged(_currentWeekIndex - 1)
+                          : null,
+                  child: AnimatedSwitcher(
+                    duration:
+                        MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : const Duration(milliseconds: 220),
+                    switchInCurve: Curves.easeOutCubic,
+                    switchOutCurve: Curves.easeInCubic,
+                    layoutBuilder:
+                        (currentChild, previousChildren) => Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            for (final previous in previousChildren)
+                              ExcludeSemantics(
+                                child: IgnorePointer(child: previous),
+                              ),
+                            if (currentChild != null) currentChild,
+                          ],
+                        ),
+                    child: CustomScrollView(
+                      key: ValueKey(_currentWeek),
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      slivers: [
+                        // One gutter keeps the exercise tables aligned as a log.
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg,
+                            vertical: AppSpacing.sm,
+                          ),
+                          sliver: SliverReorderableList(
+                            itemCount:
+                                session.exercises.length +
+                                (session.isCompleted ? 0 : 1),
+                            onReorderItem: _reorderExercises,
+                            proxyDecorator: (child, index, animation) {
+                              return Material(
+                                color: surfaceColor(context),
+                                borderRadius: AppRadius.card,
+                                child: child,
+                              );
+                            },
+                            itemBuilder: (context, index) {
+                              if (index == session.exercises.length) {
+                                return TextButton.icon(
+                                  key: const ValueKey('add_exercise_button'),
+                                  onPressed: _addEmptyExercise,
+                                  icon: const Icon(LucideIcons.plus, size: 18),
+                                  label: const Text('Add exercise'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: accent,
+                                    minimumSize: const Size.fromHeight(48),
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: AppRadius.button,
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              final exercise = session.exercises[index];
+
+                              return Container(
+                                key: ObjectKey(exercise),
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: borderColor(context),
+                                    ),
+                                  ),
+                                ),
+                                child: ExerciseCard(
+                                  exercise: exercise,
+                                  exerciseIndex: index,
+                                  reorderable: !session.isCompleted,
+                                  readOnly: session.isCompleted,
+                                  onMoveUp:
+                                      index > 0
+                                          ? () => _reorderExercises(
+                                            index,
+                                            index - 1,
+                                          )
+                                          : null,
+                                  onMoveDown:
+                                      index < session.exercises.length - 1
+                                          ? () => _reorderExercises(
+                                            index,
+                                            index + 1,
+                                          )
+                                          : null,
+                                  accent: accent,
+                                  previousSets: previousExerciseSets(
+                                    _sessionsWithDrafts(),
+                                    exercise.name,
+                                    splitId: widget.plan.splitId,
+                                    planId: widget.plan.id,
+                                    planName: widget.plan.name,
+                                    beforeWeek: _currentWeek,
+                                    includeDrafts: true,
+                                  ),
+                                  onSetChanged: _changeSetValues,
+                                  onSetRpeChanged: _changeSetRpe,
+                                  onEntryFinished: () {
+                                    if (mounted) _autoSave();
+                                  },
+                                  onAddSet: (i) => _addSet(i),
+                                  onDeleteSet:
+                                      (i, setIndex) => _deleteSet(i, setIndex),
+                                  onAddNote: _addExerciseNote,
+                                  onRename: _showExerciseRenameDialog,
+                                  onDeleteExercise: _deleteExercise,
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
+              _buildWeekNavBar(accent),
+            ],
           ),
-          _buildWeekNavBar(accent),
-        ],
+        ),
       ),
     );
   }
@@ -1091,17 +1282,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               onTap:
                   plans[index].id == activePlan.id
                       ? null
-                      : () {
-                        Navigator.pushReplacement(
-                          context,
-                          FadePageRoute(
-                            page: WorkoutScreen(
-                              plan: plans[index],
-                              planIndex: index,
-                            ),
-                          ),
-                        );
-                      },
+                      : () => _switchPlan(plans[index], index),
             ),
         ],
       ),
@@ -1270,6 +1451,7 @@ class _ExposingHorizontalDragGestureRecognizer
 class _PlanHeader extends StatelessWidget {
   final WorkoutPlan plan;
   final int fallbackIndex;
+  final ValueChanged<int> onSwitchPlan;
 
   /// The active plan's resolved identity-marker colour.
   final Color color;
@@ -1278,6 +1460,7 @@ class _PlanHeader extends StatelessWidget {
     required this.plan,
     required this.fallbackIndex,
     required this.color,
+    required this.onSwitchPlan,
   });
 
   int _currentPlanIndex(List<WorkoutPlan> plans) {
@@ -1316,27 +1499,11 @@ class _PlanHeader extends StatelessWidget {
           if (details.primaryVelocity!.abs() > 250) {
             if (details.primaryVelocity! < 0) {
               if (planIndex < plans.length - 1) {
-                Navigator.pushReplacement(
-                  context,
-                  FadePageRoute(
-                    page: WorkoutScreen(
-                      plan: plans[planIndex + 1],
-                      planIndex: planIndex + 1,
-                    ),
-                  ),
-                );
+                onSwitchPlan(planIndex + 1);
               }
             } else {
               if (planIndex > 0) {
-                Navigator.pushReplacement(
-                  context,
-                  FadePageRoute(
-                    page: WorkoutScreen(
-                      plan: plans[planIndex - 1],
-                      planIndex: planIndex - 1,
-                    ),
-                  ),
-                );
+                onSwitchPlan(planIndex - 1);
               }
             }
           }

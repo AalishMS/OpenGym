@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -14,6 +17,7 @@ import '../theme/spacing.dart';
 import '../utils/set_history.dart';
 import '../utils/statistics_format.dart';
 import '../widgets/app_button.dart';
+import '../widgets/action_progress.dart';
 import '../widgets/history/history_journal_data.dart';
 import '../widgets/history/history_journal_widgets.dart';
 import '../widgets/history/workout_details_widgets.dart';
@@ -423,6 +427,8 @@ class WorkoutDetailsScreen extends StatelessWidget {
   }
 }
 
+enum _EditLeaveAction { save, discard }
+
 class EditSessionScreen extends StatefulWidget {
   final WorkoutSession session;
 
@@ -435,19 +441,76 @@ class EditSessionScreen extends StatefulWidget {
 class _EditSessionScreenState extends State<EditSessionScreen> {
   late WorkoutSession _session;
   late TextEditingController _planNameController;
+  late final String _initialSignature;
   bool _isSaving = false;
+  bool _isConfirmingLeave = false;
 
   @override
   void initState() {
     super.initState();
     _session = widget.session.copyWith();
     _planNameController = TextEditingController(text: _session.planName);
+    _initialSignature = _draftSignature;
+    _planNameController.addListener(_onNameChanged);
   }
 
   @override
   void dispose() {
+    _planNameController.removeListener(_onNameChanged);
     _planNameController.dispose();
     super.dispose();
+  }
+
+  String get _draftSignature => jsonEncode({
+    'name': _planNameController.text.trim(),
+    'exercises':
+        _session.exercises.map((exercise) => exercise.toJson()).toList(),
+  });
+
+  bool get _isDirty => _draftSignature != _initialSignature;
+
+  void _onNameChanged() => setState(() {});
+
+  Future<void> _handleBack() async {
+    if (_isSaving || _isConfirmingLeave) return;
+    if (!_isDirty) {
+      Navigator.pop(context);
+      return;
+    }
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() => _isConfirmingLeave = true);
+    final action = await showDialog<_EditLeaveAction>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: const Text('Save changes?'),
+            content: const Text('This workout has unsaved edits.'),
+            actions: [
+              AppButton.text(
+                label: 'Cancel',
+                onPressed: () => Navigator.pop(dialogContext),
+              ),
+              AppButton.destructive(
+                label: 'Discard',
+                onPressed:
+                    () =>
+                        Navigator.pop(dialogContext, _EditLeaveAction.discard),
+              ),
+              AppButton.primary(
+                label: 'Save',
+                onPressed:
+                    () => Navigator.pop(dialogContext, _EditLeaveAction.save),
+              ),
+            ],
+          ),
+    );
+    if (!mounted) return;
+    setState(() => _isConfirmingLeave = false);
+    if (action == _EditLeaveAction.save) {
+      await _save();
+    } else if (action == _EditLeaveAction.discard) {
+      Navigator.pop(context);
+    }
   }
 
   Future<bool> _confirmDelete({
@@ -531,97 +594,108 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: backgroundColor(context),
-      appBar: AppBar(
-        backgroundColor: surfaceColor(context),
-        title: const Text('Edit workout'),
-        actions: [
-          TextButton(
-            onPressed: _isSaving ? null : _save,
-            child:
-                _isSaving
-                    ? const SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Text('Save'),
+    return PopScope(
+      canPop: !_isDirty && !_isSaving && !_isConfirmingLeave,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _handleBack();
+      },
+      child: Scaffold(
+        backgroundColor: backgroundColor(context),
+        appBar: AppBar(
+          backgroundColor: surfaceColor(context),
+          title: const Text('Edit workout'),
+          leading: AppIconButton(
+            label: 'Back',
+            icon: LucideIcons.arrowLeft,
+            onPressed: _isSaving ? null : _handleBack,
           ),
-          const SizedBox(width: AppSpacing.sm),
-        ],
-      ),
-      body: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 880),
-          child: ListView(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            children: [
-              TextField(
-                key: const ValueKey('workout-name-field'),
-                controller: _planNameController,
-                enabled: !_isSaving,
-                decoration: const InputDecoration(
-                  labelText: 'Workout name',
-                  border: OutlineInputBorder(borderRadius: AppRadius.field),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Weights are edited in kilograms. Tap a value to edit, or a set number for notes.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: AppSpacing.xl),
-              Text('Exercises', style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: AppSpacing.md),
-              if (_session.exercises.isEmpty)
-                Text(
-                  'No exercises in this workout',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              for (final entry in _session.exercises.indexed)
-                _EditableExerciseCard(
-                  key: ValueKey('edit-exercise-${entry.$1}-${entry.$2.name}'),
-                  exercise: entry.$2,
-                  entries: _entriesFor(entry.$2),
+          actions: [
+            TextButton(
+              onPressed: _isSaving ? null : _save,
+              child:
+                  _isSaving
+                    ? const ActionProgress('Saving workout')
+                      : const Text('Save'),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
+        ),
+        body: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 880),
+            child: ListView(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              children: [
+                TextField(
+                  key: const ValueKey('workout-name-field'),
+                  controller: _planNameController,
                   enabled: !_isSaving,
-                  onRemove: () => _removeExercise(entry.$1),
-                  onDeleteSet: (setIndex) => _removeSet(entry.$1, setIndex),
-                  onChanged: (setIndex, weight, reps) {
-                    final sets = List<gym.Set>.of(
-                      _session.exercises[entry.$1].sets,
-                    );
-                    final old = sets[setIndex];
-                    sets[setIndex] = gym.Set(
-                      weight: weight,
-                      reps: reps,
-                      rpe: old.rpe,
-                      note: old.note,
-                    );
-                    _replaceSets(entry.$1, sets);
-                  },
-                  onRpeChanged: (setIndex, rpe) {
-                    final sets = List<gym.Set>.of(
-                      _session.exercises[entry.$1].sets,
-                    );
-                    final old = sets[setIndex];
-                    sets[setIndex] = gym.Set(
-                      weight: old.weight,
-                      reps: old.reps,
-                      rpe: rpe,
-                      note: old.note,
-                    );
-                    _replaceSets(entry.$1, sets);
-                  },
-                  onDetails:
-                      (setIndex) => _showEditSetDialog(
-                        entry.$1,
-                        setIndex,
-                        entry.$2.sets[setIndex],
-                      ),
-                  onAddSet: () => _showAddSetDialog(entry.$1),
+                  decoration: const InputDecoration(
+                    labelText: 'Workout name',
+                    border: OutlineInputBorder(borderRadius: AppRadius.field),
+                  ),
                 ),
-            ],
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Weights are edited in kilograms. Tap a value to edit, or a set number for notes.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: AppSpacing.xl),
+                Text(
+                  'Exercises',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                if (_session.exercises.isEmpty)
+                  Text(
+                    'No exercises in this workout',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                for (final entry in _session.exercises.indexed)
+                  _EditableExerciseCard(
+                    key: ValueKey('edit-exercise-${entry.$1}-${entry.$2.name}'),
+                    exercise: entry.$2,
+                    entries: _entriesFor(entry.$2),
+                    enabled: !_isSaving,
+                    onRemove: () => _removeExercise(entry.$1),
+                    onDeleteSet: (setIndex) => _removeSet(entry.$1, setIndex),
+                    onChanged: (setIndex, weight, reps) {
+                      final sets = List<gym.Set>.of(
+                        _session.exercises[entry.$1].sets,
+                      );
+                      final old = sets[setIndex];
+                      sets[setIndex] = gym.Set(
+                        weight: weight,
+                        reps: reps,
+                        rpe: old.rpe,
+                        note: old.note,
+                      );
+                      _replaceSets(entry.$1, sets);
+                    },
+                    onRpeChanged: (setIndex, rpe) {
+                      final sets = List<gym.Set>.of(
+                        _session.exercises[entry.$1].sets,
+                      );
+                      final old = sets[setIndex];
+                      sets[setIndex] = gym.Set(
+                        weight: old.weight,
+                        reps: old.reps,
+                        rpe: rpe,
+                        note: old.note,
+                      );
+                      _replaceSets(entry.$1, sets);
+                    },
+                    onDetails:
+                        (setIndex) => _showEditSetDialog(
+                          entry.$1,
+                          setIndex,
+                          entry.$2.sets[setIndex],
+                        ),
+                    onAddSet: () => _showAddSetDialog(entry.$1),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

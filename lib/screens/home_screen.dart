@@ -16,9 +16,10 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../utils/plan_stats.dart';
-import '../widgets/workout/workout_dialogs.dart';
 import '../widgets/splits/split_switcher.dart';
 import '../widgets/app_button.dart';
+import '../widgets/action_progress.dart';
+import '../widgets/persistence_dialog.dart';
 import '../widgets/app_wordmark.dart';
 import '../widgets/home/plan_grid.dart';
 import '../widgets/home/home_plan_row.dart';
@@ -52,6 +53,46 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _managing = false;
+  bool _mutatingPlan = false;
+
+  Future<void> _persistPlanAction({
+    required String title,
+    required String action,
+    required String progress,
+    required String message,
+    required String success,
+    required Future<void> Function() persist,
+    bool destructive = false,
+    bool startImmediately = false,
+  }) async {
+    if (_mutatingPlan) return;
+    _mutatingPlan = true;
+    try {
+      final saved = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder:
+            (_) => PersistenceDialog(
+              title: title,
+              content: Text(message),
+              actionLabel: action,
+              progressLabel: progress,
+              failureMessage:
+                  'Could not ${action.toLowerCase()} the plan. Try again.',
+              onPersist: persist,
+              destructive: destructive,
+              startImmediately: startImmediately,
+            ),
+      );
+      if (saved == true && mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(success)));
+      }
+    } finally {
+      _mutatingPlan = false;
+    }
+  }
 
   @override
   void didUpdateWidget(HomeScreen oldWidget) {
@@ -387,6 +428,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Color accent,
     PlanStat? stat,
   ) {
+    if (_mutatingPlan) return;
     final planColor = planColorOf(plan.planColor, context);
     final planCount = context.read<WorkoutPlanProvider>().plans.length;
     final border = borderColor(context);
@@ -483,6 +525,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: 'Duplicate plan',
                       color: textPrimary,
                       onTap: () {
+                        if (_mutatingPlan) return;
                         Navigator.pop(ctx);
                         final copyPlan = WorkoutPlan(
                           name: '${plan.name} (Copy)',
@@ -506,16 +549,15 @@ class _HomeScreenState extends State<HomeScreen> {
                                   .toList(),
                           planColor: plan.planColor,
                         );
-                        context.read<WorkoutPlanProvider>().addPlan(copyPlan);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Plan copied',
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: onAccentColor(context)),
-                            ),
-                            backgroundColor: accentFillColor(context),
-                          ),
+                        final provider = context.read<WorkoutPlanProvider>();
+                        _persistPlanAction(
+                          title: 'Copy plan',
+                          action: 'Duplicate',
+                          progress: 'Copying plan',
+                          message: 'Creating a copy of “${plan.name}”.',
+                          success: 'Plan copied',
+                          startImmediately: true,
+                          persist: () => provider.addPlan(copyPlan),
                         );
                       },
                     ),
@@ -561,17 +603,19 @@ class _HomeScreenState extends State<HomeScreen> {
                       label: 'Delete plan',
                       color: errorColor(context),
                       onTap: () async {
+                        if (_mutatingPlan) return;
                         Navigator.pop(ctx);
-                        final confirmed =
-                            await WorkoutDialogs.showDeletePlanDialog(
-                              context,
-                              planName: plan.name,
-                            );
-                        if (confirmed && context.mounted) {
-                          context.read<WorkoutPlanProvider>().deletePlan(
-                            plan.id!,
-                          );
-                        }
+                        final provider = context.read<WorkoutPlanProvider>();
+                        await _persistPlanAction(
+                          title: 'Delete plan?',
+                          action: 'Delete',
+                          progress: 'Deleting plan',
+                          message:
+                              'Delete “${plan.name}”? Workout history will be kept.',
+                          success: 'Plan deleted',
+                          persist: () => provider.deletePlan(plan.id!),
+                          destructive: true,
+                        );
                       },
                     ),
                   ],
@@ -588,112 +632,184 @@ class _HomeScreenState extends State<HomeScreen> {
     int planIndex,
     Color accent,
   ) {
+    if (_mutatingPlan) return;
     int? selectedColor = plan.planColor;
+    bool saving = false;
+    bool saved = false;
+    String? saveError;
     final surface = surfaceColor(context);
     final border = borderColor(context);
     final textSecondary = textSecondaryColor(context);
 
     showDialog(
       context: context,
+      barrierDismissible: false,
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
-            return Dialog(
-              backgroundColor: surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: AppRadius.card,
-                side: BorderSide(color: border, width: 1),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${titleCase(plan.name)} color',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Select plan color',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: textSecondary),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: List.generate(kPlanColors.length, (slot) {
-                        final colorValue = kPlanColors[slot];
-                        // The chip shows the tone this slot resolves to in the
-                        // current mode, so what you tap is what gets painted.
-                        // Selection is matched by slot, not by value, so a plan
-                        // saved before the palette change still highlights.
-                        final color = planSwatch(slot, context);
-                        final isSelected =
-                            selectedColor != null &&
-                            planSlotOf(selectedColor!) == slot;
-                        return Semantics(
-                          label: 'Plan color ${slot + 1}',
-                          button: true,
-                          selected: isSelected,
-                          child: InkWell(
-                            onTap:
-                                () => setDialogState(
-                                  () => selectedColor = colorValue,
+            return PopScope(
+              canPop: !saving,
+              child: Dialog(
+                backgroundColor: surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: AppRadius.card,
+                  side: BorderSide(color: border, width: 1),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${titleCase(plan.name)} color',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Select plan color',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: textSecondary),
+                      ),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: List.generate(kPlanColors.length, (slot) {
+                          final colorValue = kPlanColors[slot];
+                          // The chip shows the tone this slot resolves to in the
+                          // current mode, so what you tap is what gets painted.
+                          // Selection is matched by slot, not by value, so a plan
+                          // saved before the palette change still highlights.
+                          final color = planSwatch(slot, context);
+                          final isSelected =
+                              selectedColor != null &&
+                              planSlotOf(selectedColor!) == slot;
+                          return Semantics(
+                            label: 'Plan color ${slot + 1}',
+                            button: true,
+                            selected: isSelected,
+                            child: InkWell(
+                              onTap:
+                                  saving
+                                      ? null
+                                      : () => setDialogState(
+                                        () => selectedColor = colorValue,
+                                      ),
+                              borderRadius: AppRadius.control,
+                              child: Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: color,
+                                  border: Border.all(
+                                    color:
+                                        isSelected
+                                            ? accent
+                                            : Colors.transparent,
+                                    width: 2,
+                                  ),
+                                  borderRadius: AppRadius.control,
                                 ),
-                            borderRadius: AppRadius.control,
-                            child: Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: color,
-                                border: Border.all(
-                                  color:
-                                      isSelected ? accent : Colors.transparent,
-                                  width: 2,
-                                ),
-                                borderRadius: AppRadius.control,
+                                child:
+                                    isSelected
+                                        ? Icon(
+                                          LucideIcons.check,
+                                          size: 18,
+                                          color: onColor(color),
+                                        )
+                                        : null,
                               ),
-                              child:
-                                  isSelected
-                                      ? Icon(
-                                        LucideIcons.check,
-                                        size: 18,
-                                        color: onColor(color),
-                                      )
-                                      : null,
                             ),
+                          );
+                        }),
+                      ),
+                      const SizedBox(height: 20),
+                      if (saveError != null)
+                        Semantics(
+                          liveRegion: true,
+                          child: Text(
+                            saveError!,
+                            style: TextStyle(color: errorColor(ctx)),
                           ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        AppButton.text(
-                          label: 'Cancel',
-                          onPressed: () => Navigator.pop(ctx),
                         ),
-                        const SizedBox(width: 8),
-                        AppButton.primary(
-                          label: 'Save',
-                          onPressed: () {
-                            final updated = plan.copyWith(
-                              planColor: selectedColor,
-                            );
-                            context.read<WorkoutPlanProvider>().updatePlan(
-                              updated,
-                            );
-                            Navigator.pop(ctx);
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          AppButton.text(
+                            label: 'Cancel',
+                            onPressed:
+                                saving || saved
+                                    ? null
+                                    : () => Navigator.pop(ctx),
+                          ),
+                          const SizedBox(width: 8),
+                          AppButton.primary(
+                            label: 'Save',
+                            onPressed:
+                                saving || saved
+                                    ? null
+                                    : () async {
+                                      if (saving || saved || _mutatingPlan) {
+                                        return;
+                                      }
+                                      _mutatingPlan = true;
+                                      setDialogState(() {
+                                        saving = true;
+                                        saveError = null;
+                                      });
+                                      final updated = plan.copyWith(
+                                        planColor: selectedColor,
+                                      );
+                                      try {
+                                        await context
+                                            .read<WorkoutPlanProvider>()
+                                            .updatePlan(updated);
+                                        if (!ctx.mounted) return;
+                                        setDialogState(() {
+                                          saving = false;
+                                          saved = true;
+                                        });
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                              if (ctx.mounted) {
+                                                Navigator.pop(ctx);
+                                              }
+                                            });
+                                        if (context.mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            const SnackBar(
+                                              content: Text('Plan color saved'),
+                                            ),
+                                          );
+                                        }
+                                      } catch (error) {
+                                        debugPrint(
+                                          'Failed to save plan color: $error',
+                                        );
+                                        if (ctx.mounted) {
+                                          setDialogState(() {
+                                            saving = false;
+                                            saveError =
+                                                'Could not save the color. Your selection is still here. Try again.';
+                                          });
+                                        }
+                                      } finally {
+                                        _mutatingPlan = false;
+                                      }
+                                    },
+                            child:
+                                saving
+                                    ? const ActionProgress('Saving color')
+                                    : null,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             );

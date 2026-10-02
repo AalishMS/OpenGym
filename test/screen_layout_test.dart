@@ -26,6 +26,7 @@ import 'package:gymapp/screens/settings_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 
 import 'support/hive_test_harness.dart';
+import 'support/pump_with_storage.dart';
 import 'package:gymapp/services/update_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 
@@ -708,7 +709,7 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 10));
       }
     });
-    await tester.pumpAndSettle();
+    await pumpWithStorage(tester);
 
     expect(HiveService.getPlans(splitId: 'current'), isEmpty);
     expect(HiveService.getSessions(splitId: 'current'), isEmpty);
@@ -740,7 +741,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Load'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('sample failed'), findsOneWidget);
+    expect(find.text('Could not complete this action. Try again or cancel.'), findsOneWidget);
+    expect(find.text('Load sample data?'), findsOneWidget);
   });
 
   testWidgets('settings stays readable in both themes at large text', (

@@ -294,7 +294,7 @@ void main() {
     await pumpEditor(tester);
     final save = tester.widget<InkWell>(
       find
-          .ancestor(of: find.text('SAVE'), matching: find.byType(InkWell))
+          .ancestor(of: find.text('Save'), matching: find.byType(InkWell))
           .first,
     );
     expect(save.onTap, isNull);
@@ -304,7 +304,7 @@ void main() {
     await pumpEditor(tester);
     await tester.enterText(find.byType(TextField).first, 'Push Day');
 
-    final saveText = find.text('SAVE');
+    final saveText = find.text('Save');
     expect(saveText, findsOneWidget);
     expect(find.text('[SAVE]'), findsNothing);
 
@@ -317,7 +317,7 @@ void main() {
     await tester.enterText(find.byType(TextField).first, 'Push Day');
     await tester.pump();
 
-    final saveText = find.text('SAVE');
+    final saveText = find.text('Save');
     final button = find.ancestor(of: saveText, matching: find.byType(InkWell));
     final container = tester.widget<Container>(
       find.descendant(of: button, matching: find.byType(Container)).first,
@@ -334,7 +334,7 @@ void main() {
     await pumpEditor(tester);
     await tester.enterText(find.byType(TextField).first, 'Push Day');
 
-    for (final label in ['SAVE', 'Add exercise']) {
+    for (final label in ['Save', 'Add exercise']) {
       final target = find.ancestor(
         of: find.text(label),
         matching: find.byType(InkWell),
@@ -385,6 +385,7 @@ void main() {
     await pumpEditorWithPlan(tester, plan);
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byTooltip('Delete set'));
     await tester.tap(find.byTooltip('Delete set'));
     await tester.pumpAndSettle();
     expect(find.text('> Cannot delete the last set'), findsOneWidget);
@@ -487,7 +488,10 @@ void main() {
       await tester.tap(find.text(key).last);
       await tester.pumpAndSettle();
     }
-    await tester.tap(find.text('SAVE'));
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Save'));
+      await Hive.box<WorkoutPlan>(HiveService.plansBox).flush();
+    });
     await tester.pumpAndSettle();
     final saved = HiveService.getPlans();
     expect(saved, hasLength(1));

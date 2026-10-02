@@ -5,6 +5,7 @@ import '../theme/app_typography.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../widgets/app_wordmark.dart';
+import '../widgets/action_progress.dart';
 
 /// A short, optional introduction shown once on a new installation.
 class IntroScreen extends StatefulWidget {
@@ -206,11 +207,14 @@ class _IntroScreenState extends State<IntroScreen> {
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed: _finishing ? null : _next,
-                            child: Text(
-                              _page == _pages.length - 1
-                                  ? 'Get started'
-                                  : 'Next',
-                            ),
+                            child:
+                                _finishing
+                                    ? const ActionProgress('Saving your choice')
+                                    : Text(
+                                      _page == _pages.length - 1
+                                          ? 'Get started'
+                                          : 'Next',
+                                    ),
                           ),
                         ),
                       ],

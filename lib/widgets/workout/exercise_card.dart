@@ -159,30 +159,33 @@ class ExerciseCard extends StatelessWidget {
               ),
             )
           else
-            SetEntryTable(
-              continuousLog: true,
-              onEntryFinished: onEntryFinished,
-              onDelete:
-                  readOnly
-                      ? null
-                      : (index) => onDeleteSet(exerciseIndex, index),
-              sets: [
-                for (var i = 0; i < exercise.sets.length; i++)
-                  SetEntry(
-                    weight: exercise.sets[i].weight,
-                    reps: exercise.sets[i].reps,
-                    previous:
-                        i < previousSets.length && previousSets[i].reps > 0
-                            ? '${entryWeight(previousSets[i].weight)} × ${previousSets[i].reps}'
-                            : null,
-                    rpe: exercise.sets[i].rpe,
-                  ),
-              ],
-              onChanged:
-                  (index, weight, reps) =>
-                      onSetChanged?.call(exerciseIndex, index, weight, reps),
-              onRpeChanged:
-                  (index, rpe) => onSetRpeChanged(exerciseIndex, index, rpe),
+            IgnorePointer(
+              ignoring: readOnly,
+              child: SetEntryTable(
+                continuousLog: true,
+                onEntryFinished: onEntryFinished,
+                onDelete:
+                    readOnly
+                        ? null
+                        : (index) => onDeleteSet(exerciseIndex, index),
+                sets: [
+                  for (var i = 0; i < exercise.sets.length; i++)
+                    SetEntry(
+                      weight: exercise.sets[i].weight,
+                      reps: exercise.sets[i].reps,
+                      previous:
+                          i < previousSets.length && previousSets[i].reps > 0
+                              ? '${entryWeight(previousSets[i].weight)} × ${previousSets[i].reps}'
+                              : null,
+                      rpe: exercise.sets[i].rpe,
+                    ),
+                ],
+                onChanged:
+                    (index, weight, reps) =>
+                        onSetChanged?.call(exerciseIndex, index, weight, reps),
+                onRpeChanged:
+                    (index, rpe) => onSetRpeChanged(exerciseIndex, index, rpe),
+              ),
             ),
           if (!readOnly)
             TextButton.icon(

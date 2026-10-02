@@ -17,6 +17,7 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../widgets/dashboard/dashboard_panel.dart';
+import '../widgets/action_progress.dart';
 import '../widgets/app_button.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/workout/set_entry_table.dart';
@@ -43,6 +44,9 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
   int? _selectedColor = kPlanColors[0];
   late String _initialSignature;
   String? _splitId;
+  bool _isSaving = false;
+  bool _saved = false;
+  String? _draftId;
 
   bool get _canSave => _nameController.text.trim().isNotEmpty;
 
@@ -105,6 +109,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
   }
 
   Future<void> _handleBack() async {
+    if (_isSaving) return;
     if (!_isDirty) {
       Navigator.pop(context);
       return;
@@ -115,7 +120,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
   }
 
   Future<void> _savePlan() async {
-    if (!_canSave) return;
+    if (_isSaving || _saved || !_canSave) return;
 
     if (_exercises.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -152,7 +157,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
     final provider = context.read<WorkoutPlanProvider>();
     final existing = widget.plan;
     final plan = WorkoutPlan(
-      id: existing?.id,
+      id: existing?.id ?? _draftId,
       splitId: _splitId,
       userId: existing?.userId,
       updatedAt: existing?.updatedAt,
@@ -164,12 +169,42 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
       planColor: _selectedColor,
     );
 
-    if (widget.isEdit) {
-      await provider.updatePlan(plan);
-    } else {
-      await provider.addPlan(plan);
+    setState(() => _isSaving = true);
+    FocusScope.of(context).unfocus();
+    try {
+      if (widget.isEdit) {
+        await provider.updatePlan(plan);
+      } else {
+        await provider.addPlan(plan);
+      }
+      if (!mounted) return;
+      setState(() {
+        _saved = true;
+        _isSaving = false;
+      });
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Plan saved')));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.pop(context);
+      });
+    } catch (error) {
+      debugPrint('Failed to save plan: $error');
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Could not save the plan. Your edits are still here. Try again.',
+          ),
+        ),
+      );
+    } finally {
+      // Storage assigns an identity before writing. Reuse it on retry even
+      // when the write reports failure after assigning the identity.
+      _draftId = plan.id;
     }
-    if (mounted) Navigator.pop(context);
   }
 
   int? _nextPlanPosition(List<WorkoutPlan> plans) {
@@ -301,7 +336,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
     final planColor = _planColor(context);
 
     return PopScope(
-      canPop: !_isDirty,
+      canPop: _saved || (!_isSaving && !_isDirty),
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         await _handleBack();
@@ -314,105 +349,114 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
               _EditorHeader(
                 title: widget.isEdit ? 'EDIT PLAN' : 'CREATE PLAN',
                 color: planColor,
-                canSave: _canSave,
+                canSave: _canSave && !_isSaving && !_saved,
+                isSaving: _isSaving,
                 onBack: _handleBack,
                 onSave: _savePlan,
               ),
               Container(height: 2, color: planColor),
               Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(
-                        maxWidth: Breakpoints.expanded,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          DashboardPanel(
-                            title: 'PLAN NAME',
-                            child: _PlanNameField(controller: _nameController),
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          DashboardPanel(
-                            title: 'PLAN COLOR',
-                            child: _ColorPicker(
-                              selectedColor: _selectedColor,
-                              onChanged:
-                                  (value) =>
-                                      setState(() => _selectedColor = value),
+                child: AbsorbPointer(
+                  absorbing: _isSaving,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(
+                          maxWidth: Breakpoints.expanded,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            DashboardPanel(
+                              title: 'PLAN NAME',
+                              child: _PlanNameField(
+                                controller: _nameController,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          DashboardPanel(
-                            title: 'EXERCISES',
-                            caption: '${_exercises.length} TOTAL',
-                            child:
-                                _exercises.isEmpty
-                                    ? const DashboardEmptyLine(
-                                      '> no exercises added yet',
-                                    )
-                                    : ReorderableListView.builder(
-                                      shrinkWrap: true,
-                                      physics:
-                                          const NeverScrollableScrollPhysics(),
-                                      itemCount: _exercises.length,
-                                      buildDefaultDragHandles: false,
-                                      proxyDecorator:
-                                          _buildReorderProxyDecorator,
-                                      itemBuilder: (context, index) {
-                                        final exercise = _exercises[index];
-                                        return Padding(
-                                          key: ValueKey(exercise.id),
-                                          padding: EdgeInsets.only(
-                                            bottom:
-                                                index == _exercises.length - 1
-                                                    ? 0
-                                                    : AppSpacing.sm,
-                                          ),
-                                          child: _ExerciseEditorCard(
-                                            exercise: exercise,
-                                            splitId: _splitId,
-                                            index: index,
-                                            accent: planColor,
-                                            onToggle:
-                                                () => setState(
+                            const SizedBox(height: AppSpacing.lg),
+                            DashboardPanel(
+                              title: 'PLAN COLOR',
+                              child: _ColorPicker(
+                                selectedColor: _selectedColor,
+                                onChanged:
+                                    (value) =>
+                                        setState(() => _selectedColor = value),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                            DashboardPanel(
+                              title: 'EXERCISES',
+                              caption: '${_exercises.length} TOTAL',
+                              child:
+                                  _exercises.isEmpty
+                                      ? const DashboardEmptyLine(
+                                        '> no exercises added yet',
+                                      )
+                                      : ReorderableListView.builder(
+                                        shrinkWrap: true,
+                                        physics:
+                                            const NeverScrollableScrollPhysics(),
+                                        itemCount: _exercises.length,
+                                        buildDefaultDragHandles: false,
+                                        proxyDecorator:
+                                            _buildReorderProxyDecorator,
+                                        itemBuilder: (context, index) {
+                                          final exercise = _exercises[index];
+                                          return Padding(
+                                            key: ValueKey(exercise.id),
+                                            padding: EdgeInsets.only(
+                                              bottom:
+                                                  index == _exercises.length - 1
+                                                      ? 0
+                                                      : AppSpacing.sm,
+                                            ),
+                                            child: _ExerciseEditorCard(
+                                              exercise: exercise,
+                                              splitId: _splitId,
+                                              index: index,
+                                              accent: planColor,
+                                              onToggle:
+                                                  () => setState(
+                                                    () =>
+                                                        exercise.expanded =
+                                                            !exercise.expanded,
+                                                  ),
+                                              onDelete:
+                                                  () => _deleteExercise(
+                                                    exercise.id,
+                                                    exercise.name,
+                                                  ),
+                                              onSetChanged:
+                                                  (setIndex, reps, weight) =>
+                                                      _updateSet(
+                                                        index,
+                                                        setIndex,
+                                                        reps,
+                                                        weight,
+                                                      ),
+                                              onSetDeleted:
+                                                  (setIndex) => _deleteSet(
+                                                    index,
+                                                    setIndex,
+                                                  ),
+                                              onSetAdded:
                                                   () =>
-                                                      exercise.expanded =
-                                                          !exercise.expanded,
-                                                ),
-                                            onDelete:
-                                                () => _deleteExercise(
-                                                  exercise.id,
-                                                  exercise.name,
-                                                ),
-                                            onSetChanged:
-                                                (setIndex, reps, weight) =>
-                                                    _updateSet(
-                                                      index,
-                                                      setIndex,
-                                                      reps,
-                                                      weight,
-                                                    ),
-                                            onSetDeleted:
-                                                (setIndex) =>
-                                                    _deleteSet(index, setIndex),
-                                            onSetAdded:
-                                                () => _addSetToExercise(index),
-                                          ),
-                                        );
-                                      },
-                                      onReorderItem: _onReorder,
-                                    ),
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          _FullWidthButton(
-                            label: 'Add exercise',
-                            accent: planColor,
-                            onTap: _showAddExerciseSheet,
-                          ),
-                        ],
+                                                      _addSetToExercise(index),
+                                            ),
+                                          );
+                                        },
+                                        onReorderItem: _onReorder,
+                                      ),
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                            _FullWidthButton(
+                              label: 'Add exercise',
+                              accent: planColor,
+                              onTap: _showAddExerciseSheet,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -446,6 +490,7 @@ class _EditorHeader extends StatelessWidget {
   final String title;
   final Color color;
   final bool canSave;
+  final bool isSaving;
   final VoidCallback onBack;
   final VoidCallback onSave;
 
@@ -453,6 +498,7 @@ class _EditorHeader extends StatelessWidget {
     required this.title,
     required this.color,
     required this.canSave,
+    required this.isSaving,
     required this.onBack,
     required this.onSave,
   });
@@ -474,7 +520,7 @@ class _EditorHeader extends StatelessWidget {
             label: 'Back',
             icon: LucideIcons.chevronLeft,
             color: color,
-            onPressed: onBack,
+            onPressed: isSaving ? null : onBack,
           ),
           Expanded(
             child: Text(
@@ -499,18 +545,23 @@ class _EditorHeader extends StatelessWidget {
                 borderRadius: AppRadius.button,
               ),
               child: Center(
-                child: Text(
-                  'SAVE',
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color:
-                        canSave
-                            ? onColor(color)
-                            : textSecondaryColor(context).withAlpha(128),
-                    letterSpacing: 0.1,
-                  ),
-                ),
+                child:
+                    isSaving
+                        ? const ActionProgress('Saving plan')
+                        : Text(
+                          'Save',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color:
+                                canSave
+                                    ? onColor(color)
+                                    : textSecondaryColor(
+                                      context,
+                                    ).withAlpha(128),
+                            letterSpacing: 0.1,
+                          ),
+                        ),
               ),
             ),
           ),

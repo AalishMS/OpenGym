@@ -29,6 +29,7 @@ import 'support/hive_test_harness.dart';
 void main() {
   final harness = HiveTestHarness();
   final writes = <WorkoutSession>[];
+  setUp(writes.clear);
   final plan = WorkoutPlan(
     id: 'continuous-log',
     name: 'Push day',

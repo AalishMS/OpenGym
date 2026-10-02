@@ -16,6 +16,7 @@ import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 
 import 'support/hive_test_harness.dart';
+import 'support/pump_with_storage.dart';
 
 void main() {
   final hiveHarness = HiveTestHarness();
@@ -91,7 +92,7 @@ void main() {
     await tester.pumpAndSettle();
     for (final key in ['5', '0', 'Next', '6', 'Next', '4', '5', 'Save']) {
       await tester.tap(find.text(key).last);
-      await tester.pumpAndSettle();
+      await pumpWithStorage(tester);
     }
     final saved =
         HiveService.getSessionForPlanAndWeek('Push', 2, plan.splitId)!;
@@ -110,13 +111,14 @@ void main() {
     );
     expect(find.text('80 × 8'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('Add set'));
-    await tester.pump();
+    await pumpWithStorage(tester);
     final duplicated =
         HiveService.getSessionForPlanAndWeek('Push', 2, plan.splitId)!;
     expect(duplicated.exercises.single.sets, hasLength(3));
     expect(duplicated.exercises.single.sets.last.weight, 45);
     expect(duplicated.exercises.single.sets.last.reps, 10);
     expect(duplicated.exercises.single.sets.last.rpe, 9);
+    await tester.ensureVisible(find.bySemanticsLabel('Set 2 Reps'));
     await tester.longPress(find.bySemanticsLabel('Set 2 Reps'));
     await tester.pumpAndSettle();
     expect(find.text('Delete set'), findsOneWidget);
@@ -132,11 +134,12 @@ void main() {
       hasLength(3),
     );
     Future<void> deleteSet(int number) async {
+      await tester.ensureVisible(find.bySemanticsLabel('Set $number Kg'));
       await tester.longPress(find.bySemanticsLabel('Set $number Kg'));
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
       await tester.tap(find.text('Delete set'));
-      await tester.pumpAndSettle();
+      await pumpWithStorage(tester);
     }
 
     await deleteSet(3);
@@ -192,11 +195,12 @@ void main() {
     await tester.runAsync(() async {
       await Hive.box<WorkoutPlan>(HiveService.plansBox).put(plan.id, plan);
     });
+    final sessions = _RecordingSessions();
     await tester.pumpWidget(
       MultiProvider(
         providers: [
           ChangeNotifierProvider(create: (_) => WorkoutPlanProvider()),
-          ChangeNotifierProvider(create: (_) => WorkoutSessionProvider()),
+          ChangeNotifierProvider<WorkoutSessionProvider>.value(value: sessions),
         ],
         child: MaterialApp(home: WorkoutScreen(plan: plan, planIndex: 0)),
       ),
@@ -215,16 +219,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lat Pulldown'));
-    await tester.pumpAndSettle();
+    await tester.pump();
     expect(find.text('Selected (1)'), findsOneWidget);
 
-    await tester.tapAt(const Offset(8, 8));
-    await tester.pumpAndSettle();
-    final saved = HiveService.getSessionForPlanAndWeek(
-      plan.name,
-      1,
-      plan.splitId,
-    );
+    await tester.tap(find.text('Done'));
+    await pumpWithStorage(tester);
+    final saved = sessions.saved;
     expect(saved, isNotNull);
     expect(
       saved!.exercises.map((exercise) => exercise.name),
@@ -242,4 +242,13 @@ void main() {
     expect(find.text('Added'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+}
+
+class _RecordingSessions extends WorkoutSessionProvider {
+  WorkoutSession? saved;
+
+  @override
+  Future<void> upsertSession(WorkoutSession session) async {
+    saved = session;
+  }
 }
