@@ -29,11 +29,13 @@ class SettingsScreen extends StatefulWidget {
     this.onClearData,
     this.onLoadSampleData,
     this.onSignOut,
+    this.onReplayTutorial,
   });
 
   final Future<void> Function(String splitId)? onClearData;
   final Future<void> Function()? onLoadSampleData;
   final Future<void> Function()? onSignOut;
+  final Future<void> Function()? onReplayTutorial;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -305,6 +307,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   valueIsMono: true,
                 ),
                 const _SectionHeader(title: 'About'),
+                if (widget.onReplayTutorial != null)
+                  _buildSettingsTile(
+                    icon: LucideIcons.circleHelp,
+                    title: 'Replay tutorial',
+                    subtitle: 'A quick guide to using OpenGym',
+                    onTap:
+                        () => _runSettingsAction(
+                          context,
+                          widget.onReplayTutorial!,
+                        ),
+                  ),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   child: Column(

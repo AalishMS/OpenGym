@@ -31,10 +31,18 @@ import '../widgets/splits/preset_browser_dialog.dart';
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onOpenWeeklyTraining;
   final ValueChanged<WorkoutSession>? onOpenLastWorkout;
+  final GlobalKey? tutorialPlanKey;
+  final GlobalKey? tutorialStartKey;
+  final ScrollController? tutorialScrollController;
+  final bool tutorialActive;
 
   const HomeScreen({
     this.onOpenWeeklyTraining,
     this.onOpenLastWorkout,
+    this.tutorialPlanKey,
+    this.tutorialStartKey,
+    this.tutorialScrollController,
+    this.tutorialActive = false,
     super.key,
   });
 
@@ -44,6 +52,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _managing = false;
+
+  @override
+  void didUpdateWidget(HomeScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.tutorialActive && !oldWidget.tutorialActive) _managing = false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -109,6 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Center(
       child: SingleChildScrollView(
+        controller: widget.tutorialScrollController,
         padding: const EdgeInsets.all(AppSpacing.xxl),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 360),
@@ -148,6 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const SizedBox(height: AppSpacing.xl),
               SizedBox(
+                key: widget.tutorialPlanKey,
                 width: double.infinity,
                 child: AppButton.primary(
                   label: 'Create plan',
@@ -228,6 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return _CappedWidth(
       child: ListView(
+        controller: widget.tutorialScrollController,
         padding: const EdgeInsets.fromLTRB(
           AppSpacing.lg,
           AppSpacing.sm,
@@ -237,6 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           if (!_managing) ...[
             UpNextCard(
+              tutorialStartKey: widget.tutorialStartKey,
               plan: plans[nextIndex],
               day: nextIndex + 1,
               dayCount: plans.length,
@@ -298,6 +316,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Align(
             alignment: AlignmentDirectional.centerStart,
             child: TextButton.icon(
+              key: widget.tutorialPlanKey,
               icon: const Icon(LucideIcons.plus, size: 18),
               label: const Text('New plan'),
               onPressed:

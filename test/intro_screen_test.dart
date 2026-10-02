@@ -3,12 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gymapp/main.dart' show loadIntroPending;
 import 'package:gymapp/screens/intro_screen.dart';
+import 'package:gymapp/services/tutorial_preferences.dart';
 import 'package:gymapp/theme/app_theme.dart';
 
 void main() {
   test('new installs keep the intro pending until completion', () async {
     SharedPreferences.setMockInitialValues({});
     expect(await loadIntroPending(), isTrue);
+    expect(await TutorialPreferences.isTourPending(), isTrue);
     // A later migration must not make an unfinished intro disappear.
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('idkey_migration_v1_done', true);
@@ -20,7 +22,42 @@ void main() {
   test('existing installs bypass the intro', () async {
     SharedPreferences.setMockInitialValues({'idkey_migration_v1_done': true});
     expect(await loadIntroPending(), isFalse);
+    expect(await TutorialPreferences.isTourPending(), isFalse);
   });
+
+  test(
+    'finishing the intro leaves the tour pending until it is shown',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      await loadIntroPending();
+      await TutorialPreferences.finishIntro();
+      expect(await loadIntroPending(), isFalse);
+      expect(await TutorialPreferences.isTourPending(), isTrue);
+      await TutorialPreferences.markTourSeen();
+      expect(await TutorialPreferences.isTourPending(), isFalse);
+      expect(await loadIntroPending(), isFalse);
+    },
+  );
+
+  test(
+    'skipping the intro skips the whole tutorial on future launches',
+    () async {
+      SharedPreferences.setMockInitialValues({});
+      await loadIntroPending();
+      await TutorialPreferences.finishIntro(skipTutorial: true);
+      expect(await loadIntroPending(), isFalse);
+      expect(await TutorialPreferences.isTourPending(), isFalse);
+    },
+  );
+
+  test(
+    'users who already finished the old intro are not prompted again',
+    () async {
+      SharedPreferences.setMockInitialValues({'intro_pending_v1': false});
+      expect(await loadIntroPending(), isFalse);
+      expect(await TutorialPreferences.isTourPending(), isFalse);
+    },
+  );
 
   Widget host(Future<void> Function() onFinish) {
     return MaterialApp(
@@ -29,9 +66,7 @@ void main() {
     );
   }
 
-  testWidgets('introduces planning, logging, and progress in order', (
-    tester,
-  ) async {
+  testWidgets('introduces planning and logging in two slides', (tester) async {
     var finishes = 0;
     await tester.pumpWidget(host(() async => finishes++));
 
@@ -39,10 +74,6 @@ void main() {
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(find.text('Log as you lift'), findsOneWidget);
-
-    await tester.drag(find.byType(PageView), const Offset(-500, 0));
-    await tester.pumpAndSettle();
-    expect(find.text("See how far you've come"), findsOneWidget);
 
     await tester.tap(find.text('Get started'));
     await tester.pump();
@@ -63,5 +94,38 @@ void main() {
     await tester.tap(find.text('Skip'));
     await tester.pump();
     expect(finishes, 1);
+  });
+
+  testWidgets('Skip and Back use the skip callback', (tester) async {
+    var skips = 0;
+    var finishes = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(const Color(0xFF00CED1), Brightness.light),
+        home: IntroScreen(
+          onFinish: () async => finishes++,
+          onSkip: () async => skips++,
+        ),
+      ),
+    );
+    await tester.tap(find.text('Skip'));
+    await tester.pump();
+    expect(skips, 1);
+    expect(finishes, 0);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(const Color(0xFF00CED1), Brightness.light),
+        home: IntroScreen(
+          onFinish: () async => finishes++,
+          onSkip: () async => skips++,
+        ),
+      ),
+    );
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(skips, 2);
+    expect(finishes, 0);
   });
 }

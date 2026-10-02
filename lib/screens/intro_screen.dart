@@ -9,8 +9,9 @@ import '../widgets/app_wordmark.dart';
 /// A short, optional introduction shown once on a new installation.
 class IntroScreen extends StatefulWidget {
   final Future<void> Function() onFinish;
+  final Future<void> Function()? onSkip;
 
-  const IntroScreen({required this.onFinish, super.key});
+  const IntroScreen({required this.onFinish, this.onSkip, super.key});
 
   @override
   State<IntroScreen> createState() => _IntroScreenState();
@@ -25,20 +26,14 @@ class _IntroScreenState extends State<IntroScreen> {
     (
       title: 'Make a plan that fits you',
       body:
-          'Choose a ready-made split or build a plan with your own exercises.',
+          'Choose a ready-made routine or build a plan with your own exercises.',
       label: 'Your plan',
     ),
     (
       title: 'Log as you lift',
       body:
-          'Record sets, reps, and weight. Swipe between weeks and drag exercises into order as you train.',
+          'Record your weight and reps, then look back at your workouts and progress.',
       label: 'Today\'s workout',
-    ),
-    (
-      title: 'See how far you\'ve come',
-      body:
-          'Find past sessions, personal records, and training trends in one place.',
-      label: 'Your progress',
     ),
   ];
 
@@ -48,11 +43,11 @@ class _IntroScreenState extends State<IntroScreen> {
     super.dispose();
   }
 
-  Future<void> _finish() async {
+  Future<void> _finish({bool skipped = false}) async {
     if (_finishing) return;
     setState(() => _finishing = true);
     try {
-      await widget.onFinish();
+      await (skipped ? widget.onSkip ?? widget.onFinish : widget.onFinish)();
     } catch (error) {
       if (!mounted) return;
       setState(() => _finishing = false);
@@ -81,125 +76,134 @@ class _IntroScreenState extends State<IntroScreen> {
     final textTheme = Theme.of(context).textTheme;
     final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
-    return Scaffold(
-      backgroundColor: backgroundColor(context),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 460),
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.xl,
-                    AppSpacing.lg,
-                    AppSpacing.lg,
-                    0,
-                  ),
-                  child: Row(
-                    children: [
-                      const Expanded(child: AppWordmark(fontSize: 19)),
-                      TextButton(
-                        onPressed: _finishing ? null : _finish,
-                        child: const Text('Skip'),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: PageView.builder(
-                    controller: _controller,
-                    itemCount: _pages.length,
-                    onPageChanged: (page) => setState(() => _page = page),
-                    itemBuilder: (context, index) {
-                      final page = _pages[index];
-                      return SingleChildScrollView(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.xl,
-                          vertical: AppSpacing.xl,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _finish(skipped: true);
+      },
+      child: Scaffold(
+        backgroundColor: backgroundColor(context),
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xl,
+                      AppSpacing.lg,
+                      AppSpacing.lg,
+                      0,
+                    ),
+                    child: Row(
+                      children: [
+                        const Expanded(child: AppWordmark(fontSize: 19)),
+                        TextButton(
+                          onPressed:
+                              _finishing ? null : () => _finish(skipped: true),
+                          child: const Text('Skip'),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            AnimatedScale(
-                              scale: _page == index ? 1 : .96,
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: PageView.builder(
+                      controller: _controller,
+                      itemCount: _pages.length,
+                      onPageChanged: (page) => setState(() => _page = page),
+                      itemBuilder: (context, index) {
+                        final page = _pages[index];
+                        return SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.xl,
+                            vertical: AppSpacing.xl,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              AnimatedScale(
+                                scale: _page == index ? 1 : .96,
+                                duration:
+                                    reduceMotion
+                                        ? Duration.zero
+                                        : const Duration(milliseconds: 420),
+                                curve: Curves.easeOutCubic,
+                                child: _TrainingPreview(step: index),
+                              ),
+                              const SizedBox(height: AppSpacing.xxl),
+                              Text(
+                                page.label,
+                                style: AppTypography.trainingData(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 1.3,
+                                  color: accentColor(context),
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              Text(page.title, style: textTheme.displayMedium),
+                              const SizedBox(height: AppSpacing.md),
+                              Text(
+                                page.body,
+                                style: textTheme.bodyLarge?.copyWith(
+                                  color: textSecondaryColor(context),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xl,
+                      AppSpacing.sm,
+                      AppSpacing.xl,
+                      AppSpacing.xl,
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(_pages.length, (index) {
+                            return AnimatedContainer(
                               duration:
                                   reduceMotion
                                       ? Duration.zero
-                                      : const Duration(milliseconds: 420),
+                                      : const Duration(milliseconds: 280),
                               curve: Curves.easeOutCubic,
-                              child: _TrainingPreview(step: index),
-                            ),
-                            const SizedBox(height: AppSpacing.xxl),
-                            Text(
-                              page.label,
-                              style: AppTypography.trainingData(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 1.3,
-                                color: accentColor(context),
+                              width: index == _page ? 24 : 6,
+                              height: 6,
+                              margin: const EdgeInsets.symmetric(horizontal: 3),
+                              decoration: BoxDecoration(
+                                color:
+                                    index == _page
+                                        ? accentColor(context)
+                                        : borderColor(context),
+                                borderRadius: AppRadius.chip,
                               ),
-                            ),
-                            const SizedBox(height: AppSpacing.md),
-                            Text(page.title, style: textTheme.displayMedium),
-                            const SizedBox(height: AppSpacing.md),
-                            Text(
-                              page.body,
-                              style: textTheme.bodyLarge?.copyWith(
-                                color: textSecondaryColor(context),
-                              ),
-                            ),
-                          ],
+                            );
+                          }),
                         ),
-                      );
-                    },
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    AppSpacing.xl,
-                    AppSpacing.sm,
-                    AppSpacing.xl,
-                    AppSpacing.xl,
-                  ),
-                  child: Column(
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(_pages.length, (index) {
-                          return AnimatedContainer(
-                            duration:
-                                reduceMotion
-                                    ? Duration.zero
-                                    : const Duration(milliseconds: 280),
-                            curve: Curves.easeOutCubic,
-                            width: index == _page ? 24 : 6,
-                            height: 6,
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            decoration: BoxDecoration(
-                              color:
-                                  index == _page
-                                      ? accentColor(context)
-                                      : borderColor(context),
-                              borderRadius: AppRadius.chip,
+                        const SizedBox(height: AppSpacing.xl),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _finishing ? null : _next,
+                            child: Text(
+                              _page == _pages.length - 1
+                                  ? 'Get started'
+                                  : 'Next',
                             ),
-                          );
-                        }),
-                      ),
-                      const SizedBox(height: AppSpacing.xl),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _finishing ? null : _next,
-                          child: Text(
-                            _page == _pages.length - 1 ? 'Get started' : 'Next',
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

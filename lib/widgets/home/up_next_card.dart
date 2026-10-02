@@ -19,6 +19,7 @@ class UpNextCard extends StatelessWidget {
   final VoidCallback onStart;
   final Set<int> trainedDays;
   final int? durationMinutes;
+  final GlobalKey? tutorialStartKey;
 
   const UpNextCard({
     required this.plan,
@@ -28,6 +29,7 @@ class UpNextCard extends StatelessWidget {
     required this.onStart,
     this.trainedDays = const {},
     this.durationMinutes,
+    this.tutorialStartKey,
     super.key,
   });
 
@@ -152,6 +154,7 @@ class UpNextCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
           AppButton.primary(
+            key: tutorialStartKey,
             label: 'Start workout',
             onPressed: onStart,
             child: const Row(

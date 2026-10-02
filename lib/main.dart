@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'auth/auth_gate.dart';
 import 'providers/workout_plan_provider.dart';
@@ -12,6 +11,7 @@ import 'services/hive_service.dart';
 import 'services/adopt_local_data.dart';
 import 'services/supabase_service.dart';
 import 'services/sync_service.dart';
+import 'services/tutorial_preferences.dart';
 import 'screens/intro_screen.dart';
 import 'theme/app_theme.dart';
 
@@ -32,12 +32,7 @@ void main() async {
 
 /// Decide before Hive's startup migration marks a fresh installation as old.
 Future<bool> loadIntroPending() async {
-  final prefs = await SharedPreferences.getInstance();
-  final savedChoice = prefs.getBool('intro_pending_v1');
-  if (savedChoice != null) return savedChoice;
-  final pending = !prefs.containsKey('idkey_migration_v1_done');
-  await prefs.setBool('intro_pending_v1', pending);
-  return pending;
+  return TutorialPreferences.loadIntroPending();
 }
 
 class MyApp extends StatefulWidget {
@@ -80,9 +75,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _finishIntro() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('intro_pending_v1', false);
+  Future<void> _finishIntro({bool skipTutorial = false}) async {
+    await TutorialPreferences.finishIntro(skipTutorial: skipTutorial);
     if (mounted) setState(() => _showIntro = false);
   }
 
@@ -114,7 +108,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
             themeMode: settings.themeMode,
             home:
                 _showIntro
-                    ? IntroScreen(onFinish: _finishIntro)
+                    ? IntroScreen(
+                      onFinish: _finishIntro,
+                      onSkip: () => _finishIntro(skipTutorial: true),
+                    )
                     : const AuthGate(),
           );
         },

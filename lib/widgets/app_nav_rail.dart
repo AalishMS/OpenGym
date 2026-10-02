@@ -8,10 +8,12 @@ import 'app_wordmark.dart';
 class AppNavRail extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
+  final Map<int, GlobalKey> destinationKeys;
 
   const AppNavRail({
     required this.currentIndex,
     required this.onTap,
+    this.destinationKeys = const {},
     super.key,
   });
 
@@ -58,7 +60,7 @@ class AppNavRail extends StatelessWidget {
             for (var i = 0; i < _labels.length; i++)
               NavigationRailDestination(
                 icon: Icon(_icons[i]),
-                label: Text(_labels[i]),
+                label: Text(_labels[i], key: destinationKeys[i]),
               ),
           ],
         ),

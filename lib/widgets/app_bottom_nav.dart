@@ -6,9 +6,11 @@ import '../theme/app_theme.dart';
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
+  final Map<int, GlobalKey> destinationKeys;
   const AppBottomNav({
     required this.currentIndex,
     required this.onTap,
+    this.destinationKeys = const {},
     super.key,
   });
 
@@ -56,7 +58,11 @@ class AppBottomNav extends StatelessWidget {
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           destinations: [
             for (var i = 0; i < _labels.length; i++)
-              NavigationDestination(icon: Icon(_icons[i]), label: _labels[i]),
+              NavigationDestination(
+                key: destinationKeys[i],
+                icon: Icon(_icons[i]),
+                label: _labels[i],
+              ),
           ],
         ),
       ),
