@@ -135,11 +135,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         ),
         GuidedTourStep(
           target: _settingsTourKey,
-          icon: LucideIcons.databaseBackup,
-          label: 'Keep your training safe',
-          title: 'Save a backup',
+          icon: LucideIcons.palette,
+          label: 'Your style',
+          title: 'Make OpenGym yours',
           body:
-              'In Settings → Data, use Export data to save a backup and Import data to restore it. You can replay this tour from Settings anytime.',
+              'In Settings → Appearance, pick an accent color and choose a light or dark theme, or follow your device. You can replay this tour from Settings anytime.',
         ),
       ];
       _tourActive = true;

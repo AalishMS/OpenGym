@@ -229,7 +229,8 @@ void main() {
           );
         }
       }
-      expect(find.textContaining('Settings → Data'), findsOneWidget);
+      expect(find.text('Make OpenGym yours'), findsOneWidget);
+      expect(find.textContaining('Settings → Appearance'), findsOneWidget);
       expect(find.text('4 of 4'), findsOneWidget);
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
