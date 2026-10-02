@@ -366,6 +366,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Semantics(
             label: 'Theme',
             child: SegmentedButton<ThemeMode>(
+              expandedInsets: EdgeInsets.zero,
               segments: const [
                 ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
                 ButtonSegment(value: ThemeMode.light, label: Text('Light')),
@@ -389,6 +390,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   borderRadius: AppRadius.control,
                 ),
                 minimumSize: const Size(72, 48),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                 textStyle: Theme.of(context).textTheme.labelLarge,
               ),
             ),
