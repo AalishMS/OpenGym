@@ -223,14 +223,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
       backgroundColor: bg,
       appBar: AppBar(
         backgroundColor: surface,
-        flexibleSpace: headerFlexibleSpace(context),
         title: Text(
           'Settings',
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: accent,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(color: textPrimaryColor(context)),
         ),
         automaticallyImplyLeading: false,
       ),
