@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -386,6 +387,134 @@ void main() {
       );
     }
   });
+
+  for (final reduceMotion in [false, true]) {
+    testWidgets(
+      'Next and Back retain the spotlight while measuring and move directly '
+      'between targets (reduce motion: $reduceMotion)',
+      (tester) async {
+        setSize(tester, const Size(390, 844));
+        final first = GlobalKey();
+        final second = GlobalKey();
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: buildTheme(const Color(0xFF00CED1), Brightness.light),
+            home: MediaQuery(
+              data: MediaQueryData(disableAnimations: reduceMotion),
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: 24,
+                    top: 60,
+                    child: SizedBox(key: first, width: 80, height: 48),
+                  ),
+                  Positioned(
+                    left: 280,
+                    top: 680,
+                    child: SizedBox(key: second, width: 80, height: 48),
+                  ),
+                  Positioned.fill(
+                    child: GuidedTour(
+                      steps: [
+                        GuidedTourStep(
+                          target: first,
+                          title: 'First step',
+                          body: 'A control to try.',
+                        ),
+                        GuidedTourStep(
+                          target: second,
+                          title: 'Other step',
+                          body:
+                              'This control has a longer explanation. Use it to '
+                              'review your workouts and see how your training '
+                              'has changed over time. You can check your sets, '
+                              'weights, and notes before your next session.',
+                        ),
+                      ],
+                      onClose: () {},
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final highlight = find.byKey(const ValueKey('tutorial-highlight'));
+        final bubble = find.byKey(const ValueKey('tutorial-bubble'));
+
+        for (final forward in [true, false]) {
+          final from = tester.getRect(highlight);
+          final bubbleFrom = tester.getTopLeft(bubble);
+          final to = tester
+              .getRect(find.byKey(forward ? second : first))
+              .inflate(4);
+          await tester.tap(find.text(forward ? 'Next' : 'Back'));
+          await tester.pump();
+          expect(highlight, findsOneWidget);
+          expect(tester.getRect(highlight), from);
+          expect(tester.getTopLeft(bubble), bubbleFrom);
+          expect(
+            find.text(forward ? 'First step' : 'Other step'),
+            findsOneWidget,
+          );
+
+          // Complete target measurement without advancing the animation clock.
+          for (var frame = 0; frame < 6; frame++) {
+            await tester.pump();
+            expect(highlight, findsOneWidget);
+          }
+          if (!reduceMotion) {
+            expect(tester.getTopLeft(bubble), bubbleFrom);
+          }
+          await tester.pump(const Duration(milliseconds: 80));
+          final midway = tester.getRect(highlight);
+          final bubbleMidway = tester.getTopLeft(bubble);
+          if (reduceMotion) {
+            expect(midway, to);
+          } else {
+            expect(midway, isNot(from));
+            expect(midway, isNot(to));
+            expect(
+              midway.center.dx,
+              inExclusiveRange(
+                math.min(from.center.dx, to.center.dx),
+                math.max(from.center.dx, to.center.dx),
+              ),
+            );
+            expect(
+              midway.center.dy,
+              inExclusiveRange(
+                math.min(from.center.dy, to.center.dy),
+                math.max(from.center.dy, to.center.dy),
+              ),
+            );
+          }
+          final paint = tester.widget<CustomPaint>(
+            find
+                .descendant(
+                  of: find.byType(GuidedTour),
+                  matching: find.byType(CustomPaint),
+                )
+                .first,
+          );
+          expect((paint.painter as dynamic).target, midway);
+          await tester.pumpAndSettle();
+          expect(tester.getRect(highlight), to);
+          if (!reduceMotion) {
+            final bubbleTo = tester.getTopLeft(bubble);
+            expect(
+              bubbleMidway.dy,
+              inExclusiveRange(
+                math.min(bubbleFrom.dy, bubbleTo.dy),
+                math.max(bubbleFrom.dy, bubbleTo.dy),
+              ),
+            );
+          }
+        }
+      },
+    );
+  }
 
   testWidgets('missing targets are skipped without blocking the tour', (
     tester,

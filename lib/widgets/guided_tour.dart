@@ -58,12 +58,30 @@ class GuidedTour extends StatefulWidget {
   State<GuidedTour> createState() => _GuidedTourState();
 }
 
-class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
+class _GuidedTourState extends State<GuidedTour>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final GlobalKey _overlayKey = GlobalKey();
+  final GlobalKey _bubbleKey = GlobalKey();
+  late final AnimationController _transition = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 240),
+    value: 1,
+  );
   int _index = 0;
+  int _visibleIndex = 0;
   int _revision = 0;
+  bool _preparing = true;
   Rect? _targetRect;
+  Rect? _fromRect;
+  Offset? _fromBubblePosition;
   BorderRadius _targetRadius = AppRadius.card;
+  BorderRadius _fromRadius = AppRadius.card;
+
+  double get _progress => Curves.easeInOutCubic.transform(_transition.value);
+  Rect? get _displayedRect =>
+      Rect.lerp(_fromRect ?? _targetRect, _targetRect, _progress);
+  BorderRadius get _displayedRadius =>
+      BorderRadius.lerp(_fromRadius, _targetRadius, _progress)!;
 
   @override
   void initState() {
@@ -76,6 +94,7 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
   void dispose() {
     _revision++;
     WidgetsBinding.instance.removeObserver(this);
+    _transition.dispose();
     super.dispose();
   }
 
@@ -88,7 +107,7 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
   @override
   void didChangeMetrics() => _prepare();
 
-  Rect? _measureTarget() {
+  ({Rect rect, BorderRadius radius})? _measureTarget() {
     final target =
         widget.steps[_index].target.currentContext?.findRenderObject();
     final overlay = _overlayKey.currentContext?.findRenderObject();
@@ -103,6 +122,7 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
       target.getTransformTo(overlay),
       Offset.zero & target.size,
     );
+    var radius = AppRadius.card;
     final anchor = widget.steps[_index].target.currentWidget;
     if (anchor is GuidedTourTarget) {
       final additional =
@@ -124,24 +144,52 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
         rect.right + inset.right,
         rect.bottom + inset.bottom,
       );
-      _targetRadius = anchor.borderRadius;
+      radius = anchor.borderRadius;
     } else {
       // The outer radius follows the button's parallel outline: 10 + 4px.
       rect = rect.inflate(AppSpacing.xs);
-      _targetRadius = AppRadius.card;
     }
     // Leave space for the stroke on every edge, including near a safe area.
     rect = rect.intersect((Offset.zero & overlay.size).deflate(2));
-    return rect.isEmpty ? null : rect;
+    return rect.isEmpty ? null : (rect: rect, radius: radius);
+  }
+
+  void _setTarget(
+    ({Rect rect, BorderRadius radius}) target, {
+    bool animate = false,
+  }) {
+    final from = _displayedRect;
+    final fromRadius = _displayedRadius;
+    final bubble = _bubbleKey.currentContext?.findRenderObject();
+    final overlay = _overlayKey.currentContext?.findRenderObject();
+    final bubblePosition =
+        bubble is RenderBox && overlay is RenderBox && bubble.hasSize
+            ? bubble.localToGlobal(Offset.zero, ancestor: overlay)
+            : null;
+    setState(() {
+      _fromRect = from;
+      _fromRadius = fromRadius;
+      _fromBubblePosition = bubblePosition;
+      _targetRect = target.rect;
+      _targetRadius = target.radius;
+      _visibleIndex = _index;
+      _preparing = false;
+    });
+    if (animate && from != null && !MediaQuery.disableAnimationsOf(context)) {
+      _transition.forward(from: 0);
+    } else {
+      _transition.value = 1;
+    }
   }
 
   void _trackTarget(Duration timestamp) {
     if (!mounted) return;
-    if (_targetRect != null) {
-      final rect = _measureTarget();
-      if (rect != null && rect != _targetRect) {
-        setState(() => _targetRect = rect);
-      } else if (rect == null) {
+    if (!_preparing && _targetRect != null) {
+      final target = _measureTarget();
+      if (target != null &&
+          (target.rect != _targetRect || target.radius != _targetRadius)) {
+        _setTarget(target, animate: _transition.isAnimating);
+      } else if (target == null) {
         _prepare();
       }
     }
@@ -152,7 +200,9 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
 
   void _prepare() {
     final revision = ++_revision;
-    _targetRect = null;
+    // Keep the last bounds until the destination has been laid out. Clearing
+    // them briefly removes the spotlight and centers the coaching card.
+    _preparing = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || revision != _revision) return;
       if (_index >= widget.steps.length) {
@@ -178,9 +228,9 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
         WidgetsBinding.instance.scheduleFrame();
         await WidgetsBinding.instance.endOfFrame;
         if (!mounted || revision != _revision) return;
-        final rect = _measureTarget();
-        if (rect == null) continue;
-        setState(() => _targetRect = rect);
+        final target = _measureTarget();
+        if (target == null) continue;
+        _setTarget(target, animate: true);
         return;
       }
       // Data can disappear while the tour is open. An absent target must not
@@ -195,10 +245,7 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
       widget.onClose();
       return;
     }
-    setState(() {
-      _index++;
-      _targetRect = null;
-    });
+    setState(() => _index++);
     _prepare();
   }
 
@@ -211,9 +258,20 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     if (widget.steps.isEmpty) return const SizedBox.shrink();
-    final step = widget.steps[_index];
+    return AnimatedBuilder(
+      animation: _transition,
+      builder: (context, _) => _buildOverlay(context),
+    );
+  }
+
+  Widget _buildOverlay(BuildContext context) {
+    // Keep the current copy and controls with the retained bounds, too. The
+    // next card may need more room than the current target leaves available.
+    final step = widget.steps[_visibleIndex];
     final padding = MediaQuery.paddingOf(context);
-    final rect = _targetRect;
+    final rect = _displayedRect;
+    final radius = _displayedRadius;
+    final busy = _preparing || _transition.isAnimating;
     return Stack(
       key: _overlayKey,
       children: [
@@ -222,7 +280,7 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
             painter: _SpotlightPainter(
               target: rect,
               scrim: Theme.of(context).colorScheme.scrim.withAlpha(190),
-              radius: _targetRadius,
+              radius: radius,
             ),
           ),
         ),
@@ -234,7 +292,7 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
                 key: const ValueKey('tutorial-highlight'),
                 decoration: BoxDecoration(
                   border: Border.all(color: accentColor(context), width: 2),
-                  borderRadius: _targetRadius,
+                  borderRadius: radius,
                   boxShadow: [
                     BoxShadow(
                       color: accentColor(context).withAlpha(45),
@@ -248,8 +306,14 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
           ),
         Positioned.fill(
           child: CustomSingleChildLayout(
-            delegate: _BubbleLayout(target: rect, safePadding: padding),
+            delegate: _BubbleLayout(
+              target: _targetRect,
+              previousPosition: _fromBubblePosition,
+              progress: _progress,
+              safePadding: padding,
+            ),
             child: Semantics(
+              key: _bubbleKey,
               scopesRoute: true,
               explicitChildNodes: true,
               namesRoute: true,
@@ -304,7 +368,7 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
                                   ),
                                 ),
                                 Text(
-                                  '${_index + 1} of ${widget.steps.length}',
+                                  '${_visibleIndex + 1} of ${widget.steps.length}',
                                   style: Theme.of(context).textTheme.labelMedium
                                       ?.copyWith(color: accentColor(context)),
                                 ),
@@ -312,7 +376,7 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
                             ),
                           if (compact)
                             Text(
-                              '${_index + 1} of ${widget.steps.length}',
+                              '${_visibleIndex + 1} of ${widget.steps.length}',
                               style: Theme.of(context).textTheme.labelMedium
                                   ?.copyWith(color: accentColor(context)),
                             ),
@@ -343,7 +407,7 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
                                         height: 3,
                                         decoration: BoxDecoration(
                                           color:
-                                              i <= _index
+                                              i <= _visibleIndex
                                                   ? accentFillColor(context)
                                                   : borderColor(context),
                                           borderRadius: AppRadius.micro,
@@ -399,9 +463,9 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
                                 ),
                                 child: const Text('Skip'),
                               ),
-                              if (_index > 0)
+                              if (_visibleIndex > 0)
                                 TextButton(
-                                  onPressed: rect == null ? null : _back,
+                                  onPressed: busy ? null : _back,
                                   style: TextButton.styleFrom(
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: AppSpacing.sm,
@@ -410,14 +474,14 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
                                   child: const Text('Back'),
                                 ),
                               ElevatedButton(
-                                onPressed: rect == null ? null : _next,
+                                onPressed: busy ? null : _next,
                                 style: ElevatedButton.styleFrom(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: AppSpacing.lg,
                                   ),
                                 ),
                                 child: Text(
-                                  _index == widget.steps.length - 1
+                                  _visibleIndex == widget.steps.length - 1
                                       ? 'Done'
                                       : 'Next',
                                 ),
@@ -469,9 +533,16 @@ class _SpotlightPainter extends CustomPainter {
 /// Uses the bubble's measured size, rather than assuming a fixed text height.
 class _BubbleLayout extends SingleChildLayoutDelegate {
   final Rect? target;
+  final Offset? previousPosition;
+  final double progress;
   final EdgeInsets safePadding;
 
-  const _BubbleLayout({required this.target, required this.safePadding});
+  const _BubbleLayout({
+    required this.target,
+    required this.previousPosition,
+    required this.progress,
+    required this.safePadding,
+  });
 
   Rect _bounds(Size size) => Rect.fromLTRB(
     AppSpacing.lg,
@@ -480,9 +551,8 @@ class _BubbleLayout extends SingleChildLayoutDelegate {
     size.height - safePadding.bottom - AppSpacing.lg,
   );
 
-  Rect _region(Size size) {
+  Rect _region(Size size, Rect? rect) {
     final bounds = _bounds(size);
-    final rect = target;
     if (rect == null) return bounds;
     final candidates = [
       Rect.fromLTRB(
@@ -526,7 +596,7 @@ class _BubbleLayout extends SingleChildLayoutDelegate {
 
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
-    final region = _region(constraints.biggest);
+    final region = _region(constraints.biggest, target);
     return BoxConstraints(
       maxWidth: math.min(360, region.width),
       maxHeight: region.height,
@@ -535,8 +605,20 @@ class _BubbleLayout extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
-    final bounds = _region(size);
-    final rect = target;
+    final destination = _positionForTarget(size, childSize, target);
+    // Start from the rendered position, not a position recalculated with the
+    // next card's height. Different copy must not shift the animation's origin.
+    final position =
+        Offset.lerp(previousPosition ?? destination, destination, progress)!;
+    final bounds = _bounds(size);
+    return Offset(
+      position.dx.clamp(bounds.left, bounds.right - childSize.width),
+      position.dy.clamp(bounds.top, bounds.bottom - childSize.height),
+    );
+  }
+
+  Offset _positionForTarget(Size size, Size childSize, Rect? rect) {
+    final bounds = _region(size, rect);
     final wantedY =
         rect == null
             ? bounds.center.dy - childSize.height / 2
@@ -547,12 +629,21 @@ class _BubbleLayout extends SingleChildLayoutDelegate {
             : rect.center.dy - childSize.height / 2;
     final wantedX = (rect?.center.dx ?? bounds.center.dx) - childSize.width / 2;
     return Offset(
-      wantedX.clamp(bounds.left, bounds.right - childSize.width),
-      wantedY.clamp(bounds.top, bounds.bottom - childSize.height),
+      wantedX.clamp(
+        bounds.left,
+        math.max(bounds.left, bounds.right - childSize.width),
+      ),
+      wantedY.clamp(
+        bounds.top,
+        math.max(bounds.top, bounds.bottom - childSize.height),
+      ),
     );
   }
 
   @override
   bool shouldRelayout(_BubbleLayout oldDelegate) =>
-      target != oldDelegate.target || safePadding != oldDelegate.safePadding;
+      target != oldDelegate.target ||
+      previousPosition != oldDelegate.previousPosition ||
+      progress != oldDelegate.progress ||
+      safePadding != oldDelegate.safePadding;
 }
