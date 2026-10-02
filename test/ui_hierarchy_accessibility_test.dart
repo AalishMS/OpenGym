@@ -227,26 +227,26 @@ void main() {
     );
   }
 
-  testWidgets(
-    'Finish explains the Start prerequisite beside the disabled button',
-    (tester) async {
-      await pumpScreen(
-        tester,
-        WorkoutScreen(plan: plan(), planIndex: 0),
-        plans: [plan()],
-        size: const Size(390, 800),
-      );
-      expect(find.textContaining('Tap Start in the toolbar'), findsOneWidget);
-      expect(
-        tester
-            .widget<FilledButton>(
-              find.widgetWithText(FilledButton, 'Finish workout'),
-            )
-            .onPressed,
-        isNull,
-      );
-    },
-  );
+  testWidgets('Finish is an accessible disabled toolbar action before Start', (
+    tester,
+  ) async {
+    await pumpScreen(
+      tester,
+      WorkoutScreen(plan: plan(), planIndex: 0),
+      plans: [plan()],
+      size: const Size(390, 800),
+    );
+    expect(find.textContaining('Tap Start in the toolbar'), findsNothing);
+    final finish = find.byWidgetPredicate(
+      (widget) => widget is IconButton && widget.tooltip == 'Finish workout',
+    );
+    expect(finish, findsOneWidget);
+    expect(tester.widget<IconButton>(finish).onPressed, isNull);
+    expect(
+      find.ancestor(of: finish, matching: find.byType(AppBar)),
+      findsOneWidget,
+    );
+  });
 
   testWidgets('week rename reports invalid input and submits with Done', (
     tester,

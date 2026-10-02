@@ -267,6 +267,7 @@ class SetEntryTable extends StatelessWidget {
           constraints.maxWidth >=
               400 * MediaQuery.textScalerOf(context).scale(1);
       return ReadableTableViewport(
+        showScrollbar: !continuousLog,
         minimumWidth: _minimumTableWidth(
           context,
           sets,

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import 'package:gymapp/models/exercise.dart';
@@ -182,6 +183,9 @@ void main() {
             expect(
               tester.getRect(title).overlaps(tester.getRect(timer)),
               isFalse,
+              reason:
+                  'width=$width scale=$scale title=${tester.getRect(title)} '
+                  'timer=${tester.getRect(timer)}',
             );
             expect(tester.getRect(title).top, greaterThanOrEqualTo(0));
             expect(find.byTooltip('Delete set'), findsNothing);
@@ -212,9 +216,22 @@ void main() {
               );
             }
             expect(tester.getSize(menu).width, greaterThanOrEqualTo(48));
-            final finish = find.widgetWithText(FilledButton, 'Finish workout');
+            expect(
+              find.descendant(of: card, matching: find.byType(Scrollbar)),
+              findsNothing,
+            );
+            final finish = find.widgetWithIcon(IconButton, LucideIcons.check);
             expect(finish, findsOneWidget);
-            expect(tester.getRect(finish).bottom, lessThanOrEqualTo(844));
+            expect(
+              tester
+                  .getRect(find.byType(AppBar))
+                  .contains(tester.getCenter(finish)),
+              isTrue,
+            );
+            expect(
+              tester.getSize(finish).shortestSide,
+              greaterThanOrEqualTo(48),
+            );
 
             if (const bool.fromEnvironment('WORKOUT_PREVIEW') &&
                 width == 390 &&
@@ -302,7 +319,7 @@ void main() {
     expect(find.byTooltip('Exercise actions for Bench press'), findsNothing);
     expect(find.byTooltip('Workout actions'), findsNothing);
     expect(find.bySemanticsLabel('Start workout'), findsNothing);
-    expect(find.text('Finish workout'), findsNothing);
+    expect(find.byTooltip('Finish workout'), findsNothing);
     // Completed sessions deliberately ignore pointer events on the log.
     await tester.longPress(
       find.bySemanticsLabel('Set 1 Kg').first,
@@ -315,7 +332,7 @@ void main() {
   });
 
   testWidgets(
-    'visible finish button requires a started workout and keeps confirmation',
+    'toolbar finish requires a started workout and keeps confirmation',
     (tester) async {
       const channel = MethodChannel(
         'com.aalishms.opengym/workout_timer_notification',
@@ -329,8 +346,12 @@ void main() {
       await tester.runAsync(() => seed());
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
-      final finish = find.widgetWithText(FilledButton, 'Finish workout');
-      expect(tester.widget<FilledButton>(finish).onPressed, isNull);
+      final finish = find.widgetWithIcon(IconButton, LucideIcons.check);
+      expect(tester.widget<IconButton>(finish).onPressed, isNull);
+      await tester.tap(finish);
+      await tester.pumpAndSettle();
+      expect(find.text('Log workout?'), findsNothing);
+      expect(find.textContaining('Tap Start in the toolbar'), findsNothing);
       await tester.tap(find.byTooltip('Workout actions'));
       await tester.pumpAndSettle();
       expect(
@@ -345,7 +366,11 @@ void main() {
       await tester.runAsync(() => seed(started: true));
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
-      expect(tester.widget<FilledButton>(finish).onPressed, isNotNull);
+      expect(tester.widget<IconButton>(finish).onPressed, isNotNull);
+      expect(
+        tester.widget<IconButton>(finish).color,
+        accentColor(tester.element(finish)),
+      );
       await tester.tap(finish);
       await tester.pumpAndSettle();
       expect(find.text('Log workout?'), findsOneWidget);
@@ -366,7 +391,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(writes.single.isCompleted, isTrue);
       expect(find.byTooltip('Workout actions'), findsNothing);
-      expect(find.text('Finish workout'), findsNothing);
+      expect(find.byTooltip('Finish workout'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

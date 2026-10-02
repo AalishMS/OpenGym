@@ -834,23 +834,61 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         ),
         actions: [
           if (!session.isCompleted) ...[
-            Semantics(
-              button: true,
-              label: session.isTimerRunning ? 'Pause workout' : 'Start workout',
-              child: TextButton(
+            if (MediaQuery.sizeOf(context).width < 400 &&
+                textScaler.scale(1) > 1.5)
+              IconButton(
+                tooltip:
+                    session.isTimerRunning
+                        ? 'Pause workout'
+                        : 'Start workout',
                 onPressed: _toggleTimer,
-                style: TextButton.styleFrom(
-                  foregroundColor: accent,
-                  minimumSize: const Size(64, 48),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm,
-                  ),
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: AppRadius.button,
-                  ),
+                color: accent,
+                constraints: const BoxConstraints(
+                  minWidth: 48,
+                  minHeight: 48,
                 ),
-                child: Text(session.isTimerRunning ? 'Pause' : 'Start'),
+                icon: Icon(
+                  session.isTimerRunning
+                      ? LucideIcons.pause
+                      : LucideIcons.play,
+                  size: 22,
+                ),
+              )
+            else
+              Semantics(
+                button: true,
+                label:
+                    session.isTimerRunning
+                        ? 'Pause workout'
+                        : 'Start workout',
+                child: TextButton(
+                  onPressed: _toggleTimer,
+                  style: TextButton.styleFrom(
+                    foregroundColor: accent,
+                    minimumSize: const Size(64, 48),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.sm,
+                    ),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: AppRadius.button,
+                    ),
+                  ),
+                  child: Text(session.isTimerRunning ? 'Pause' : 'Start'),
+                ),
               ),
+            IconButton(
+              tooltip: 'Finish workout',
+              onPressed:
+                  session.hasStarted
+                      ? _stopWorkout
+                      : null,
+              color: accent,
+              disabledColor: textSecondaryColor(context),
+              constraints: const BoxConstraints(
+                minWidth: 48,
+                minHeight: 48,
+              ),
+              icon: const Icon(LucideIcons.check, size: 22),
             ),
             PopupMenuButton<String>(
               tooltip: 'Workout actions',
@@ -1008,42 +1046,6 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               ),
             ),
           ),
-          if (!session.isCompleted)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg,
-                vertical: AppSpacing.xs,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (!session.hasStarted) ...[
-                    Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        'Tap Start in the toolbar to begin the timer and enable Finish workout.',
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: textSecondaryColor(context)),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                  ],
-                  FilledButton.icon(
-                    onPressed: session.hasStarted ? _stopWorkout : null,
-                    icon: const Icon(LucideIcons.check, size: 18),
-                    label: const Text('Finish workout'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: accentFillColor(context),
-                      foregroundColor: onAccentColor(context),
-                      minimumSize: const Size.fromHeight(48),
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: AppRadius.button,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           _buildWeekNavBar(accent),
         ],
       ),

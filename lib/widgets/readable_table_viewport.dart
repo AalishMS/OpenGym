@@ -18,10 +18,12 @@ double readableTextWidth(BuildContext context, String text, TextStyle style) {
 class ReadableTableViewport extends StatefulWidget {
   final double minimumWidth;
   final Widget child;
+  final bool showScrollbar;
 
   const ReadableTableViewport({
     required this.minimumWidth,
     required this.child,
+    this.showScrollbar = true,
     super.key,
   });
 
@@ -40,21 +42,28 @@ class _ReadableTableViewportState extends State<ReadableTableViewport> {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-    builder:
-        (context, constraints) => Scrollbar(
+    builder: (context, constraints) {
+      final showScrollbar =
+          widget.showScrollbar && widget.minimumWidth > constraints.maxWidth;
+      final scrollView = ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: SingleChildScrollView(
           controller: _controller,
-          thumbVisibility: widget.minimumWidth > constraints.maxWidth,
-          child: SingleChildScrollView(
-            controller: _controller,
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.only(
-              bottom: widget.minimumWidth > constraints.maxWidth ? 12 : 0,
-            ),
-            child: SizedBox(
-              width: math.max(widget.minimumWidth, constraints.maxWidth),
-              child: widget.child,
-            ),
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.only(bottom: showScrollbar ? 12 : 0),
+          child: SizedBox(
+            width: math.max(widget.minimumWidth, constraints.maxWidth),
+            child: widget.child,
           ),
         ),
+      );
+      return widget.showScrollbar
+          ? Scrollbar(
+            controller: _controller,
+            thumbVisibility: showScrollbar,
+            child: scrollView,
+          )
+          : scrollView;
+    },
   );
 }
