@@ -132,7 +132,15 @@ void main() {
       );
       expect(find.byType(FloatingActionButton), findsNothing);
       final action = find.text('New plan');
-      await tester.scrollUntilVisible(action, 150);
+      await tester.scrollUntilVisible(
+        action,
+        150,
+        scrollable: find.byWidgetPredicate(
+          (widget) =>
+              widget is Scrollable &&
+              widget.axisDirection == AxisDirection.down,
+        ),
+      );
       await tester.tap(action);
       await tester.pumpAndSettle();
       expect(find.byType(PlanEditorScreen), findsOneWidget);
@@ -825,7 +833,15 @@ void main() {
         ),
         findsOneWidget,
       );
-      await tester.scrollUntilVisible(find.text('Next'), 150);
+      await tester.scrollUntilVisible(
+        find.text('Next'),
+        150,
+        scrollable: find.byWidgetPredicate(
+          (widget) =>
+              widget is Scrollable &&
+              widget.axisDirection == AxisDirection.down,
+        ),
+      );
       expect(find.text('Next'), findsOneWidget);
     },
   );

@@ -43,6 +43,7 @@ void main() {
   );
 
   Future<void> tap(WidgetTester tester, String text) async {
+    await tester.ensureVisible(find.text(text).last);
     await tester.tap(find.text(text).last);
     await tester.pumpAndSettle();
   }
@@ -84,6 +85,7 @@ void main() {
             greaterThanOrEqualTo(48),
           );
         }
+        await tester.ensureVisible(find.bySemanticsLabel('Set 1 Kg'));
         await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
@@ -104,7 +106,7 @@ void main() {
     }
   });
 
-  testWidgets('RPE 10 stays on one line inside the 48 pixel details action', (
+  testWidgets('RPE 10 stays readable inside a minimum 48dp details action', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -132,7 +134,8 @@ void main() {
 
         expect(effortText.maxLines, 1);
         expect(effortText.softWrap, isFalse);
-        expect(tester.getSize(action), const Size(48, 48));
+        expect(tester.getSize(action).width, greaterThanOrEqualTo(48));
+        expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
         expect(
           tester.getRect(action).contains(tester.getRect(effort).center),
           isTrue,

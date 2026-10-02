@@ -8,6 +8,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
+import '../readable_table_viewport.dart';
 
 /// Completed sets by calendar day, with an outline identifying today.
 class TrainingSnapshot extends StatelessWidget {
@@ -107,113 +108,115 @@ class TrainingSnapshot extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Semantics(
             label: 'Completed sets by day. The outlined day is today.',
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                for (var index = 0; index < 7; index++) ...[
-                  if (index > 0) const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Semantics(
-                      label:
-                          '${names[index]}: ${dailyWorkouts[index]} workouts, '
-                          '${dailySets[index]} sets${index == todayIndex ? ', today' : ''}',
-                      button:
-                          latestByDay[index] != null &&
-                          onOpenLastWorkout != null,
-                      child: Tooltip(
-                        message:
-                            '${names[index]} · ${dailyWorkouts[index]} workouts · ${dailySets[index]} sets',
-                        child: InkWell(
-                          key: ValueKey('training-day-$index'),
-                          onTap:
-                              latestByDay[index] == null ||
-                                      onOpenLastWorkout == null
-                                  ? null
-                                  : () =>
-                                      onOpenLastWorkout!(latestByDay[index]!),
-                          borderRadius: AppRadius.control,
-                          child: ExcludeSemantics(
-                            child: Column(
-                              children: [
-                                SizedBox(
-                                  height: 52,
-                                  child: Align(
-                                    alignment: Alignment.bottomCenter,
-                                    child: Container(
-                                      width: double.infinity,
-                                      height:
-                                          dailyWorkouts[index] > 0
-                                              ? 14 +
-                                                  (maxSets == 0
-                                                      ? 0
-                                                      : 38 *
-                                                          dailySets[index] /
-                                                          maxSets)
-                                              : index == todayIndex
-                                              ? 40
-                                              : 5,
-                                      decoration: BoxDecoration(
-                                        color:
+            child: ReadableTableViewport(
+              minimumWidth: 7 * 48 + 6 * AppSpacing.sm,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  for (var index = 0; index < 7; index++) ...[
+                    if (index > 0) const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Semantics(
+                        label:
+                            '${names[index]}: ${dailyWorkouts[index]} workouts, '
+                            '${dailySets[index]} sets${index == todayIndex ? ', today' : ''}',
+                        button:
+                            latestByDay[index] != null &&
+                            onOpenLastWorkout != null,
+                        child: Tooltip(
+                          message:
+                              '${names[index]} · ${dailyWorkouts[index]} workouts · ${dailySets[index]} sets',
+                          child: InkWell(
+                            key: ValueKey('training-day-$index'),
+                            onTap:
+                                latestByDay[index] == null ||
+                                        onOpenLastWorkout == null
+                                    ? null
+                                    : () =>
+                                        onOpenLastWorkout!(latestByDay[index]!),
+                            borderRadius: AppRadius.control,
+                            child: ExcludeSemantics(
+                              child: Column(
+                                children: [
+                                  SizedBox(
+                                    height: 52,
+                                    child: Align(
+                                      alignment: Alignment.bottomCenter,
+                                      child: Container(
+                                        width: double.infinity,
+                                        height:
+                                            dailyWorkouts[index] > 0
+                                                ? 14 +
+                                                    (maxSets == 0
+                                                        ? 0
+                                                        : 38 *
+                                                            dailySets[index] /
+                                                            maxSets)
+                                                : index == todayIndex
+                                                ? 40
+                                                : 5,
+                                        decoration: BoxDecoration(
+                                          color:
+                                              index == todayIndex
+                                                  ? backgroundColor(context)
+                                                  : dailyWorkouts[index] > 0
+                                                  ? accentFillColor(context)
+                                                  : borderColor(context),
+                                          borderRadius: AppRadius.control,
+                                        ),
+                                        child:
                                             index == todayIndex
-                                                ? backgroundColor(context)
-                                                : dailyWorkouts[index] > 0
-                                                ? accentFillColor(context)
-                                                : borderColor(context),
-                                        borderRadius: AppRadius.control,
-                                      ),
-                                      child:
-                                          index == todayIndex
-                                              ? CustomPaint(
-                                                painter: _TodayOutline(
-                                                  color: todayColor,
-                                                ),
-                                                // Leave a neutral gap between the outline and
-                                                // the bar so every accent keeps today legible.
-                                                child:
-                                                    dailyWorkouts[index] > 0
-                                                        ? Padding(
-                                                          padding:
-                                                              const EdgeInsets.all(
-                                                                3,
-                                                              ),
-                                                          child: DecoratedBox(
-                                                            decoration:
-                                                                BoxDecoration(
-                                                                  color:
-                                                                      accentFillColor(
-                                                                        context,
-                                                                      ),
-                                                                  borderRadius:
-                                                                      AppRadius
-                                                                          .micro,
+                                                ? CustomPaint(
+                                                  painter: _TodayOutline(
+                                                    color: todayColor,
+                                                  ),
+                                                  // Leave a neutral gap between the outline and
+                                                  // the bar so every accent keeps today legible.
+                                                  child:
+                                                      dailyWorkouts[index] > 0
+                                                          ? Padding(
+                                                            padding:
+                                                                const EdgeInsets.all(
+                                                                  3,
                                                                 ),
-                                                          ),
-                                                        )
-                                                        : null,
-                                              )
-                                              : null,
+                                                            child: DecoratedBox(
+                                                              decoration: BoxDecoration(
+                                                                color:
+                                                                    accentFillColor(
+                                                                      context,
+                                                                    ),
+                                                                borderRadius:
+                                                                    AppRadius
+                                                                        .micro,
+                                                              ),
+                                                            ),
+                                                          )
+                                                          : null,
+                                                )
+                                                : null,
+                                      ),
                                     ),
                                   ),
-                                ),
-                                const SizedBox(height: AppSpacing.sm),
-                                Text(
-                                  letters[index],
-                                  style: textTheme.labelSmall?.copyWith(
-                                    color:
-                                        index == todayIndex
-                                            ? todayColor
-                                            : secondary,
+                                  const SizedBox(height: AppSpacing.sm),
+                                  Text(
+                                    letters[index],
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color:
+                                          index == todayIndex
+                                              ? todayColor
+                                              : secondary,
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ],

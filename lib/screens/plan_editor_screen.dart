@@ -637,47 +637,52 @@ class _ExerciseEditorCard extends StatelessWidget {
   /// Spans rather than a plain string because the numbers carry the line and the
   /// units step back out of the way — the same hierarchy as the entry table, so a collapsed card
   /// previews its own contents in the voice they are written in.
-  List<TextSpan> _prescriptionSpans(TextStyle number, TextStyle unit) {
+  List<TextSpan> _prescriptionGroups(TextStyle number, TextStyle unit) {
     final sets = exercise.sets;
-    if (sets.isEmpty) return [TextSpan(text: 'no sets', style: unit)];
-
+    if (sets.isEmpty) return [TextSpan(text: 'No sets', style: unit)];
     final reps = sets.map((set) => set.reps);
     final weights = sets.map((set) => set.weight);
     final minReps = reps.reduce((a, b) => a < b ? a : b);
     final maxReps = reps.reduce((a, b) => a > b ? a : b);
     final minWeight = weights.reduce((a, b) => a < b ? a : b);
     final maxWeight = weights.reduce((a, b) => a > b ? a : b);
-
-    final spans = <TextSpan>[TextSpan(text: '${sets.length}', style: number)];
-
-    if (minReps == maxReps) {
-      spans.add(TextSpan(text: ' × ', style: unit));
-      spans.add(TextSpan(text: '$maxReps', style: number));
-    } else {
-      // Ranges only once the sets actually disagree. `3 × 8` is the common case
-      // and stays the short one.
-      spans.add(TextSpan(text: ' sets  ·  ', style: unit));
-      spans.add(TextSpan(text: '$minReps–$maxReps', style: number));
-      spans.add(TextSpan(text: ' reps', style: unit));
-    }
-
-    // A draft with no weight on it yet is bodyweight or simply unfilled; either
-    // way `0kg` is noise, so the whole clause drops out.
-    if (maxWeight > 0) {
-      spans.add(TextSpan(text: '  ·  ', style: unit));
-      spans.add(
+    return [
+      if (minReps == maxReps)
         TextSpan(
-          text:
-              minWeight == maxWeight
-                  ? formatWeight(maxWeight)
-                  : '${formatWeight(minWeight)}–${formatWeight(maxWeight)}',
-          style: number,
+          children: [
+            TextSpan(text: '${sets.length}', style: number),
+            TextSpan(text: ' × ', style: unit),
+            TextSpan(text: '$maxReps', style: number),
+          ],
+        )
+      else ...[
+        TextSpan(
+          children: [
+            TextSpan(text: '${sets.length}', style: number),
+            TextSpan(text: ' sets', style: unit),
+          ],
         ),
-      );
-      spans.add(TextSpan(text: 'kg', style: unit));
-    }
-
-    return spans;
+        TextSpan(
+          children: [
+            TextSpan(text: '$minReps–$maxReps', style: number),
+            TextSpan(text: ' reps', style: unit),
+          ],
+        ),
+      ],
+      if (maxWeight > 0)
+        TextSpan(
+          children: [
+            TextSpan(
+              text:
+                  minWeight == maxWeight
+                      ? formatWeight(maxWeight)
+                      : '${formatWeight(minWeight)}–${formatWeight(maxWeight)}',
+              style: number,
+            ),
+            TextSpan(text: ' kg', style: unit),
+          ],
+        ),
+    ];
   }
 
   @override
@@ -737,98 +742,114 @@ class _ExerciseEditorCard extends StatelessWidget {
     );
   }
 
+  Widget _prescriptionSummary(BuildContext context) => Wrap(
+    spacing: AppSpacing.md,
+    runSpacing: AppSpacing.xs,
+    children: [
+      for (final group in _prescriptionGroups(
+        GoogleFonts.jetBrainsMono(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          height: 1.4,
+          color: textPrimaryColor(context),
+        ),
+        GoogleFonts.jetBrainsMono(
+          fontSize: 12,
+          height: 1.4,
+          color: textSecondaryColor(context),
+        ),
+      ))
+        Text.rich(group),
+    ],
+  );
   Widget _buildHeader(BuildContext context, bool expanded) {
     final textSecondary = textSecondaryColor(context);
-
     return InkWell(
       onTap: onToggle,
-      // Collapsed, this header *is* the card, so its splash has to follow all
-      // four corners; expanded, only the top two.
       borderRadius: expanded ? AppRadius.cardTop : AppRadius.card,
       splashColor: accent.withValues(alpha: 0.2),
       highlightColor: accent.withValues(alpha: 0.1),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.md,
-          AppSpacing.sm,
-          AppSpacing.md,
-          AppSpacing.sm,
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
         ),
-        child: Row(
-          children: [
-            // An explicit handle, so it drags the moment it is touched. Behind a
-            // long-press it read as a handle that did not work.
-            ReorderableDragStartListener(
-              index: index,
-              child: SizedBox(
-                width: 48,
-                height: 48,
-                child: Icon(
-                  LucideIcons.gripVertical,
-                  size: 14,
-                  color: textSecondary,
-                ),
-              ),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      _IndexBadge(
-                        label: '${index + 1}',
-                        borderTint: accent,
-                        textTint: accent,
-                        fontSize: 10,
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Expanded(
-                        child: Text(
-                          exercise.name,
-                          // The card's title, not its headline — the
-                          // prescription below it is the data.
-                          style: Theme.of(context).textTheme.titleMedium,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Padding(
-                    padding: const EdgeInsets.only(left: _nameIndent),
-                    child: RichText(
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      text: TextSpan(
-                        children: _prescriptionSpans(
-                          GoogleFonts.jetBrainsMono(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            height: 1.1,
-                            color: textPrimaryColor(context),
-                          ),
-                          GoogleFonts.jetBrainsMono(
-                            fontSize: 10,
-                            height: 1.1,
-                            color: textSecondary,
-                          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final reflow =
+                constraints.maxWidth <
+                400 * MediaQuery.textScalerOf(context).scale(1);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    ReorderableDragStartListener(
+                      index: index,
+                      child: SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: Icon(
+                          LucideIcons.gripVertical,
+                          size: 14,
+                          color: textSecondary,
                         ),
                       ),
                     ),
-                  ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              _IndexBadge(
+                                label: '${index + 1}',
+                                borderTint: accent,
+                                textTint: accent,
+                                fontSize: 10,
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  exercise.name,
+                                  style:
+                                      Theme.of(context).textTheme.titleMedium,
+                                  maxLines: reflow ? null : 1,
+                                  overflow:
+                                      reflow
+                                          ? TextOverflow.visible
+                                          : TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (!reflow) ...[
+                            const SizedBox(height: AppSpacing.xs),
+                            Padding(
+                              padding: const EdgeInsets.only(left: _nameIndent),
+                              child: _prescriptionSummary(context),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Icon(
+                      expanded
+                          ? LucideIcons.chevronUp
+                          : LucideIcons.chevronDown,
+                      size: 14,
+                      color: textSecondary,
+                    ),
+                  ],
+                ),
+                if (reflow) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  _prescriptionSummary(context),
                 ],
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            // An indicator, not a tap target — the whole header toggles.
-            Icon(
-              expanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
-              size: 14,
-              color: textSecondary,
-            ),
-          ],
+              ],
+            );
+          },
         ),
       ),
     );
@@ -968,11 +989,14 @@ class _FullWidthButton extends StatelessWidget {
               Icon(LucideIcons.plus, size: 12, color: accent),
               const SizedBox(width: AppSpacing.sm),
             ],
-            Text(
-              label,
-              style: Theme.of(
-                context,
-              ).textTheme.labelLarge?.copyWith(color: accent),
+            Flexible(
+              child: Text(
+                label,
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(color: accent),
+              ),
             ),
           ],
         ),

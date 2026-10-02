@@ -1,10 +1,14 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:flutter/services.dart';
 
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../theme/semantic_colors.dart';
+import '../readable_table_viewport.dart';
 
 /// A display snapshot. Editing it never mutates a session or a plan implicitly.
 class SetEntry {
@@ -43,7 +47,79 @@ const int _kWeightFlex = 5;
 const int _kRepsFlex = 4;
 const int _kRpeFlex = 4;
 
+double _numberWidth(BuildContext context, bool numberIsAction) => [
+  numberIsAction ? 48.0 : _kSetNumberWidth,
+  readableTextWidth(context, 'Set', Theme.of(context).textTheme.titleSmall!),
+  readableTextWidth(context, '999', Theme.of(context).textTheme.titleMedium!),
+  readableTextWidth(
+        context,
+        'PR',
+        Theme.of(
+          context,
+        ).textTheme.labelSmall!.copyWith(fontWeight: FontWeight.w700),
+      ) +
+      8,
+].reduce(math.max);
+
+double _detailsWidth(BuildContext context) => math.max(
+  48,
+  readableTextWidth(context, '@10', Theme.of(context).textTheme.labelLarge!) +
+      16,
+);
+
+double _minimumTableWidth(
+  BuildContext context,
+  List<SetEntry> sets, {
+  required bool showHistoryColumns,
+  required bool showPrevious,
+  required bool showRpe,
+  required bool numberIsAction,
+  required bool trailing,
+}) {
+  final valueStyle = Theme.of(context).textTheme.titleLarge!.copyWith(
+    fontSize: 20,
+    fontWeight: FontWeight.bold,
+    fontFeatures: const [FontFeature.tabularFigures()],
+  );
+  double widest(Iterable<String> values, TextStyle style) => values.fold(
+    48,
+    (width, value) =>
+        math.max(width, readableTextWidth(context, value, style) + 16),
+  );
+  final weight = widest([
+    '999.99',
+    ...sets.map((set) => entryWeight(set.weight)),
+  ], valueStyle);
+  final reps = widest(['999', ...sets.map((set) => '${set.reps}')], valueStyle);
+  final previous = widest(
+    ['Previous', ...sets.map((set) => set.previous ?? '—')],
+    Theme.of(context).textTheme.bodyMedium!.copyWith(
+      fontSize: 16,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    ),
+  );
+  final rpe = widest(['@10', 'RPE'], Theme.of(context).textTheme.labelLarge!);
+  final unit = [
+    weight / _kWeightFlex,
+    reps / (showRpe ? _kRepsFlex : _kWeightFlex),
+    if (showRpe) rpe / _kRpeFlex,
+    if (showHistoryColumns && showPrevious) previous / _kPreviousFlex,
+  ].reduce(math.max);
+  final flex =
+      _kWeightFlex +
+      (showRpe ? _kRepsFlex + _kRpeFlex : _kWeightFlex) +
+      (showHistoryColumns && showPrevious ? _kPreviousFlex : 0);
+  return unit * flex +
+      (showHistoryColumns
+          ? _numberWidth(context, numberIsAction) + _kColumnGap
+          : 0) +
+      (showHistoryColumns && showPrevious ? _kColumnGap : 0) +
+      _kColumnGap * (showRpe ? 2 : 1) +
+      (trailing ? _detailsWidth(context) : 0);
+}
+
 double _rpeColumnWidth(
+  BuildContext context,
   double width, {
   bool showHistoryColumns = true,
   bool showPrevious = true,
@@ -52,12 +128,15 @@ double _rpeColumnWidth(
 }) {
   final historyWidth =
       showHistoryColumns
-          ? (numberIsAction ? 48 : _kSetNumberWidth) +
+          ? _numberWidth(context, numberIsAction) +
               _kColumnGap +
               (showPrevious ? _kColumnGap : 0)
           : 0;
   final flexibleWidth =
-      width - historyWidth - 2 * _kColumnGap - (trailing ? 48 : 0);
+      width -
+      historyWidth -
+      2 * _kColumnGap -
+      (trailing ? _detailsWidth(context) : 0);
   final flex =
       _kWeightFlex +
       _kRepsFlex +
@@ -77,7 +156,7 @@ class SetEntryHeading extends StatelessWidget {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      final rpeWidth = _rpeColumnWidth(constraints.maxWidth);
+      final rpeWidth = _rpeColumnWidth(context, constraints.maxWidth);
       return Row(
         children: [
           Expanded(child: title),
@@ -187,137 +266,153 @@ class SetEntryTable extends StatelessWidget {
           !numberIsAction ||
           constraints.maxWidth >=
               400 * MediaQuery.textScalerOf(context).scale(1);
-      return Column(
-        children: [
-          _EntryHeader(
-            trailing: showTrailing,
-            showHistoryColumns: showHistoryColumns,
-            showRpe: onRpeChanged != null,
-            numberIsAction: numberIsAction,
-            showPrevious: showPrevious,
-            continuousLog: continuousLog,
-          ),
-          for (var index = 0; index < sets.length; index++)
-            Padding(
-              padding: EdgeInsets.only(bottom: continuousLog ? 4 : 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Builder(
-                    builder:
-                        (rowContext) => Semantics(
-                          container: continuousLog && onDelete != null,
-                          label:
-                              continuousLog && onDelete != null
-                                  ? 'Set ${index + 1} actions'
-                                  : null,
-                          customSemanticsActions:
-                              continuousLog && onDelete != null
-                                  ? {
-                                    const CustomSemanticsAction(
-                                          label: 'Delete set',
-                                        ):
-                                        () => _showDelete(rowContext, index),
-                                  }
-                                  : null,
-                          child: GestureDetector(
-                            key: ValueKey('set_entry_row_$index'),
-                            behavior: HitTestBehavior.opaque,
-                            onLongPressStart:
+      return ReadableTableViewport(
+        minimumWidth: _minimumTableWidth(
+          context,
+          sets,
+          showHistoryColumns: showHistoryColumns,
+          showPrevious: showPrevious,
+          showRpe: onRpeChanged != null,
+          numberIsAction: numberIsAction,
+          trailing: showTrailing,
+        ),
+        child: Column(
+          children: [
+            _EntryHeader(
+              trailing: showTrailing,
+              showHistoryColumns: showHistoryColumns,
+              showRpe: onRpeChanged != null,
+              numberIsAction: numberIsAction,
+              showPrevious: showPrevious,
+              continuousLog: continuousLog,
+            ),
+            for (var index = 0; index < sets.length; index++)
+              Padding(
+                padding: EdgeInsets.only(bottom: continuousLog ? 4 : 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Builder(
+                      builder:
+                          (rowContext) => Semantics(
+                            container: continuousLog && onDelete != null,
+                            label:
                                 continuousLog && onDelete != null
-                                    ? (details) => _showDelete(
-                                      rowContext,
-                                      index,
-                                      position: details.globalPosition,
-                                    )
+                                    ? 'Set ${index + 1} actions'
                                     : null,
-                            child: _EntryRow(
-                              showHistoryColumns: showHistoryColumns,
-                              showPrevious: showPrevious,
-                              continuousLog: continuousLog,
-                              index: index,
-                              previous: sets[index].previous,
-                              weight: entryWeight(sets[index].weight),
-                              reps: '${sets[index].reps}',
-                              rpe: sets[index].rpe,
-                              isPrMarker: sets[index].isPrMarker,
-                              onDetails:
-                                  onDetails != null && onDelete != null
-                                      ? () => onDetails!(index)
+                            customSemanticsActions:
+                                continuousLog && onDelete != null
+                                    ? {
+                                      const CustomSemanticsAction(
+                                            label: 'Delete set',
+                                          ):
+                                          () => _showDelete(rowContext, index),
+                                    }
+                                    : null,
+                            child: GestureDetector(
+                              key: ValueKey('set_entry_row_$index'),
+                              behavior: HitTestBehavior.opaque,
+                              onLongPressStart:
+                                  continuousLog && onDelete != null
+                                      ? (details) => _showDelete(
+                                        rowContext,
+                                        index,
+                                        position: details.globalPosition,
+                                      )
                                       : null,
-                              onWeight:
-                                  () => _open(context, index, _SetField.weight),
-                              onReps:
-                                  () => _open(context, index, _SetField.reps),
-                              onRpe:
-                                  onRpeChanged == null
-                                      ? null
-                                      : () =>
-                                          _open(context, index, _SetField.rpe),
-                              trailing:
-                                  showTrailing
-                                      ? Semantics(
-                                        label:
-                                            onDelete != null
-                                                ? 'Delete set'
-                                                : 'Set details',
-                                        button: true,
-                                        container: true,
-                                        excludeSemantics: true,
-                                        onTap:
-                                            () =>
-                                                (onDelete ?? onDetails)!(index),
-                                        child: IconButton(
-                                          iconSize: 32,
-                                          tooltip:
+                              child: _EntryRow(
+                                showHistoryColumns: showHistoryColumns,
+                                showPrevious: showPrevious,
+                                continuousLog: continuousLog,
+                                index: index,
+                                previous: sets[index].previous,
+                                weight: entryWeight(sets[index].weight),
+                                reps: '${sets[index].reps}',
+                                rpe: sets[index].rpe,
+                                isPrMarker: sets[index].isPrMarker,
+                                onDetails:
+                                    onDetails != null && onDelete != null
+                                        ? () => onDetails!(index)
+                                        : null,
+                                onWeight:
+                                    () =>
+                                        _open(context, index, _SetField.weight),
+                                onReps:
+                                    () => _open(context, index, _SetField.reps),
+                                onRpe:
+                                    onRpeChanged == null
+                                        ? null
+                                        : () => _open(
+                                          context,
+                                          index,
+                                          _SetField.rpe,
+                                        ),
+                                trailing:
+                                    showTrailing
+                                        ? Semantics(
+                                          label:
                                               onDelete != null
                                                   ? 'Delete set'
                                                   : 'Set details',
-                                          onPressed:
+                                          button: true,
+                                          container: true,
+                                          excludeSemantics: true,
+                                          onTap:
                                               () => (onDelete ?? onDetails)!(
                                                 index,
                                               ),
-                                          icon:
-                                              onDelete == null &&
-                                                      sets[index].rpe != null
-                                                  ? _effort(
-                                                    context,
-                                                    sets[index].rpe!,
-                                                  )
-                                                  : Icon(
-                                                    onDelete != null
-                                                        ? Icons.close
-                                                        : Icons.more_horiz,
-                                                    size: 18,
-                                                    color:
-                                                        onDelete != null
-                                                            ? errorColor(
-                                                              context,
-                                                            )
-                                                            : textSecondaryColor(
-                                                              context,
-                                                            ),
-                                                  ),
-                                        ),
-                                      )
-                                      : null,
+                                          child: IconButton(
+                                            iconSize: 32,
+                                            tooltip:
+                                                onDelete != null
+                                                    ? 'Delete set'
+                                                    : 'Set details',
+                                            onPressed:
+                                                () => (onDelete ?? onDetails)!(
+                                                  index,
+                                                ),
+                                            icon:
+                                                onDelete == null &&
+                                                        sets[index].rpe != null
+                                                    ? _effort(
+                                                      context,
+                                                      sets[index].rpe!,
+                                                    )
+                                                    : Icon(
+                                                      onDelete != null
+                                                          ? Icons.close
+                                                          : Icons.more_horiz,
+                                                      size: 18,
+                                                      color:
+                                                          onDelete != null
+                                                              ? errorColor(
+                                                                context,
+                                                              )
+                                                              : textSecondaryColor(
+                                                                context,
+                                                              ),
+                                                    ),
+                                          ),
+                                        )
+                                        : null,
+                              ),
                             ),
                           ),
-                        ),
-                  ),
-                  if ((sets[index].annotation?.trim().isNotEmpty ?? false) &&
-                      !sets[index].isPrMarker)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 40, top: 6),
-                      child: Text(
-                        sets[index].annotation!,
-                        style: _quiet(context),
-                      ),
                     ),
-                ],
+                    if ((sets[index].annotation?.trim().isNotEmpty ?? false) &&
+                        !sets[index].isPrMarker)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 40, top: 6),
+                        child: Text(
+                          sets[index].annotation!,
+                          style: _quiet(context),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       );
     },
   );
@@ -334,16 +429,13 @@ TextStyle _quiet(BuildContext context) =>
 Widget _effort(BuildContext context, int rpe) => Semantics(
   label: 'RPE $rpe',
   excludeSemantics: true,
-  child: FittedBox(
-    fit: BoxFit.scaleDown,
-    child: Text(
-      '@$rpe',
-      maxLines: 1,
-      softWrap: false,
-      style: Theme.of(context).textTheme.labelLarge!.copyWith(
-        fontWeight: FontWeight.w700,
-        color: rpeColor(rpe, context),
-      ),
+  child: Text(
+    '@$rpe',
+    maxLines: 1,
+    softWrap: false,
+    style: Theme.of(context).textTheme.labelLarge!.copyWith(
+      fontWeight: FontWeight.w700,
+      color: rpeColor(rpe, context),
     ),
   ),
 );
@@ -362,7 +454,7 @@ Widget _columns(
         children: [
           if (showHistoryColumns) ...[
             SizedBox(
-              width: numberIsAction ? 48 : _kSetNumberWidth,
+              width: _numberWidth(context, numberIsAction),
               child: cells[0],
             ),
             const SizedBox(width: _kColumnGap),
@@ -378,6 +470,7 @@ Widget _columns(
             const SizedBox(width: _kColumnGap),
             SizedBox(
               width: _rpeColumnWidth(
+                context,
                 constraints.maxWidth,
                 showHistoryColumns: showHistoryColumns,
                 showPrevious: showPrevious,
@@ -387,7 +480,8 @@ Widget _columns(
               child: cells[4],
             ),
           ],
-          if (trailing != null) SizedBox(width: 48, child: trailing),
+          if (trailing != null)
+            SizedBox(width: _detailsWidth(context), child: trailing),
         ],
       ),
 );
@@ -480,17 +574,14 @@ class _EntryRow extends StatelessWidget {
       _setNumber(context),
       Semantics(
         label: 'Previous set ${index + 1}: ${previous ?? 'no history'}',
-        child: FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            previous ?? '—',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-              fontSize: continuousLog ? 13 : 16,
-              fontWeight: continuousLog ? FontWeight.w400 : FontWeight.w600,
-              color: textSecondaryColor(context),
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
+        child: Text(
+          previous ?? '—',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+            fontSize: continuousLog ? 13 : 16,
+            fontWeight: continuousLog ? FontWeight.w400 : FontWeight.w600,
+            color: textSecondaryColor(context),
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
       ),
@@ -522,23 +613,20 @@ class _EntryRow extends StatelessWidget {
           Semantics(
             label: 'Personal record',
             excludeSemantics: true,
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xs,
-                  vertical: AppSpacing.xxs,
-                ),
-                decoration: BoxDecoration(
-                  color: accentFillColor(context),
-                  borderRadius: AppRadius.badge,
-                ),
-                child: Text(
-                  'PR',
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: onAccentColor(context),
-                    fontWeight: FontWeight.w700,
-                  ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.xs,
+                vertical: AppSpacing.xxs,
+              ),
+              decoration: BoxDecoration(
+                color: accentFillColor(context),
+                borderRadius: AppRadius.badge,
+              ),
+              child: Text(
+                'PR',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: onAccentColor(context),
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -594,8 +682,8 @@ class _EntryRow extends StatelessWidget {
         child: InkWell(
           onTap: onRpe,
           borderRadius: AppRadius.field,
-          child: SizedBox(
-            height: 48,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
             child: Center(
               child:
                   continuousLog || rpe == null
@@ -652,16 +740,14 @@ class _EntryRow extends StatelessWidget {
                       : Border.all(color: borderColor(context)),
               borderRadius: AppRadius.field,
             ),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                value.isEmpty ? '—' : value,
-                style: Theme.of(context).textTheme.titleLarge!.copyWith(
-                  fontSize: continuousLog ? 18 : 20,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  fontWeight: FontWeight.bold,
-                  color: textPrimaryColor(context),
-                ),
+            child: Text(
+              value.isEmpty ? '—' : value,
+              softWrap: false,
+              style: Theme.of(context).textTheme.titleLarge!.copyWith(
+                fontSize: continuousLog ? 18 : 20,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                fontWeight: FontWeight.bold,
+                color: textPrimaryColor(context),
               ),
             ),
           ),
@@ -693,10 +779,68 @@ class _SetKeyboard extends StatefulWidget {
 }
 
 class _SetKeyboardState extends State<_SetKeyboard> {
+  final FocusNode _keyboardFocus = FocusNode(debugLabel: 'Set numeric entry');
   late int _index = widget.initialIndex;
   late _SetField _field = widget.initialField;
   late String _input = _value;
   bool _replace = true;
+
+  @override
+  void dispose() {
+    _keyboardFocus.dispose();
+    super.dispose();
+  }
+
+  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isControlPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isMetaPressed) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      Navigator.pop(context);
+    } else if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      if (_hasNext) {
+        _next();
+      } else {
+        Navigator.pop(context);
+      }
+    } else if (key == LogicalKeyboardKey.backspace) {
+      _type('delete');
+    } else if (key == LogicalKeyboardKey.delete) {
+      setState(() {
+        _input = '';
+        _replace = true;
+        _publish();
+      });
+    } else {
+      final digit =
+          {
+            LogicalKeyboardKey.numpad0: '0',
+            LogicalKeyboardKey.numpad1: '1',
+            LogicalKeyboardKey.numpad2: '2',
+            LogicalKeyboardKey.numpad3: '3',
+            LogicalKeyboardKey.numpad4: '4',
+            LogicalKeyboardKey.numpad5: '5',
+            LogicalKeyboardKey.numpad6: '6',
+            LogicalKeyboardKey.numpad7: '7',
+            LogicalKeyboardKey.numpad8: '8',
+            LogicalKeyboardKey.numpad9: '9',
+            LogicalKeyboardKey.numpadDecimal: '.',
+          }[key] ??
+          event.character ??
+          key.keyLabel;
+      if (!RegExp(r'^[0-9.]$').hasMatch(digit)) return KeyEventResult.ignored;
+      _type(digit);
+    }
+    return KeyEventResult.handled;
+  }
 
   SetEntry get _set => widget.sets[_index];
   String get _value => switch (_field) {
@@ -710,6 +854,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     _field = field;
     _input = _value;
     _replace = true;
+    _keyboardFocus.requestFocus();
   });
 
   void _publish() {
@@ -783,33 +928,38 @@ class _SetKeyboardState extends State<_SetKeyboard> {
       _field == _SetField.weight || _index + 1 < widget.sets.length;
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    top: false,
-    child: SingleChildScrollView(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.md,
-              AppSpacing.lg,
-              AppSpacing.lg,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _contextRows(context),
-                const SizedBox(height: AppSpacing.md),
-                Divider(height: 1, thickness: 1, color: borderColor(context)),
-                const SizedBox(height: AppSpacing.lg),
-                _incrementRow(context),
-                const SizedBox(height: AppSpacing.lg),
-                _digitGrid(context),
-                const SizedBox(height: AppSpacing.lg),
-                _actionRow(context),
-              ],
+  Widget build(BuildContext context) => Focus(
+    focusNode: _keyboardFocus,
+    autofocus: true,
+    onKeyEvent: _handleKey,
+    child: SafeArea(
+      top: false,
+      child: SingleChildScrollView(
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.md,
+                AppSpacing.lg,
+                AppSpacing.lg,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _contextRows(context),
+                  const SizedBox(height: AppSpacing.md),
+                  Divider(height: 1, thickness: 1, color: borderColor(context)),
+                  const SizedBox(height: AppSpacing.lg),
+                  _incrementRow(context),
+                  const SizedBox(height: AppSpacing.lg),
+                  _digitGrid(context),
+                  const SizedBox(height: AppSpacing.lg),
+                  _actionRow(context),
+                ],
+              ),
             ),
           ),
         ),
@@ -817,104 +967,101 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     ),
   );
 
-  List<(String, int)> get _contextColumns {
-    final columns = <(String, int)>[];
-    if (widget.showHistoryColumns) {
-      columns.addAll([('Set', 7), ('Prev', 9)]);
-    }
-    columns.addAll([('Kg', 10), ('Reps', 9)]);
-    if (widget.onRpeChanged != null) columns.add(('RPE', 8));
-    return columns;
-  }
-
-  Widget _contextRows(BuildContext context) => Column(
-    children: [
-      Row(
-        children: [
-          for (final column in _contextColumns)
-            Expanded(
-              flex: column.$2,
-              child: Text(
-                column.$1,
-                textAlign:
-                    column.$1 == 'Set' || column.$1 == 'Prev'
-                        ? TextAlign.left
-                        : TextAlign.center,
-                style: Theme.of(context).textTheme.titleSmall!.copyWith(
-                  color: textSecondaryColor(context),
-                ),
-              ),
-            ),
-        ],
-      ),
-      const SizedBox(height: AppSpacing.xs),
-      Row(
+  Widget _contextRows(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final style = Theme.of(context).textTheme.titleLarge!.copyWith(
+        fontWeight: FontWeight.w600,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      );
+      final minimumWidth = math.max(
+        48.0,
+        ['999.99', entryWeight(_set.weight), '${_set.reps}', '@ 10']
+            .map((value) => readableTextWidth(context, value, style) + 24)
+            .reduce(math.max),
+      );
+      final fields = [
+        (
+          _SetField.weight,
+          'Kg',
+          _field == _SetField.weight ? _input : entryWeight(_set.weight),
+        ),
+        (
+          _SetField.reps,
+          'Reps',
+          _field == _SetField.reps ? _input : '${_set.reps}',
+        ),
+        if (widget.onRpeChanged != null)
+          (
+            _SetField.rpe,
+            'RPE',
+            '@ ${_field == _SetField.rpe ? (_input.isEmpty ? '—' : _input) : (_set.rpe?.toString() ?? '—')}',
+          ),
+      ];
+      final count = ((constraints.maxWidth + AppSpacing.sm) /
+              (minimumWidth + AppSpacing.sm))
+          .floor()
+          .clamp(1, fields.length);
+      final width =
+          (constraints.maxWidth - (count - 1) * AppSpacing.sm) / count;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (widget.showHistoryColumns) ...[
-            Expanded(flex: 7, child: _contextText(context, '${_index + 1}')),
-            Expanded(
-              flex: 9,
-              child: _contextText(context, _set.previous ?? '—', muted: true),
+            Wrap(
+              spacing: AppSpacing.lg,
+              runSpacing: AppSpacing.xs,
+              children: [
+                Text(
+                  'Set ${_index + 1}',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                Text(
+                  'Previous: ${_set.previous ?? '—'}',
+                  style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                    color: textSecondaryColor(context),
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: AppSpacing.sm),
           ],
-          Expanded(
-            flex: 10,
-            child: _contextField(
-              context,
-              value:
-                  _field == _SetField.weight
-                      ? _input
-                      : entryWeight(_set.weight),
-              field: _SetField.weight,
-              semanticsLabel: 'Set ${_index + 1} Kg',
-              filled: false,
-            ),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final field in fields)
+                SizedBox(
+                  width: width,
+                  child: Column(
+                    children: [
+                      Text(
+                        field.$2,
+                        style: Theme.of(context).textTheme.titleSmall!.copyWith(
+                          color: textSecondaryColor(context),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      _contextField(
+                        context,
+                        field: field.$1,
+                        value: field.$3,
+                        semanticsLabel:
+                            field.$1 == _SetField.rpe
+                                ? (_set.rpe == null
+                                    ? 'Set ${_index + 1} RPE, not set'
+                                    : 'Set ${_index + 1} RPE ${_set.rpe}')
+                                : 'Set ${_index + 1} ${field.$2}',
+                        filled: field.$1 != _SetField.weight,
+                      ),
+                    ],
+                  ),
+                ),
+            ],
           ),
-          Expanded(
-            flex: 9,
-            child: _contextField(
-              context,
-              value: _field == _SetField.reps ? _input : '${_set.reps}',
-              field: _SetField.reps,
-              semanticsLabel: 'Set ${_index + 1} Reps',
-            ),
-          ),
-          if (widget.onRpeChanged != null)
-            Expanded(
-              flex: 8,
-              child: _contextField(
-                context,
-                value:
-                    '@ ${_field == _SetField.rpe ? (_input.isEmpty ? '—' : _input) : (_set.rpe?.toString() ?? '—')}',
-                field: _SetField.rpe,
-                semanticsLabel:
-                    _set.rpe == null
-                        ? 'Set ${_index + 1} RPE, not set'
-                        : 'Set ${_index + 1} RPE ${_set.rpe}',
-              ),
-            ),
         ],
-      ),
-    ],
+      );
+    },
   );
-
-  Widget _contextText(
-    BuildContext context,
-    String value, {
-    bool muted = false,
-  }) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-    child: Text(
-      value,
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-      style: Theme.of(context).textTheme.titleLarge!.copyWith(
-        fontFeatures: const [FontFeature.tabularFigures()],
-        color: muted ? textSecondaryColor(context) : textPrimaryColor(context),
-      ),
-    ),
-  );
-
   Widget _contextField(
     BuildContext context, {
     required String value,
@@ -936,6 +1083,12 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     }
     return Semantics(
       label: semanticsLabel,
+      value: switch (field) {
+        _SetField.weight => '${value.isEmpty ? '0' : value} kilograms',
+        _SetField.reps => '${value.isEmpty ? '0' : value} repetitions',
+        _SetField.rpe => _set.rpe == null ? 'Not set' : '${_set.rpe} out of 10',
+      },
+      liveRegion: active,
       button: true,
       selected: active,
       excludeSemantics: true,
@@ -947,7 +1100,8 @@ class _SetKeyboardState extends State<_SetKeyboard> {
           onTap: () => _select(_index, field),
           borderRadius: AppRadius.button,
           child: Container(
-            height: 48,
+            constraints: const BoxConstraints(minHeight: 48),
+            padding: const EdgeInsets.all(AppSpacing.xs),
             margin: const EdgeInsets.only(left: AppSpacing.xs),
             alignment: Alignment.center,
             decoration: BoxDecoration(
@@ -959,16 +1113,14 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                       : Colors.transparent,
               borderRadius: AppRadius.button,
             ),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(
-                value.isEmpty ? '0' : value,
-                maxLines: 1,
-                style: Theme.of(context).textTheme.titleLarge!.copyWith(
-                  color: valueColor,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                  fontWeight: FontWeight.w600,
-                ),
+            child: Text(
+              value.isEmpty ? '0' : value,
+              maxLines: 1,
+              softWrap: false,
+              style: Theme.of(context).textTheme.titleLarge!.copyWith(
+                color: valueColor,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                fontWeight: FontWeight.w600,
               ),
             ),
           ),
@@ -983,19 +1135,39 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     _SetField.rpe => false,
   };
 
-  Widget _incrementRow(BuildContext context) => Row(
-    children: [
-      for (var i = 0; i < 4; i++) ...[
-        if (i > 0) const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: _incrementKey(
-            context,
-            label: const ['+2.5', '−2.5', '+1', '−1'][i],
-            delta: const [2.5, -2.5, 1.0, -1.0][i],
-          ),
-        ),
-      ],
-    ],
+  Widget _incrementRow(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final minimumWidth = math.max(
+        48.0,
+        readableTextWidth(
+              context,
+              '−2.5',
+              Theme.of(context).textTheme.labelLarge!,
+            ) +
+            16,
+      );
+      final count = ((constraints.maxWidth + AppSpacing.sm) /
+              (minimumWidth + AppSpacing.sm))
+          .floor()
+          .clamp(1, 4);
+      final width =
+          (constraints.maxWidth - (count - 1) * AppSpacing.sm) / count;
+      return Wrap(
+        spacing: AppSpacing.sm,
+        runSpacing: AppSpacing.sm,
+        children: [
+          for (var i = 0; i < 4; i++)
+            SizedBox(
+              width: width,
+              child: _incrementKey(
+                context,
+                label: const ['+2.5', '−2.5', '+1', '−1'][i],
+                delta: const [2.5, -2.5, 1.0, -1.0][i],
+              ),
+            ),
+        ],
+      );
+    },
   );
 
   Widget _incrementKey(
@@ -1011,12 +1183,12 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     final unit = _field == _SetField.reps ? 'reps' : 'kilograms';
     return Semantics(
       label: '$label $unit',
-      child: SizedBox(
-        height: 48,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
         child: OutlinedButton(
           onPressed: enabled ? () => _adjust(delta) : null,
           style: OutlinedButton.styleFrom(
-            padding: EdgeInsets.zero,
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
             foregroundColor:
                 emphasized ? accentColor(context) : textPrimaryColor(context),
             disabledForegroundColor: textSecondaryColor(context),
@@ -1028,7 +1200,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
               borderRadius: AppRadius.keypadKey,
             ),
           ),
-          child: FittedBox(child: Text(label)),
+          child: Text(label),
         ),
       ),
     );
@@ -1073,8 +1245,8 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     final enabled = key != '.' || _field == _SetField.weight;
     return Semantics(
       label: isDelete ? 'Delete digit' : null,
-      child: SizedBox(
-        height: height,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: height),
         child: TextButton(
           onPressed: enabled ? () => _type(key) : null,
           style: TextButton.styleFrom(
@@ -1129,8 +1301,8 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     required String label,
     required VoidCallback? onTap,
     required bool filled,
-  }) => SizedBox(
-    height: 52,
+  }) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 52),
     child: TextButton(
       onPressed: onTap,
       style: TextButton.styleFrom(

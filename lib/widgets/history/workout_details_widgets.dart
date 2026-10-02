@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../models/exercise.dart';
@@ -7,6 +9,7 @@ import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import '../../utils/statistics_format.dart';
+import '../readable_table_viewport.dart';
 
 bool _isPrMarker(String? note) {
   final normalized = note?.trim().toLowerCase().replaceAll(
@@ -259,41 +262,53 @@ class WorkoutExerciseDetails extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             )
-          else ...[
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: _SetHeader(weightUnit: weightUnit),
-            ),
-            for (final entry in exercise.sets.indexed)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _SetValues(
-                      index: entry.$1,
-                      weight: displayWeight(entry.$2.weight, weightUnit),
-                      reps: entry.$2.reps,
-                      rpe: entry.$2.rpe,
-                      isPrAttempt: _isPrMarker(entry.$2.note),
-                    ),
-                    if ((entry.$2.note?.trim().isNotEmpty ?? false) &&
-                        !_isPrMarker(entry.$2.note))
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          left: 40,
-                          top: AppSpacing.xs,
-                          bottom: AppSpacing.xs,
-                        ),
-                        child: _WorkoutNote(
-                          note: entry.$2.note!.trim(),
-                          label: 'Set ${entry.$1 + 1} note',
-                        ),
-                      ),
-                  ],
-                ),
+          else
+            ReadableTableViewport(
+              minimumWidth: _minimumSavedTableWidth(
+                context,
+                exercise,
+                weightUnit,
               ),
-          ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: _SetHeader(weightUnit: weightUnit),
+                  ),
+                  for (final entry in exercise.sets.indexed)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _SetValues(
+                            index: entry.$1,
+                            weightUnit: weightUnit,
+                            weight: displayWeight(entry.$2.weight, weightUnit),
+                            reps: entry.$2.reps,
+                            rpe: entry.$2.rpe,
+                            isPrAttempt: _isPrMarker(entry.$2.note),
+                          ),
+                          if ((entry.$2.note?.trim().isNotEmpty ?? false) &&
+                              !_isPrMarker(entry.$2.note))
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                left: 40,
+                                top: AppSpacing.xs,
+                                bottom: AppSpacing.xs,
+                              ),
+                              child: _WorkoutNote(
+                                note: entry.$2.note!.trim(),
+                                label: 'Set ${entry.$1 + 1} note',
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
           if (performed.length > 1)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -334,9 +349,75 @@ class _WorkoutNote extends StatelessWidget {
 
 // Saved logs omit the live screen's Previous column. The other columns retain
 // its fixed set-number gutter, spacing, and weight/reps/RPE proportions.
-Widget _setColumns(List<Widget> cells) => Row(
+double _savedSetNumberWidth(BuildContext context) => [
+  32.0,
+  readableTextWidth(context, 'Set', Theme.of(context).textTheme.labelMedium!),
+  readableTextWidth(
+    context,
+    '999',
+    Theme.of(context).textTheme.labelLarge!.copyWith(
+      fontFeatures: const [FontFeature.tabularFigures()],
+    ),
+  ),
+].reduce(math.max);
+
+double _minimumSavedTableWidth(
+  BuildContext context,
+  Exercise exercise,
+  String unit,
+) {
+  final style = Theme.of(context).textTheme.titleLarge!.copyWith(
+    fontSize: 18,
+    fontWeight: FontWeight.bold,
+    fontFeatures: const [FontFeature.tabularFigures()],
+  );
+  final weightWidth = exercise.sets.fold<double>(
+    48,
+    (width, set) => math.max(
+      width,
+      readableTextWidth(
+            context,
+            formatWeight(displayWeight(set.weight, unit)),
+            style,
+          ) +
+          16 +
+          (_isPrMarker(set.note)
+              ? readableTextWidth(
+                    context,
+                    'PR',
+                    Theme.of(context).textTheme.labelSmall!.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ) +
+                  12
+              : 0),
+    ),
+  );
+  final repsWidth = exercise.sets.fold<double>(
+    48,
+    (width, set) =>
+        math.max(width, readableTextWidth(context, '${set.reps}', style) + 16),
+  );
+  final rpeWidth = math.max(
+    48.0,
+    readableTextWidth(
+          context,
+          'RPE',
+          Theme.of(context).textTheme.labelMedium!,
+        ) +
+        8,
+  );
+  final flexibleUnit = [
+    weightWidth / 5,
+    repsWidth / 4,
+    rpeWidth / 4,
+  ].reduce(math.max);
+  return _savedSetNumberWidth(context) + 3 * AppSpacing.sm + flexibleUnit * 13;
+}
+
+Widget _setColumns(BuildContext context, List<Widget> cells) => Row(
   children: [
-    SizedBox(width: 32, child: cells[0]),
+    SizedBox(width: _savedSetNumberWidth(context), child: cells[0]),
     const SizedBox(width: AppSpacing.sm),
     Expanded(flex: 5, child: cells[1]),
     const SizedBox(width: AppSpacing.sm),
@@ -352,7 +433,7 @@ class _SetHeader extends StatelessWidget {
   const _SetHeader({required this.weightUnit});
 
   @override
-  Widget build(BuildContext context) => _setColumns([
+  Widget build(BuildContext context) => _setColumns(context, [
     for (final label in ['Set', 'Weight ($weightUnit)', 'Reps', 'RPE'])
       Text(
         label,
@@ -367,6 +448,7 @@ class _SetHeader extends StatelessWidget {
 
 class _SetValues extends StatelessWidget {
   final int index;
+  final String weightUnit;
   final double weight;
   final int reps;
   final int? rpe;
@@ -374,21 +456,32 @@ class _SetValues extends StatelessWidget {
 
   const _SetValues({
     required this.index,
+    required this.weightUnit,
     required this.weight,
     required this.reps,
     required this.rpe,
     required this.isPrAttempt,
   });
 
-  Widget _value(BuildContext context, Widget child) => Container(
-    constraints: const BoxConstraints(minHeight: 44),
-    padding: const EdgeInsets.all(AppSpacing.xs),
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      color: surfaceColor(context),
-      borderRadius: AppRadius.field,
+  Widget _value(
+    BuildContext context,
+    Widget child, {
+    required String label,
+    required String value,
+  }) => Semantics(
+    label: label,
+    value: value,
+    excludeSemantics: true,
+    child: Container(
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: const EdgeInsets.all(AppSpacing.xs),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: surfaceColor(context),
+        borderRadius: AppRadius.field,
+      ),
+      child: child,
     ),
-    child: FittedBox(fit: BoxFit.scaleDown, child: child),
   );
 
   @override
@@ -408,8 +501,14 @@ class _SetValues extends StatelessWidget {
       container: true,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
-        child: _setColumns([
-          Text('${index + 1}', textAlign: TextAlign.center, style: quiet),
+        child: _setColumns(context, [
+          ExcludeSemantics(
+            child: Text(
+              '${index + 1}',
+              textAlign: TextAlign.center,
+              style: quiet,
+            ),
+          ),
           _value(
             context,
             Row(
@@ -442,8 +541,16 @@ class _SetValues extends StatelessWidget {
                 ],
               ],
             ),
+            label: 'Set ${index + 1} weight',
+            value:
+                '${formatWeight(weight)} ${weightUnit == 'lbs' ? 'pounds' : 'kilograms'}${isPrAttempt ? ', Personal record' : ''}',
           ),
-          _value(context, Text('$reps', style: style)),
+          _value(
+            context,
+            Text('$reps', style: style),
+            label: 'Set ${index + 1} reps',
+            value: '$reps',
+          ),
           Semantics(
             label: 'Set ${index + 1} RPE',
             value: rpe?.toString() ?? 'Not recorded',

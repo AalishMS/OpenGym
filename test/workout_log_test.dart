@@ -21,6 +21,7 @@ import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
+import 'package:gymapp/widgets/readable_table_viewport.dart';
 
 import 'support/hive_test_harness.dart';
 
@@ -191,10 +192,25 @@ void main() {
               matching: find.byTooltip('Exercise actions for Bench press'),
             );
             final rpe = find.descendant(of: card, matching: find.text('RPE'));
-            expect(
-              tester.getCenter(menu).dx,
-              closeTo(tester.getCenter(rpe).dx, 0.1),
+            final tableViewport = find.descendant(
+              of: card,
+              matching: find.byType(ReadableTableViewport),
             );
+            final minimumWidth =
+                tester
+                    .widget<ReadableTableViewport>(tableViewport)
+                    .minimumWidth;
+            if (minimumWidth <= tester.getSize(tableViewport).width) {
+              expect(
+                tester.getCenter(menu).dx,
+                closeTo(tester.getCenter(rpe).dx, 0.1),
+              );
+            } else {
+              expect(
+                tester.getRect(card).contains(tester.getCenter(menu)),
+                isTrue,
+              );
+            }
             expect(tester.getSize(menu).width, greaterThanOrEqualTo(48));
             final finish = find.widgetWithText(FilledButton, 'Finish workout');
             expect(finish, findsOneWidget);
@@ -262,8 +278,8 @@ void main() {
       final menu = find.byTooltip('Exercise actions for Bench press');
       final rect = tester.getRect(menu);
       for (final edge in [
-          rect.centerLeft + const Offset(0.1, 0),
-          rect.centerRight - const Offset(0.1, 0),
+        rect.centerLeft + const Offset(0.1, 0),
+        rect.centerRight - const Offset(0.1, 0),
       ]) {
         await tester.tapAt(edge);
         await tester.pumpAndSettle();

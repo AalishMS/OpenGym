@@ -11,11 +11,7 @@ class PlanStatusTile extends StatelessWidget {
   final List<PlanStat> stats;
   final void Function(PlanStat) onOpen;
 
-  const PlanStatusTile({
-    required this.stats,
-    required this.onOpen,
-    super.key,
-  });
+  const PlanStatusTile({required this.stats, required this.onOpen, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -30,54 +26,58 @@ class PlanStatusTile extends StatelessWidget {
           InkWell(
             onTap: () => onOpen(stat),
             splashColor: accent.withAlpha(40),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-              child: Row(
-                children: [
-                  Container(
-                    width: 2,
-                    height: 22,
-                    color: planColorOf(stat.plan.planColor, context),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          stat.plan.name.toUpperCase(),
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                            color: textPrimary,
-                            letterSpacing: 0.02,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          _subtitle(stat),
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 9,
-                            color: textSecondary,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 2,
+                      height: 22,
+                      color: planColorOf(stat.plan.planColor, context),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    stat.lastTrained != null
-                        ? formatRelativeDay(stat.lastTrained!)
-                        : 'NEVER',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 9,
-                      color: stat.lastTrained != null ? accent : textSecondary,
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            stat.plan.name.toUpperCase(),
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: textPrimary,
+                              letterSpacing: 0.02,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            _subtitle(stat),
+                            style: GoogleFonts.jetBrainsMono(
+                              fontSize: 9,
+                              color: textSecondary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      stat.lastTrained != null
+                          ? formatRelativeDay(stat.lastTrained!)
+                          : 'NEVER',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 9,
+                        color:
+                            stat.lastTrained != null ? accent : textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
