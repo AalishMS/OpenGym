@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import 'models/workout_session.dart';
@@ -95,39 +96,50 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       _tourSteps = [
         GuidedTourStep(
           target: _planTourKey,
+          icon: LucideIcons.clipboardList,
+          label: 'Build your routine',
           title: hasPlans ? 'Make a plan' : 'Plan your first workout',
           body:
               hasPlans
-                  ? 'A plan is your list of exercises. Add your own with New plan, or choose a ready-made routine.'
-                  : 'Create a list of exercises, or choose a ready-made routine. Once you have a plan, use Start workout to enter your weight and reps.',
+                  ? 'Use New plan to group your exercises into a workout you can repeat. You can also choose a ready-made routine from the split menu.'
+                  : 'Tap Create plan to pick your exercises, or use Choose a split below for a ready-made routine.',
           scrollController: _homeScrollController,
           scrollToEnd: hasPlans,
         ),
         if (hasPlans)
           GuidedTourStep(
             target: _startTourKey,
-            title: 'Start and log',
+            icon: LucideIcons.play,
+            label: 'At the gym',
+            title: 'Log as you lift',
             body:
-                'Open your workout, tap Start, and enter your weight and reps. Tap Finish workout when you are done.',
+                'Start workout opens your exercise list. Tap Start to run the timer, log your weight and reps for each set, then Finish workout to save it to History.',
             scrollController: _homeScrollController,
           ),
         GuidedTourStep(
           target: _historyTourKey,
+          icon: LucideIcons.history,
+          label: 'Look back',
           title: 'Find past workouts',
           body:
-              'Your finished workouts appear here. Open one to see what you lifted.',
+              'Your finished workouts land in History. Open a workout to check your sets, weights, and notes before your next session.',
           scrollController: _homeScrollController,
         ),
         GuidedTourStep(
           target: _statsTourKey,
+          icon: LucideIcons.trendingUp,
+          label: 'Keep building',
           title: 'See your progress',
-          body: 'See how often you train and how your lifts improve.',
+          body:
+              'See your training consistency and personal records. As you log workouts, your numbers here grow with you.',
         ),
         GuidedTourStep(
           target: _settingsTourKey,
+          icon: LucideIcons.databaseBackup,
+          label: 'Keep your training safe',
           title: 'Save a backup',
           body:
-              'Backups live in Settings → Data. Export data saves a backup; Import data restores one.',
+              'In Settings → Data, use Export data to save a backup and Import data to restore it. You can replay this tour from Settings anytime.',
         ),
       ];
       _tourActive = true;

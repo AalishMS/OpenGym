@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/radii.dart';
+import '../theme/spacing.dart';
+import 'guided_tour.dart';
 
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
@@ -58,10 +61,19 @@ class AppBottomNav extends StatelessWidget {
           labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
           destinations: [
             for (var i = 0; i < _labels.length; i++)
-              NavigationDestination(
+              GuidedTourTarget(
                 key: destinationKeys[i],
-                icon: Icon(_icons[i]),
-                label: _labels[i],
+                // Enclose the icon and label without outlining the entire
+                // edge-to-edge navigation slot or its system safe area.
+                padding: const EdgeInsets.symmetric(
+                  horizontal: -AppSpacing.sm,
+                  vertical: -AppSpacing.xs,
+                ),
+                borderRadius: AppRadius.button,
+                child: NavigationDestination(
+                  icon: Icon(_icons[i]),
+                  label: _labels[i],
+                ),
               ),
           ],
         ),

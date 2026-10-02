@@ -1,10 +1,31 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
+
+/// Describes the visible bounds when a control's hit area is larger than its
+/// contents, or its icon and label live in separate parts of a native widget.
+class GuidedTourTarget extends StatelessWidget {
+  final Widget child;
+  final GlobalKey? additionalTarget;
+  final EdgeInsets padding;
+  final BorderRadius borderRadius;
+
+  const GuidedTourTarget({
+    required this.child,
+    this.additionalTarget,
+    this.padding = const EdgeInsets.all(AppSpacing.sm),
+    this.borderRadius = AppRadius.button,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) => child;
+}
 
 class GuidedTourStep {
   final GlobalKey target;
@@ -12,6 +33,8 @@ class GuidedTourStep {
   final String body;
   final ScrollController? scrollController;
   final bool scrollToEnd;
+  final IconData icon;
+  final String label;
 
   const GuidedTourStep({
     required this.target,
@@ -19,6 +42,8 @@ class GuidedTourStep {
     required this.body,
     this.scrollController,
     this.scrollToEnd = false,
+    this.icon = LucideIcons.dumbbell,
+    this.label = 'Quick tour',
   });
 }
 
@@ -38,6 +63,7 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
   int _index = 0;
   int _revision = 0;
   Rect? _targetRect;
+  BorderRadius _targetRadius = AppRadius.card;
 
   @override
   void initState() {
@@ -66,14 +92,47 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
     final target =
         widget.steps[_index].target.currentContext?.findRenderObject();
     final overlay = _overlayKey.currentContext?.findRenderObject();
-    if (target is! RenderBox || overlay is! RenderBox || !target.hasSize) {
+    if (target is! RenderBox ||
+        overlay is! RenderBox ||
+        !target.attached ||
+        !target.hasSize ||
+        !overlay.hasSize) {
       return null;
     }
-    final rect = MatrixUtils.transformRect(
+    var rect = MatrixUtils.transformRect(
       target.getTransformTo(overlay),
       Offset.zero & target.size,
-    ).intersect(Offset.zero & overlay.size);
-    return rect.isEmpty ? null : rect.inflate(6);
+    );
+    final anchor = widget.steps[_index].target.currentWidget;
+    if (anchor is GuidedTourTarget) {
+      final additional =
+          anchor.additionalTarget?.currentContext?.findRenderObject();
+      if (additional is RenderBox &&
+          additional.attached &&
+          additional.hasSize) {
+        rect = rect.expandToInclude(
+          MatrixUtils.transformRect(
+            additional.getTransformTo(overlay),
+            Offset.zero & additional.size,
+          ),
+        );
+      }
+      final inset = anchor.padding;
+      rect = Rect.fromLTRB(
+        rect.left - inset.left,
+        rect.top - inset.top,
+        rect.right + inset.right,
+        rect.bottom + inset.bottom,
+      );
+      _targetRadius = anchor.borderRadius;
+    } else {
+      // The outer radius follows the button's parallel outline: 10 + 4px.
+      rect = rect.inflate(AppSpacing.xs);
+      _targetRadius = AppRadius.card;
+    }
+    // Leave space for the stroke on every edge, including near a safe area.
+    rect = rect.intersect((Offset.zero & overlay.size).deflate(2));
+    return rect.isEmpty ? null : rect;
   }
 
   void _trackTarget(Duration timestamp) {
@@ -143,6 +202,12 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
     _prepare();
   }
 
+  void _back() {
+    if (_index == 0) return;
+    setState(() => _index--);
+    _prepare();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.steps.isEmpty) return const SizedBox.shrink();
@@ -157,6 +222,7 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
             painter: _SpotlightPainter(
               target: rect,
               scrim: Theme.of(context).colorScheme.scrim.withAlpha(190),
+              radius: _targetRadius,
             ),
           ),
         ),
@@ -168,7 +234,14 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
                 key: const ValueKey('tutorial-highlight'),
                 decoration: BoxDecoration(
                   border: Border.all(color: accentColor(context), width: 2),
-                  borderRadius: AppRadius.button,
+                  borderRadius: _targetRadius,
+                  boxShadow: [
+                    BoxShadow(
+                      color: accentColor(context).withAlpha(45),
+                      blurRadius: 12,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -190,60 +263,171 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
                   side: BorderSide(color: borderColor(context)),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Flexible(
-                        child: SingleChildScrollView(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                elevation: 8,
+                shadowColor: Theme.of(context).colorScheme.scrim.withAlpha(90),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final compact = constraints.maxHeight < 240;
+                    return Padding(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (!compact)
+                            Row(
+                              children: [
+                                Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: accentMutedColor(context),
+                                    borderRadius: AppRadius.control,
+                                  ),
+                                  child: Icon(
+                                    step.icon,
+                                    size: 18,
+                                    color: accentColor(context),
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.md),
+                                Expanded(
+                                  child: Text(
+                                    step.label,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelMedium?.copyWith(
+                                      color: textSecondaryColor(context),
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  '${_index + 1} of ${widget.steps.length}',
+                                  style: Theme.of(context).textTheme.labelMedium
+                                      ?.copyWith(color: accentColor(context)),
+                                ),
+                              ],
+                            ),
+                          if (compact)
+                            Text(
+                              '${_index + 1} of ${widget.steps.length}',
+                              style: Theme.of(context).textTheme.labelMedium
+                                  ?.copyWith(color: accentColor(context)),
+                            ),
+                          SizedBox(
+                            height: compact ? AppSpacing.sm : AppSpacing.md,
+                          ),
+                          ExcludeSemantics(
+                            child: Row(
+                              children: [
+                                for (var i = 0; i < widget.steps.length; i++)
+                                  Expanded(
+                                    child: Padding(
+                                      padding: EdgeInsets.only(
+                                        right:
+                                            i == widget.steps.length - 1
+                                                ? 0
+                                                : AppSpacing.xs,
+                                      ),
+                                      child: AnimatedContainer(
+                                        duration:
+                                            MediaQuery.disableAnimationsOf(
+                                                  context,
+                                                )
+                                                ? Duration.zero
+                                                : const Duration(
+                                                  milliseconds: 180,
+                                                ),
+                                        height: 3,
+                                        decoration: BoxDecoration(
+                                          color:
+                                              i <= _index
+                                                  ? accentFillColor(context)
+                                                  : borderColor(context),
+                                          borderRadius: AppRadius.micro,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(
+                            height: compact ? AppSpacing.sm : AppSpacing.lg,
+                          ),
+                          Flexible(
+                            child: SingleChildScrollView(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    step.title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(fontWeight: FontWeight.w700),
+                                  ),
+                                  const SizedBox(height: AppSpacing.sm),
+                                  Text(
+                                    step.body,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium?.copyWith(
+                                      color: textSecondaryColor(context),
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          OverflowBar(
+                            alignment: MainAxisAlignment.spaceBetween,
+                            overflowAlignment: OverflowBarAlignment.end,
+                            spacing: AppSpacing.sm,
+                            overflowSpacing: AppSpacing.xs,
                             children: [
-                              Text(
-                                '${_index + 1} of ${widget.steps.length}',
-                                style: Theme.of(context).textTheme.labelSmall,
+                              TextButton(
+                                onPressed: widget.onClose,
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.sm,
+                                  ),
+                                ),
+                                child: const Text('Skip'),
                               ),
-                              const SizedBox(height: AppSpacing.sm),
-                              Text(
-                                step.title,
-                                style: Theme.of(context).textTheme.titleLarge,
-                              ),
-                              const SizedBox(height: AppSpacing.sm),
-                              Text(
-                                step.body,
-                                style: Theme.of(context).textTheme.bodyMedium,
+                              if (_index > 0)
+                                TextButton(
+                                  onPressed: rect == null ? null : _back,
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: AppSpacing.sm,
+                                    ),
+                                  ),
+                                  child: const Text('Back'),
+                                ),
+                              ElevatedButton(
+                                onPressed: rect == null ? null : _next,
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: AppSpacing.lg,
+                                  ),
+                                ),
+                                child: Text(
+                                  _index == widget.steps.length - 1
+                                      ? 'Done'
+                                      : 'Next',
+                                ),
                               ),
                             ],
                           ),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Flexible(
-                            child: TextButton(
-                              onPressed: widget.onClose,
-                              child: const Text('Skip'),
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Flexible(
-                            child: ElevatedButton(
-                              onPressed: rect == null ? null : _next,
-                              child: Text(
-                                _index == widget.steps.length - 1
-                                    ? 'Done'
-                                    : 'Next',
-                              ),
-                            ),
-                          ),
                         ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -257,22 +441,29 @@ class _GuidedTourState extends State<GuidedTour> with WidgetsBindingObserver {
 class _SpotlightPainter extends CustomPainter {
   final Rect? target;
   final Color scrim;
+  final BorderRadius radius;
 
-  const _SpotlightPainter({required this.target, required this.scrim});
+  const _SpotlightPainter({
+    required this.target,
+    required this.scrim,
+    required this.radius,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
     final path = Path()..fillType = PathFillType.evenOdd;
     path.addRect(Offset.zero & size);
     if (target != null) {
-      path.addRRect(AppRadius.button.toRRect(target!));
+      path.addRRect(radius.toRRect(target!));
     }
     canvas.drawPath(path, Paint()..color = scrim);
   }
 
   @override
   bool shouldRepaint(_SpotlightPainter oldDelegate) =>
-      target != oldDelegate.target || scrim != oldDelegate.scrim;
+      target != oldDelegate.target ||
+      scrim != oldDelegate.scrim ||
+      radius != oldDelegate.radius;
 }
 
 /// Uses the bubble's measured size, rather than assuming a fixed text height.
@@ -322,7 +513,7 @@ class _BubbleLayout extends SingleChildLayoutDelegate {
     Rect? best;
     double bestScore = -1;
     for (final candidate in candidates) {
-      if (candidate.width < 160 || candidate.height < 96) continue;
+      if (candidate.width < 180 || candidate.height < 140) continue;
       final score =
           math.min(candidate.width, 360.0) * math.min(candidate.height, 320.0);
       if (score > bestScore) {

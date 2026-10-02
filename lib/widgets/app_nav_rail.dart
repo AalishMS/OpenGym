@@ -3,6 +3,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme/app_theme.dart';
 import 'app_wordmark.dart';
+import 'guided_tour.dart';
 
 /// Desktop sidebar navigation with the same destinations as [AppBottomNav].
 class AppNavRail extends StatelessWidget {
@@ -31,6 +32,11 @@ class AppNavRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = accentColor(context);
     final textSecondary = textSecondaryColor(context);
+    // Keep icon identity stable when the shell rebuilds during the tour.
+    final iconKeys = {
+      for (final entry in destinationKeys.entries)
+        entry.key: GlobalObjectKey(entry.value),
+    };
 
     return SizedBox(
       width: 180,
@@ -59,8 +65,12 @@ class AppNavRail extends StatelessWidget {
           destinations: [
             for (var i = 0; i < _labels.length; i++)
               NavigationRailDestination(
-                icon: Icon(_icons[i]),
-                label: Text(_labels[i], key: destinationKeys[i]),
+                icon: Icon(_icons[i], key: iconKeys[i]),
+                label: GuidedTourTarget(
+                  key: destinationKeys[i],
+                  additionalTarget: iconKeys[i],
+                  child: Text(_labels[i]),
+                ),
               ),
           ],
         ),
