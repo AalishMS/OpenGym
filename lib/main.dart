@@ -50,6 +50,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late SettingsProvider _settingsProvider;
   late SplitProvider _splitProvider;
   late bool _showIntro;
+  GlobalKey<NavigatorState> _accountNavigatorKey = GlobalKey<NavigatorState>();
+  String? _navigatorUserId = SupabaseService.currentUserId;
 
   @override
   void initState() {
@@ -80,6 +82,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (mounted) setState(() => _showIntro = false);
   }
 
+  void _onAccountChanged(String? userId) {
+    if (!mounted || userId == _navigatorUserId) return;
+    setState(() {
+      _navigatorUserId = userId;
+      _accountNavigatorKey = GlobalKey<NavigatorState>();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -101,18 +111,27 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
           final seed = settings.accentSeed;
 
           return MaterialApp(
+            navigatorKey: _accountNavigatorKey,
             title: 'OpenGym',
             debugShowCheckedModeBanner: false,
             theme: buildTheme(seed, Brightness.light),
             darkTheme: buildTheme(seed, Brightness.dark),
             themeMode: settings.themeMode,
+            builder:
+                (context, navigator) =>
+                    _showIntro
+                        ? navigator!
+                        : AuthGate(
+                          onAccountChanged: _onAccountChanged,
+                          child: navigator!,
+                        ),
             home:
                 _showIntro
                     ? IntroScreen(
                       onFinish: _finishIntro,
                       onSkip: () => _finishIntro(skipTutorial: true),
                     )
-                    : const AuthGate(),
+                    : const AuthenticatedHome(),
           );
         },
       ),

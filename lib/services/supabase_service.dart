@@ -1,8 +1,14 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Central access point for the Supabase client and the current user.
 class SupabaseService {
   SupabaseService._();
+
+  static bool passwordRecoveryPending = false;
+  static StreamSubscription<AuthState>? _recoverySubscription;
 
   // Baked-in Supabase config so EVERY build (any IDE, any `flutter run`/`build`,
   // CI) has online support with no --dart-define flags. A --dart-define or
@@ -38,6 +44,21 @@ class SupabaseService {
       // parameter to publishableKey and accepts the legacy anon key here.
       publishableKey: supabaseAnonKey,
     );
+    await _recoverySubscription?.cancel();
+    // The SDK replays its last auth event. Subscribe before runApp so a
+    // cold-start recovery link is retained through subsequent token refreshes.
+    _recoverySubscription = auth.onAuthStateChange.listen(
+      (state) {
+        if (state.event == AuthChangeEvent.passwordRecovery) {
+          passwordRecoveryPending = true;
+        } else if (state.event == AuthChangeEvent.signedOut) {
+          passwordRecoveryPending = false;
+        }
+      },
+      onError: (Object error) {
+        debugPrint('Authentication recovery failed: ${error.runtimeType}');
+      },
+    );
   }
 
   static SupabaseClient get client => Supabase.instance.client;
@@ -55,4 +76,31 @@ class SupabaseService {
       auth.signUp(email: email.trim(), password: password);
 
   static Future<void> signOut() => auth.signOut();
+
+  static const recoveryAppUrl = 'io.opengym.app://reset-password/';
+  static const recoveryWebUrl = 'https://open-gym.netlify.app/';
+
+  static Future<void> requestPasswordReset(String email) =>
+      auth.resetPasswordForEmail(
+        email.trim(),
+        redirectTo:
+            kIsWeb
+                ? Uri.base
+                    .replace(query: 'password_reset=true', fragment: '')
+                    .toString()
+                : recoveryAppUrl,
+      );
+
+  static Future<void> updatePassword(
+    String password, {
+    String? expectedUserId,
+  }) {
+    if (expectedUserId != null &&
+        auth.currentSession?.user.id != expectedUserId) {
+      throw const AuthException(
+        'Your account changed. Open the reset link again before saving a password.',
+      );
+    }
+    return auth.updateUser(UserAttributes(password: password));
+  }
 }

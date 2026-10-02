@@ -17,6 +17,7 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../widgets/dashboard/dashboard_panel.dart';
+import '../widgets/app_button.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../utils/set_history.dart';
@@ -469,14 +470,11 @@ class _EditorHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          InkWell(
-            onTap: onBack,
-            borderRadius: AppRadius.control,
-            child: SizedBox(
-              width: 48,
-              height: 48,
-              child: Icon(LucideIcons.chevronLeft, color: color, size: 20),
-            ),
+          AppIconButton(
+            label: 'Back',
+            icon: LucideIcons.chevronLeft,
+            color: color,
+            onPressed: onBack,
           ),
           Expanded(
             child: Text(

@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
+import '../app_button.dart';
 
 /// A quiet plan entry, with a distinct outline for the next workout.
 class HomePlanRow extends StatelessWidget {
@@ -128,13 +129,13 @@ class HomePlanRow extends StatelessWidget {
                         color: onColor(nextGround),
                       ),
                     ),
-                  )
-                else
-                  Icon(
-                    LucideIcons.chevronRight,
-                    size: 18,
-                    color: textSecondaryColor(context),
                   ),
+                AppIconButton(
+                  label: 'Actions for $name',
+                  icon: LucideIcons.ellipsis,
+                  color: textSecondaryColor(context),
+                  onPressed: onShowActions,
+                ),
               ],
             ),
           ),

@@ -60,9 +60,12 @@ class HistoryMonthHeader extends StatelessWidget {
           runSpacing: AppSpacing.xs,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Text(
-              historyMonthLabel(group.month, group.year),
-              style: Theme.of(context).textTheme.titleLarge,
+            Semantics(
+              header: true,
+              child: Text(
+                historyMonthLabel(group.month, group.year),
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
             ),
             Text(
               '$count workout${count == 1 ? '' : 's'}',

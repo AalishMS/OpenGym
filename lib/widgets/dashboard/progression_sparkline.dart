@@ -62,14 +62,22 @@ class ProgressionSparkline extends StatelessWidget {
         const SizedBox(height: AppSpacing.sm),
         SizedBox(
           height: 80,
-          child: CustomPaint(
-            painter: _SparklinePainter(
-              values: values,
-              minY: min - pad,
-              maxY: max + pad,
-              color: accent,
+          child: Semantics(
+            image: true,
+            label: '$exercise maximum weight by session',
+            value:
+                'Oldest to newest. ${values.indexed.map((entry) => 'Session ${entry.$1 + 1}: ${formatWeight(entry.$2)} kilograms').join('; ')}',
+            child: ExcludeSemantics(
+              child: CustomPaint(
+                painter: _SparklinePainter(
+                  values: values,
+                  minY: min - pad,
+                  maxY: max + pad,
+                  color: accent,
+                ),
+                child: const SizedBox.expand(),
+              ),
             ),
-            child: const SizedBox.expand(),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),

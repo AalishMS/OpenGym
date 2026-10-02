@@ -32,6 +32,7 @@ class WorkoutScreen extends StatefulWidget {
   final WorkoutPlan plan;
   final int planIndex;
   final int? initialWeekNumber;
+  final WorkoutSession? initialSession;
   final bool showLogConfirmationOnOpen;
 
   const WorkoutScreen({
@@ -39,6 +40,7 @@ class WorkoutScreen extends StatefulWidget {
     required this.plan,
     required this.planIndex,
     this.initialWeekNumber,
+    this.initialSession,
     this.showLogConfirmationOnOpen = false,
   });
 
@@ -80,11 +82,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   void _reloadCurrentSession() {
     if (!mounted) return;
-    final saved = HiveService.getSessionForPlanAndWeek(
-      widget.plan.name,
-      _currentWeek,
-      widget.plan.splitId,
-    );
+    final saved = _savedSessionForWeek(_currentWeek);
     if (saved == null) return;
     _weekSessions[_currentWeek] = saved;
     _syncTicker(saved);
@@ -114,7 +112,16 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         _currentWeekIndex = _weeks.indexOf(draft.weekNumber);
       }
     }
-    final requestedWeek = widget.initialWeekNumber;
+    final initialSession = widget.initialSession;
+    if (initialSession != null) {
+      if (!_weeks.contains(initialSession.weekNumber)) {
+        _weeks.add(initialSession.weekNumber);
+        _weeks.sort();
+      }
+      _weekSessions[initialSession.weekNumber] = initialSession;
+    }
+    final requestedWeek =
+        initialSession?.weekNumber ?? widget.initialWeekNumber;
     if (requestedWeek != null && _weeks.contains(requestedWeek)) {
       _currentWeekIndex = _weeks.indexOf(requestedWeek);
     }
@@ -123,11 +130,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
   void _loadSessionForCurrentWeek() {
     final week = _weeks[_currentWeekIndex];
-    final existingSession = HiveService.getSessionForPlanAndWeek(
-      widget.plan.name,
-      week,
-      widget.plan.splitId,
-    );
+    final existingSession = _savedSessionForWeek(week);
     if (existingSession != null) {
       _weekSessions[week] = existingSession;
       _syncTicker(existingSession);
@@ -135,6 +138,21 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
       _ticker?.cancel();
       _ticker = null;
     }
+  }
+
+  WorkoutSession? _savedSessionForWeek(int week) {
+    final selected = _weekSessions[week];
+    // A renamed plan or another session in the same week must not replace the
+    // draft selected from Dashboard when provider notifications arrive.
+    if (selected != null) {
+      final id = selected.id;
+      return id == null ? selected : HiveService.getSessionById(id) ?? selected;
+    }
+    return HiveService.getSessionForPlanAndWeek(
+      widget.plan.name,
+      week,
+      widget.plan.splitId,
+    );
   }
 
   void _syncTicker(WorkoutSession session) {
@@ -996,18 +1014,34 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 horizontal: AppSpacing.lg,
                 vertical: AppSpacing.xs,
               ),
-              child: FilledButton.icon(
-                onPressed: session.hasStarted ? _stopWorkout : null,
-                icon: const Icon(LucideIcons.check, size: 18),
-                label: const Text('Finish workout'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: accentFillColor(context),
-                  foregroundColor: onAccentColor(context),
-                  minimumSize: const Size.fromHeight(48),
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: AppRadius.button,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (!session.hasStarted) ...[
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        'Tap Start in the toolbar to begin the timer and enable Finish workout.',
+                        style: Theme.of(context).textTheme.bodySmall
+                            ?.copyWith(color: textSecondaryColor(context)),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+                  FilledButton.icon(
+                    onPressed: session.hasStarted ? _stopWorkout : null,
+                    icon: const Icon(LucideIcons.check, size: 18),
+                    label: const Text('Finish workout'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: accentFillColor(context),
+                      foregroundColor: onAccentColor(context),
+                      minimumSize: const Size.fromHeight(48),
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: AppRadius.button,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           _buildWeekNavBar(accent),

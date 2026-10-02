@@ -19,6 +19,8 @@ import '../widgets/dashboard/progression_sparkline.dart';
 import '../widgets/dashboard/recent_prs_tile.dart';
 import '../widgets/dashboard/stat_tile.dart';
 import '../widgets/app_button.dart';
+import '../widgets/history/history_journal_data.dart';
+import 'history_screen.dart';
 import 'plan_editor_screen.dart';
 import 'workout_screen.dart';
 
@@ -189,17 +191,43 @@ class DashboardScreen extends StatelessWidget {
     List<WorkoutPlan> plans,
   ) {
     final index = plans.indexWhere(
-      (p) => p.name.toLowerCase() == last.planName.toLowerCase(),
+      (plan) =>
+          plan.splitId == last.splitId &&
+          (last.planId != null
+              ? plan.id == last.planId
+              : plan.name.toLowerCase() == last.planName.toLowerCase()),
     );
 
     return DashboardPanel(
       title: 'LAST SESSION',
-      // A deleted or renamed plan can't be reopened — the button greys out
-      // rather than disappearing, so the row keeps its shape.
       action: AppButton.secondary(
-        label: 'Resume',
-        onPressed:
-            index >= 0 ? () => _openPlan(context, index, plans[index]) : null,
+        label: last.isCompleted ? 'View workout' : 'Resume',
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute<void>(
+              builder:
+                  (_) =>
+                      last.isCompleted
+                          ? WorkoutDetailsScreen(
+                            sessionIdentity: historySessionIdentity(last),
+                          )
+                          : WorkoutScreen(
+                            plan:
+                                index >= 0
+                                    ? plans[index]
+                                    : WorkoutPlan(
+                                      name: last.planName,
+                                      id: last.planId,
+                                      splitId: last.splitId,
+                                      exercises: const [],
+                                    ),
+                            planIndex: index,
+                            initialSession: last,
+                          ),
+            ),
+          );
+        },
       ),
       child: LastSessionTile(session: last),
     );

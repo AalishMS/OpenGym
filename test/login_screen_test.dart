@@ -35,13 +35,19 @@ void main() {
     home: const LoginScreen(),
   );
 
-  testWidgets('empty submission reports the required-fields error', (
+  testWidgets('empty submission reports field errors and focuses email', (
     tester,
   ) async {
     await tester.pumpWidget(loginHost());
     await tester.tap(find.widgetWithText(ElevatedButton, 'Sign in'));
     await tester.pump();
-    expect(find.text('Email and password required.'), findsOneWidget);
+    expect(find.text('Enter your email.'), findsOneWidget);
+    expect(find.text('Enter your password.'), findsOneWidget);
+    final fields =
+        tester.widgetList<TextField>(find.byType(TextField)).toList();
+    expect(fields[0].decoration?.errorText, 'Enter your email.');
+    expect(fields[1].decoration?.errorText, 'Enter your password.');
+    expect(fields[0].focusNode?.hasFocus, isTrue);
   });
 
   testWidgets('mode switch updates heading and primary action', (tester) async {
@@ -105,8 +111,10 @@ void main() {
       isNull,
     );
     expect(
-      tester.widget<TextButton>(find.byType(TextButton)).onPressed,
-      isNull,
+      tester
+          .widgetList<TextButton>(find.byType(TextButton))
+          .every((button) => button.onPressed == null),
+      isTrue,
     );
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     final semantics = tester.ensureSemantics();

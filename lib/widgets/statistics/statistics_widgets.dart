@@ -13,7 +13,10 @@ class StatisticsSectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(title, style: Theme.of(context).textTheme.titleLarge);
+    return Semantics(
+      header: true,
+      child: Text(title, style: Theme.of(context).textTheme.titleLarge),
+    );
   }
 }
 

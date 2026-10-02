@@ -142,7 +142,13 @@ class _IntroScreenState extends State<IntroScreen> {
                                 ),
                               ),
                               const SizedBox(height: AppSpacing.md),
-                              Text(page.title, style: textTheme.displayMedium),
+                              Semantics(
+                                header: true,
+                                child: Text(
+                                  page.title,
+                                  style: textTheme.displayMedium,
+                                ),
+                              ),
                               const SizedBox(height: AppSpacing.md),
                               Text(
                                 page.body,
@@ -165,27 +171,35 @@ class _IntroScreenState extends State<IntroScreen> {
                     ),
                     child: Column(
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: List.generate(_pages.length, (index) {
-                            return AnimatedContainer(
-                              duration:
-                                  reduceMotion
-                                      ? Duration.zero
-                                      : const Duration(milliseconds: 280),
-                              curve: Curves.easeOutCubic,
-                              width: index == _page ? 24 : 6,
-                              height: 6,
-                              margin: const EdgeInsets.symmetric(horizontal: 3),
-                              decoration: BoxDecoration(
-                                color:
-                                    index == _page
-                                        ? accentColor(context)
-                                        : borderColor(context),
-                                borderRadius: AppRadius.chip,
-                              ),
-                            );
-                          }),
+                        Semantics(
+                          label: 'Page ${_page + 1} of ${_pages.length}',
+                          liveRegion: true,
+                          child: ExcludeSemantics(
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(_pages.length, (index) {
+                                return AnimatedContainer(
+                                  duration:
+                                      reduceMotion
+                                          ? Duration.zero
+                                          : const Duration(milliseconds: 280),
+                                  curve: Curves.easeOutCubic,
+                                  width: index == _page ? 24 : 6,
+                                  height: 6,
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        index == _page
+                                            ? accentColor(context)
+                                            : borderColor(context),
+                                    borderRadius: AppRadius.chip,
+                                  ),
+                                );
+                              }),
+                            ),
+                          ),
                         ),
                         const SizedBox(height: AppSpacing.xl),
                         SizedBox(
