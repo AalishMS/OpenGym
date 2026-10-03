@@ -75,6 +75,7 @@ double _minimumTableWidth(
   required bool showRpe,
   required bool numberIsAction,
   required bool trailing,
+  required bool continuousLog,
 }) {
   final valueStyle = Theme.of(context).textTheme.titleLarge!.copyWith(
     fontSize: 20,
@@ -87,7 +88,8 @@ double _minimumTableWidth(
         math.max(width, readableTextWidth(context, value, style) + 16),
   );
   final weight = widest([
-    '999.99',
+    // Live logs only need room for displayed values, not a hypothetical input.
+    if (!continuousLog) '999.99',
     ...sets.map((set) => entryWeight(set.weight)),
   ], valueStyle);
   final reps = widest(['999', ...sets.map((set) => '${set.reps}')], valueStyle);
@@ -276,6 +278,7 @@ class SetEntryTable extends StatelessWidget {
           showRpe: onRpeChanged != null,
           numberIsAction: numberIsAction,
           trailing: showTrailing,
+          continuousLog: continuousLog,
         ),
         child: Column(
           children: [

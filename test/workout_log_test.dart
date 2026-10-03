@@ -23,6 +23,7 @@ import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
 import 'package:gymapp/widgets/readable_table_viewport.dart';
+import 'package:gymapp/widgets/underline_tab_strip.dart';
 
 import 'support/hive_test_harness.dart';
 
@@ -262,6 +263,48 @@ void main() {
           }
         }
       }
+    },
+  );
+
+  testWidgets(
+    'swiping the set table changes weeks without horizontal scrolling',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      // Flutter's square test glyphs need more room than the app's font.
+      tester.view.physicalSize = const Size(600, 844);
+      addTearDown(tester.view.reset);
+      await tester.runAsync(() => seed());
+      await tester.pumpWidget(host());
+      await tester.pumpAndSettle();
+
+      final card = find.byType(ExerciseCard).first;
+      final row = find.descendant(
+        of: card,
+        matching: find.byKey(const ValueKey('set_entry_row_0')),
+      );
+      int selectedWeek() =>
+          tester
+              .widget<UnderlineTabStrip>(
+                find.byWidgetPredicate(
+                  (widget) =>
+                      widget is UnderlineTabStrip &&
+                      widget.rule == StripRule.top,
+                ),
+              )
+              .selectedIndex;
+
+      expect(selectedWeek(), 1);
+      expect(
+        find.descendant(of: card, matching: find.byType(Scrollable)),
+        findsNothing,
+      );
+      await tester.flingFrom(tester.getCenter(row), const Offset(120, 0), 1000);
+      await tester.pumpAndSettle();
+      expect(selectedWeek(), 0);
+      await tester.flingFrom(tester.getCenter(row), const Offset(-120, 0), 1000);
+      await tester.pumpAndSettle();
+      expect(selectedWeek(), 1);
+      expect(tester.takeException(), isNull);
     },
   );
 

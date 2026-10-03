@@ -43,6 +43,10 @@ class _ReadableTableViewportState extends State<ReadableTableViewport> {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
+      // A table that fits must not compete with its parent's swipe gesture.
+      if (widget.minimumWidth <= constraints.maxWidth) {
+        return SizedBox(width: constraints.maxWidth, child: widget.child);
+      }
       final showScrollbar =
           widget.showScrollbar && widget.minimumWidth > constraints.maxWidth;
       final scrollView = ScrollConfiguration(
