@@ -269,15 +269,42 @@ void main() {
               )
               .last;
       final route = ModalRoute.of(tester.element(title))!;
-      expect(route.transitionDuration, const Duration(milliseconds: 240));
+      expect(route.transitionDuration, const Duration(milliseconds: 190));
       expect(route.animation!.value, inExclusiveRange(0, 1));
       final slide = tester.widget<SlideTransition>(
         find.ancestor(of: title, matching: find.byType(SlideTransition)).first,
       );
       expect(slide.position.value.dx.sign, dx < 0 ? 1 : -1);
+      expect(slide.position.value.dx.abs(), lessThan(0.08));
+      final fade = tester.widget<FadeTransition>(
+        find.ancestor(of: title, matching: find.byType(FadeTransition)).first,
+      );
+      expect(fade.opacity.value, inExclusiveRange(0.78, 1));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
     }
+  });
+
+  testWidgets('workout content follows a swipe before the plan changes', (
+    tester,
+  ) async {
+    await open(tester);
+    final gesture = await tester.startGesture(const Offset(300, 450));
+    await gesture.moveBy(const Offset(-80, 0));
+    await tester.pump();
+    final bodyTransform = tester.widget<Transform>(
+      find
+          .ancestor(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Transform),
+          )
+          .first,
+    );
+    expect(bodyTransform.transform.storage[12], inInclusiveRange(-28, -1));
+    expect(currentPlan(tester), 'Pull');
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(currentPlan(tester), 'Legs');
   });
 
   testWidgets('reduced motion switches plans immediately', (tester) async {

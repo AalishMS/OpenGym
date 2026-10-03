@@ -48,7 +48,8 @@ class WorkoutScreen extends StatefulWidget {
   State<WorkoutScreen> createState() => _WorkoutScreenState();
 }
 
-class _WorkoutScreenState extends State<WorkoutScreen> {
+class _WorkoutScreenState extends State<WorkoutScreen>
+    with SingleTickerProviderStateMixin {
   List<int> _weeks = [1];
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};
@@ -63,6 +64,8 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Timer? _ticker;
   WorkoutSessionProvider? _sessionProvider;
   bool _didShowInitialLogConfirmation = false;
+  late final AnimationController _planSwipeOffset =
+      AnimationController.unbounded(vsync: this);
 
   @override
   void initState() {
@@ -84,6 +87,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   void dispose() {
     _ticker?.cancel();
     _sessionProvider?.removeListener(_reloadCurrentSession);
+    _planSwipeOffset.dispose();
     super.dispose();
   }
 
@@ -293,41 +297,90 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         (widget.plan.key != null && plan.key == widget.plan.key),
   );
 
+  void _updatePlanSwipe(double distance) {
+    if (MediaQuery.disableAnimationsOf(context)) return;
+    final plans = context.read<WorkoutPlanProvider>().plans;
+    final index = _currentPlanIndex(plans);
+    final canMove = distance < 0 ? index < plans.length - 1 : index > 0;
+    // Follow the finger just enough to acknowledge the gesture without
+    // pulling the workout table far from its reading position.
+    _planSwipeOffset.value = (distance * (canMove ? 0.20 : 0.05)).clamp(
+      -28.0,
+      28.0,
+    );
+  }
+
+  void _settlePlanSwipe() {
+    if (!mounted) return;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _planSwipeOffset.value = 0;
+      return;
+    }
+    _planSwipeOffset.animateTo(
+      0,
+      duration: const Duration(milliseconds: 150),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
   Future<void> _switchPlan(WorkoutPlan plan, int index) async {
     final currentIndex = _currentPlanIndex(
       context.read<WorkoutPlanProvider>().plans,
     );
     if (index == currentIndex) return;
     final direction = index > currentIndex ? 1.0 : -1.0;
-    final duration =
-        MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 240);
+    if (!MediaQuery.disableAnimationsOf(context)) {
+      _planSwipeOffset.animateTo(
+        -direction * 28,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOutCubic,
+      );
+    }
+    final duration = MediaQuery.disableAnimationsOf(context)
+        ? Duration.zero
+        : const Duration(milliseconds: 190);
     await _saveBeforeNavigation(
       () => Navigator.pushReplacement(
         context,
         PageRouteBuilder<void>(
           transitionDuration: duration,
           reverseTransitionDuration: duration,
-          pageBuilder:
-              (context, animation, secondaryAnimation) =>
-                  WorkoutScreen(plan: plan, planIndex: index),
+          pageBuilder: (context, animation, secondaryAnimation) =>
+              WorkoutScreen(plan: plan, planIndex: index),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return SlideTransition(
-              position: animation.drive(
-                Tween(
-                  begin: Offset(direction, 0),
-                  end: Offset.zero,
+            return FadeTransition(
+              opacity: animation.drive(
+                Tween<double>(
+                  begin: 0.78,
+                  end: 1,
                 ).chain(CurveTween(curve: Curves.easeOutCubic)),
               ),
-              child: child,
+              child: SlideTransition(
+                position: animation.drive(
+                  Tween(
+                    begin: Offset(direction * 0.08, 0),
+                    end: Offset.zero,
+                  ).chain(CurveTween(curve: Curves.easeOutCubic)),
+                ),
+                child: child,
+              ),
             );
           },
         ),
       ),
       leavesScreen: true,
     );
+    if (mounted && !_isNavigating) _settlePlanSwipe();
   }
+
+  Widget _animatedPlanContent(Widget child) => AnimatedBuilder(
+    animation: _planSwipeOffset,
+    builder: (context, child) => Transform.translate(
+      offset: Offset(_planSwipeOffset.value, 0),
+      child: child,
+    ),
+    child: child,
+  );
 
   void _showPRDialog(List<PRResult> prs) {
     WorkoutDialogs.showPRDialog(context, prs);
@@ -990,7 +1043,11 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 PlanSwipeRegion(
                   onNextPlan: onNextPlan,
                   onPreviousPlan: onPreviousPlan,
-                  child: _PlanHeader(plan: activePlan, color: planColor),
+                  onDragProgress: _updatePlanSwipe,
+                  onDragCancel: _settlePlanSwipe,
+                  child: _animatedPlanContent(
+                    _PlanHeader(plan: activePlan, color: planColor),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Row(
@@ -1143,7 +1200,9 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 child: PlanSwipeRegion(
                   onNextPlan: onNextPlan,
                   onPreviousPlan: onPreviousPlan,
-                  child: CustomScrollView(
+                  onDragProgress: _updatePlanSwipe,
+                  onDragCancel: _settlePlanSwipe,
+                  child: _animatedPlanContent(CustomScrollView(
                     key: ValueKey(_currentWeek),
                     physics: const BouncingScrollPhysics(
                       parent: AlwaysScrollableScrollPhysics(),
@@ -1237,7 +1296,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                         ),
                       ),
                     ],
-                  ),
+                  )),
                 ),
               ),
               _buildWeekNavBar(accent),

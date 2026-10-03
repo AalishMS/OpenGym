@@ -7,12 +7,16 @@ class PlanSwipeRegion extends StatefulWidget {
   final Widget child;
   final VoidCallback? onNextPlan;
   final VoidCallback? onPreviousPlan;
+  final ValueChanged<double>? onDragProgress;
+  final VoidCallback? onDragCancel;
 
   const PlanSwipeRegion({
     super.key,
     required this.child,
     this.onNextPlan,
     this.onPreviousPlan,
+    this.onDragProgress,
+    this.onDragCancel,
   });
 
   @override
@@ -29,10 +33,20 @@ class _PlanSwipeRegionState extends State<PlanSwipeRegion> {
         (_dragDistance.abs() > kTouchSlop && velocity.abs() > 300);
     if (isSwipe) {
       if (_dragDistance < 0) {
-        widget.onNextPlan?.call();
+        if (widget.onNextPlan != null) {
+          widget.onNextPlan!();
+        } else {
+          widget.onDragCancel?.call();
+        }
       } else {
-        widget.onPreviousPlan?.call();
+        if (widget.onPreviousPlan != null) {
+          widget.onPreviousPlan!();
+        } else {
+          widget.onDragCancel?.call();
+        }
       }
+    } else {
+      widget.onDragCancel?.call();
     }
     _dragDistance = 0;
   }
@@ -55,10 +69,12 @@ class _PlanSwipeRegionState extends State<PlanSwipeRegion> {
                     }
                     ..onUpdate = (details) {
                       _dragDistance += details.delta.dx;
+                      widget.onDragProgress?.call(_dragDistance);
                     }
                     ..onEnd = _onDragEnd
                     ..onCancel = () {
                       _dragDistance = 0;
+                      widget.onDragCancel?.call();
                     };
                 },
               ),
