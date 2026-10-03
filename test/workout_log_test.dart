@@ -267,7 +267,7 @@ void main() {
   );
 
   testWidgets(
-    'swiping the set table changes weeks without horizontal scrolling',
+    'swiping the set table changes plans and restores the saved workout week',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       // Flutter's square test glyphs need more room than the app's font.
@@ -300,10 +300,24 @@ void main() {
       );
       await tester.flingFrom(tester.getCenter(row), const Offset(120, 0), 1000);
       await tester.pumpAndSettle();
+      expect(
+        tester.widget<WorkoutScreen>(find.byType(WorkoutScreen)).plan.name,
+        'Full body',
+      );
       expect(selectedWeek(), 0);
       await tester.flingFrom(tester.getCenter(row), const Offset(-120, 0), 1000);
       await tester.pumpAndSettle();
+      expect(
+        tester.widget<WorkoutScreen>(find.byType(WorkoutScreen)).plan.name,
+        'Push day',
+      );
       expect(selectedWeek(), 1);
+      expect(
+        tester.widget<ExerciseCard>(card).exercise.sets.first.weight,
+        70,
+      );
+      expect(writes.first.planId, plan.id);
+      expect(writes.first.weekNumber, 6);
       expect(tester.takeException(), isNull);
     },
   );

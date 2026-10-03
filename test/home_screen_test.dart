@@ -504,7 +504,7 @@ void main() {
     );
   });
 
-  testWidgets('week swipe continues across consecutive completed sessions', (
+  testWidgets('a single plan ignores swipes and weeks change only through tabs', (
     tester,
   ) async {
     final plan = populatedPlan();
@@ -557,24 +557,28 @@ void main() {
             .selectedIndex;
 
     expect(selectedWeek(), 2);
-    for (final expected in [1, 0]) {
+    for (final delta in [100.0, -100.0]) {
       await tester.flingFrom(
         const Offset(200, 330),
-        const Offset(100, 0),
+        Offset(delta, 0),
         1000,
       );
       await tester.pumpAndSettle();
-      expect(selectedWeek(), expected);
+      expect(selectedWeek(), 2);
     }
-    for (final expected in [1, 2]) {
-      await tester.flingFrom(
-        const Offset(200, 330),
-        const Offset(-100, 0),
-        1000,
-      );
+    for (final expected in [1, 0, 1, 2]) {
+      await tester.tap(find.text('Week ${expected + 1}').last);
       await tester.pumpAndSettle();
       expect(selectedWeek(), expected);
     }
+    expect(
+      find.descendant(
+        of: find.byType(WorkoutScreen),
+        matching: find.byType(AnimatedSwitcher),
+      ),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('notification navigation opens the requested workout week', (

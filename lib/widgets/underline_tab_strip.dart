@@ -102,8 +102,7 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
   @override
   void didUpdateWidget(UnderlineTabStrip oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Follow the selection when it moves — a swipe between weeks or a new week
-    // can land on a tab that sits off the end of the strip.
+    // Switching plans or adding a week can select a tab off the end of the strip.
     if (oldWidget.selectedIndex != widget.selectedIndex ||
         oldWidget.tabs.length != widget.tabs.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {

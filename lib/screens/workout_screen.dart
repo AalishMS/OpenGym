@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -20,13 +19,13 @@ import '../services/workout_timer_notification_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
-import '../utils/fade_page_route.dart';
 import '../utils/format.dart';
 import '../utils/set_history.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/workout/exercise_card.dart';
+import '../widgets/workout/plan_swipe_region.dart';
 import '../widgets/workout/workout_dialogs.dart';
 
 class WorkoutScreen extends StatefulWidget {
@@ -287,14 +286,48 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   Future<void> _handleBack() =>
       _saveBeforeNavigation(() => Navigator.pop(context), leavesScreen: true);
 
-  Future<void> _switchPlan(WorkoutPlan plan, int index) =>
-      _saveBeforeNavigation(
-        () => Navigator.pushReplacement(
-          context,
-          FadePageRoute(page: WorkoutScreen(plan: plan, planIndex: index)),
+  int _currentPlanIndex(List<WorkoutPlan> plans) => plans.indexWhere(
+    (plan) =>
+        identical(plan, widget.plan) ||
+        (widget.plan.id != null && plan.id == widget.plan.id) ||
+        (widget.plan.key != null && plan.key == widget.plan.key),
+  );
+
+  Future<void> _switchPlan(WorkoutPlan plan, int index) async {
+    final currentIndex = _currentPlanIndex(
+      context.read<WorkoutPlanProvider>().plans,
+    );
+    if (index == currentIndex) return;
+    final direction = index > currentIndex ? 1.0 : -1.0;
+    final duration =
+        MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 240);
+    await _saveBeforeNavigation(
+      () => Navigator.pushReplacement(
+        context,
+        PageRouteBuilder<void>(
+          transitionDuration: duration,
+          reverseTransitionDuration: duration,
+          pageBuilder:
+              (context, animation, secondaryAnimation) =>
+                  WorkoutScreen(plan: plan, planIndex: index),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return SlideTransition(
+              position: animation.drive(
+                Tween(
+                  begin: Offset(direction, 0),
+                  end: Offset.zero,
+                ).chain(CurveTween(curve: Curves.easeOutCubic)),
+              ),
+              child: child,
+            );
+          },
         ),
-        leavesScreen: true,
-      );
+      ),
+      leavesScreen: true,
+    );
+  }
 
   void _showPRDialog(List<PRResult> prs) {
     WorkoutDialogs.showPRDialog(context, prs);
@@ -897,15 +930,19 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
 
     final planProvider = context.watch<WorkoutPlanProvider>();
     final plans = planProvider.plans;
-    final activePlan = plans.firstWhere(
-      (plan) => plan.id == widget.plan.id,
-      orElse: () {
-        if (widget.planIndex >= 0 && widget.planIndex < plans.length) {
-          return plans[widget.planIndex];
-        }
-        return widget.plan;
-      },
-    );
+    final currentPlanIndex = _currentPlanIndex(plans);
+    final activePlan =
+        currentPlanIndex >= 0 ? plans[currentPlanIndex] : widget.plan;
+    final VoidCallback? onNextPlan =
+        currentPlanIndex >= 0 && currentPlanIndex < plans.length - 1
+            ? () =>
+                _switchPlan(plans[currentPlanIndex + 1], currentPlanIndex + 1)
+            : null;
+    final VoidCallback? onPreviousPlan =
+        currentPlanIndex > 0
+            ? () =>
+                _switchPlan(plans[currentPlanIndex - 1], currentPlanIndex - 1)
+            : null;
     final planColor = planColorOf(activePlan.planColor, context);
     final elapsed = formatDuration(session.elapsedSeconds());
     final timerStyle = Theme.of(context).textTheme.bodySmall!.copyWith(
@@ -950,13 +987,10 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _PlanHeader(
-                  plan: activePlan,
-                  fallbackIndex: plans.indexWhere(
-                    (plan) => plan.id == activePlan.id,
-                  ),
-                  color: planColor,
-                  onSwitchPlan: (index) => _switchPlan(plans[index], index),
+                PlanSwipeRegion(
+                  onNextPlan: onNextPlan,
+                  onPreviousPlan: onPreviousPlan,
+                  child: _PlanHeader(plan: activePlan, color: planColor),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Row(
@@ -1076,7 +1110,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                 ),
               ],
             ],
-            bottom: _buildPlanTabBar(accent, plans, activePlan),
+            bottom: _buildPlanTabBar(accent, plans, currentPlanIndex),
           ),
           body: Column(
             children: [
@@ -1106,132 +1140,103 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
                   ),
                 ),
               Expanded(
-                child: _GestureClaimingContainer(
-                  onSwipeLeft:
-                      _currentWeekIndex < _weeks.length - 1
-                          ? () => _onWeekChanged(_currentWeekIndex + 1)
-                          : null,
-                  onSwipeRight:
-                      _currentWeekIndex > 0
-                          ? () => _onWeekChanged(_currentWeekIndex - 1)
-                          : null,
-                  child: AnimatedSwitcher(
-                    duration:
-                        MediaQuery.disableAnimationsOf(context)
-                            ? Duration.zero
-                            : const Duration(milliseconds: 220),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    layoutBuilder:
-                        (currentChild, previousChildren) => Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            for (final previous in previousChildren)
-                              ExcludeSemantics(
-                                child: IgnorePointer(child: previous),
-                              ),
-                            if (currentChild != null) currentChild,
-                          ],
-                        ),
-                    child: CustomScrollView(
-                      key: ValueKey(_currentWeek),
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
-                      ),
-                      slivers: [
-                        // One gutter keeps the exercise tables aligned as a log.
-                        SliverPadding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.lg,
-                            vertical: AppSpacing.sm,
-                          ),
-                          sliver: SliverReorderableList(
-                            itemCount:
-                                session.exercises.length +
-                                (session.isCompleted ? 0 : 1),
-                            onReorderItem: _reorderExercises,
-                            proxyDecorator: (child, index, animation) {
-                              return Material(
-                                color: surfaceColor(context),
-                                borderRadius: AppRadius.card,
-                                child: child,
-                              );
-                            },
-                            itemBuilder: (context, index) {
-                              if (index == session.exercises.length) {
-                                return TextButton.icon(
-                                  key: const ValueKey('add_exercise_button'),
-                                  onPressed: _addEmptyExercise,
-                                  icon: const Icon(LucideIcons.plus, size: 18),
-                                  label: const Text('Add exercise'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: accent,
-                                    minimumSize: const Size.fromHeight(48),
-                                    shape: const RoundedRectangleBorder(
-                                      borderRadius: AppRadius.button,
-                                    ),
-                                  ),
-                                );
-                              }
-
-                              final exercise = session.exercises[index];
-
-                              return Container(
-                                key: ObjectKey(exercise),
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    bottom: BorderSide(
-                                      color: borderColor(context),
-                                    ),
-                                  ),
-                                ),
-                                child: ExerciseCard(
-                                  exercise: exercise,
-                                  exerciseIndex: index,
-                                  reorderable: !session.isCompleted,
-                                  readOnly: session.isCompleted,
-                                  onMoveUp:
-                                      index > 0
-                                          ? () => _reorderExercises(
-                                            index,
-                                            index - 1,
-                                          )
-                                          : null,
-                                  onMoveDown:
-                                      index < session.exercises.length - 1
-                                          ? () => _reorderExercises(
-                                            index,
-                                            index + 1,
-                                          )
-                                          : null,
-                                  accent: accent,
-                                  previousSets: previousExerciseSets(
-                                    _sessionsWithDrafts(),
-                                    exercise.name,
-                                    splitId: widget.plan.splitId,
-                                    planId: widget.plan.id,
-                                    planName: widget.plan.name,
-                                    beforeWeek: _currentWeek,
-                                    includeDrafts: true,
-                                  ),
-                                  onSetChanged: _changeSetValues,
-                                  onSetRpeChanged: _changeSetRpe,
-                                  onEntryFinished: () {
-                                    if (mounted) _autoSave();
-                                  },
-                                  onAddSet: (i) => _addSet(i),
-                                  onDeleteSet:
-                                      (i, setIndex) => _deleteSet(i, setIndex),
-                                  onAddNote: _addExerciseNote,
-                                  onRename: _showExerciseRenameDialog,
-                                  onDeleteExercise: _deleteExercise,
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
+                child: PlanSwipeRegion(
+                  onNextPlan: onNextPlan,
+                  onPreviousPlan: onPreviousPlan,
+                  child: CustomScrollView(
+                    key: ValueKey(_currentWeek),
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
                     ),
+                    slivers: [
+                      // One gutter keeps the exercise tables aligned as a log.
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.lg,
+                          vertical: AppSpacing.sm,
+                        ),
+                        sliver: SliverReorderableList(
+                          itemCount:
+                              session.exercises.length +
+                              (session.isCompleted ? 0 : 1),
+                          onReorderItem: _reorderExercises,
+                          proxyDecorator: (child, index, animation) {
+                            return Material(
+                              color: surfaceColor(context),
+                              borderRadius: AppRadius.card,
+                              child: child,
+                            );
+                          },
+                          itemBuilder: (context, index) {
+                            if (index == session.exercises.length) {
+                              return TextButton.icon(
+                                key: const ValueKey('add_exercise_button'),
+                                onPressed: _addEmptyExercise,
+                                icon: const Icon(LucideIcons.plus, size: 18),
+                                label: const Text('Add exercise'),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: accent,
+                                  minimumSize: const Size.fromHeight(48),
+                                  shape: const RoundedRectangleBorder(
+                                    borderRadius: AppRadius.button,
+                                  ),
+                                ),
+                              );
+                            }
+
+                            final exercise = session.exercises[index];
+
+                            return Container(
+                              key: ObjectKey(exercise),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: borderColor(context),
+                                  ),
+                                ),
+                              ),
+                              child: ExerciseCard(
+                                exercise: exercise,
+                                exerciseIndex: index,
+                                reorderable: !session.isCompleted,
+                                readOnly: session.isCompleted,
+                                onMoveUp:
+                                    index > 0
+                                        ? () =>
+                                            _reorderExercises(index, index - 1)
+                                        : null,
+                                onMoveDown:
+                                    index < session.exercises.length - 1
+                                        ? () =>
+                                            _reorderExercises(index, index + 1)
+                                        : null,
+                                accent: accent,
+                                previousSets: previousExerciseSets(
+                                  _sessionsWithDrafts(),
+                                  exercise.name,
+                                  splitId: widget.plan.splitId,
+                                  planId: widget.plan.id,
+                                  planName: widget.plan.name,
+                                  beforeWeek: _currentWeek,
+                                  includeDrafts: true,
+                                ),
+                                onSetChanged: _changeSetValues,
+                                onSetRpeChanged: _changeSetRpe,
+                                onEntryFinished: () {
+                                  if (mounted) _autoSave();
+                                },
+                                onAddSet: (i) => _addSet(i),
+                                onDeleteSet:
+                                    (i, setIndex) => _deleteSet(i, setIndex),
+                                onAddNote: _addExerciseNote,
+                                onRename: _showExerciseRenameDialog,
+                                onDeleteExercise: _deleteExercise,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1259,14 +1264,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   PreferredSizeWidget? _buildPlanTabBar(
     Color accent,
     List<WorkoutPlan> plans,
-    WorkoutPlan activePlan,
+    int selectedIndex,
   ) {
     if (plans.isEmpty) {
       return null;
     }
 
     const double barHeight = 48;
-    final selectedIndex = plans.indexWhere((p) => p.id == activePlan.id);
 
     return PreferredSize(
       preferredSize: const Size.fromHeight(barHeight),
@@ -1274,13 +1278,13 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
         rule: StripRule.bottom,
         height: barHeight,
         color: accent,
-        selectedIndex: selectedIndex >= 0 ? selectedIndex : widget.planIndex,
+        selectedIndex: selectedIndex,
         tabs: [
           for (var index = 0; index < plans.length; index++)
             UnderlineTabData(
               label: plans[index].name,
               onTap:
-                  plans[index].id == activePlan.id
+                  index == selectedIndex
                       ? null
                       : () => _switchPlan(plans[index], index),
             ),
@@ -1311,9 +1315,7 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
             for (var index = 0; index < _weeks.length; index++)
               UnderlineTabData(
                 label: 'Week ${_weeks[index]}',
-                // Routed through _onWeekChanged, same as a swipe: tapping used
-                // to move the index without saving the week you were leaving or
-                // loading the one you arrived at.
+                // Save the departing week before loading the selected one.
                 onTap:
                     index == _currentWeekIndex
                         ? null
@@ -1353,189 +1355,42 @@ class _WorkoutScreenState extends State<WorkoutScreen> {
   }
 }
 
-class _GestureClaimingContainer extends StatefulWidget {
-  final Widget child;
-  final VoidCallback? onSwipeLeft;
-  final VoidCallback? onSwipeRight;
-
-  const _GestureClaimingContainer({
-    required this.child,
-    this.onSwipeLeft,
-    this.onSwipeRight,
-  });
-
-  @override
-  State<_GestureClaimingContainer> createState() =>
-      _GestureClaimingContainerState();
-}
-
-class _GestureClaimingContainerState extends State<_GestureClaimingContainer> {
-  double _dragAccumulator = 0;
-  double _totalDx = 0;
-  double _totalDy = 0;
-  bool _hasClaimedGesture = false;
-  bool _isHorizontalGesture = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return RawGestureDetector(
-      behavior: HitTestBehavior.opaque,
-      gestures: {
-        _ExposingHorizontalDragGestureRecognizer:
-            GestureRecognizerFactoryWithHandlers<
-              _ExposingHorizontalDragGestureRecognizer
-            >(() => _ExposingHorizontalDragGestureRecognizer(), (
-              _ExposingHorizontalDragGestureRecognizer instance,
-            ) {
-              instance
-                ..dragStartBehavior = DragStartBehavior.down
-                ..supportedDevices = {
-                  PointerDeviceKind.touch,
-                  PointerDeviceKind.mouse,
-                };
-              instance.onStart = (details) {
-                _dragAccumulator = 0;
-                _totalDx = 0;
-                _totalDy = 0;
-                _hasClaimedGesture = false;
-                _isHorizontalGesture = false;
-              };
-              instance.onUpdate = (details) {
-                _dragAccumulator += details.delta.dx;
-                _totalDx += details.delta.dx;
-                _totalDy += details.delta.dy;
-
-                final totalMovement = _totalDx.abs() + _totalDy.abs();
-                if (!_hasClaimedGesture && totalMovement > 10) {
-                  if (_totalDy.abs() == 0) {
-                    instance.resolve(GestureDisposition.accepted);
-                    _hasClaimedGesture = true;
-                    _isHorizontalGesture = true;
-                  } else if (_totalDx.abs() / _totalDy.abs() > 1.5) {
-                    instance.resolve(GestureDisposition.accepted);
-                    _hasClaimedGesture = true;
-                    _isHorizontalGesture = true;
-                  } else if (_totalDy.abs() / _totalDx.abs() > 1.0) {
-                    instance.resolve(GestureDisposition.rejected);
-                    _hasClaimedGesture = true;
-                    _isHorizontalGesture = false;
-                  }
-                }
-              };
-              instance.onEnd = (details) {
-                if (_isHorizontalGesture && _dragAccumulator.abs() > 40) {
-                  if (_dragAccumulator < 0 && widget.onSwipeLeft != null) {
-                    widget.onSwipeLeft!();
-                  } else if (_dragAccumulator > 0 &&
-                      widget.onSwipeRight != null) {
-                    widget.onSwipeRight!();
-                  }
-                }
-                _dragAccumulator = 0;
-              };
-            }),
-      },
-      child: widget.child,
-    );
-  }
-}
-
-class _ExposingHorizontalDragGestureRecognizer
-    extends HorizontalDragGestureRecognizer {
-  @override
-  void resolve(GestureDisposition disposition) {
-    super.resolve(disposition);
-  }
-}
-
 class _PlanHeader extends StatelessWidget {
   final WorkoutPlan plan;
-  final int fallbackIndex;
-  final ValueChanged<int> onSwitchPlan;
 
   /// The active plan's resolved identity-marker colour.
   final Color color;
 
-  const _PlanHeader({
-    required this.plan,
-    required this.fallbackIndex,
-    required this.color,
-    required this.onSwitchPlan,
-  });
-
-  int _currentPlanIndex(List<WorkoutPlan> plans) {
-    final planKey = plan.key;
-    if (planKey != null) {
-      final keyIndex = plans.indexWhere(
-        (candidate) => candidate.key == planKey,
-      );
-      if (keyIndex >= 0) return keyIndex;
-    }
-
-    final id = plan.id;
-    if (id != null) {
-      final idIndex = plans.indexWhere((candidate) => candidate.id == id);
-      if (idIndex >= 0) return idIndex;
-    }
-
-    final identityIndex = plans.indexWhere(
-      (candidate) => identical(candidate, plan),
-    );
-    if (identityIndex >= 0) return identityIndex;
-
-    return fallbackIndex.clamp(0, plans.length - 1);
-  }
+  const _PlanHeader({required this.plan, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onHorizontalDragEnd: (details) {
-        final provider = context.read<WorkoutPlanProvider>();
-        final plans = provider.plans;
-        if (plans.isEmpty) return;
-        final planIndex = _currentPlanIndex(plans);
-        if (details.primaryVelocity != null) {
-          if (details.primaryVelocity!.abs() > 250) {
-            if (details.primaryVelocity! < 0) {
-              if (planIndex < plans.length - 1) {
-                onSwitchPlan(planIndex + 1);
-              }
-            } else {
-              if (planIndex > 0) {
-                onSwitchPlan(planIndex - 1);
-              }
-            }
-          }
-        }
-      },
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Semantics(
-            label: '${plan.name} plan marker',
-            child: Container(
-              width: 3,
-              height: 20,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: AppRadius.micro,
-              ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Semantics(
+          label: '${plan.name} plan marker',
+          child: Container(
+            width: 3,
+            height: 20,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: AppRadius.micro,
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
-          Flexible(
-            child: Text(
-              plan.name,
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-              style: Theme.of(context).textTheme.headlineSmall!.copyWith(
-                color: textPrimaryColor(context),
-              ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Flexible(
+          child: Text(
+            plan.name,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: Theme.of(context).textTheme.headlineSmall!.copyWith(
+              color: textPrimaryColor(context),
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
