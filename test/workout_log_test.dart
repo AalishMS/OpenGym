@@ -201,17 +201,45 @@ void main() {
               find.descendant(of: card, matching: find.byType(Scrollable)),
               findsNothing,
             );
-            if (rpe.evaluate().length == 1) {
+            expect(rpe, findsOneWidget);
+            expect(
+              find.descendant(of: card, matching: find.text('Kg')),
+              findsOneWidget,
+            );
+            expect(
+              tester.getCenter(menu).dx,
+              closeTo(tester.getCenter(rpe).dx, 0.1),
+            );
+            final row = find.descendant(
+              of: card,
+              matching: find.byKey(const ValueKey('set_entry_row_0')),
+            );
+            final weight = find.descendant(
+              of: row,
+              matching: find.bySemanticsLabel('Set 1 Kg'),
+            );
+            for (final label in ['Set 1 Reps', 'Set 1 RPE value 8']) {
               expect(
-                tester.getCenter(menu).dx,
-                closeTo(tester.getCenter(rpe).dx, 0.1),
-              );
-            } else {
-              expect(
-                tester.getRect(card).contains(tester.getCenter(menu)),
-                isTrue,
+                tester
+                    .getCenter(
+                      find.descendant(
+                        of: row,
+                        matching: find.bySemanticsLabel(label),
+                      ),
+                    )
+                    .dy,
+                closeTo(tester.getCenter(weight).dy, 0.1),
+                reason: 'The original columns must stay on the same row',
               );
             }
+            expect(
+              tester
+                  .getCenter(
+                    find.descendant(of: row, matching: find.text('70 × 8')),
+                  )
+                  .dy,
+              closeTo(tester.getCenter(weight).dy, 0.1),
+            );
             expect(tester.getSize(menu).width, greaterThanOrEqualTo(48));
             expect(
               find.descendant(of: card, matching: find.byType(Scrollbar)),

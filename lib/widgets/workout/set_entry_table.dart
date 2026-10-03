@@ -75,7 +75,6 @@ double _minimumTableWidth(
   required bool showRpe,
   required bool numberIsAction,
   required bool trailing,
-  required bool continuousLog,
 }) {
   final valueStyle = Theme.of(context).textTheme.titleLarge!.copyWith(
     fontSize: 20,
@@ -88,8 +87,7 @@ double _minimumTableWidth(
         math.max(width, readableTextWidth(context, value, style) + 16),
   );
   final weight = widest([
-    // Live logs only need room for displayed values, not a hypothetical input.
-    if (!continuousLog) '999.99',
+    '999.99',
     ...sets.map((set) => entryWeight(set.weight)),
   ], valueStyle);
   final reps = widest(['999', ...sets.map((set) => '${set.reps}')], valueStyle);
@@ -268,28 +266,16 @@ class SetEntryTable extends StatelessWidget {
           !numberIsAction ||
           constraints.maxWidth >=
               400 * MediaQuery.textScalerOf(context).scale(1);
-      final minimumWidth = _minimumTableWidth(
-        context,
-        sets,
-        showHistoryColumns: showHistoryColumns,
-        showPrevious: showPrevious,
-        showRpe: onRpeChanged != null,
-        numberIsAction: numberIsAction,
-        trailing: showTrailing,
-        continuousLog: continuousLog,
-      );
-      final compact = continuousLog && minimumWidth > constraints.maxWidth;
       final table = Column(
         children: [
-          if (!compact)
-            _EntryHeader(
-              trailing: showTrailing,
-              showHistoryColumns: showHistoryColumns,
-              showRpe: onRpeChanged != null,
-              numberIsAction: numberIsAction,
-              showPrevious: showPrevious,
-              continuousLog: continuousLog,
-            ),
+          _EntryHeader(
+            trailing: showTrailing,
+            showHistoryColumns: showHistoryColumns,
+            showRpe: onRpeChanged != null,
+            numberIsAction: numberIsAction,
+            showPrevious: showPrevious,
+            continuousLog: continuousLog,
+          ),
           for (var index = 0; index < sets.length; index++)
             Padding(
               padding: EdgeInsets.only(bottom: continuousLog ? 4 : 8),
@@ -325,7 +311,6 @@ class SetEntryTable extends StatelessWidget {
                                     )
                                     : null,
                             child: _EntryRow(
-                              compact: compact,
                               showHistoryColumns: showHistoryColumns,
                               showPrevious: showPrevious,
                               continuousLog: continuousLog,
@@ -413,8 +398,21 @@ class SetEntryTable extends StatelessWidget {
             ),
         ],
       );
+      // Workout rows use the card's existing column geometry. A horizontal
+      // viewport would widen them and compete with plan navigation swipes.
       if (continuousLog) return table;
-      return ReadableTableViewport(minimumWidth: minimumWidth, child: table);
+      return ReadableTableViewport(
+        minimumWidth: _minimumTableWidth(
+          context,
+          sets,
+          showHistoryColumns: showHistoryColumns,
+          showPrevious: showPrevious,
+          showRpe: onRpeChanged != null,
+          numberIsAction: numberIsAction,
+          trailing: showTrailing,
+        ),
+        child: table,
+      );
     },
   );
 }
@@ -537,7 +535,6 @@ class _EntryHeader extends StatelessWidget {
 }
 
 class _EntryRow extends StatelessWidget {
-  final bool compact;
   final int index;
   final String? previous;
   final String weight;
@@ -554,7 +551,6 @@ class _EntryRow extends StatelessWidget {
   final bool continuousLog;
 
   const _EntryRow({
-    this.compact = false,
     required this.index,
     this.previous,
     required this.weight,
@@ -572,105 +568,31 @@ class _EntryRow extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    if (compact) return _compactRow(context);
-    return _columns(
-      [
-        _setNumber(context),
-        Semantics(
-          label: 'Previous set ${index + 1}: ${previous ?? 'no history'}',
-          child: Text(
-            previous ?? '—',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-              fontSize: continuousLog ? 13 : 16,
-              fontWeight: continuousLog ? FontWeight.w400 : FontWeight.w600,
-              color: textSecondaryColor(context),
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
+  Widget build(BuildContext context) => _columns(
+    [
+      _setNumber(context),
+      Semantics(
+        label: 'Previous set ${index + 1}: ${previous ?? 'no history'}',
+        child: Text(
+          previous ?? '—',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+            fontSize: continuousLog ? 13 : 16,
+            fontWeight: continuousLog ? FontWeight.w400 : FontWeight.w600,
+            color: textSecondaryColor(context),
+            fontFeatures: const [FontFeature.tabularFigures()],
           ),
         ),
-        _field(context, weight, 'Kg', onWeight),
-        _field(context, reps, 'Reps', onReps),
-        if (onRpe != null) _rpeReadout(context),
-      ],
-      trailing: trailing,
-      showHistoryColumns: showHistoryColumns,
-      showRpe: onRpe != null,
-      numberIsAction: onDetails != null,
-      showPrevious: showPrevious,
-    );
-  }
-
-  Widget _compactRow(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) {
-      final style = Theme.of(context).textTheme.titleLarge!.copyWith(
-        fontSize: 18,
-        fontWeight: FontWeight.bold,
-      );
-      final fieldWidth = [
-        48.0,
-        readableTextWidth(context, weight, style) + 16,
-        readableTextWidth(context, reps, style) + 16,
-        readableTextWidth(context, 'Reps', _quiet(context)) + 16,
-        readableTextWidth(context, 'RPE', _quiet(context)) + 16,
-      ].reduce(math.max);
-      final fields = [
-        ('Kg', _field(context, weight, 'Kg', onWeight)),
-        ('Reps', _field(context, reps, 'Reps', onReps)),
-        if (onRpe != null) ('RPE', _rpeReadout(context)),
-      ];
-      final count = ((constraints.maxWidth + _kColumnGap) /
-              (fieldWidth + _kColumnGap))
-          .floor()
-          .clamp(1, fields.length);
-      final width = (constraints.maxWidth - (count - 1) * _kColumnGap) / count;
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                SizedBox(
-                  width: _numberWidth(context, false),
-                  child: _setNumber(context),
-                ),
-                const SizedBox(width: _kColumnGap),
-                Expanded(
-                  child: Semantics(
-                    label:
-                        'Previous set ${index + 1}: ${previous ?? 'no history'}',
-                    excludeSemantics: true,
-                    child: Wrap(
-                      spacing: AppSpacing.xs,
-                      children: [
-                        Text('Previous:', style: _quiet(context)),
-                        Text(previous ?? '—', style: _quiet(context)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Wrap(
-              spacing: _kColumnGap,
-              runSpacing: AppSpacing.xs,
-              children: [
-                for (final (label, field) in fields)
-                  SizedBox(
-                    width: width,
-                    child: Column(
-                      children: [Text(label, style: _quiet(context)), field],
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      );
-    },
+      ),
+      _field(context, weight, 'Kg', onWeight),
+      _field(context, reps, 'Reps', onReps),
+      if (onRpe != null) _rpeReadout(context),
+    ],
+    trailing: trailing,
+    showHistoryColumns: showHistoryColumns,
+    showRpe: onRpe != null,
+    numberIsAction: onDetails != null,
+    showPrevious: showPrevious,
   );
 
   Widget _setNumber(BuildContext context) {
