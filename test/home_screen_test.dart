@@ -382,7 +382,14 @@ void main() {
       await tester.ensureVisible(find.text('Push Day').last);
       await tester.tap(find.text('Push Day').last);
       await tester.pumpAndSettle();
-      await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('add_exercise_button')),
+        300,
+        scrollable: find.descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.byType(Scrollable),
+        ),
+      );
       await tester.pumpAndSettle();
 
       final addTile = find.text('Add exercise');

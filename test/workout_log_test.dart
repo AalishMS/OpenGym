@@ -22,7 +22,6 @@ import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
-import 'package:gymapp/widgets/readable_table_viewport.dart';
 import 'package:gymapp/widgets/underline_tab_strip.dart';
 
 import 'support/hive_test_harness.dart';
@@ -198,15 +197,11 @@ void main() {
               matching: find.byTooltip('Exercise actions for Bench press'),
             );
             final rpe = find.descendant(of: card, matching: find.text('RPE'));
-            final tableViewport = find.descendant(
-              of: card,
-              matching: find.byType(ReadableTableViewport),
+            expect(
+              find.descendant(of: card, matching: find.byType(Scrollable)),
+              findsNothing,
             );
-            final minimumWidth =
-                tester
-                    .widget<ReadableTableViewport>(tableViewport)
-                    .minimumWidth;
-            if (minimumWidth <= tester.getSize(tableViewport).width) {
+            if (rpe.evaluate().length == 1) {
               expect(
                 tester.getCenter(menu).dx,
                 closeTo(tester.getCenter(rpe).dx, 0.1),
@@ -253,9 +248,13 @@ void main() {
                 image.dispose();
               });
             }
-            await tester.drag(
-              find.byType(CustomScrollView),
-              const Offset(0, -800),
+            await tester.scrollUntilVisible(
+              find.text('Overhead press'),
+              300,
+              scrollable: find.descendant(
+                of: find.byType(CustomScrollView),
+                matching: find.byType(Scrollable),
+              ),
             );
             await tester.pumpAndSettle();
             expect(find.text('Overhead press'), findsOneWidget);
@@ -270,8 +269,7 @@ void main() {
     'swiping the set table changes plans and restores the saved workout week',
     (tester) async {
       tester.view.devicePixelRatio = 1;
-      // Flutter's square test glyphs need more room than the app's font.
-      tester.view.physicalSize = const Size(600, 844);
+      tester.view.physicalSize = const Size(390, 844);
       addTearDown(tester.view.reset);
       await tester.runAsync(() => seed());
       await tester.pumpWidget(host());
@@ -305,17 +303,18 @@ void main() {
         'Full body',
       );
       expect(selectedWeek(), 0);
-      await tester.flingFrom(tester.getCenter(row), const Offset(-120, 0), 1000);
+      await tester.flingFrom(
+        tester.getCenter(row),
+        const Offset(-120, 0),
+        1000,
+      );
       await tester.pumpAndSettle();
       expect(
         tester.widget<WorkoutScreen>(find.byType(WorkoutScreen)).plan.name,
         'Push day',
       );
       expect(selectedWeek(), 1);
-      expect(
-        tester.widget<ExerciseCard>(card).exercise.sets.first.weight,
-        70,
-      );
+      expect(tester.widget<ExerciseCard>(card).exercise.sets.first.weight, 70);
       expect(writes.first.planId, plan.id);
       expect(writes.first.weekNumber, 6);
       expect(tester.takeException(), isNull);
