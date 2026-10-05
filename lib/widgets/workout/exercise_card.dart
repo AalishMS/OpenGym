@@ -162,6 +162,7 @@ class ExerciseCard extends StatelessWidget {
             IgnorePointer(
               ignoring: readOnly,
               child: SetEntryTable(
+                showPrevious: false,
                 continuousLog: true,
                 onEntryFinished: onEntryFinished,
                 onDelete:

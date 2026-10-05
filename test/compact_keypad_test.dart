@@ -57,6 +57,93 @@ void main() {
     await GoogleFonts.pendingFonts();
   });
 
+  for (final continuousLog in [false, true]) {
+    testWidgets(
+      '${continuousLog ? 'workout' : 'nested plan editor'} reveals bottom sets above keypad',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(400, 640);
+        tester.view.padding = const FakeViewPadding(bottom: 34);
+        addTearDown(tester.view.reset);
+        final controller = ScrollController();
+        addTearDown(controller.dispose);
+        final table = SetEntryTable(
+          key: const ValueKey('exercise'),
+          continuousLog: continuousLog,
+          showPrevious: false,
+          sets: const [
+            SetEntry(weight: 70, reps: 8, previous: '60 × 8'),
+            SetEntry(weight: 70, reps: 8),
+            SetEntry(weight: 70, reps: 8),
+          ],
+          onChanged: (_, _, _) {},
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(
+                controller: controller,
+                child: Column(
+                  children: [
+                    const SizedBox(height: 400),
+                    if (continuousLog)
+                      table
+                    else
+                      ReorderableListView(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        onReorderItem: (_, _) {},
+                        children: [table],
+                      ),
+                    if (continuousLog)
+                      ValueListenableBuilder<double>(
+                        valueListenable: SetEntryTable.keyboardHeight,
+                        builder: (_, height, _) => SizedBox(height: height),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        expect(find.text('Prev'), findsNothing);
+        expect(find.text('Previous'), findsNothing);
+        await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+        await tester.pump();
+        await tester.pump();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        final intermediate = controller.offset;
+        expect(intermediate, greaterThan(0));
+        await tester.pumpAndSettle();
+        expect(controller.offset, greaterThan(intermediate));
+
+        void expectVisible(String label) {
+          final field = tester.getRect(find.bySemanticsLabel(label));
+          final keyboard = tester.getRect(find.byType(BottomSheet));
+          expect(field.bottom, lessThanOrEqualTo(keyboard.top - 12));
+          expect(field.top, greaterThanOrEqualTo(0));
+        }
+
+        expectVisible('Set 1 Kg');
+        await tester.tap(find.widgetWithText(TextButton, 'Next'));
+        await tester.pumpAndSettle();
+        expectVisible('Set 1 Reps');
+        await tester.tap(find.widgetWithText(TextButton, 'Next'));
+        await tester.pumpAndSettle();
+        expectVisible('Set 2 Kg');
+        await tester.tap(find.widgetWithText(TextButton, 'Copy'));
+        await tester.pumpAndSettle();
+        expectVisible('Set 3 Kg');
+        await tester.tap(find.widgetWithText(TextButton, 'Save'));
+        await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsNothing);
+        expect(SetEntryTable.keyboardHeight.value, 0);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets('compact keypad edits original fields and copies to next set', (
     tester,
   ) async {

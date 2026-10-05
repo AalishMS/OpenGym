@@ -183,6 +183,7 @@ class SetEntryTable extends StatefulWidget {
   final ValueChanged<int>? onDelete;
   final VoidCallback? onEntryFinished;
   final bool showHistoryColumns;
+  final bool showPrevious;
   final bool continuousLog;
 
   const SetEntryTable({
@@ -194,6 +195,7 @@ class SetEntryTable extends StatefulWidget {
     this.onDelete,
     this.onEntryFinished,
     this.showHistoryColumns = true,
+    this.showPrevious = true,
     this.continuousLog = false,
   });
 
@@ -216,6 +218,17 @@ class _SetEntryTableState extends State<SetEntryTable> {
   ValueChanged<int>? get onDelete => widget.onDelete;
   bool get continuousLog => widget.continuousLog;
   bool get showHistoryColumns => widget.showHistoryColumns;
+
+  double get _keyboardSpace {
+    final overlayContext = Overlay.of(context).context;
+    final bottom = MediaQuery.paddingOf(overlayContext).bottom;
+    return math.max(
+          232.0,
+          MediaQuery.sizeOf(overlayContext).height * .35 - bottom,
+        ) +
+        bottom +
+        12;
+  }
 
   void _close() => _history?.remove();
 
@@ -271,10 +284,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
     }
     _activeKeyboard?._close();
     _activeKeyboard = this;
-    SetEntryTable._keyboardHeight.value =
-        continuousLog
-            ? math.max(232.0, MediaQuery.sizeOf(context).height * .35)
-            : 0;
+    SetEntryTable._keyboardHeight.value = continuousLog ? _keyboardSpace : 0;
     FocusManager.instance.primaryFocus?.unfocus();
     _changed = false;
     _history = LocalHistoryEntry(onRemove: _removeKeyboard);
@@ -305,9 +315,9 @@ class _SetEntryTableState extends State<SetEntryTable> {
                       onEditingChanged: () {
                         if (mounted) {
                           setState(() {});
-                          _revealRow(_keyboardKey.currentState!._index);
                         }
                       },
+                      onSelectionChanged: _revealRow,
                       onChanged: (index, weight, reps) {
                         _changed = true;
                         onChanged(index, weight, reps);
@@ -340,24 +350,47 @@ class _SetEntryTableState extends State<SetEntryTable> {
       final rowContext = _rowKeys[index]?.currentContext;
       if (!mounted || _overlay == null || rowContext == null) return;
       final box = rowContext.findRenderObject() as RenderBox?;
-      final scrollable = Scrollable.maybeOf(rowContext, axis: Axis.vertical);
-      if (box == null || scrollable == null) return;
-      final screen = MediaQuery.sizeOf(context).height;
+      final keyboardBox =
+          _keyboardKey.currentContext?.findRenderObject() as RenderBox?;
+      if (box == null || keyboardBox == null) return;
       final top = box.localToGlobal(Offset.zero).dy;
-      final available = screen - math.max(232.0, screen * .35) - 12;
-      final delta =
-          top < 80
-              ? top - 80
-              : math.max(0.0, top + box.size.height - available);
-      final position = scrollable.position;
-      position.animateTo(
-        (position.pixels + delta).clamp(
+      final keyboardTop = keyboardBox.localToGlobal(Offset.zero).dy;
+      // The editor nests a shrink-wrapped reorder list inside the page scroll.
+      // Skip disabled and horizontal viewports to reach the one that can move.
+      rowContext.visitAncestorElements((element) {
+        if (element is! StatefulElement || element.state is! ScrollableState) {
+          return true;
+        }
+        final scrollable = element.state as ScrollableState;
+        final position = scrollable.position;
+        if (axisDirectionToAxis(position.axisDirection) != Axis.vertical ||
+            !position.physics.allowImplicitScrolling) {
+          return true;
+        }
+        final viewport =
+            position.context.notificationContext?.findRenderObject()
+                as RenderBox?;
+        if (viewport == null) return true;
+        final viewportTop = viewport.localToGlobal(Offset.zero).dy;
+        final available =
+            math.min(keyboardTop, viewportTop + viewport.size.height) - 12;
+        final delta =
+            top < viewportTop + 12
+                ? top - viewportTop - 12
+                : math.max(0.0, top + box.size.height - available);
+        final target = (position.pixels + delta).clamp(
           position.minScrollExtent,
           position.maxScrollExtent,
-        ),
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
-      );
+        );
+        if ((target - position.pixels).abs() > .5) {
+          position.animateTo(
+            target,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+          );
+        }
+        return false;
+      });
     });
   }
 
@@ -404,9 +437,10 @@ class _SetEntryTableState extends State<SetEntryTable> {
       final showTrailing =
           onDetails != null || (onDelete != null && !continuousLog);
       final showPrevious =
-          !numberIsAction ||
-          constraints.maxWidth >=
-              400 * MediaQuery.textScalerOf(context).scale(1);
+          widget.showPrevious &&
+          (!numberIsAction ||
+              constraints.maxWidth >=
+                  400 * MediaQuery.textScalerOf(context).scale(1));
       final table = Column(
         children: [
           _EntryHeader(
@@ -552,10 +586,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
       );
       // Workout rows use the card's existing column geometry. A horizontal
       // viewport would widen them and compete with plan navigation swipes.
-      final bottom =
-          _overlay == null
-              ? 0.0
-              : math.max(232.0, MediaQuery.sizeOf(context).height * .35);
+      final bottom = _overlay == null ? 0.0 : _keyboardSpace;
       if (continuousLog) {
         return table;
       }
@@ -943,6 +974,7 @@ class _SetKeyboard extends StatefulWidget {
   final _SetField initialField;
   final VoidCallback onClose;
   final VoidCallback onEditingChanged;
+  final ValueChanged<int> onSelectionChanged;
   final void Function(int, double, int) onChanged;
   final void Function(int, int?)? onRpeChanged;
 
@@ -953,6 +985,7 @@ class _SetKeyboard extends StatefulWidget {
     required this.initialField,
     required this.onClose,
     required this.onEditingChanged,
+    required this.onSelectionChanged,
     required this.onChanged,
     this.onRpeChanged,
   });
@@ -1039,6 +1072,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     _replace = true;
     _keyboardFocus.requestFocus();
     widget.onEditingChanged();
+    widget.onSelectionChanged(index);
   });
 
   void _publish() {
