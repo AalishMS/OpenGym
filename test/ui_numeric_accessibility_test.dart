@@ -401,7 +401,7 @@ void main() {
             .value,
         '12 repetitions',
       );
-      await tester.tap(find.bySemanticsLabel('Set 1 RPE 7'));
+      await tester.tap(find.text('RPE').last);
       await tester.pumpAndSettle();
       await key(LogicalKeyboardKey.digit1, character: '1');
       await key(LogicalKeyboardKey.digit0, character: '0');
@@ -411,7 +411,7 @@ void main() {
       expect(rpes.last, isNull);
       expect(
         tester
-            .getSemantics(find.bySemanticsLabel('Set 1 RPE, not set'))
+            .getSemantics(find.bySemanticsLabel('Set 1 RPE'))
             .getSemanticsData()
             .value,
         'Not set',

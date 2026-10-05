@@ -84,7 +84,7 @@ void main() {
     expect(find.text('Bench Press'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('Set 1 Kg').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.bySemanticsLabel('Set 1 RPE 7'));
+    await tester.tap(find.text('RPE').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('8').last);
     await tester.pumpAndSettle();

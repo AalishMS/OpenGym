@@ -93,8 +93,11 @@ void main() {
         expect(tester.testTextInput.isVisible, isFalse);
         final next = find.widgetWithText(TextButton, 'Next');
         final save = find.widgetWithText(TextButton, 'Save');
-        expect(tester.getTopLeft(next).dy, tester.getTopLeft(save).dy);
-        expect(tester.getCenter(next).dx, lessThan(tester.getCenter(save).dx));
+        expect(
+          tester.getTopLeft(next).dy,
+          lessThan(tester.getTopLeft(save).dy),
+        );
+        expect(tester.getCenter(next).dx, tester.getCenter(save).dx);
         expect(
           tester.widget<TextButton>(next).style?.backgroundColor?.resolve({}),
           isNot(
@@ -227,8 +230,8 @@ void main() {
         find.widgetWithText(OutlinedButton, '+2.5'),
       );
       final digit = tester.getSize(find.widgetWithText(TextButton, '1'));
-      expect(adjustment.width, lessThan(digit.width));
-      expect(digit.width, greaterThan(90));
+      expect(adjustment.width, digit.width);
+      expect(digit.width, greaterThanOrEqualTo(48));
       for (final key in ['5', '0', '.', '2', '5']) {
         await tap(tester, key);
       }
@@ -355,7 +358,7 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
     expect(find.text('RPE'), findsNWidgets(2));
-    await tester.tap(find.bySemanticsLabel('Set 1 RPE 7'));
+    await tester.tap(find.text('RPE').last);
     await tester.pumpAndSettle();
     expect(find.bySemanticsLabel('RPE 8'), findsNothing);
     expect(
@@ -383,7 +386,7 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Delete digit'));
     await tester.pumpAndSettle();
     expect(changes, [1, 10, 1, null]);
-    expect(find.bySemanticsLabel('Set 1 RPE, not set'), findsOneWidget);
+    expect(find.bySemanticsLabel('Set 1 RPE'), findsOneWidget);
     await tap(tester, '0');
     expect(changes, [1, 10, 1, null]);
     await tap(tester, 'Next');

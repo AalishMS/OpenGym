@@ -1246,7 +1246,9 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                             final exercise = session.exercises[index];
 
                             return Container(
-                              key: ObjectKey(exercise),
+                              // Numeric edits replace the exercise snapshot;
+                              // retain the row and its active keypad across them.
+                              key: ValueKey((_currentWeek, index, exercise.name)),
                               decoration: BoxDecoration(
                                 border: Border(
                                   bottom: BorderSide(
