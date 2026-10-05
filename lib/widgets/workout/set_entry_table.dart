@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
@@ -170,6 +171,11 @@ class SetEntryHeading extends StatelessWidget {
 
 /// Shared by prescribed sets, live sets, and the set detail dialogs.
 class SetEntryTable extends StatefulWidget {
+  static final ValueNotifier<double> _keyboardHeight = ValueNotifier(0);
+
+  /// Space needed at the end of a workout list to reveal its last set.
+  static ValueListenable<double> get keyboardHeight => _keyboardHeight;
+
   final List<SetEntry> sets;
   final void Function(int index, double weight, int reps) onChanged;
   final void Function(int index, int? rpe)? onRpeChanged;
@@ -226,7 +232,17 @@ class _SetEntryTableState extends State<SetEntryTable> {
   }
 
   void _removeKeyboard() {
-    if (_activeKeyboard == this) _activeKeyboard = null;
+    if (_activeKeyboard == this) {
+      _activeKeyboard = null;
+      // Row disposal can happen while the workout list is building.
+      if (_disposing) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_activeKeyboard == null) SetEntryTable._keyboardHeight.value = 0;
+        });
+      } else {
+        SetEntryTable._keyboardHeight.value = 0;
+      }
+    }
     _overlay?.remove();
     _overlay?.dispose();
     _overlay = null;
@@ -255,6 +271,10 @@ class _SetEntryTableState extends State<SetEntryTable> {
     }
     _activeKeyboard?._close();
     _activeKeyboard = this;
+    SetEntryTable._keyboardHeight.value =
+        continuousLog
+            ? math.max(232.0, MediaQuery.sizeOf(context).height * .35)
+            : 0;
     FocusManager.instance.primaryFocus?.unfocus();
     _changed = false;
     _history = LocalHistoryEntry(onRemove: _removeKeyboard);
@@ -537,7 +557,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
               ? 0.0
               : math.max(232.0, MediaQuery.sizeOf(context).height * .35);
       if (continuousLog) {
-        return Padding(padding: EdgeInsets.only(bottom: bottom), child: table);
+        return table;
       }
       return Padding(
         padding: EdgeInsets.only(bottom: bottom),

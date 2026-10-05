@@ -26,6 +26,7 @@ import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/workout/exercise_card.dart';
 import '../widgets/workout/plan_swipe_region.dart';
+import '../widgets/workout/set_entry_table.dart';
 import '../widgets/workout/workout_dialogs.dart';
 
 class WorkoutScreen extends StatefulWidget {
@@ -1295,6 +1296,12 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                               ),
                             );
                           },
+                        ),
+                      ),
+                      ValueListenableBuilder<double>(
+                        valueListenable: SetEntryTable.keyboardHeight,
+                        builder: (context, height, _) => SliverToBoxAdapter(
+                          child: SizedBox(height: height),
                         ),
                       ),
                     ],

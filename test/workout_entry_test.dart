@@ -82,8 +82,18 @@ void main() {
     expect(find.bySemanticsLabel('Delete set'), findsNothing);
     expect(find.text('Add set'), findsOneWidget);
     expect(find.text('Bench Press'), findsOneWidget);
+    final addSetGap =
+        tester.getTopLeft(find.text('Add set')).dy -
+        tester.getBottomLeft(find.bySemanticsLabel('Set 2 Reps')).dy;
     await tester.tap(find.bySemanticsLabel('Set 1 Kg').last);
     await tester.pumpAndSettle();
+    expect(
+      tester.getTopLeft(find.text('Add set')).dy -
+          tester.getBottomLeft(find.bySemanticsLabel('Set 2 Reps')).dy,
+      closeTo(addSetGap, .1),
+      reason:
+          'Opening the keypad must not insert blank space inside an exercise',
+    );
     await tester.tap(find.text('RPE').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('8').last);
