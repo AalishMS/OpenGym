@@ -427,7 +427,8 @@ void main() {
     final handle = find.byTooltip('Hold to reorder Bench Press');
     expect(handle, findsOneWidget);
     final dragItems = find.byWidgetPredicate(
-      (widget) => widget is Container && widget.key is ObjectKey,
+      (widget) =>
+          widget is Container && widget.key is ValueKey<(int, int, String)>,
     );
     expect(dragItems, findsWidgets);
 
