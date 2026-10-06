@@ -201,7 +201,7 @@ void main() {
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
     expect(find.text('Barbell Row'), findsOneWidget);
-    expect(find.text('Muscle groups'), findsOneWidget);
+    expect(find.byTooltip('Muscle groups'), findsOneWidget);
 
     await tester.enterText(
       find.widgetWithText(TextField, 'Search exercises'),
@@ -246,7 +246,7 @@ void main() {
     await pumpEditor(tester);
     await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Create custom exercise'));
+    await tester.tap(find.byTooltip('Create custom exercise'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextFormField), 'Cable Halo');
     tester.testTextInput.hide();
@@ -287,7 +287,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Discard'));
     await tester.pumpAndSettle();
-    expect(find.text('CREATE PLAN'), findsNothing);
+    expect(find.text('New plan'), findsNothing);
   });
 
   testWidgets('blank plan name disables save', (tester) async {
@@ -350,7 +350,7 @@ void main() {
     await pumpEditor(tester);
     await tester.tap(find.text('Add exercise'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Create custom exercise'));
+    await tester.tap(find.byTooltip('Create custom exercise'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, '   ');
     await tester.pump();
@@ -362,7 +362,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Create custom exercise'));
+    await tester.tap(find.byTooltip('Create custom exercise'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last, 'Bench Press');
     await tester.pump();
@@ -388,7 +388,7 @@ void main() {
     await tester.ensureVisible(find.byTooltip('Delete set'));
     await tester.tap(find.byTooltip('Delete set'));
     await tester.pumpAndSettle();
-    expect(find.text('> Cannot delete the last set'), findsOneWidget);
+    expect(find.text('Each exercise needs at least one set'), findsOneWidget);
     expect(find.bySemanticsLabel('Set 1 Kg'), findsOneWidget);
     expect(find.text('80'), findsOneWidget);
   });

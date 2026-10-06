@@ -1,0 +1,350 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=block" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0D0D0D; --surface: #1E1E1E; --cyan: #00CED1; --fill: #00A0A3; --ink: #007175;
+    --text: #F0F0F0; --muted: #8E8E8E;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
+  body { font-family: 'Manrope', sans-serif; color: var(--text); position: relative; -webkit-font-smoothing: antialiased; }
+  .abs { position: absolute; }
+  #glow { width: 1400px; height: 1400px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,206,209,0.16) 0%, rgba(0,206,209,0.05) 35%, rgba(0,206,209,0) 65%); }
+
+  /* Hook */
+  #hook { left: 0; top: 0; width: 1920px; height: 1080px; display: flex; flex-direction: column; justify-content: center; padding-left: 300px; }
+  #hook .w { font-size: 168px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.02; }
+  #hook .w.c { color: var(--cyan); }
+
+  /* Wordmark */
+  .mark { display: flex; align-items: center; font-weight: 800; letter-spacing: -0.03em; color: var(--cyan); white-space: nowrap; }
+  .mark svg { flex: none; }
+  .mark .ch { display: inline-block; }
+  .mark { position: relative; }
+  .caret { position: absolute; top: 50%; background: var(--cyan); border-radius: 3px; }
+  #reveal { left: 0; top: 0; width: 1920px; height: 1080px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #reveal .mark { font-size: 150px; height: 190px; }
+  #reveal .tag { font-size: 58px; font-weight: 700; margin-top: 34px; letter-spacing: -0.02em; }
+  #reveal .sub { font-size: 34px; font-weight: 500; color: var(--muted); margin-top: 18px; }
+  #reveal .sub b { color: var(--cyan); font-weight: 700; margin: 0 14px; }
+
+  /* Captions */
+  .cap { left: 190px; top: 0; height: 1080px; width: 820px; display: flex; flex-direction: column; justify-content: center; }
+  .cap .h { font-size: 82px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.06; }
+  .cap .h .c { color: var(--cyan); }
+  .cap .h2 { font-size: 82px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.06; margin-top: 26px; color: var(--cyan); }
+  .cap .s { font-size: 36px; font-weight: 500; color: var(--muted); margin-top: 30px; line-height: 1.35; }
+  .cap .kicker { font-size: 26px; font-weight: 700; color: var(--cyan); letter-spacing: 0.02em; margin-bottom: 26px; font-family: 'JetBrains Mono', monospace; }
+
+  /* Phone */
+  .phone { width: 428px; height: 917px; border-radius: 62px; background: #1b1b1b; padding: 14px;
+    box-shadow: 0 0 0 2px #2c2c2c, 0 40px 120px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.04) inset; }
+  .screen { width: 400px; height: 889px; border-radius: 48px; overflow: hidden; position: relative; background: #F7F7F6; }
+  .native { position: absolute; left: 0; top: 0; width: 1080px; height: 2400px; transform-origin: 0 0; transform: scale(0.37037); }
+  .layer { position: absolute; left: 0; top: 0; width: 1080px; height: 2400px; }
+  .layer img { display: block; width: 1080px; height: 2400px; }
+  #scrim { background: rgba(0,0,0,0.52); }
+  #sheet { left: 0; top: 1038px; width: 1080px; height: 1362px; overflow: hidden; }
+  #sheet img { position: absolute; left: 0; top: -1038px; }
+  .patch { position: absolute; background: #E3E3E3; display: flex; align-items: center; justify-content: center; }
+  #kgPatch { left: 120px; top: 1205px; width: 180px; height: 100px; color: #007175; font-size: 46px; font-weight: 500; }
+  #rowPatch { left: 445px; top: 815px; width: 182px; height: 86px; color: #262626; font-size: 47px; font-weight: 600; }
+  #rowBox { left: 425px; top: 802px; width: 221px; height: 109px; border-radius: 26px; border: 6px solid var(--fill); }
+  .press { position: absolute; border-radius: 50%; }
+  .ring { position: absolute; border-radius: 50%; border: 6px solid rgba(255,255,255,0.9); }
+  .dot { position: absolute; border-radius: 50%; background: rgba(255,255,255,0.55); box-shadow: 0 0 0 4px rgba(0,0,0,0.12), 0 10px 30px rgba(0,0,0,0.25); }
+  #wipeLine { left: 0; width: 1080px; height: 10px; background: var(--cyan); box-shadow: 0 0 60px 18px rgba(0,206,209,0.55); }
+
+  /* Outro */
+  #outro { left: 0; top: 0; width: 1920px; height: 1080px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  #outro .mark { font-size: 190px; height: 230px; }
+  #outro .l1 { font-size: 46px; font-weight: 700; margin-top: 40px; }
+  #outro .l1 .c { color: var(--cyan); }
+  #outro .l2 { font-size: 34px; font-weight: 500; color: var(--muted); margin-top: 20px; font-family: 'JetBrains Mono', monospace; }
+</style>
+</head>
+<body>
+<div id="glow" class="abs"></div>
+
+<div id="hook" class="abs">
+  <div class="w" id="w1">Lift.</div>
+  <div class="w c" id="w2">Log it.</div>
+  <div class="w" id="w3">Lift again.</div>
+</div>
+
+<div id="reveal" class="abs">
+  <div class="mark" id="mark1"></div>
+  <div class="tag" id="tag">A clean, focused gym tracker.</div>
+  <div class="sub" id="sub">Plan workouts<b>·</b>Log lifts<b>·</b>See progress</div>
+</div>
+
+<div id="cap3" class="abs cap">
+  <div class="kicker">Home</div>
+  <div class="h">Open it.<br>Your next workout<br>is <span class="c">waiting.</span></div>
+</div>
+<div id="cap4" class="abs cap">
+  <div class="kicker">Workout</div>
+  <div class="h" id="c4a">Last session's weights, pre-filled.</div>
+  <div class="h2" id="c4b">Nudge. Save.<br>Back to the bar.</div>
+</div>
+<div id="cap5" class="abs cap">
+  <div class="kicker">Stats</div>
+  <div class="h">Watch every<br>lift <span class="c">climb.</span></div>
+  <div class="s" id="c5s">Weekly volume, estimated 1RM<br>and new records, tracked for you.</div>
+</div>
+<div id="cap6" class="abs cap">
+  <div class="kicker">Anywhere</div>
+  <div class="h">Works offline.<br>Syncs when<br><span class="c">you want.</span></div>
+  <div class="s" id="c6s">Light or dark, in your accent.</div>
+</div>
+
+<!-- Main phone -->
+<div id="phone" class="abs phone"><div class="screen"><div class="native" id="nat">
+  <div class="layer" id="Lhome"><img src="../../screenshots/home.png"></div>
+  <div class="layer" id="Lwork"><img src="../../screenshots/workout.png">
+    <div class="patch" id="rowPatch"><span>72.5</span></div>
+    <div class="abs" id="rowBox"></div>
+  </div>
+  <div class="layer" id="scrim"></div>
+  <div class="abs" id="sheet"><img src="../../screenshots/workout_keypad.png">
+    <div class="patch" id="kgPatch" style="top:167px"><span id="kgVal">70</span></div>
+  </div>
+  <div class="layer" id="Ldark"><img src="../../screenshots/home_dark.png"></div>
+  <div class="abs" id="wipeLine"></div>
+  <div class="dot" id="dot"></div>
+  <div class="ring" id="ring"></div>
+</div></div></div>
+
+<!-- Stats phones -->
+<div id="phA" class="abs phone"><div class="screen"><div class="native"><div class="layer"><img src="../../screenshots/statistics.png"></div></div></div></div>
+<div id="phB" class="abs phone"><div class="screen"><div class="native"><div class="layer"><img src="../../screenshots/statistics_2.png"></div></div></div></div>
+
+<div id="outro" class="abs">
+  <div class="mark" id="mark2"></div>
+  <div class="l1" id="o1">Open source<span class="c">  ·  </span>Get the APK on GitHub</div>
+  <div class="l2" id="o2">github.com/AalishMS/OpenGym</div>
+</div>
+
+<script>
+const chevron = (size, stroke) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>`;
+function buildMark(el, size) {
+  el.innerHTML = `<span class="chev" style="display:inline-flex;margin-right:${size*0.12}px">${chevron(size*0.62, 3.4)}</span>` +
+    [...'OpenGym'].map(c => `<span class="ch">${c}</span>`).join('') +
+    `<span class="caret" style="width:${size*0.07}px;height:${size*0.78}px"></span>`;
+}
+buildMark(document.getElementById('mark1'), 150);
+buildMark(document.getElementById('mark2'), 190);
+
+const $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const seg = (t, a, b) => clamp((t - a) / (b - a));
+const lerp = (a, b, p) => a + (b - a) * p;
+const eOut = p => 1 - Math.pow(1 - p, 3);
+const eOut5 = p => 1 - Math.pow(1 - p, 5);
+const eIn = p => p * p * p;
+const eIO = p => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+const eBack = p => { const c1 = 1.5, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
+
+// In = rise + unblur; Out = lift + fade. Returns [opacity, dy, blur]
+function inOut(t, tin, tout, dur = 0.35, outDur = 0.22, dist = 40) {
+  const pi = eOut5(seg(t, tin, tin + dur));
+  const po = eIn(seg(t, tout, tout + outDur));
+  return [pi * (1 - po), (1 - pi) * dist - po * dist * 0.6, (1 - pi) * 10 + po * 6];
+}
+function apply(el, [o, dy, blur], extra = '') {
+  el.style.opacity = o;
+  el.style.visibility = o <= 0.001 ? 'hidden' : 'visible';
+  el.style.transform = `translateY(${dy}px) ${extra}`;
+  el.style.filter = blur > 0.05 ? `blur(${blur}px)` : 'none';
+}
+
+function typeMark(el, t, t0, cps, caretUntil) {
+  const chars = el.querySelectorAll('.ch');
+  const chev = el.querySelector('.chev');
+  const caret = el.querySelector('.caret');
+  const pc = eBack(seg(t, t0 - 0.12, t0 + 0.14));
+  chev.style.opacity = clamp(pc * 1.5);
+  chev.style.transform = `translateX(${(1 - pc) * -30}px)`;
+  const n = (t - t0 - 0.1) * cps;
+  chars.forEach((c, i) => {
+    const p = clamp(n - i);
+    c.style.opacity = p > 0 ? 1 : 0;
+    c.style.transform = `translateY(${(1 - eOut(p)) * 18}px)`;
+  });
+  const typed = Math.max(0, Math.min(chars.length, Math.ceil(n)));
+  const anchor = typed > 0 ? chars[typed - 1] : chev;
+  caret.style.left = (anchor.offsetLeft + anchor.offsetWidth + 6) + 'px';
+  caret.style.marginTop = (-caret.offsetHeight / 2) + 'px';
+  const typing = n < chars.length;
+  const blink = typing || (Math.floor((t - t0) * 2.2) % 2 === 0);
+  caret.style.opacity = (t >= t0 && t < caretUntil && blink) ? 1 : 0;
+}
+
+function phonePlace(el, x, y, scale = 1, rot = 0, o = 1) {
+  el.style.transform = `translate(${x - 214}px, ${y - 458.5}px) scale(${scale}) rotate(${rot}deg)`;
+  el.style.opacity = o;
+  el.style.visibility = o <= 0.001 ? 'hidden' : 'visible';
+}
+
+// Press indicator in native screen coords: finger dot arrives, presses, ripple ring.
+function tap(t, tt, x, y) {
+  const dot = $('dot'), ring = $('ring');
+  const a = seg(t, tt - 0.35, tt - 0.05), r = seg(t, tt, tt + 0.5), gone = seg(t, tt + 0.15, tt + 0.4);
+  const active = t > tt - 0.35 && t < tt + 0.5;
+  if (!active) return false;
+  const ds = lerp(1.25, 1, eOut(a)) * (t > tt ? lerp(0.85, 1, eOut(seg(t, tt, tt + 0.15))) : 1);
+  const D = 120;
+  dot.style.cssText = `left:${x - D / 2}px;top:${y - D / 2}px;width:${D}px;height:${D}px;opacity:${eOut(a) * (1 - gone)};transform:scale(${ds})`;
+  const R = lerp(60, 230, eOut(r));
+  ring.style.cssText = `left:${x - R}px;top:${y - R}px;width:${2 * R}px;height:${2 * R}px;opacity:${t >= tt ? (1 - r) * 0.9 : 0}`;
+  return true;
+}
+
+const ACCENTS = ['#2E8BFF', '#FF8A3D', '#FF5A45', '#FF3FA4', '#00CED1', '#A07CFF', '#9AA7C7', '#3DDB6A', '#00CED1'];
+
+function renderAt(t) {
+  // Glow drifts toward wherever the action is
+  let gx = 960, gy = 540, go = 0.7;
+  if (t >= 5.5 && t < 19) { gx = 1400; gy = 560; go = 1; }
+  if (t >= 13 && t < 16.5) { gx = 1380; }
+  const gm = t < 2.5 ? 0.5 + 0.5 * Math.sin(t * 2) * 0 : 1;
+  $('glow').style.transform = `translate(${gx - 700}px, ${gy - 700}px)`;
+  $('glow').style.opacity = go * (t < 2.5 ? 0.55 : 1) * gm;
+
+  // 1. Hook
+  ['w1', 'w2', 'w3'].forEach((id, i) => {
+    const tin = i * 0.5;
+    const v = inOut(t, tin - 0.02, 2.25, 0.3, 0.25, 70);
+    if (i === 0 && t < 0.05) v[0] = 1, v[1] = 0, v[2] = 0; // frame 0 never blank
+    const punch = eOut(seg(t, tin, tin + 0.25));
+    apply($(id), v, `scale(${lerp(1.06, 1, punch)})`);
+    $(id).style.transformOrigin = 'left center';
+  });
+  $('hook').style.display = t < 2.6 ? 'flex' : 'none';
+
+  // 2. Reveal
+  const rv = t >= 2.4 && t < 5.6;
+  $('reveal').style.display = rv ? 'flex' : 'none';
+  if (rv) {
+    typeMark($('mark1'), t, 2.55, 14, 5.3);
+    const out = eIn(seg(t, 5.25, 5.5));
+    $('mark1').style.opacity = 1 - out;
+    $('mark1').style.transform = `translateY(${-out * 30}px)`;
+    apply($('tag'), inOut(t, 3.3, 5.25, 0.4, 0.22, 30));
+    apply($('sub'), inOut(t, 3.6, 5.25, 0.4, 0.22, 30));
+  }
+
+  // Captions
+  apply($('cap3'), inOut(t, 5.8, 8.3, 0.4, 0.22, 40));
+  apply($('cap4'), inOut(t, 8.8, 12.8, 0.4, 0.22, 40));
+  apply($('c4b'), inOut(t, 9.9, 99, 0.4, 0.2, 30));
+  apply($('cap5'), inOut(t, 13.2, 16.25, 0.4, 0.22, 40));
+  apply($('c5s'), inOut(t, 13.6, 99, 0.4, 0.2, 24));
+  apply($('cap6'), inOut(t, 16.6, 18.75, 0.4, 0.22, 40));
+  apply($('c6s'), inOut(t, 17.3, 99, 0.4, 0.2, 24));
+
+  // Main phone
+  const PX = 1400, PY = 540;
+  let po = 0, py = PY, ps = 1;
+  if (t >= 5.5 && t < 13.05) {
+    const e = eOut5(seg(t, 5.5, 6.25));
+    py = lerp(PY + 900, PY, e); po = 1;
+    ps = lerp(1, 1.05, eIO(seg(t, 6.2, 8.3)));
+    if (t >= 8.3) ps = lerp(1.05, 1, eIO(seg(t, 8.3, 9.0)));
+    const x = eIn(seg(t, 12.8, 13.05));
+    po = 1 - x; ps *= lerp(1, 0.94, x); py += x * 40;
+  } else if (t >= 16.45 && t < 19.05) {
+    const e = eOut5(seg(t, 16.45, 16.95));
+    po = e; ps = lerp(0.94, 1, e); py = lerp(PY + 40, PY, e);
+    const x = eIn(seg(t, 18.75, 19.0));
+    po *= 1 - x; ps *= lerp(1, 0.94, x);
+  }
+  phonePlace($('phone'), PX, py, ps, 0, po);
+
+  // Screen layers
+  const nav = eIO(seg(t, 8.25, 8.65));                 // home -> workout
+  const showHome = t < 8.65 || t >= 16;
+  $('Lhome').style.visibility = showHome ? 'visible' : 'hidden';
+  $('Lhome').style.transform = t < 16 ? `translateX(${-nav * 300}px)` : 'none';
+  $('Lhome').style.filter = t < 16 && nav > 0 ? `brightness(${1 - nav * 0.3})` : 'none';
+  $('Lwork').style.visibility = t >= 8.25 && t < 16 ? 'visible' : 'hidden';
+  $('Lwork').style.transform = `translateX(${(1 - nav) * 1080}px)`;
+
+  const sheetIn = eOut5(seg(t, 9.3, 9.75)), sheetOut = eIO(seg(t, 11.75, 12.15));
+  const sh = sheetIn * (1 - sheetOut);
+  $('scrim').style.opacity = sh;
+  $('scrim').style.visibility = sh > 0 && t < 16 ? 'visible' : 'hidden';
+  $('sheet').style.visibility = sh > 0 && t < 16 ? 'visible' : 'hidden';
+  $('sheet').style.transform = `translateY(${(1 - sh) * 1400}px)`;
+
+  // +2.5 nudges kg on the keypad; Save writes it into set 3
+  const bumped = t >= 10.62;
+  $('kgPatch').style.visibility = bumped ? 'visible' : 'hidden';
+  $('kgVal').textContent = '72.5';
+  const pop = seg(t, 10.62, 10.9);
+  $('kgVal').style.display = 'inline-block';
+  $('kgVal').style.transform = `scale(${bumped ? lerp(1.3, 1, eOut(pop)) : 1})`;
+  const saved = t >= 11.75;
+  $('rowPatch').style.visibility = saved ? 'visible' : 'hidden';
+  const hl = seg(t, 12.1, 12.35) * (1 - seg(t, 12.6, 13.0));
+  $('rowBox').style.opacity = saved ? hl : 0;
+
+  // Dark mode wipe
+  const wp = eIO(seg(t, 17.15, 17.85));
+  const darkOn = t >= 16.4 && t < 19.1;
+  $('Ldark').style.visibility = darkOn && wp > 0 ? 'visible' : 'hidden';
+  $('Ldark').style.clipPath = `inset(0 0 ${(1 - wp) * 100}% 0)`;
+  const lineVis = darkOn && wp > 0 && wp < 1;
+  $('wipeLine').style.visibility = lineVis ? 'visible' : 'hidden';
+  $('wipeLine').style.top = `${wp * 2400 - 5}px`;
+
+  // Taps (native screen coords)
+  let tapping = false;
+  if (t > 7 && t < 8.3) tapping = tap(t, 7.75, 540, 808);
+  else if (t > 10 && t < 11.2) tapping = tap(t, 10.6, 157, 1448);
+  else if (t > 11 && t < 12.2) tapping = tap(t, 11.6, 797, 2294);
+  if (!tapping) { $('dot').style.opacity = 0; $('ring').style.opacity = 0; }
+
+  // 5. Stats phones
+  [['phA', 13.0, 1180, 560, -5], ['phB', 13.18, 1560, 600, 4]].forEach(([id, tin, x, y, r]) => {
+    const e = eOut5(seg(t, tin, tin + 0.6));
+    const x2 = eIn(seg(t, 16.2, 16.45));
+    const drift = (t - tin) * 6;
+    const on = t >= tin && t < 16.5;
+    phonePlace($(id), x + (1 - e) * 140, y + (1 - e) * 500 - drift + x2 * 40, 1 - x2 * 0.06, lerp(r * 2.2, r, e), on ? (1 - x2) * clamp(e * 3) : 0);
+  });
+
+  // 7. Outro
+  const ov = t >= 18.95;
+  $('outro').style.display = ov ? 'flex' : 'none';
+  if (ov) {
+    typeMark($('mark2'), t, 19.05, 18, 99);
+    const k = Math.min(ACCENTS.length - 1, Math.floor(Math.max(0, t - 19.55) / 0.13));
+    $('mark2').style.color = t < 19.55 ? '#00CED1' : ACCENTS[k];
+    const sc = lerp(1.04, 1, eOut(seg(t, 19.05, 20.8)));
+    $('mark2').style.transform = `scale(${sc})`;
+    apply($('o1'), inOut(t, 20.0, 99, 0.4, 0.2, 26));
+    apply($('o2'), inOut(t, 20.25, 99, 0.4, 0.2, 26));
+  }
+}
+
+window.ready = (async () => {
+  await document.fonts.load('800 100px Manrope');
+  await document.fonts.load('500 100px Manrope');
+  await document.fonts.load('600 100px Manrope');
+  await document.fonts.load('700 100px Manrope');
+  await document.fonts.load('500 40px "JetBrains Mono"');
+  await document.fonts.ready;
+  await Promise.all([...document.images].map(i => i.decode()));
+  return true;
+})();
+window.renderAt = renderAt;
+renderAt(0);
+</script>
+</body>
+</html>
