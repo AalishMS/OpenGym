@@ -12,6 +12,7 @@ import '../theme/radii.dart';
 import '../utils/statistics_format.dart';
 import '../widgets/statistics/statistics_widgets.dart';
 import '../widgets/statistics/training_charts.dart';
+import '../widgets/statistics/workout_heatmap.dart';
 
 class StatsScreen extends StatefulWidget {
   final int weeklyTrainingRequest;
@@ -191,6 +192,31 @@ class _StatsScreenState extends State<StatsScreen> {
                                 weeks: weeks,
                                 weightUnit: unit,
                               ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        const StatisticsSectionHeader(title: 'Activity'),
+                        const SizedBox(height: 12),
+                        _ChartPanel(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Workouts',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Completed workouts · Last 52 weeks',
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: textSecondaryColor(context),
+                                ),
+                              ),
+                              const SizedBox(height: 20),
+                              WorkoutHeatmap(sessions: sessions),
                             ],
                           ),
                         ),
