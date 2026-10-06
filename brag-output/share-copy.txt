@@ -1,0 +1,1 @@
+Lift. Log it. Lift again. OpenGym pre-fills last session's weights, so logging a set is a +2.5 and a Save, then it charts every lift climbing. Works offline, syncs when you want, open source: github.com/AalishMS/OpenGym

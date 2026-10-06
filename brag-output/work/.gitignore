@@ -1,0 +1,10 @@
+# Only the composition source is tracked. Everything else is regenerated:
+# node_modules (npm i), frames and stems (render.mjs / mix.mjs), and loops/,
+# which holds decoded Apple Loops that must not be redistributed on their own.
+*
+!.gitignore
+!index.html
+!render.mjs
+!mix.mjs
+!package.json
+!package-lock.json
