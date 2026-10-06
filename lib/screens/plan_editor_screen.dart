@@ -16,7 +16,6 @@ import '../theme/breakpoints.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
-import '../widgets/dashboard/dashboard_panel.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_button.dart';
 import '../widgets/exercise_picker_sheet.dart';
@@ -124,15 +123,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
 
     if (_exercises.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '> Add at least one exercise',
-            style: GoogleFonts.jetBrainsMono(
-              color: onColor(errorColor(context)),
-            ),
-          ),
-          backgroundColor: errorColor(context),
-        ),
+        const SnackBar(content: Text('Add at least one exercise to save')),
       );
       return;
     }
@@ -237,15 +228,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
       final sets = _exercises[exerciseIndex].sets;
       if (sets.length <= 1) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '> Cannot delete the last set',
-              style: GoogleFonts.jetBrainsMono(
-                color: onColor(errorColor(context)),
-              ),
-            ),
-            backgroundColor: errorColor(context),
-          ),
+          const SnackBar(content: Text('Each exercise needs at least one set')),
         );
         return;
       }
@@ -343,11 +326,18 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
       },
       child: Scaffold(
         backgroundColor: backgroundColor(context),
+        // Pinned rather than trailing the list, so adding the fifth exercise
+        // does not mean scrolling past the first four first.
+        bottomNavigationBar: _AddExerciseBar(
+          accent: planColor,
+          onTap: _isSaving || _saved ? null : _showAddExerciseSheet,
+        ),
         body: SafeArea(
+          bottom: false,
           child: Column(
             children: [
               _EditorHeader(
-                title: widget.isEdit ? 'EDIT PLAN' : 'CREATE PLAN',
+                title: widget.isEdit ? 'Edit plan' : 'New plan',
                 color: planColor,
                 canSave: _canSave && !_isSaving && !_saved,
                 isSaving: _isSaving,
@@ -359,7 +349,12 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                 child: AbsorbPointer(
                   absorbing: _isSaving,
                   child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.xl,
+                      AppSpacing.lg,
+                      AppSpacing.xl,
+                    ),
                     child: Center(
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(
@@ -368,93 +363,32 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            DashboardPanel(
-                              title: 'PLAN NAME',
-                              child: _PlanNameField(
-                                controller: _nameController,
-                              ),
+                            const _SectionHeading(title: 'Plan name'),
+                            _PlanNameField(
+                              controller: _nameController,
+                              marker: planColor,
                             ),
-                            const SizedBox(height: AppSpacing.lg),
-                            DashboardPanel(
-                              title: 'PLAN COLOR',
-                              child: _ColorPicker(
-                                selectedColor: _selectedColor,
-                                onChanged:
-                                    (value) =>
-                                        setState(() => _selectedColor = value),
-                              ),
+                            const SizedBox(height: AppSpacing.xl),
+                            const _SectionHeading(title: 'Color'),
+                            _ColorPicker(
+                              selectedColor: _selectedColor,
+                              onChanged:
+                                  (value) =>
+                                      setState(() => _selectedColor = value),
                             ),
-                            const SizedBox(height: AppSpacing.lg),
-                            DashboardPanel(
-                              title: 'EXERCISES',
-                              caption: '${_exercises.length} TOTAL',
-                              child:
-                                  _exercises.isEmpty
-                                      ? const DashboardEmptyLine(
-                                        '> no exercises added yet',
-                                      )
-                                      : ReorderableListView.builder(
-                                        shrinkWrap: true,
-                                        physics:
-                                            const NeverScrollableScrollPhysics(),
-                                        itemCount: _exercises.length,
-                                        buildDefaultDragHandles: false,
-                                        proxyDecorator:
-                                            _buildReorderProxyDecorator,
-                                        itemBuilder: (context, index) {
-                                          final exercise = _exercises[index];
-                                          return Padding(
-                                            key: ValueKey(exercise.id),
-                                            padding: EdgeInsets.only(
-                                              bottom:
-                                                  index == _exercises.length - 1
-                                                      ? 0
-                                                      : AppSpacing.sm,
-                                            ),
-                                            child: _ExerciseEditorCard(
-                                              exercise: exercise,
-                                              splitId: _splitId,
-                                              index: index,
-                                              accent: planColor,
-                                              onToggle:
-                                                  () => setState(
-                                                    () =>
-                                                        exercise.expanded =
-                                                            !exercise.expanded,
-                                                  ),
-                                              onDelete:
-                                                  () => _deleteExercise(
-                                                    exercise.id,
-                                                    exercise.name,
-                                                  ),
-                                              onSetChanged:
-                                                  (setIndex, reps, weight) =>
-                                                      _updateSet(
-                                                        index,
-                                                        setIndex,
-                                                        reps,
-                                                        weight,
-                                                      ),
-                                              onSetDeleted:
-                                                  (setIndex) => _deleteSet(
-                                                    index,
-                                                    setIndex,
-                                                  ),
-                                              onSetAdded:
-                                                  () =>
-                                                      _addSetToExercise(index),
-                                            ),
-                                          );
-                                        },
-                                        onReorderItem: _onReorder,
-                                      ),
+                            const SizedBox(height: AppSpacing.xl),
+                            _SectionHeading(
+                              title: 'Exercises',
+                              count: _exercises.length,
+                              hint:
+                                  _exercises.length > 1
+                                      ? 'Drag to reorder'
+                                      : null,
                             ),
-                            const SizedBox(height: AppSpacing.lg),
-                            _FullWidthButton(
-                              label: 'Add exercise',
-                              accent: planColor,
-                              onTap: _showAddExerciseSheet,
-                            ),
+                            if (_exercises.isEmpty)
+                              const _EmptyExercises()
+                            else
+                              _buildExerciseList(planColor),
                           ],
                         ),
                       ),
@@ -466,6 +400,40 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildExerciseList(Color planColor) {
+    return ReorderableListView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: _exercises.length,
+      buildDefaultDragHandles: false,
+      proxyDecorator: _buildReorderProxyDecorator,
+      itemBuilder: (context, index) {
+        final exercise = _exercises[index];
+        return Padding(
+          key: ValueKey(exercise.id),
+          padding: EdgeInsets.only(
+            bottom: index == _exercises.length - 1 ? 0 : AppSpacing.sm,
+          ),
+          child: _ExerciseEditorCard(
+            exercise: exercise,
+            splitId: _splitId,
+            index: index,
+            accent: planColor,
+            onToggle:
+                () => setState(() => exercise.expanded = !exercise.expanded),
+            onDelete: () => _deleteExercise(exercise.id, exercise.name),
+            onSetChanged:
+                (setIndex, reps, weight) =>
+                    _updateSet(index, setIndex, reps, weight),
+            onSetDeleted: (setIndex) => _deleteSet(index, setIndex),
+            onSetAdded: () => _addSetToExercise(index),
+          ),
+        );
+      },
+      onReorderItem: _onReorder,
     );
   }
 }
@@ -522,12 +490,17 @@ class _EditorHeader extends StatelessWidget {
             color: color,
             onPressed: isSaving ? null : onBack,
           ),
+          const SizedBox(width: AppSpacing.xs),
           Expanded(
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: textPrimaryColor(context),
+            child: Semantics(
+              header: true,
+              child: Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: textPrimaryColor(context),
+                ),
               ),
             ),
           ),
@@ -535,9 +508,9 @@ class _EditorHeader extends StatelessWidget {
             onTap: canSave ? onSave : null,
             borderRadius: AppRadius.button,
             child: Container(
-              constraints: const BoxConstraints(minHeight: 48),
+              constraints: const BoxConstraints(minHeight: 48, minWidth: 72),
               padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.md,
+                horizontal: AppSpacing.lg,
                 vertical: AppSpacing.sm,
               ),
               decoration: BoxDecoration(
@@ -550,16 +523,13 @@ class _EditorHeader extends StatelessWidget {
                         ? const ActionProgress('Saving plan')
                         : Text(
                           'Save',
-                          style: GoogleFonts.jetBrainsMono(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelLarge?.copyWith(
                             color:
                                 canSave
                                     ? onColor(color)
-                                    : textSecondaryColor(
-                                      context,
-                                    ).withAlpha(128),
-                            letterSpacing: 0.1,
+                                    : textSecondaryColor(context),
                           ),
                         ),
               ),
@@ -572,33 +542,106 @@ class _EditorHeader extends StatelessWidget {
   }
 }
 
-class _PlanNameField extends StatelessWidget {
-  final TextEditingController controller;
+/// A sentence-case label over one section of the editor, with an optional
+/// count beside it and a muted hint pushed to the far edge.
+class _SectionHeading extends StatelessWidget {
+  final String title;
+  final int? count;
+  final String? hint;
 
-  const _PlanNameField({required this.controller});
+  const _SectionHeading({required this.title, this.count, this.hint});
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final secondary = textSecondaryColor(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Semantics(
+            header: true,
+            child: Text(
+              title,
+              style: textTheme.titleSmall?.copyWith(
+                color: textPrimaryColor(context),
+              ),
+            ),
+          ),
+          if (count != null) ...[
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              '$count',
+              style: textTheme.titleSmall?.copyWith(color: secondary),
+            ),
+          ],
+          const SizedBox(width: AppSpacing.md),
+          if (hint != null)
+            Expanded(
+              child: Text(
+                hint!,
+                textAlign: TextAlign.end,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: textTheme.bodySmall?.copyWith(color: secondary),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PlanNameField extends StatelessWidget {
+  final TextEditingController controller;
+
+  /// The plan's colour, shown as the same bar the workout header leads with,
+  /// so the name and colour read as one identity while they are being chosen.
+  final Color marker;
+
+  const _PlanNameField({required this.controller, required this.marker});
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
     return TextField(
       controller: controller,
-      textCapitalization: TextCapitalization.characters,
-      style: GoogleFonts.jetBrainsMono(
-        fontSize: 13,
-        letterSpacing: 0.04,
+      textCapitalization: TextCapitalization.sentences,
+      textInputAction: TextInputAction.done,
+      style: textTheme.bodyLarge?.copyWith(
+        fontWeight: FontWeight.w600,
         color: textPrimaryColor(context),
       ),
       decoration: InputDecoration(
-        hintText: 'e.g. PUSH DAY',
-        hintStyle: GoogleFonts.jetBrainsMono(
-          fontSize: 13,
+        hintText: 'e.g. Push day',
+        hintStyle: textTheme.bodyLarge?.copyWith(
           color: textSecondaryColor(context),
         ),
-        border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        errorBorder: InputBorder.none,
-        disabledBorder: InputBorder.none,
-        contentPadding: EdgeInsets.zero,
+        filled: true,
+        fillColor: surfaceColor(context),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.md,
+        ),
+        prefixIconConstraints: const BoxConstraints(minWidth: 0),
+        prefixIcon: Padding(
+          padding: const EdgeInsets.only(
+            left: AppSpacing.md,
+            right: AppSpacing.sm,
+          ),
+          child: ExcludeSemantics(
+            child: Container(
+              width: 3,
+              height: 20,
+              decoration: BoxDecoration(
+                color: marker,
+                borderRadius: AppRadius.micro,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -610,45 +653,85 @@ class _ColorPicker extends StatelessWidget {
 
   const _ColorPicker({required this.selectedColor, required this.onChanged});
 
+  static const double _swatch = 48;
+
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: AppSpacing.sm,
-      runSpacing: AppSpacing.sm,
-      children: List.generate(kPlanColors.length, (slot) {
-        final colorValue = kPlanColors[slot];
-        // Resolved swatch, slot-matched selection — see the home-screen picker.
-        final color = planSwatch(slot, context);
-        final selected =
-            selectedColor != null && planSlotOf(selectedColor!) == slot;
-        return Semantics(
-          label: 'Plan color ${slot + 1}',
-          selected: selected,
-          button: true,
-          onTap: () => onChanged(colorValue),
-          child: InkWell(
-            onTap: () => onChanged(colorValue),
-            borderRadius: AppRadius.control,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: color,
-                border: Border.all(
-                  color:
-                      selected ? textPrimaryColor(context) : Colors.transparent,
-                  width: 2,
-                ),
-                borderRadius: AppRadius.control,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // One row when all ten fit, otherwise two even rows of five, spread
+        // edge to edge so the grid lines up with the fields above and below
+        // instead of leaving a ragged 6 + 4.
+        final perRow =
+            constraints.maxWidth >=
+                    kPlanColors.length * _swatch +
+                        (kPlanColors.length - 1) * AppSpacing.sm
+                ? kPlanColors.length
+                : (kPlanColors.length / 2).ceil();
+        return Column(
+          children: [
+            for (
+              var start = 0;
+              start < kPlanColors.length;
+              start += perRow
+            ) ...[
+              if (start > 0) const SizedBox(height: AppSpacing.sm),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  for (
+                    var slot = start;
+                    slot < start + perRow && slot < kPlanColors.length;
+                    slot++
+                  )
+                    _buildSwatch(context, slot),
+                ],
               ),
-              child:
-                  selected
-                      ? Icon(LucideIcons.check, size: 16, color: onColor(color))
-                      : null,
-            ),
-          ),
+            ],
+          ],
         );
-      }),
+      },
+    );
+  }
+
+  Widget _buildSwatch(BuildContext context, int slot) {
+    final colorValue = kPlanColors[slot];
+    // Resolved swatch, slot-matched selection — see the home-screen picker.
+    final color = planSwatch(slot, context);
+    final selected =
+        selectedColor != null && planSlotOf(selectedColor!) == slot;
+    return Semantics(
+      label: 'Plan color ${slot + 1}',
+      selected: selected,
+      button: true,
+      onTap: () => onChanged(colorValue),
+      child: InkWell(
+        onTap: () => onChanged(colorValue),
+        borderRadius: AppRadius.button,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          width: _swatch,
+          height: _swatch,
+          padding: const EdgeInsets.all(AppSpacing.xs),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: selected ? color : Colors.transparent,
+              width: 2,
+            ),
+            borderRadius: AppRadius.button,
+          ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: AppRadius.badge,
+            ),
+            child:
+                selected
+                    ? Icon(LucideIcons.check, size: 18, color: onColor(color))
+                    : null,
+          ),
+        ),
+      ),
     );
   }
 }
@@ -756,10 +839,13 @@ class _ExerciseEditorCard extends StatelessWidget {
           _buildHeader(context, expanded),
           if (expanded) ...[
             Container(
+              // Narrower side padding than the header: the set table is the
+              // widest thing on the screen and every pixel here keeps it from
+              // scrolling sideways on a phone.
               padding: const EdgeInsets.fromLTRB(
+                AppSpacing.sm,
                 AppSpacing.md,
-                AppSpacing.md,
-                AppSpacing.md,
+                AppSpacing.sm,
                 AppSpacing.xs,
               ),
               // A hairline rule, not a filled band: the sets are the card's
@@ -819,15 +905,39 @@ class _ExerciseEditorCard extends StatelessWidget {
       splashColor: accent.withValues(alpha: 0.2),
       highlightColor: accent.withValues(alpha: 0.1),
       child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.sm,
+        padding: const EdgeInsets.fromLTRB(
+          0,
+          AppSpacing.xs,
+          AppSpacing.xs,
+          AppSpacing.xs,
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
+            // Only a very narrow card (or very large text) gives the summary
+            // the full width; otherwise it sits under the name it describes.
             final reflow =
                 constraints.maxWidth <
-                400 * MediaQuery.textScalerOf(context).scale(1);
+                300 * MediaQuery.textScalerOf(context).scale(1);
+            final title = Row(
+              children: [
+                _IndexBadge(
+                  label: '${index + 1}',
+                  borderTint: accent,
+                  textTint: accent,
+                  fontSize: 10,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    exercise.name,
+                    style: Theme.of(context).textTheme.titleMedium,
+                    maxLines: reflow ? null : 2,
+                    overflow:
+                        reflow ? TextOverflow.visible : TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            );
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -835,67 +945,66 @@ class _ExerciseEditorCard extends StatelessWidget {
                   children: [
                     ReorderableDragStartListener(
                       index: index,
-                      child: SizedBox(
-                        width: 48,
-                        height: 48,
-                        child: Icon(
-                          LucideIcons.gripVertical,
-                          size: 14,
-                          color: textSecondary,
+                      child: Tooltip(
+                        message: 'Drag to reorder',
+                        child: SizedBox(
+                          width: 44,
+                          height: 48,
+                          child: Icon(
+                            LucideIcons.gripVertical,
+                            size: 18,
+                            color: textSecondary,
+                          ),
                         ),
                       ),
                     ),
                     Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              _IndexBadge(
-                                label: '${index + 1}',
-                                borderTint: accent,
-                                textTint: accent,
-                                fontSize: 10,
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(
-                                child: Text(
-                                  exercise.name,
-                                  style:
-                                      Theme.of(context).textTheme.titleMedium,
-                                  maxLines: reflow ? null : 1,
-                                  overflow:
-                                      reflow
-                                          ? TextOverflow.visible
-                                          : TextOverflow.ellipsis,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.sm,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            title,
+                            if (!reflow) ...[
+                              const SizedBox(height: AppSpacing.xs),
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  left: _nameIndent,
                                 ),
+                                child: _prescriptionSummary(context),
                               ),
                             ],
-                          ),
-                          if (!reflow) ...[
-                            const SizedBox(height: AppSpacing.xs),
-                            Padding(
-                              padding: const EdgeInsets.only(left: _nameIndent),
-                              child: _prescriptionSummary(context),
-                            ),
                           ],
-                        ],
+                        ),
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Icon(
-                      expanded
-                          ? LucideIcons.chevronUp
-                          : LucideIcons.chevronDown,
-                      size: 14,
-                      color: textSecondary,
+                    SizedBox(
+                      width: 40,
+                      height: 48,
+                      child: AnimatedRotation(
+                        turns: expanded ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 180),
+                        child: Icon(
+                          LucideIcons.chevronDown,
+                          size: 18,
+                          color: textSecondary,
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                if (reflow) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  _prescriptionSummary(context),
-                ],
+                if (reflow)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md,
+                      0,
+                      AppSpacing.md,
+                      AppSpacing.sm,
+                    ),
+                    child: _prescriptionSummary(context),
+                  ),
               ],
             );
           },
@@ -906,24 +1015,30 @@ class _ExerciseEditorCard extends StatelessWidget {
 
   Widget _buildFooter(BuildContext context, Color border) {
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.sm),
+      padding: const EdgeInsets.all(AppSpacing.xs),
       decoration: BoxDecoration(border: Border(top: BorderSide(color: border))),
       child: Row(
         children: [
-          _FooterIconAction(
-            semanticLabel: 'Add set',
-            icon: LucideIcons.plus,
-            color: accent,
-            onTap: onSetAdded,
+          Expanded(
+            child: Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: _FooterAction(
+                semanticLabel: 'Add set',
+                label: 'Add set',
+                icon: LucideIcons.plus,
+                color: accent,
+                onTap: onSetAdded,
+              ),
+            ),
           ),
-          const Spacer(),
-          // Destructive, so it states its consequence in words down here rather
-          // than sitting in the header as a grey glyph one thumb-width from the
-          // chevron, where a mis-tap used to cost an exercise and all its sets.
-          _FooterIconAction(
+          const SizedBox(width: AppSpacing.sm),
+          // Destructive, so it is drawn in the error role and kept at the far
+          // end of the footer, away from Add set and from the header chevron,
+          // where a mis-tap used to cost an exercise and all its sets.
+          _FooterAction(
             semanticLabel: 'Delete exercise',
             icon: LucideIcons.trash2,
-            color: textSecondaryColor(context),
+            color: errorColor(context),
             onTap: onDelete,
           ),
         ],
@@ -972,15 +1087,18 @@ class _IndexBadge extends StatelessWidget {
   }
 }
 
-/// An icon action in an exercise card's footer.
-class _FooterIconAction extends StatelessWidget {
+/// An action in an exercise card's footer: an icon, with a visible label when
+/// it is the kind of action a first-time user should be able to read.
+class _FooterAction extends StatelessWidget {
   final String semanticLabel;
+  final String? label;
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
 
-  const _FooterIconAction({
+  const _FooterAction({
     required this.semanticLabel,
+    this.label,
     required this.icon,
     required this.color,
     required this.onTap,
@@ -988,66 +1106,133 @@ class _FooterIconAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
+    final action = Semantics(
       button: true,
       label: semanticLabel,
       onTap: onTap,
+      excludeSemantics: true,
       child: InkWell(
         onTap: onTap,
-        borderRadius: AppRadius.badge,
+        borderRadius: AppRadius.button,
         splashColor: color.withValues(alpha: 0.2),
         highlightColor: color.withValues(alpha: 0.1),
-        child: SizedBox(
-          width: 48,
-          height: 48,
-          child: Icon(icon, size: 20, color: color),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: Padding(
+            padding: EdgeInsets.symmetric(
+              horizontal: label == null ? 0 : AppSpacing.md,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 18, color: color),
+                if (label != null) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      label!,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.labelLarge?.copyWith(color: color),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
+      ),
+    );
+    return label == null
+        ? Tooltip(
+          message: semanticLabel,
+          excludeFromSemantics: true,
+          child: action,
+        )
+        : action;
+  }
+}
+
+/// Shown in place of the exercise list until the first one is added.
+class _EmptyExercises extends StatelessWidget {
+  const _EmptyExercises();
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final secondary = textSecondaryColor(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.xl,
+      ),
+      decoration: BoxDecoration(
+        color: surfaceColor(context),
+        border: Border.all(color: borderColor(context)),
+        borderRadius: AppRadius.card,
+      ),
+      child: Column(
+        children: [
+          Icon(LucideIcons.dumbbell, size: 24, color: secondary),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'No exercises yet',
+            textAlign: TextAlign.center,
+            style: textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Pick from the exercise library or create your own, then set '
+            'a target weight and reps for each set.',
+            textAlign: TextAlign.center,
+            style: textTheme.bodyMedium?.copyWith(color: secondary),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _FullWidthButton extends StatelessWidget {
-  final String label;
+/// The editor's pinned footer: the one action the screen is mostly for.
+class _AddExerciseBar extends StatelessWidget {
   final Color accent;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
-  const _FullWidthButton({
-    required this.label,
-    required this.accent,
-    required this.onTap,
-  });
+  const _AddExerciseBar({required this.accent, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.button,
-      child: Container(
-        constraints: const BoxConstraints(minHeight: 48),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 13),
-        decoration: BoxDecoration(
-          border: Border.all(color: accent.withAlpha(64)),
-          borderRadius: AppRadius.button,
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            if (label == 'Add exercise') ...[
-              Icon(LucideIcons.plus, size: 12, color: accent),
-              const SizedBox(width: AppSpacing.sm),
-            ],
-            Flexible(
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(color: accent),
+    return Container(
+      decoration: BoxDecoration(
+        color: backgroundColor(context),
+        border: Border(top: BorderSide(color: borderColor(context))),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.sm,
+          ),
+          child: Center(
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: Breakpoints.expanded),
+              child: OutlinedButton.icon(
+                onPressed: onTap,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: accent,
+                  minimumSize: const Size.fromHeight(48),
+                  side: BorderSide(color: accent),
+                ).copyWith(
+                  overlayColor: WidgetStatePropertyAll(accent.withAlpha(24)),
+                ),
+                icon: const Icon(LucideIcons.plus, size: 18),
+                label: const Text('Add exercise'),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );

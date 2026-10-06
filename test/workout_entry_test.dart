@@ -211,7 +211,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Add exercises'), findsOneWidget);
     expect(find.text('Selected (0)'), findsOneWidget);
-    expect(find.text('Create custom exercise'), findsOneWidget);
+    expect(find.byTooltip('Create custom exercise'), findsOneWidget);
 
     await tester.enterText(
       find.widgetWithText(TextField, 'Search exercises'),

@@ -255,19 +255,6 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                   onChanged: (value) => setState(() => _query = value),
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.xs,
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                ),
-                child: _SecondaryAction(
-                  label: 'Create custom exercise',
-                  icon: LucideIcons.plus,
-                  onTap: _createCustomExercise,
-                ),
-              ),
               Expanded(child: _buildContent()),
               _buildFooter(),
             ],
@@ -319,47 +306,86 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
     }
   }
 
+  int _selectedIn(String category) =>
+      ExerciseLibrary.exercisesByCategory[category]!
+          .where((name) => _selectedNames.containsKey(_key(name)))
+          .length;
+
+  Widget get _customAction =>
+      _CustomExerciseButton(onTap: () => _createCustomExercise());
+
   Widget _buildGroupGrid() {
     final media = MediaQuery.of(context);
     final useSingleColumn =
         media.size.width < 360 || media.textScaler.scale(16) >= 22;
-    return GridView.builder(
-      key: const ValueKey('muscle-group-grid'),
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.sm,
-        AppSpacing.lg,
-        AppSpacing.lg,
-      ),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: useSingleColumn ? 1 : 2,
-        crossAxisSpacing: AppSpacing.md,
-        mainAxisSpacing: AppSpacing.md,
-        childAspectRatio: useSingleColumn ? 3.1 : 0.9,
-      ),
-      itemCount: ExerciseLibrary.categoryNames.length,
-      itemBuilder: (context, index) {
-        final category = ExerciseLibrary.categoryNames[index];
-        return _MuscleGroupTile(
-          category: category,
-          count: ExerciseLibrary.exercisesByCategory[category]!.length,
-          horizontal: useSingleColumn,
-          onTap: () => _openCategory(category),
-        );
-      },
+    final categories = ExerciseLibrary.categoryNames;
+    final columns = useSingleColumn ? 1 : 2;
+    Widget tile(String category) => _MuscleGroupTile(
+      category: category,
+      count: ExerciseLibrary.exercisesByCategory[category]!.length,
+      selectedCount: _selectedIn(category),
+      showChevron: useSingleColumn,
+      onTap: () => _openCategory(category),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _ContextBar(title: 'Muscle groups', trailing: _customAction),
+        Expanded(
+          // Rows sized by their content rather than a fixed aspect ratio, so
+          // larger text grows a tile instead of clipping its label.
+          child: ListView(
+            key: const ValueKey('muscle-group-grid'),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.xs,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
+            children: [
+              for (var start = 0; start < categories.length; start += columns)
+                Padding(
+                  padding: EdgeInsets.only(top: start == 0 ? 0 : AppSpacing.sm),
+                  child: IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = start; i < start + columns; i++) ...[
+                          if (i > start) const SizedBox(width: AppSpacing.sm),
+                          Expanded(
+                            child:
+                                i < categories.length
+                                    ? tile(categories[i])
+                                    : const SizedBox.shrink(),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
   Widget _buildCategoryList() {
     final category = _selectedCategory!;
     final names = ExerciseLibrary.exercisesByCategory[category]!;
+    final selected = _selectedIn(category);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ContentHeading(
-          backLabel: 'Muscle groups',
-          title: category,
+        _ContextBar(
+          backTooltip: 'Muscle groups',
           onBack: _showGroups,
+          title: category,
+          subtitle:
+              selected == 0
+                  ? '${names.length} exercises'
+                  : '${names.length} exercises · $selected selected',
+          trailing: _customAction,
         ),
         Expanded(
           child: _ExerciseList(
@@ -390,7 +416,10 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _SectionLabel(label: 'Search results'),
+        _ContextBar(
+          title: results.length == 1 ? '1 result' : '${results.length} results',
+          trailing: _customAction,
+        ),
         Expanded(
           child: _ExerciseList(
             results: results,
@@ -412,10 +441,11 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _ContentHeading(
-          backLabel: 'Back',
-          title: 'Selected exercises',
+        _ContextBar(
+          backTooltip: 'Back',
           onBack: _showGroups,
+          title: 'Selected exercises',
+          trailing: _customAction,
         ),
         Expanded(
           child:
@@ -437,6 +467,28 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
   }
 
   Widget _buildFooter() {
+    final media = MediaQuery.of(context);
+    // Where the grid drops to one column, two half-width buttons cannot hold
+    // their labels either; stack them and let the semantics carry the hint.
+    final compact = media.size.width < 360 || media.textScaler.scale(16) >= 22;
+    final selected = OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(48),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
+      ),
+      onPressed: _showSelected,
+      child: Text('Selected (${_selectedNames.length})'),
+    );
+    final done = FilledButton(
+      style: FilledButton.styleFrom(
+        backgroundColor: accentFillColor(context),
+        foregroundColor: onAccentColor(context),
+        minimumSize: const Size.fromHeight(48),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
+      ),
+      onPressed: () => Navigator.pop(context),
+      child: const Text('Done'),
+    );
     return Container(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -454,45 +506,27 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Changes apply as you select.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: textSecondaryColor(context),
+            if (compact) ...[
+              selected,
+              const SizedBox(height: AppSpacing.sm),
+              done,
+            ] else ...[
+              Text(
+                'Changes apply as you select.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: textSecondaryColor(context),
+                ),
               ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size.fromHeight(48),
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: AppRadius.button,
-                      ),
-                    ),
-                    onPressed: _showSelected,
-                    child: Text('Selected (${_selectedNames.length})'),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: accentFillColor(context),
-                      foregroundColor: onAccentColor(context),
-                      minimumSize: const Size.fromHeight(48),
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: AppRadius.button,
-                      ),
-                    ),
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Done'),
-                  ),
-                ),
-              ],
-            ),
+              const SizedBox(height: AppSpacing.sm),
+              Row(
+                children: [
+                  Expanded(child: selected),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: done),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -548,37 +582,118 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-class _SecondaryAction extends StatelessWidget {
-  final String label;
-  final IconData icon;
+/// The always-available way out of the library: compact enough to share a
+/// row with the view's title, named in full for screen readers.
+class _CustomExerciseButton extends StatelessWidget {
   final VoidCallback onTap;
 
-  const _SecondaryAction({
-    required this.label,
-    required this.icon,
-    required this.onTap,
+  const _CustomExerciseButton({required this.onTap});
+
+  static const String _label = 'Create custom exercise';
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    // Same cut-off as the muscle-group grid: where the tiles drop to one
+    // column, the label would crowd the title, so the icon stands alone.
+    final compact = media.size.width < 360 || media.textScaler.scale(16) >= 22;
+    return Semantics(
+      button: true,
+      label: _label,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: _label,
+        excludeFromSemantics: true,
+        child:
+            compact
+                ? IconButton(
+                  onPressed: onTap,
+                  icon: const Icon(LucideIcons.plus, size: 20),
+                )
+                : TextButton.icon(
+                  onPressed: onTap,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                    ),
+                  ),
+                  icon: const Icon(LucideIcons.plus, size: 18),
+                  label: const Text('New exercise'),
+                ),
+      ),
+    );
+  }
+}
+
+/// Where the picker is, on one line: an optional back step, the current
+/// view's title, and the custom-exercise action.
+class _ContextBar extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final String? backTooltip;
+  final VoidCallback? onBack;
+  final Widget? trailing;
+
+  const _ContextBar({
+    required this.title,
+    this.subtitle,
+    this.backTooltip,
+    this.onBack,
+    this.trailing,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppRadius.button,
+    final textTheme = Theme.of(context).textTheme;
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        onBack == null ? AppSpacing.lg : AppSpacing.xs,
+        AppSpacing.sm,
+        AppSpacing.sm,
+        AppSpacing.xs,
+      ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 48),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 17, color: accentColor(context)),
-            const SizedBox(width: AppSpacing.sm),
-            Flexible(
-              child: Text(
-                label,
-                style: Theme.of(
-                  context,
-                ).textTheme.labelLarge?.copyWith(color: accentColor(context)),
+            if (onBack != null)
+              IconButton(
+                tooltip: backTooltip,
+                onPressed: onBack,
+                color: textPrimaryColor(context),
+                icon: const Icon(LucideIcons.chevronLeft, size: 22),
+              ),
+            Expanded(
+              child: Semantics(
+                header: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.titleMedium,
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: textTheme.bodySmall?.copyWith(
+                          color: textSecondaryColor(context),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
+            if (trailing != null) ...[
+              const SizedBox(width: AppSpacing.sm),
+              trailing!,
+            ],
           ],
         ),
       ),
@@ -589,63 +704,37 @@ class _SecondaryAction extends StatelessWidget {
 class _MuscleGroupTile extends StatelessWidget {
   final String category;
   final int count;
-  final bool horizontal;
+  final int selectedCount;
+  final bool showChevron;
   final VoidCallback onTap;
 
   const _MuscleGroupTile({
     required this.category,
     required this.count,
-    required this.horizontal,
+    required this.selectedCount,
+    required this.showChevron,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final content = <Widget>[
-      MuscleGroupIllustration(
-        group: category,
-        silhouetteColor: textSecondaryColor(context).withValues(alpha: 0.28),
-        highlightColor: accentColor(context),
-      ),
-      SizedBox(
-        width: horizontal ? AppSpacing.lg : 0,
-        height: horizontal ? 0 : AppSpacing.sm,
-      ),
-      Expanded(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment:
-              horizontal ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-          children: [
-            Text(
-              category,
-              textAlign: horizontal ? TextAlign.start : TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              '$count exercises',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: textSecondaryColor(context),
-              ),
-            ),
-          ],
-        ),
-      ),
-      Icon(
-        LucideIcons.chevronRight,
-        size: 18,
-        color: textSecondaryColor(context),
-      ),
-    ];
-
+    final textTheme = Theme.of(context).textTheme;
+    final secondary = textSecondaryColor(context);
+    final hasSelection = selectedCount > 0;
     return Semantics(
       button: true,
-      label: '$category, $count exercises',
+      label:
+          hasSelection
+              ? '$category, $count exercises, $selectedCount selected'
+              : '$category, $count exercises',
+      excludeSemantics: true,
+      onTap: onTap,
       child: Material(
         color: surfaceColor(context),
         shape: RoundedRectangleBorder(
-          side: BorderSide(color: borderColor(context)),
+          side: BorderSide(
+            color: hasSelection ? accentColor(context) : borderColor(context),
+          ),
           borderRadius: AppRadius.card,
         ),
         child: InkWell(
@@ -653,71 +742,45 @@ class _MuscleGroupTile extends StatelessWidget {
           borderRadius: AppRadius.card,
           child: Padding(
             padding: const EdgeInsets.all(AppSpacing.md),
-            child:
-                horizontal ? Row(children: content) : Column(children: content),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 34,
+                  height: 40,
+                  child: MuscleGroupIllustration(
+                    group: category,
+                    silhouetteColor: secondary.withValues(alpha: 0.28),
+                    highlightColor: accentColor(context),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(category, style: textTheme.titleMedium),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        hasSelection
+                            ? '$selectedCount of $count selected'
+                            : '$count exercises',
+                        style: textTheme.bodySmall?.copyWith(
+                          color:
+                              hasSelection ? accentColor(context) : secondary,
+                          fontWeight: hasSelection ? FontWeight.w600 : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (showChevron)
+                  Icon(LucideIcons.chevronRight, size: 18, color: secondary),
+              ],
+            ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _ContentHeading extends StatelessWidget {
-  final String backLabel;
-  final String title;
-  final VoidCallback onBack;
-
-  const _ContentHeading({
-    required this.backLabel,
-    required this.title,
-    required this.onBack,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.sm,
-        0,
-        AppSpacing.xxl,
-        AppSpacing.xs,
-      ),
-      child: Row(
-        children: [
-          TextButton.icon(
-            onPressed: onBack,
-            icon: const Icon(LucideIcons.chevronLeft, size: 18),
-            label: Text(backLabel),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              title,
-              textAlign: TextAlign.end,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SectionLabel extends StatelessWidget {
-  final String label;
-
-  const _SectionLabel({required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.sm,
-        AppSpacing.lg,
-        AppSpacing.xs,
-      ),
-      child: Text(label, style: Theme.of(context).textTheme.titleMedium),
     );
   }
 }
@@ -804,7 +867,7 @@ class _ExerciseRow extends StatelessWidget {
             vertical: AppSpacing.sm,
           ),
           decoration: BoxDecoration(
-            color: selected ? accentMutedColor(context) : null,
+            color: selected ? accentFillColor(context).withAlpha(28) : null,
             borderRadius: AppRadius.button,
           ),
           child: Row(
