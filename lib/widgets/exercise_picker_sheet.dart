@@ -119,6 +119,18 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
     });
   }
 
+  /// Done steps back out of a muscle group (or the selected list) to the
+  /// groups page, like the back button; only from there does it close.
+  void _done() {
+    if (_view == _PickerView.groups) {
+      Navigator.pop(context);
+      return;
+    }
+    _searchController.clear();
+    _query = '';
+    _showGroups();
+  }
+
   void _showSelected() {
     setState(() {
       _searchController.clear();
@@ -486,7 +498,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
         minimumSize: const Size.fromHeight(48),
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
       ),
-      onPressed: () => Navigator.pop(context),
+      onPressed: _done,
       child: const Text('Done'),
     );
     return Container(
