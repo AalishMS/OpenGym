@@ -614,7 +614,7 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
               onPressed: _isSaving ? null : _save,
               child:
                   _isSaving
-                    ? const ActionProgress('Saving workout')
+                      ? const ActionProgress('Saving workout')
                       : const Text('Save'),
             ),
             const SizedBox(width: AppSpacing.sm),
@@ -694,6 +694,11 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
                         ),
                     onAddSet: () => _showAddSetDialog(entry.$1),
                   ),
+                // Room for the keypad below the last card.
+                ValueListenableBuilder<double>(
+                  valueListenable: SetEntryTable.keyboardHeight,
+                  builder: (_, height, _) => SizedBox(height: height),
+                ),
               ],
             ),
           ),
@@ -835,6 +840,7 @@ class _EditableExerciseCard extends StatelessWidget {
             IgnorePointer(
               ignoring: !enabled,
               child: SetEntryTable(
+                hostReservesSpace: true,
                 sets: entries,
                 onChanged: onChanged,
                 onRpeChanged: onRpeChanged,

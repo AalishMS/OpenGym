@@ -186,6 +186,10 @@ class SetEntryTable extends StatefulWidget {
   final bool showPrevious;
   final bool continuousLog;
 
+  /// The host list adds [keyboardHeight] below its content, so the table does
+  /// not pad itself. Without it the padding sits inside the table's card.
+  final bool hostReservesSpace;
+
   const SetEntryTable({
     super.key,
     required this.sets,
@@ -197,6 +201,7 @@ class SetEntryTable extends StatefulWidget {
     this.showHistoryColumns = true,
     this.showPrevious = true,
     this.continuousLog = false,
+    this.hostReservesSpace = false,
   });
 
   @override
@@ -217,6 +222,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
   ValueChanged<int>? get onDetails => widget.onDetails;
   ValueChanged<int>? get onDelete => widget.onDelete;
   bool get continuousLog => widget.continuousLog;
+  bool get _hostReserves => widget.continuousLog || widget.hostReservesSpace;
   bool get showHistoryColumns => widget.showHistoryColumns;
 
   double get _keyboardSpace =>
@@ -276,7 +282,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
     }
     _activeKeyboard?._close();
     _activeKeyboard = this;
-    SetEntryTable._keyboardHeight.value = continuousLog ? _keyboardSpace : 0;
+    SetEntryTable._keyboardHeight.value = _hostReserves ? _keyboardSpace : 0;
     FocusManager.instance.primaryFocus?.unfocus();
     _changed = false;
     _history = LocalHistoryEntry(onRemove: _removeKeyboard);
@@ -599,7 +605,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
       );
       // Workout rows use the card's existing column geometry. A horizontal
       // viewport would widen them and compete with plan navigation swipes.
-      final bottom = _overlay == null ? 0.0 : _keyboardSpace;
+      final bottom = _overlay == null || _hostReserves ? 0.0 : _keyboardSpace;
       if (continuousLog) {
         return table;
       }

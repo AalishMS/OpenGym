@@ -465,6 +465,30 @@ void main() {
     expect(find.byIcon(LucideIcons.trash2), findsOneWidget);
   });
 
+  testWidgets('opening the keypad does not stretch the exercise card', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    await openExerciseGroup(tester);
+    await tester.tap(find.text('Bench Press'));
+    await tester.pumpAndSettle();
+    // Done may first step back to the muscle groups before it closes.
+    for (var i = 0; i < 2 && find.text('Done').evaluate().isNotEmpty; i++) {
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+    }
+
+    final card = find.ancestor(
+      of: find.bySemanticsLabel('Set 1 Kg'),
+      matching: find.byType(Container),
+    );
+    final before = tester.getSize(card.last).height;
+    await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(card.last).height, before);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('editor remains renderable at compact width', (tester) async {
     await pumpEditor(tester, size: const Size(320, 700));
     await tester.tap(find.text('Add exercise'));

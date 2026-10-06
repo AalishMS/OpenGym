@@ -389,6 +389,13 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                               const _EmptyExercises()
                             else
                               _buildExerciseList(planColor),
+                            // Room for the keypad below the last card, so
+                            // the card itself keeps its natural height.
+                            ValueListenableBuilder<double>(
+                              valueListenable: SetEntryTable.keyboardHeight,
+                              builder:
+                                  (_, height, _) => SizedBox(height: height),
+                            ),
                           ],
                         ),
                       ),
@@ -854,6 +861,7 @@ class _ExerciseEditorCard extends StatelessWidget {
                 border: Border(top: BorderSide(color: border)),
               ),
               child: SetEntryTable(
+                hostReservesSpace: true,
                 showPrevious: false,
                 sets: [
                   for (var i = 0; i < exercise.sets.length; i++)
