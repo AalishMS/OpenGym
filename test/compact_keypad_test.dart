@@ -132,10 +132,10 @@ void main() {
         await tester.tap(find.widgetWithText(TextButton, 'Next'));
         await tester.pumpAndSettle();
         expectVisible('Set 2 Kg');
-        await tester.tap(find.widgetWithText(TextButton, 'Copy'));
+        await tester.tap(find.text('Copy to set 3'));
         await tester.pumpAndSettle();
         expectVisible('Set 3 Kg');
-        await tester.tap(find.widgetWithText(TextButton, 'Save'));
+        await tester.tap(find.bySemanticsLabel('Hide keypad'));
         await tester.pumpAndSettle();
         expect(find.byType(BottomSheet), findsNothing);
         expect(SetEntryTable.keyboardHeight.value, 0);
@@ -212,7 +212,7 @@ void main() {
     );
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
-    expect(tester.getSize(find.byType(BottomSheet)).height, closeTo(280, 1));
+    expect(tester.getSize(find.byType(BottomSheet)).height, closeTo(278, 1));
     expect(
       tester
           .widgetList<ModalBarrier>(find.byType(ModalBarrier))
@@ -263,18 +263,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(TextButton, '9'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(TextButton, 'Copy'));
+    await tester.tap(find.text('Copy to set 2'));
     await tester.pumpAndSettle();
     expect((entries[1].weight, entries[1].reps, entries[1].rpe), (5, 9, 7));
     expect(entries[1].previous, '55 × 6');
     expect(entries[1].annotation, 'Keep note');
-    expect(
-      tester
-          .widget<TextButton>(find.widgetWithText(TextButton, 'Copy'))
-          .onPressed,
-      isNull,
-    );
-    await tester.tap(find.widgetWithText(TextButton, 'Save'));
+    expect(find.textContaining('Copy to set'), findsNothing);
+    await tester.tap(find.bySemanticsLabel('Hide keypad'));
     await tester.pumpAndSettle();
     expect(finishes, 1);
     expect(find.byType(BottomSheet), findsNothing);
@@ -331,7 +326,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsOneWidget);
       expect(finishes, 1);
-      await tester.tap(find.widgetWithText(TextButton, 'Save'));
+      await tester.tap(find.bySemanticsLabel('Hide keypad'));
       await tester.pumpAndSettle();
       expect(find.byType(BottomSheet), findsNothing);
       await tester.tap(find.bySemanticsLabel('Set 1 Kg').last);

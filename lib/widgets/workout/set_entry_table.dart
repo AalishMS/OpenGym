@@ -219,16 +219,8 @@ class _SetEntryTableState extends State<SetEntryTable> {
   bool get continuousLog => widget.continuousLog;
   bool get showHistoryColumns => widget.showHistoryColumns;
 
-  double get _keyboardSpace {
-    final overlayContext = Overlay.of(context).context;
-    final bottom = MediaQuery.paddingOf(overlayContext).bottom;
-    return math.max(
-          232.0,
-          MediaQuery.sizeOf(overlayContext).height * .35 - bottom,
-        ) +
-        bottom +
-        12;
-  }
+  double get _keyboardSpace =>
+      _keypadSheetHeight(Overlay.of(context).context) + 12;
 
   void _close() => _history?.remove();
 
@@ -297,39 +289,54 @@ class _SetEntryTableState extends State<SetEntryTable> {
             bottom: 0,
             child: Theme(
               data: Theme.of(context),
-              child: BottomSheet(
-                onClosing: _close,
-                backgroundColor: surfaceColor(context),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: AppRadius.sheet,
-                ),
-                clipBehavior: Clip.antiAlias,
-                enableDrag: false,
+              // Slides up once on open; switching fields reuses the sheet.
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 1, end: 0),
+                duration:
+                    MediaQuery.disableAnimationsOf(overlayContext)
+                        ? Duration.zero
+                        : const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
                 builder:
-                    (_) => _SetKeyboard(
-                      key: _keyboardKey,
-                      sets: List.of(sets),
-                      initialIndex: index,
-                      initialField: field,
-                      onClose: _close,
-                      onEditingChanged: () {
-                        if (mounted) {
-                          setState(() {});
-                        }
-                      },
-                      onSelectionChanged: _revealRow,
-                      onChanged: (index, weight, reps) {
-                        _changed = true;
-                        onChanged(index, weight, reps);
-                      },
-                      onRpeChanged:
-                          onRpeChanged == null
-                              ? null
-                              : (index, rpe) {
-                                _changed = true;
-                                onRpeChanged!(index, rpe);
-                              },
+                    (_, offset, child) => FractionalTranslation(
+                      translation: Offset(0, offset),
+                      child: child,
                     ),
+                child: BottomSheet(
+                  onClosing: _close,
+                  backgroundColor: _keypadTrayColor(context),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: AppRadius.sheet,
+                    side: BorderSide(color: borderColor(context)),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  enableDrag: false,
+                  builder:
+                      (_) => _SetKeyboard(
+                        key: _keyboardKey,
+                        sets: List.of(sets),
+                        initialIndex: index,
+                        initialField: field,
+                        onClose: _close,
+                        onEditingChanged: () {
+                          if (mounted) {
+                            setState(() {});
+                          }
+                        },
+                        onSelectionChanged: _revealRow,
+                        onChanged: (index, weight, reps) {
+                          _changed = true;
+                          onChanged(index, weight, reps);
+                        },
+                        onRpeChanged:
+                            onRpeChanged == null
+                                ? null
+                                : (index, rpe) {
+                                  _changed = true;
+                                  onRpeChanged!(index, rpe);
+                                },
+                      ),
+                ),
               ),
             ),
           ),
@@ -354,7 +361,13 @@ class _SetEntryTableState extends State<SetEntryTable> {
           _keyboardKey.currentContext?.findRenderObject() as RenderBox?;
       if (box == null || keyboardBox == null) return;
       final top = box.localToGlobal(Offset.zero).dy;
-      final keyboardTop = keyboardBox.localToGlobal(Offset.zero).dy;
+      // Measure where the sheet settles, not where its slide-in currently is.
+      final overlayBox =
+          Overlay.of(context).context.findRenderObject() as RenderBox?;
+      if (overlayBox == null) return;
+      final keyboardTop =
+          overlayBox.localToGlobal(Offset(0, overlayBox.size.height)).dy -
+          keyboardBox.size.height;
       // The editor nests a shrink-wrapped reorder list inside the page scroll.
       // Skip disabled and horizontal viewports to reach the one that can move.
       rowContext.visitAncestorElements((element) {
@@ -1030,11 +1043,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     } else if (key == LogicalKeyboardKey.backspace) {
       _type('delete');
     } else if (key == LogicalKeyboardKey.delete) {
-      setState(() {
-        _input = '';
-        _replace = true;
-        _publish();
-      });
+      _clear();
     } else {
       final digit =
           {
@@ -1124,6 +1133,12 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     _publish();
   });
 
+  void _clear() => setState(() {
+    _input = '';
+    _replace = true;
+    _publish();
+  });
+
   void _adjust(double delta) => setState(() {
     if (_field == _SetField.rpe ||
         (_field == _SetField.reps && delta.abs() != 1)) {
@@ -1174,14 +1189,8 @@ class _SetKeyboardState extends State<_SetKeyboard> {
       top: false,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          // Four rows, with 48dp targets as the floor on short displays.
-          final height = math.max(
-            232.0,
-            MediaQuery.sizeOf(context).height * .35 -
-                MediaQuery.paddingOf(context).bottom,
-          );
-          final keyHeight = math.max(48.0, (height - 40) / 4);
-          final keyWidth = math.max(
+          final keyHeight = _keyHeight(context);
+          final minimumKeyWidth = math.max(
             48.0,
             readableTextWidth(
                   context,
@@ -1190,80 +1199,36 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                 ) +
                 8,
           );
-          final width = 5 * keyWidth + 40;
+          final width = math.max(
+            math.min(constraints.maxWidth, 680.0),
+            5 * minimumKeyWidth + 4 * _kKeyGap + 2 * _kKeypadPadding,
+          );
+          final screen = MediaQuery.sizeOf(context).height;
+          final bottom = MediaQuery.paddingOf(context).bottom;
           return SizedBox(
-            height: height,
+            height: math.min(_keypadHeight(context), screen * .6 - bottom),
             child: SingleChildScrollView(
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: math.max(math.min(constraints.maxWidth, 680), width),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8),
-                    child: Column(
-                      children: [
-                        for (var row = 0; row < 4; row++) ...[
-                          if (row > 0) const SizedBox(height: 8),
-                          SizedBox(
-                            height: keyHeight,
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _incrementKey(
-                                    context,
-                                    label:
-                                        const ['+2.5', '−2.5', '+1', '−1'][row],
-                                    delta: const [2.5, -2.5, 1.0, -1.0][row],
-                                  ),
-                                ),
-                                for (final key
-                                    in const [
-                                      ['1', '2', '3'],
-                                      ['4', '5', '6'],
-                                      ['7', '8', '9'],
-                                      ['.', '0', 'delete'],
-                                    ][row]) ...[
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: _digitKey(
-                                      context,
-                                      key,
-                                      height: keyHeight,
-                                    ),
-                                  ),
-                                ],
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: _actionKey(
-                                    context,
-                                    label:
-                                        const [
-                                          'RPE',
-                                          'Copy',
-                                          'Next',
-                                          'Save',
-                                        ][row],
-                                    onTap: switch (row) {
-                                      0 =>
-                                        widget.onRpeChanged == null
-                                            ? null
-                                            : () =>
-                                                _select(_index, _SetField.rpe),
-                                      1 =>
-                                        _index + 1 < widget.sets.length
-                                            ? _copy
-                                            : null,
-                                      2 => _hasNext ? _next : null,
-                                      _ => widget.onClose,
-                                    },
-                                    filled: row == 3,
-                                  ),
-                                ),
-                              ],
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                  child: Center(
+                    child: SizedBox(
+                      width: width,
+                      child: Column(
+                        children: [
+                          _header(context),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(
+                              _kKeypadPadding,
+                              0,
+                              _kKeypadPadding,
+                              _kKeypadPadding,
                             ),
+                            child: _grid(context, keyHeight),
                           ),
                         ],
-                      ],
+                      ),
                     ),
                   ),
                 ),
@@ -1274,6 +1239,146 @@ class _SetKeyboardState extends State<_SetKeyboard> {
       ),
     ),
   );
+
+  String get _fieldLabel => switch (_field) {
+    _SetField.weight => 'Weight (kg)',
+    _SetField.reps => 'Reps',
+    _SetField.rpe => 'RPE (1–10)',
+  };
+
+  /// Names what the keys are editing, plus the one action that targets
+  /// another set and so reads better as a sentence than as a key.
+  Widget _header(BuildContext context) {
+    final style = Theme.of(context).textTheme.labelLarge!;
+    final hasNextSet = _index + 1 < widget.sets.length;
+    return SizedBox(
+      height: _headerHeight(context),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.xs, 0),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: 'Set ${_index + 1}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: textPrimaryColor(context),
+                      ),
+                    ),
+                    TextSpan(text: '  ·  $_fieldLabel'),
+                  ],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style.copyWith(color: textSecondaryColor(context)),
+              ),
+            ),
+            if (hasNextSet)
+              TextButton.icon(
+                onPressed: _withHaptic(_copy),
+                style: TextButton.styleFrom(
+                  foregroundColor: accentColor(context),
+                  minimumSize: const Size(48, 40),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                  ),
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: AppRadius.button,
+                  ),
+                  textStyle: style.copyWith(fontWeight: FontWeight.w600),
+                ),
+                icon: const Icon(Icons.content_copy_outlined, size: 18),
+                label: Text('Copy to set ${_index + 2}'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Five equal columns: adjustments, three digit columns, then actions. The
+  /// action column spans rows so the key pressed most after typing, Next, is
+  /// also the largest one.
+  Widget _grid(BuildContext context, double keyHeight) {
+    double span(int rows) => rows * keyHeight + (rows - 1) * _kKeyGap;
+    Widget column(List<(int, Widget)> keys) => Expanded(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < keys.length; i++) ...[
+            if (i > 0) const SizedBox(height: _kKeyGap),
+            SizedBox(height: span(keys[i].$1), child: keys[i].$2),
+          ],
+        ],
+      ),
+    );
+    final hasRpe = widget.onRpeChanged != null;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        column([
+          for (final (label, delta) in const [
+            ('+2.5', 2.5),
+            ('−2.5', -2.5),
+            ('+1', 1.0),
+            ('−1', -1.0),
+          ])
+            (1, _incrementKey(context, label: label, delta: delta)),
+        ]),
+        for (final keys in const [
+          ['1', '4', '7', '.'],
+          ['2', '5', '8', '0'],
+          ['3', '6', '9', 'delete'],
+        ]) ...[
+          const SizedBox(width: _kKeyGap),
+          column([for (final key in keys) (1, _digitKey(context, key))]),
+        ],
+        const SizedBox(width: _kKeyGap),
+        column([
+          if (hasRpe)
+            (
+              1,
+              _key(
+                context,
+                tone:
+                    _field == _SetField.rpe
+                        ? _KeyTone.selected
+                        : _KeyTone.action,
+                onPressed: () => _select(_index, _SetField.rpe),
+                child: const _KeyLabel('RPE'),
+              ),
+            ),
+          (
+            hasRpe ? 2 : 3,
+            _key(
+              context,
+              tone: _KeyTone.primary,
+              onPressed: _hasNext ? _next : widget.onClose,
+              child: _KeyLabel(_hasNext ? 'Next' : 'Done'),
+            ),
+          ),
+          (
+            1,
+            Semantics(
+              label: 'Hide keypad',
+              button: true,
+              excludeSemantics: true,
+              onTap: widget.onClose,
+              child: _key(
+                context,
+                tone: _KeyTone.action,
+                onPressed: widget.onClose,
+                child: const Icon(Icons.keyboard_hide_outlined, size: 22),
+              ),
+            ),
+          ),
+        ]),
+      ],
+    );
+  }
 
   bool _adjustmentEnabled(double delta) => switch (_field) {
     _SetField.weight => true,
@@ -1294,91 +1399,154 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     final unit = _field == _SetField.reps ? 'reps' : 'kilograms';
     return Semantics(
       label: '$label $unit',
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: OutlinedButton(
-          onPressed: enabled ? () => _adjust(delta) : null,
-          style: OutlinedButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            foregroundColor:
-                emphasized ? accentColor(context) : textPrimaryColor(context),
-            disabledForegroundColor: textSecondaryColor(context),
-            side: BorderSide(
-              color: emphasized ? accentColor(context) : borderColor(context),
-              width: emphasized ? 2 : 1,
-            ),
-            shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
-          ),
-          child: Text(label),
-        ),
+      child: _key(
+        context,
+        tone: emphasized ? _KeyTone.emphasized : _KeyTone.action,
+        onPressed: enabled ? () => _adjust(delta) : null,
+        child: Text(label),
       ),
     );
   }
 
-  Widget _digitKey(BuildContext context, String key, {required double height}) {
+  Widget _digitKey(BuildContext context, String key) {
     final isDelete = key == 'delete';
     final enabled = key != '.' || _field == _SetField.weight;
     return Semantics(
       label: isDelete ? 'Delete digit' : null,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(minHeight: height),
-        child: TextButton(
-          onPressed: enabled ? () => _type(key) : null,
-          style: TextButton.styleFrom(
-            padding: EdgeInsets.zero,
-            backgroundColor:
-                isDelete
-                    ? errorColor(context).withValues(alpha: 0.12)
-                    : backgroundColor(context),
-            foregroundColor:
-                isDelete ? errorColor(context) : textPrimaryColor(context),
-            disabledForegroundColor: textSecondaryColor(context),
-            shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
-            textStyle: Theme.of(
-              context,
-            ).textTheme.headlineSmall!.copyWith(fontWeight: FontWeight.w500),
-          ),
-          child:
-              isDelete
-                  ? const Icon(Icons.backspace_outlined, size: 20)
-                  : Text(key),
-        ),
+      hint: isDelete ? 'Long press to clear' : null,
+      child: _key(
+        context,
+        tone: _KeyTone.digit,
+        onPressed: enabled ? () => _type(key) : null,
+        onLongPress: isDelete ? _clear : null,
+        child:
+            isDelete
+                ? const Icon(Icons.backspace_outlined, size: 22)
+                : Text(key),
       ),
     );
   }
 
-  Widget _actionKey(
+  VoidCallback? _withHaptic(VoidCallback? action) =>
+      action == null
+          ? null
+          : () {
+            HapticFeedback.selectionClick();
+            action();
+          };
+
+  Widget _key(
     BuildContext context, {
-    required String label,
-    required VoidCallback? onTap,
-    required bool filled,
-  }) => ConstrainedBox(
-    constraints: const BoxConstraints(minHeight: 48),
-    child: TextButton(
-      onPressed: onTap,
-      style: TextButton.styleFrom(
-        backgroundColor: filled ? accentFillColor(context) : Colors.transparent,
-        foregroundColor: filled ? onAccentColor(context) : accentColor(context),
-        disabledForegroundColor: textSecondaryColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.button,
-          side: BorderSide(
-            color:
-                filled
-                    ? accentFillColor(context)
-                    : (onTap == null
-                        ? borderColor(context)
-                        : accentColor(context)),
-            width: filled ? 0 : 2,
-          ),
-        ),
-        textStyle: Theme.of(
-          context,
-        ).textTheme.titleMedium!.copyWith(fontWeight: FontWeight.w600),
+    required _KeyTone tone,
+    required VoidCallback? onPressed,
+    VoidCallback? onLongPress,
+    required Widget child,
+  }) {
+    final textTheme = Theme.of(context).textTheme;
+    final (ground, ink) = switch (tone) {
+      _KeyTone.primary => (accentFillColor(context), onAccentColor(context)),
+      _KeyTone.selected => (
+        accentMutedColor(context),
+        textPrimaryColor(context),
       ),
-      child: Text(label),
+      _KeyTone.emphasized => (
+        raisedSurfaceColor(context),
+        accentColor(context),
+      ),
+      _KeyTone.digit || _KeyTone.action => (
+        raisedSurfaceColor(context),
+        textPrimaryColor(context),
+      ),
+    };
+    return TextButton(
+      onPressed: _withHaptic(onPressed),
+      onLongPress:
+          onLongPress == null
+              ? null
+              : () {
+                HapticFeedback.mediumImpact();
+                onLongPress();
+              },
+      style: TextButton.styleFrom(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(48, 48),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        backgroundColor: ground,
+        foregroundColor: ink,
+        // A disabled key sinks into the tray instead of fading in place.
+        disabledBackgroundColor: _keypadTrayColor(context),
+        disabledForegroundColor: textSecondaryColor(context),
+        side:
+            onPressed == null
+                ? BorderSide(color: borderColor(context))
+                : BorderSide.none,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
+        textStyle:
+            tone == _KeyTone.digit
+                ? textTheme.headlineSmall!.copyWith(
+                  fontSize: 24,
+                  fontWeight: FontWeight.w500,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                )
+                : textTheme.titleMedium!.copyWith(fontWeight: FontWeight.w600),
+      ),
+      child: child,
+    );
+  }
+}
+
+enum _KeyTone { digit, action, emphasized, selected, primary }
+
+/// The keys always sit one step above the tray: dark mode puts surface keys on
+/// the black page ground, light mode puts near-white keys on a grey surface.
+Color _keypadTrayColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? backgroundColor(context)
+        : surfaceColor(context);
+
+/// Action labels stay on one line; at extreme text sizes they shrink to fit
+/// the key rather than breaking a word in half.
+class _KeyLabel extends StatelessWidget {
+  final String text;
+  const _KeyLabel(this.text);
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xxs),
+    child: FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Text(text, maxLines: 1, softWrap: false),
     ),
   );
+}
+
+const double _kKeyGap = 6;
+const double _kKeypadPadding = 8;
+
+/// Keys are wider than tall on a phone; they grow with short screens' floor of
+/// 48dp and with the text scale so a scaled label never clips.
+double _keyHeight(BuildContext context) => math.max(
+  (MediaQuery.sizeOf(context).height * .065).clamp(48.0, 56.0),
+  MediaQuery.textScalerOf(context).scale(24) + 24,
+);
+
+double _headerHeight(BuildContext context) =>
+    math.max(44.0, MediaQuery.textScalerOf(context).scale(14) + 30);
+
+double _keypadHeight(BuildContext context) =>
+    _headerHeight(context) +
+    4 * _keyHeight(context) +
+    3 * _kKeyGap +
+    _kKeypadPadding;
+
+/// The whole sheet, bottom safe area included: what a list has to leave free.
+double _keypadSheetHeight(BuildContext context) {
+  final bottom = MediaQuery.paddingOf(context).bottom;
+  return math.min(
+        _keypadHeight(context),
+        MediaQuery.sizeOf(context).height * .6 - bottom,
+      ) +
+      bottom;
 }
 
 /// Selection and cursor stay in the original row while the custom keyboard edits.

@@ -225,6 +225,7 @@ class WorkoutDialogs {
                       _DialogSetEntry(
                         weightController: weightController,
                         repsController: repsController,
+                        showHistoryColumns: false,
                       ),
                       const SizedBox(height: 12),
                       Text(

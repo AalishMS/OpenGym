@@ -285,18 +285,21 @@ void main() {
           target(tester, active);
           target(tester, find.bySemanticsLabel('Set 1 Reps').last);
           for (final text in ['+2.5', '−2.5', '+1', '−1']) {
-            target(tester, find.widgetWithText(OutlinedButton, text));
+            target(tester, find.widgetWithText(TextButton, text));
             readable(
               tester,
               find.descendant(
-                of: find.widgetWithText(OutlinedButton, text),
+                of: find.widgetWithText(TextButton, text),
                 matching: find.text(text),
               ),
               scale,
             );
           }
           await snapshot(tester, '${label}_keypad_top');
-          final save = find.widgetWithText(TextButton, 'Save');
+          final save = find.descendant(
+            of: find.bySemanticsLabel('Hide keypad'),
+            matching: find.byType(TextButton),
+          );
           await tester.ensureVisible(save);
           await snapshot(tester, '${label}_keypad_bottom');
           await tester.tap(save);

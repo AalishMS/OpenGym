@@ -484,7 +484,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
-    for (final key in ['5', '0', '.', '2', '5', 'Next', '1', '2', 'Save']) {
+    for (final key in ['5', '0', '.', '2', '5', 'Next', '1', '2', 'Done']) {
       await tester.tap(find.text(key).last);
       await tester.pumpAndSettle();
     }

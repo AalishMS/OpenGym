@@ -100,10 +100,12 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('Set 1 Kg').last);
     await tester.pumpAndSettle();
-    for (final key in ['5', '0', 'Next', '6', 'Next', '4', '5', 'Save']) {
+    for (final key in ['5', '0', 'Next', '6', 'Next', '4', '5']) {
       await tester.tap(find.text(key).last);
       await pumpWithStorage(tester);
     }
+    await tester.tap(find.bySemanticsLabel('Hide keypad'));
+    await pumpWithStorage(tester);
     final saved =
         HiveService.getSessionForPlanAndWeek('Push', 2, plan.splitId)!;
     expect(saved.exercises.single.sets[0].weight, 50);

@@ -138,7 +138,7 @@ void main() {
     await tap('0');
     await tap('Next');
     await tap('0');
-    await tap('Save');
+    await tap('Done');
     await tap('Save');
     expect(saved, isNull);
     expect(
@@ -148,7 +148,7 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Set 1 Reps'));
     await tester.pumpAndSettle();
     await tap('6');
-    await tap('Save');
+    await tap('Done');
     await tester.tap(find.bySemanticsLabel('RPE 8'));
     await tester.enterText(find.byType(TextField), 'Controlled tempo');
     await tap('Save');

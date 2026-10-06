@@ -92,7 +92,10 @@ void main() {
         expect(find.byType(EditableText), findsNothing);
         expect(tester.testTextInput.isVisible, isFalse);
         final next = find.widgetWithText(TextButton, 'Next');
-        final save = find.widgetWithText(TextButton, 'Save');
+        final save = find.descendant(
+          of: find.bySemanticsLabel('Hide keypad'),
+          matching: find.byType(TextButton),
+        );
         expect(
           tester.getTopLeft(next).dy,
           lessThan(tester.getTopLeft(save).dy),
@@ -104,7 +107,9 @@ void main() {
             tester.widget<TextButton>(save).style?.backgroundColor?.resolve({}),
           ),
         );
-        await tap(tester, 'Save');
+        await tester.ensureVisible(save);
+        await tester.tap(save);
+        await tester.pumpAndSettle();
       }
     }
   });
@@ -227,7 +232,7 @@ void main() {
       await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
       await tester.pumpAndSettle();
       final adjustment = tester.getSize(
-        find.widgetWithText(OutlinedButton, '+2.5'),
+        find.widgetWithText(TextButton, '+2.5'),
       );
       final digit = tester.getSize(find.widgetWithText(TextButton, '1'));
       expect(adjustment.width, digit.width);
@@ -263,13 +268,13 @@ void main() {
       expect(decimal.onPressed, isNull);
       expect(
         tester
-            .widget<OutlinedButton>(find.widgetWithText(OutlinedButton, '+2.5'))
+            .widget<TextButton>(find.widgetWithText(TextButton, '+2.5'))
             .onPressed,
         isNull,
       );
       expect(
         tester
-            .widget<OutlinedButton>(find.widgetWithText(OutlinedButton, '+1'))
+            .widget<TextButton>(find.widgetWithText(TextButton, '+1'))
             .onPressed,
         isNotNull,
       );
@@ -292,15 +297,13 @@ void main() {
       await tap(tester, '0');
       await tap(tester, 'Next');
       await tap(tester, '6');
-      final finalNext = tester.widget<TextButton>(
-        find.widgetWithText(TextButton, 'Next'),
-      );
-      expect(finalNext.onPressed, isNull);
-      await tap(tester, 'Save');
+      // The last field turns Next into Done, which closes the keypad.
+      expect(find.widgetWithText(TextButton, 'Next'), findsNothing);
+      await tap(tester, 'Done');
       expect(entries[1].weight, 80);
       expect(entries[1].reps, 6);
       expect(entries[0].previous, '65 × 8');
-      expect(find.text('Save'), findsNothing);
+      expect(find.byType(BottomSheet), findsNothing);
     },
   );
 
@@ -325,7 +328,7 @@ void main() {
     expect(changes.last, 99);
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('Save'), findsNothing);
+    expect(find.byType(BottomSheet), findsNothing);
     expect(changes.last, 99);
   });
 
@@ -368,7 +371,7 @@ void main() {
     for (final label in ['+2.5', '−2.5', '+1', '−1']) {
       expect(
         tester
-            .widget<OutlinedButton>(find.widgetWithText(OutlinedButton, label))
+            .widget<TextButton>(find.widgetWithText(TextButton, label))
             .onPressed,
         isNull,
       );
