@@ -4,10 +4,23 @@ This file provides guidance for AI agents working on the OpenGym Flutter project
 
 ## Project Overview
 
+OpenGym is an offline-first Flutter gym tracker for workout plans, active set
+logging, history, records, statistics, and optional account-based sync.
+
 - **Type**: Flutter mobile app (gym tracking)
 - **State Management**: Provider with ChangeNotifier
-- **Local Storage**: Hive (NoSQL)
+- **Local Storage**: Hive (NoSQL) is the source of truth; settings use SharedPreferences
+- **Auth & Sync**: Supabase (email auth, Postgres with RLS, last-write-wins sync)
 - **Architecture**: Clean separation - models, providers, services, screens, widgets, theme
+
+### Where context lives
+- `DESIGN.md` - the current product, architecture, data lifecycle, and visual
+  direction. Read it before structural changes and keep it current
+- `docs/splits.md` - split workspaces, which scope all plans and sessions
+- `docs/online_support_verification.md` - manual online-support checks that
+  can't be automated
+- Git history records completed work. These documents describe the current
+  state; they are not changelogs
 
 ---
 
@@ -31,7 +44,7 @@ flutter analyze --no-fatal-warnings  # Run but don't fail on warnings
 ```bash
 flutter test                          # Run all tests
 flutter test test/statistics_analytics_test.dart    # Run single test file
-flutter test --name="Basic"           # Run tests matching name pattern
+flutter test --name="record events"  # Run tests matching name pattern
 flutter test test/statistics_analytics_test.dart --name="session calculations"
 ```
 
@@ -205,17 +218,20 @@ Action labels should say what happens in familiar, concise language:
 
 ```
 lib/
-├── main.dart                    # App entry point
-├── models/                      # Hive models (set.dart, exercise.dart, etc.)
-│   └── *.g.dart               # Generated adapters (do not edit)
+├── main.dart                   # App entry point: Hive + Supabase init, providers
+├── app_shell.dart              # Tab layout (Home / History / Stats / Settings)
+├── auth/                       # AuthGate: login, password recovery, account switching
+├── models/                     # Hive models (split, workout_plan, workout_session, ...)
+│   └── *.g.dart                # Generated adapters (do not edit)
 ├── providers/                  # State management (ChangeNotifier)
-├── services/                   # Business logic (HiveService, PRTrackingService)
+├── repositories/               # Thin data-access wrappers (SplitRepository)
+├── services/                   # Business logic (HiveService, SyncService, BackupService, ...)
 ├── screens/                    # UI screens
-├── widgets/                    # Reusable widgets
-│   └── workout/               # Workout screen sub-widgets
-├── theme/                      # Theme configuration
-├── data/                       # Static data (exercise_library.dart)
-└── utils/                      # Utilities (fade_page_route.dart)
+├── widgets/                    # Reusable widgets, one subdirectory per screen
+│   └── workout/                # Workout screen sub-widgets
+├── theme/                      # Tones, typography, spacing, radii, breakpoints
+├── data/                       # Static data (exercise library, workout presets, plan colours)
+└── utils/                      # Utilities (formatting, set history, split identity)
 ```
 
 ---
@@ -263,7 +279,7 @@ class MyModel extends HiveObject {
 
 ## Workflow Rules
 
-1. Read `opencode.md` at session start
+1. Read `DESIGN.md` before architectural or data-model changes
 2. Run `flutter analyze` after every file change
 3. Fix all errors before proceeding
 4. Work one task at a time, verify compile before continuing

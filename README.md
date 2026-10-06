@@ -132,12 +132,12 @@ center.
 
 ```
 lib/
-├── models/        → Hive data models (Set, Exercise, Plan, Session)
+├── models/        → Hive data models (Split, Plan, Session, Exercise, Set)
 ├── providers/     → ChangeNotifier state management
-├── repositories/  → Clean architecture data layer
+├── repositories/  → Thin data-access layer
 ├── services/      → Business logic (HiveService, SyncService, PR Tracking)
-├── screens/       → 7 UI screens (Home, Workout, Stats, etc.)
-├── widgets/       → Reusable components (SetRow, ExerciseCard, Dialogs)
+├── screens/       → Page-level UI (Home, Workout, History, Stats, etc.)
+├── widgets/       → Reusable components, grouped by screen
 ├── theme/         → Color, typography, spacing, and shape system
 ├── data/          → Exercise library (65+ exercises)
 └── utils/         → Animations and helpers
@@ -209,11 +209,17 @@ involved. Publishing is a tag push; GitHub Actions does the rest.
    version: 1.0.1+2
    ```
 
-2. Commit, then tag with `v` + the exact pubspec version and push:
+2. Commit `pubspec.yaml` on its own, then tag with `v` + the exact pubspec
+   version and push:
 
    ```bash
-   git commit -am "release: 1.0.1+2" && git tag v1.0.1+2 && git push && git push --tags
+   git add pubspec.yaml && git commit -m "chore: release 1.0.1+2"
+   git tag v1.0.1+2 && git push && git push --tags
    ```
+
+   Don't use `git commit -am`. It also commits the generated plugin
+   registrants under `linux/`, `macos/`, and `windows/`, which pick up
+   line-ending-only changes on every build.
 
 `.github/workflows/release.yml` then verifies the tag matches pubspec (and fails
 loudly if not), runs the tests, builds a single universal signed APK, checks it
@@ -281,47 +287,22 @@ Do the export *first*. Uninstalling the old app deletes its local database.
 ```
 gymapp-offline/
 ├── lib/
-│   ├── main.dart                   # App entry point
-│   ├── models/                     # Hive type adapters
-│   │   ├── set.dart
-│   │   ├── exercise.dart
-│   │   ├── exercise_template.dart
-│   │   ├── workout_plan.dart
-│   │   └── workout_session.dart
-│   ├── providers/                  # State management
-│   │   ├── workout_plan_provider.dart
-│   │   ├── workout_session_provider.dart
-│   │   ├── progression_provider.dart
-│   │   └── settings_provider.dart
-│   ├── repositories/               # Data access layer
-│   │   ├── workout_plan_repository.dart
-│   │   ├── workout_session_repository.dart
-│   │   └── stats_repository.dart
-│   ├── services/                   # Business logic
-│   │   ├── hive_service.dart
-│   │   ├── pr_tracking_service.dart
-│   │   └── sample_data_seeder.dart
-│   ├── screens/                    # UI screens
-│   │   ├── home_screen.dart
-│   │   ├── create_plan_screen.dart
-│   │   ├── edit_plan_screen.dart
-│   │   ├── workout_screen.dart
-│   │   ├── history_screen.dart
-│   │   ├── stats_screen.dart
-│   │   └── settings_screen.dart
-│   ├── widgets/workout/            # Reusable widgets
-│   │   ├── set_row.dart
-│   │   ├── exercise_card.dart
-│   │   ├── arrow_button.dart
-│   │   └── workout_dialogs.dart
-│   ├── theme/
-│   │   └── app_theme.dart
-│   ├── data/
-│   │   └── exercise_library.dart
-│   └── utils/
-│       └── fade_page_route.dart
-├── logo/                           # App icon assets
-├── test/                           # Tests
+│   ├── main.dart                   # Startup: Hive, Supabase, providers
+│   ├── app_shell.dart              # Tab layout (Home / History / Stats / Settings)
+│   ├── auth/                       # AuthGate: login, recovery, account switching
+│   ├── models/                     # Hive models + generated *.g.dart adapters
+│   ├── providers/                  # ChangeNotifier state (splits, plans, sessions, settings, updates)
+│   ├── repositories/               # Thin data-access wrappers
+│   ├── services/                   # Hive, sync, backup, PR tracking, presets, updates
+│   ├── screens/                    # Page-level UI
+│   ├── widgets/                    # Reusable UI, grouped by screen
+│   │   ├── dashboard/  history/  home/  splits/  statistics/  workout/
+│   ├── theme/                      # Colour tones, typography, spacing, radii, breakpoints
+│   ├── data/                       # Exercise library, workout presets, plan colours
+│   └── utils/                      # Formatting, set history, split identity, routes
+├── docs/                           # Splits, presets research, manual verification
+├── screenshots/                    # README images
+├── test/                           # Unit and widget tests (helpers in test/support/)
 └── web/                            # PWA web assets
 ```
 
@@ -334,10 +315,10 @@ gymapp-offline/
 flutter test
 
 # Run a specific test file
-flutter test test/widget_test.dart
+flutter test test/statistics_analytics_test.dart
 
 # Run tests matching a name
-flutter test --name="Basic"
+flutter test --name="session calculations"
 ```
 
 ---

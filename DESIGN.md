@@ -45,13 +45,20 @@ recognizable details rather than a theme that users need to understand. The
 
 ```text
 main.dart
-  -> HiveService.init()
-  -> SupabaseService.init()
+  -> HiveService.init() + SupabaseService.init()   (in parallel)
+  -> AdoptLocalData.prepareLocal()                 (offline-only cache handover)
   -> MultiProvider
-  -> AuthGate
+  -> IntroScreen (first run) or AuthGate
   -> AppShell
   -> Home / History / Stats / Settings
 ```
+
+`AuthGate` wraps the app Navigator through `MaterialApp.builder`, so login and
+password-recovery UI can appear above pushed routes. When the signed-in account
+changes, the navigator key is replaced so the previous user's route stack is
+discarded. `AdoptLocalData` adopts on-device data into an account the first
+time that user signs in, and keeps one account's cache hidden from the next
+user on a shared device.
 
 The app is split into small layers:
 
@@ -59,7 +66,7 @@ The app is split into small layers:
 | --- | --- | --- |
 | Models | `lib/models/` | Hive objects and JSON serialization |
 | Providers | `lib/providers/` | UI-facing state and `notifyListeners()` |
-| Repositories | `lib/repositories/` | Thin data-access wrappers around services |
+| Repositories | `lib/repositories/` | Thin data-access wrappers around services (currently splits only) |
 | Services | `lib/services/` | Storage, sync, backup, PR tracking, seeding |
 | Screens | `lib/screens/` | Page-level UI |
 | Widgets | `lib/widgets/` | Reusable UI components |
@@ -71,12 +78,17 @@ Provider is the only app-wide state pattern.
 
 | Provider | State |
 | --- | --- |
-| `WorkoutPlanProvider` | Workout plan list and plan CRUD |
-| `WorkoutSessionProvider` | Session list, current week, session mutations |
+| `SplitProvider` | Available splits, the active split, split CRUD and preset installs |
+| `WorkoutPlanProvider` | Workout plan list and plan CRUD for the active split |
+| `WorkoutSessionProvider` | Session list, current week, session mutations for the active split |
 | `SettingsProvider` | Theme mode, accent color, units, auto-fill, refresh rate |
+| `UpdateProvider` | Self-update check against GitHub Releases |
 
-Providers mutate data through repositories, reload local state, notify listeners,
-and schedule sync where needed.
+Providers mutate data through `HiveService` (`SplitProvider` goes through
+`SplitRepository`), reload local state, notify listeners, and schedule sync
+where needed. The plan and session providers take
+`SplitProvider` in their constructors and reload when the active split changes.
+See [docs/splits.md](docs/splits.md).
 
 ## Data Model
 
@@ -86,11 +98,15 @@ The core model is intentionally small.
 | --- | --- |
 | `Set` | One performed set: reps, weight, optional RPE, optional note |
 | `Exercise` | One logged exercise with a list of sets |
+| `SetTemplate` | One target set in a plan: reps and weight (display-only) |
 | `ExerciseTemplate` | Exercise entry with targets and optional workout guidance |
-| `WorkoutPlan` | Named plan with exercises, optional color, and explicit order |
-| `WorkoutSession` | Logged workout for a plan, date, week, and exercises |
+| `WorkoutPlan` | Named plan with exercises, optional color, explicit order, and `splitId` |
+| `WorkoutSession` | Logged workout for a plan, date, week, exercises, and `splitId` |
+| `Split` | An independent training workspace that owns plans and sessions |
+| `SplitPreference` | The account's active split, keyed by user ID |
 
-Plans and sessions also carry sync metadata:
+Splits, plans, and sessions also carry sync metadata. `SplitPreference` keeps
+only `updatedAt` and `dirty`: it is keyed by `userId` and is never deleted.
 
 | Field | Purpose |
 | --- | --- |
@@ -104,19 +120,23 @@ Hive adapters are generated in `*.g.dart`; those files are not edited by hand.
 
 ## Local Persistence
 
-`HiveService` owns local persistence. It opens two boxes:
+`HiveService` owns local persistence. It opens four boxes:
 
 | Box | Records |
 | --- | --- |
 | `workout_plans` | `WorkoutPlan` |
 | `workout_sessions` | `WorkoutSession` |
+| `splits` | `Split` |
+| `split_preferences` | `SplitPreference` |
 
 UI-facing reads hide tombstoned records. Raw reads include tombstones so sync can
 push deletes.
 
-`HiveService` also runs a one-shot migration from old integer Hive keys to stable
-ID keys. Before re-keying records, it writes a JSON safety backup to
-SharedPreferences.
+`HiveService` also runs one-shot migrations. The first re-keys records from old
+integer Hive keys to stable IDs, after writing a JSON safety backup to
+SharedPreferences. The second, `ensureSplitWorkspace`, creates a default split
+when none exists and assigns any plan or session without a `splitId` to the
+active split.
 
 ## Cloud Sync
 
@@ -127,11 +147,19 @@ Supabase Postgres.
 local mutation
   -> mark record dirty
   -> debounce sync
+  -> pull splits + split preference   (best effort; may fail offline)
+  -> ensure a local split workspace exists
+  -> push live splits
   -> push dirty plans
   -> push dirty sessions
-  -> pull changed plans
-  -> pull changed sessions
+  -> push split preference
+  -> push deleted splits
+  -> pull splits, split preference, plans, sessions
 ```
+
+Parents are pushed before children. Deleted splits are pushed last because a
+server trigger tombstones their plans and sessions, and every child mutation
+has to land first. Each table keeps its own pull cursor in SharedPreferences.
 
 Sync uses whole aggregate rows: one plan or one session is stored as promoted
 columns plus a JSON `data` payload. Deletes are represented by `deletedAt`, not
@@ -144,9 +172,14 @@ Conflict resolution is timestamp based:
   the server later.
 - Sync errors are swallowed and retried on the next trigger.
 - Concurrent sync calls share the same active future.
+- Sync runs after local mutations and whenever the app returns to the
+  foreground.
 
-Supabase auth gates the app when online support is configured. Offline-only
-builds skip auth and open the app shell directly.
+Supabase auth gates the app when online support is configured. The Supabase URL
+and publishable key are compiled in as `--dart-define` defaults
+(`SUPABASE_URL`, `SUPABASE_ANON_KEY`), and row-level security is the security
+boundary. A build that overrides either one with an empty value is
+offline-only: it skips auth and opens the app shell directly.
 
 ## Navigation
 
@@ -211,12 +244,13 @@ whole app means editing the six scale constants in that one file.
 
 ## Backup And Import
 
-`BackupService` exports all plans, sessions, and settings into a versioned JSON
-file. Imports validate JSON shape and supported versions before replacing local
-data.
+`BackupService` exports all splits, plans, sessions, and settings into a
+versioned JSON file (currently version 3). Imports validate JSON shape and
+supported versions before replacing local data.
 
 Version 1 backups without stable IDs are upgraded on import by assigning IDs and
-marking records dirty so they can sync upward.
+marking records dirty so they can sync upward. Backups older than version 3
+import into a single `My Split`.
 
 ## Development Constraints
 
