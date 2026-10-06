@@ -139,6 +139,35 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('signing in without a connection says the device is offline', (
+    tester,
+  ) async {
+    pendingAuth = Completer<http.Response>();
+    await tester.pumpWidget(loginHost());
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Email'),
+      'person@example.com',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Password'),
+      'password123',
+    );
+    await tester.tap(find.widgetWithText(ElevatedButton, 'Sign in'));
+    await tester.pump();
+    pendingAuth!.completeError(
+      http.ClientException(
+        "SocketException: Failed host lookup: 'example.supabase.co'",
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(
+      find.text("You're offline. Check your connection and try again."),
+      findsOneWidget,
+    );
+    expect(find.textContaining('SocketException'), findsNothing);
+  });
+
   testWidgets('loading spinner uses the button foreground', (tester) async {
     pendingAuth = Completer<http.Response>();
     await tester.pumpWidget(loginHost());

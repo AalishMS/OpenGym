@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../auth/auth_error_message.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
@@ -231,10 +232,8 @@ class _LoginScreenState extends State<LoginScreen> {
       } else {
         await SupabaseService.signIn(email, password);
       }
-    } on AuthException catch (e) {
-      if (mounted) setState(() => _error = e.message);
-    } catch (_) {
-      if (mounted) setState(() => _error = 'Something went wrong. Try again.');
+    } catch (e) {
+      if (mounted) setState(() => _error = authErrorMessage(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

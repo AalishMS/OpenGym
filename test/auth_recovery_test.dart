@@ -516,6 +516,36 @@ void main() {
     );
   });
 
+  testWidgets('an offline token refresh reports offline, not a bad link', (
+    tester,
+  ) async {
+    await SupabaseService.auth.getSessionFromUrl(
+      Uri.parse(
+        'io.opengym.app://callback/#access_token=test-token&refresh_token=refresh-token&expires_in=3600&token_type=bearer&type=signup',
+      ),
+    );
+    await tester.pumpWidget(gateHost());
+    await tester.pumpAndSettle();
+    // What the SDK emits when a background token refresh has no network.
+    // ignore: invalid_use_of_internal_member
+    SupabaseService.auth.notifyException(
+      AuthRetryableFetchException(
+        message:
+            "ClientException with SocketException: Failed host lookup: 'example.supabase.co'",
+      ),
+      StackTrace.current,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(MaterialBanner), findsOneWidget);
+    expect(find.textContaining("You're offline"), findsOneWidget);
+    expect(
+      find.textContaining('Could not verify the sign-in or reset link'),
+      findsNothing,
+    );
+    expect(find.text('Signed-in home'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets(
     'expired link failures are announced while the signed-in app remains available',
     (tester) async {

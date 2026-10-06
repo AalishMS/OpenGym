@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
+import 'auth_error_message.dart';
 import '../services/adopt_local_data.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
@@ -76,8 +77,14 @@ class _AuthGateState extends State<AuthGate> {
         if (!mounted) return;
         setState(() {
           _authStateReady = true;
+          // A background token refresh with no network lands here too; it is
+          // retried automatically and the next auth event clears the banner.
           _authError =
-              'Could not verify the sign-in or reset link. Request a new link and try again.';
+              isNetworkError(error)
+                  ? "You're offline. Your workouts are saved on this device and will sync when you reconnect."
+                  : error is AuthRetryableFetchException
+                  ? kServerUnavailableMessage
+                  : 'Could not verify the sign-in or reset link. Request a new link and try again.';
         });
       },
     );
