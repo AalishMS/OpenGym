@@ -81,6 +81,19 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> closeExercisePicker(WidgetTester tester) async {
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    // From a category or selected review, Done first returns to the groups.
+    if (find.text('Done').evaluate().isNotEmpty) {
+      expect(find.byKey(const ValueKey('muscle-group-grid')), findsOneWidget);
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Add exercises'), findsNothing);
+    expect(find.text('Done'), findsNothing);
+  }
+
   testWidgets('add exercise sheet survives being closed', (tester) async {
     await pumpEditor(tester);
     await tester.tap(find.text('Add exercise'));
@@ -92,8 +105,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
+    await closeExercisePicker(tester);
     expect(tester.takeException(), isNull);
   });
 
@@ -162,8 +174,7 @@ void main() {
     await openExerciseGroup(tester);
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
+    await closeExercisePicker(tester);
     for (final label in ['Add set', 'Delete exercise']) {
       expect(
         tester.getSize(find.bySemanticsLabel(label)).height,
@@ -433,8 +444,7 @@ void main() {
     await openExerciseGroup(tester);
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
+    await closeExercisePicker(tester);
     final title = tester.widget<Text>(find.text('Bench Press'));
     expect(
       title.style?.fontFamily,
@@ -454,8 +464,7 @@ void main() {
     await openExerciseGroup(tester);
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
+    await closeExercisePicker(tester);
 
     expect(find.bySemanticsLabel('Set 1 Kg'), findsOneWidget);
     expect(find.text('[+ ADD SET]'), findsNothing);
@@ -472,11 +481,7 @@ void main() {
     await openExerciseGroup(tester);
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    // Done may first step back to the muscle groups before it closes.
-    for (var i = 0; i < 2 && find.text('Done').evaluate().isNotEmpty; i++) {
-      await tester.tap(find.text('Done'));
-      await tester.pumpAndSettle();
-    }
+    await closeExercisePicker(tester);
 
     final card = find.ancestor(
       of: find.bySemanticsLabel('Set 1 Kg'),
@@ -504,8 +509,7 @@ void main() {
     await openExerciseGroup(tester);
     await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Done'));
-    await tester.pumpAndSettle();
+    await closeExercisePicker(tester);
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
     for (final key in ['5', '0', '.', '2', '5', 'Next', '1', '2', 'Done']) {
