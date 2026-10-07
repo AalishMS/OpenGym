@@ -223,28 +223,29 @@ class _SplitMenu extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // A quiet overline: the header labels the list below it, it is
+              // not itself something to tap.
               Padding(
                 padding: const EdgeInsets.fromLTRB(
                   AppSpacing.sm,
                   AppSpacing.xs,
                   AppSpacing.sm,
-                  AppSpacing.sm,
+                  AppSpacing.xs,
                 ),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
-                        'Training split',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: accentColor(context),
-                        ),
+                        'Your splits',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: textSecondary),
                       ),
                     ),
                     Text(
                       '${provider.splits.length} of ${SplitProvider.maxSplits}',
                       style: Theme.of(
                         context,
-                      ).textTheme.bodySmall?.copyWith(color: textSecondary),
+                      ).textTheme.labelMedium?.copyWith(color: textSecondary),
                     ),
                   ],
                 ),
@@ -261,24 +262,23 @@ class _SplitMenu extends StatelessWidget {
               ),
               _SplitMenuAction(
                 key: const ValueKey('new-split-action'),
+                icon: LucideIcons.plus,
                 label: 'New split',
-                caption:
-                    provider.canCreate
-                        ? 'Empty workspace'
-                        : 'Limit reached · 5 of 5 active',
+                caption: provider.canCreate ? null : 'Limit reached',
                 enabled: provider.canCreate,
                 onTap: onCreate,
               ),
               _SplitMenuAction(
                 key: const ValueKey('browse-programs-action'),
-                label: 'Browse programs',
-                caption: 'Choose a split',
+                icon: LucideIcons.libraryBig,
+                label: 'Browse',
+                semanticLabel: 'Browse programs',
                 onTap: onBrowse,
               ),
               _SplitMenuAction(
                 key: const ValueKey('manage-splits-action'),
+                icon: LucideIcons.settings2,
                 label: 'Manage splits',
-                caption: 'Rename or delete',
                 onTap: onManage,
               ),
             ],
@@ -317,32 +317,27 @@ class _SplitMenuRow extends StatelessWidget {
             color: selected ? accentMutedColor(context) : Colors.transparent,
             borderRadius: AppRadius.control,
           ),
+          // Radio-style leading mark: the splits read as "pick one of these",
+          // unlike the icon-led actions under the rule.
           child: Row(
             children: [
-              Container(
-                width: 3,
-                height: 24,
-                decoration: BoxDecoration(
-                  color: selected ? accent : borderColor(context),
-                  borderRadius: AppRadius.micro,
-                ),
+              Icon(
+                selected ? LucideIcons.circleCheck : LucideIcons.circle,
+                size: 18,
+                color: selected ? accent : textSecondaryColor(context),
               ),
-              const SizedBox(width: AppSpacing.sm),
+              const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Text(
                   split.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                    color:
-                        selected
-                            ? textPrimaryColor(context)
-                            : textSecondaryColor(context),
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: textPrimaryColor(context),
                   ),
                 ),
               ),
-              if (selected) Icon(LucideIcons.check, size: 18, color: accent),
             ],
           ),
         ),
@@ -351,62 +346,71 @@ class _SplitMenuRow extends StatelessWidget {
   }
 }
 
+/// A command row under the split list: accent icon plus a one-line label, so
+/// it reads as "do something" rather than as another split to pick.
 class _SplitMenuAction extends StatelessWidget {
+  final IconData icon;
   final String label;
-  final String caption;
+  final String? semanticLabel;
+  final String? caption;
   final bool enabled;
   final VoidCallback onTap;
 
   const _SplitMenuAction({
     super.key,
+    required this.icon,
     required this.label,
-    required this.caption,
     required this.onTap,
+    this.semanticLabel,
+    this.caption,
     this.enabled = true,
   });
 
   @override
   Widget build(BuildContext context) {
+    final secondary = textSecondaryColor(context);
     final foreground =
-        enabled
-            ? textPrimaryColor(context)
-            : textSecondaryColor(context).withAlpha(120);
+        enabled ? textPrimaryColor(context) : secondary.withAlpha(120);
+    final iconColor =
+        enabled ? accentColor(context) : secondary.withAlpha(120);
     return Semantics(
       button: true,
       enabled: enabled,
-      label: label,
+      label: caption == null
+          ? (semanticLabel ?? label)
+          : '${semanticLabel ?? label}, $caption',
+      excludeSemantics: true,
       child: InkWell(
         onTap: enabled ? onTap : null,
         borderRadius: AppRadius.control,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 52),
+          constraints: const BoxConstraints(minHeight: 44),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
             child: Row(
               children: [
+                Icon(icon, size: 18, color: iconColor),
+                const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Text(
                     label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(
                       context,
                     ).textTheme.labelLarge?.copyWith(color: foreground),
                   ),
                 ),
-                const SizedBox(width: AppSpacing.sm),
-                Flexible(
-                  child: Text(
-                    caption,
-                    textAlign: TextAlign.right,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      height: 1.3,
-                      color: textSecondaryColor(
-                        context,
-                      ).withAlpha(enabled ? 220 : 120),
-                    ),
+                if (caption != null) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    caption!,
+                    maxLines: 1,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: secondary),
                   ),
-                ),
+                ],
               ],
             ),
           ),

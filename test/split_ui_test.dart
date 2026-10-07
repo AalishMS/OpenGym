@@ -143,17 +143,17 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Browse programs'), findsOneWidget);
+    expect(find.text('Browse'), findsOneWidget);
     expect(
       tester.getTopLeft(find.text('New split')).dy,
-      lessThan(tester.getTopLeft(find.text('Browse programs')).dy),
+      lessThan(tester.getTopLeft(find.text('Browse')).dy),
     );
     expect(
-      tester.getTopLeft(find.text('Browse programs')).dy,
+      tester.getTopLeft(find.text('Browse')).dy,
       lessThan(tester.getTopLeft(find.text('Manage splits')).dy),
     );
 
-    await tester.tap(find.text('Browse programs'));
+    await tester.tap(find.text('Browse'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('preset-catalog')), findsOneWidget);
     expect(find.text('Workout presets'), findsOneWidget);
@@ -231,7 +231,7 @@ void main() {
       );
       await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Browse programs'));
+      await tester.tap(find.text('Browse'));
       await tester.pumpAndSettle();
       expect(find.text('Workout presets'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -252,7 +252,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Limit reached · 5 of 5 active'), findsOneWidget);
+    expect(find.text('Limit reached'), findsOneWidget);
     final action = tester.widget<InkWell>(
       find.descendant(
         of: find.byKey(const ValueKey('new-split-action')),
