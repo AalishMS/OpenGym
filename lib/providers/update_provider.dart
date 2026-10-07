@@ -48,6 +48,30 @@ class UpdateProvider with ChangeNotifier {
     'OPENGYM_PREVIEW_UPDATE',
   );
 
+  /// A local UI preview that never checks GitHub or installs an APK.
+  bool get isPreview => kDebugMode && _previewUpdate;
+
+  void _showPreview() {
+    _installed = const AppVersion([0, 0, 0], 0);
+    _release = const ReleaseInfo(
+      tagName: 'preview',
+      displayVersion: 'OpenGym preview',
+      changelog: '''
+- Faster workout startup
+- Improved set logging
+- Clearer progress charts
+- More reliable offline sync
+''',
+      htmlUrl: kReleasesPageUrl,
+      apkUrl: 'https://example.invalid/preview.apk',
+      apkSize: 25 * 1024 * 1024,
+      version: AppVersion([1, 0, 0], 999),
+    );
+    _error = null;
+    _status = UpdateStatus.available;
+    notifyListeners();
+  }
+
   /// How long to wait between automatic network checks. Unauthenticated GitHub
   /// allows 60 requests/hour per IP; four a day leaves that untouched. The
   /// manual check in Settings deliberately ignores this.
@@ -88,13 +112,10 @@ class UpdateProvider with ChangeNotifier {
   /// Reads the installed version so Settings can show it. Safe to call often.
   Future<void> loadInstalledVersion() async {
     if (_installed != null) return;
-    final installed = await UpdateService.installedVersion();
-    // Lets developers exercise the real GitHub-backed prompt without cutting
-    // a release. kDebugMode prevents the override from affecting release APKs.
     _installed =
-        kDebugMode && _previewUpdate
+        isPreview
             ? const AppVersion([0, 0, 0], 0)
-            : installed;
+            : await UpdateService.installedVersion();
     if (_installed != null) notifyListeners();
   }
 
@@ -104,6 +125,10 @@ class UpdateProvider with ChangeNotifier {
   /// every failure — an offline launch must be indistinguishable from a launch
   /// that found no update.
   Future<void> checkOnStartup() async {
+    if (isPreview) {
+      _showPreview();
+      return;
+    }
     if (!UpdateService.isSupportedPlatform) return;
     await loadInstalledVersion();
     if (_installed == null) return;
@@ -131,6 +156,10 @@ class UpdateProvider with ChangeNotifier {
   /// here the user asked and silence would read as a broken button.
   Future<void> checkManually() async {
     if (isBusy) return;
+    if (isPreview) {
+      _showPreview();
+      return;
+    }
     if (!UpdateService.isSupportedPlatform) {
       _error = 'Self-updating is only available on Android.';
       _status = UpdateStatus.failed;
@@ -190,6 +219,7 @@ class UpdateProvider with ChangeNotifier {
 
   /// Downloads the offered APK and hands it to the system installer.
   Future<void> startUpdate() async {
+    if (isPreview) return;
     final release = _release;
     if (release == null || isBusy) return;
     if (!UpdateService.isSupportedPlatform) return;

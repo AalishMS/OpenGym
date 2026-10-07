@@ -27,7 +27,10 @@ of Home, History, Stats, and Settings).
   override produces an offline-only build that skips auth entirely
   (`SupabaseService.isConfigured`).
 - `--dart-define=OPENGYM_PREVIEW_UPDATE=true` forces the self-update dialog so
-  you can preview it.
+  you can preview it in debug mode on any platform. It uses sample release
+  notes without GitHub requests or an APK download; Update now does nothing.
+  Settings → Check for updates reopens it after Later. Stop and rerun the app
+  when changing the define. Release builds ignore the flag.
 
 ## Data flow
 

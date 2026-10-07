@@ -119,6 +119,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   /// The tile's second line, which doubles as the result readout for a manual
   /// check — the outcome stays visible after the snackbar has gone.
   String _updateSubtitle(UpdateProvider updates) {
+    if (updates.isPreview) return 'Preview update dialog';
     if (!UpdateService.isSupportedPlatform) {
       return 'Only available on Android';
     }
