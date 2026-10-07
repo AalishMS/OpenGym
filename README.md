@@ -41,23 +41,19 @@ center.
 <table>
   <tr>
     <td align="center">
-      <strong>Workout plans — light</strong><br>
+      <strong>Workout plans</strong><br>
       <img src="screenshots/home.png" width="300" alt="OpenGym workout plans screen">
-    </td>
-    <td align="center">
-      <strong>Workout plans — dark</strong><br>
-      <img src="screenshots/home_dark.png" width="300" alt="OpenGym workout plans screen in dark mode">
     </td>
     <td align="center">
       <strong>Workout logging</strong><br>
       <img src="screenshots/workout.png" width="300" alt="OpenGym active workout screen">
     </td>
-  </tr>
-  <tr>
     <td align="center">
       <strong>Fast set entry</strong><br>
       <img src="screenshots/workout_keypad.png" width="300" alt="OpenGym workout keypad for entering a set">
     </td>
+  </tr>
+  <tr>
     <td align="center">
       <strong>Weekly training</strong><br>
       <img src="screenshots/statistics.png" width="300" alt="OpenGym training statistics screen">
@@ -66,14 +62,38 @@ center.
       <strong>Exercise progress</strong><br>
       <img src="screenshots/statistics_2.png" width="300" alt="OpenGym exercise progress chart">
     </td>
-  </tr>
-  <tr>
-    <td align="center" colspan="3">
+    <td align="center">
       <strong>Appearance and preferences</strong><br>
       <img src="screenshots/settings.png" width="300" alt="OpenGym settings screen">
     </td>
   </tr>
 </table>
+
+<details>
+<summary><strong>Dark mode</strong></summary>
+<br>
+<table>
+  <tr>
+    <td align="center">
+      <strong>Plans</strong><br>
+      <img src="screenshots/home_dark.png" width="200" alt="OpenGym workout plans screen in dark mode">
+    </td>
+    <td align="center">
+      <strong>Set entry</strong><br>
+      <img src="screenshots/workout_keypad_dark.png" width="200" alt="OpenGym workout keypad in dark mode">
+    </td>
+    <td align="center">
+      <strong>Statistics</strong><br>
+      <img src="screenshots/statistics_dark.png" width="200" alt="OpenGym statistics screen in dark mode">
+    </td>
+    <td align="center">
+      <strong>Settings</strong><br>
+      <img src="screenshots/settings_dark.png" width="200" alt="OpenGym settings screen in dark mode">
+    </td>
+  </tr>
+</table>
+
+</details>
 
 ---
 
