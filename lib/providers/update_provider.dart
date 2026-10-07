@@ -77,12 +77,12 @@ class UpdateProvider with ChangeNotifier {
   bool get isBusy =>
       _status == UpdateStatus.downloading || _status == UpdateStatus.installing;
 
-  /// The installed version formatted for Settings, e.g. `1.0.0 (1)`.
+  /// The installed version formatted for Settings, e.g. `Version 11`.
   /// Falls back to an em dash rather than inventing a number.
   String get installedVersionLabel {
     final v = _installed;
     if (v == null) return '—';
-    return v.build == null ? v.name : '${v.name} (${v.build})';
+    return v.displayLabel;
   }
 
   /// Reads the installed version so Settings can show it. Safe to call often.

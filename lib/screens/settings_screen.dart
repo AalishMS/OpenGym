@@ -126,7 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case UpdateStatus.checking:
         return 'Checking GitHub...';
       case UpdateStatus.available:
-        return '${updates.release?.displayVersion ?? 'A new version'} is ready';
+        return '${updates.release?.version.displayLabel ?? 'A new version'} is ready';
       case UpdateStatus.upToDate:
         return "You're up to date";
       case UpdateStatus.downloading:

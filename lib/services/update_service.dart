@@ -102,6 +102,9 @@ class AppVersion {
 
   String get name => parts.join('.');
 
+  /// User-facing release number; older releases without a build use their name.
+  String get displayLabel => 'Version ${build ?? name}';
+
   @override
   String toString() => build == null ? name : '$name+$build';
 }

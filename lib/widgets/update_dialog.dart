@@ -212,7 +212,7 @@ class _ReleaseHeader extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _MetadataChip(label: release.displayVersion),
+                  _MetadataChip(label: release.version.displayLabel),
                   if (size.isNotEmpty) _MetadataChip(label: size),
                 ],
               ),
