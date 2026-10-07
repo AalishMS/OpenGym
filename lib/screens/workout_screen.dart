@@ -288,8 +288,19 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     }
   }
 
-  Future<void> _handleBack() =>
-      _saveBeforeNavigation(() => Navigator.pop(context), leavesScreen: true);
+  Future<void> _handleBack() async {
+    if (_isNavigating || _timerAction != null || !mounted) return;
+    // The keypad owns a LocalHistoryEntry. A pop consumes that entry without
+    // leaving this route, so it must not set the screen's navigation lock.
+    if (ModalRoute.of(context)?.willHandlePopInternally ?? false) {
+      Navigator.pop(context);
+      return;
+    }
+    await _saveBeforeNavigation(
+      () => Navigator.pop(context),
+      leavesScreen: true,
+    );
+  }
 
   int _currentPlanIndex(List<WorkoutPlan> plans) => plans.indexWhere(
     (plan) =>

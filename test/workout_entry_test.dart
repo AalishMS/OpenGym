@@ -193,6 +193,69 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final systemBack in [false, true]) {
+    testWidgets(
+      '${systemBack ? 'system' : 'toolbar'} Back closes keypad without locking workout',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(400, 880);
+        addTearDown(tester.view.reset);
+        final plan = WorkoutPlan(
+          id: 'back-keypad-$systemBack',
+          name: 'Back keypad $systemBack',
+          exercises: [ExerciseTemplate(name: 'Bench Press', sets: 1)],
+        );
+        await tester.runAsync(() => HiveService.upsertPlan(plan));
+        final navigator = GlobalKey<NavigatorState>();
+        final sessions = _RecordingSessions();
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider(create: (_) => WorkoutPlanProvider()),
+              ChangeNotifierProvider<WorkoutSessionProvider>.value(
+                value: sessions,
+              ),
+            ],
+            child: MaterialApp(
+              navigatorKey: navigator,
+              home: const Scaffold(body: Text('Home')),
+            ),
+          ),
+        );
+        navigator.currentState!.push<void>(
+          MaterialPageRoute(
+            builder: (_) => WorkoutScreen(plan: plan, planIndex: 0),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('5').last);
+        await tester.pump();
+
+        if (systemBack) {
+          await tester.binding.handlePopRoute();
+        } else {
+          await tester.tap(find.byTooltip('Back'));
+        }
+        await pumpWithStorage(tester);
+        expect(find.byType(BottomSheet), findsNothing);
+        expect(find.byType(WorkoutScreen), findsOneWidget);
+        expect(sessions.saved!.exercises.single.sets.single.weight, 5);
+
+        // The old toolbar path swallowed every tap after closing the keypad.
+        await tester.tap(find.bySemanticsLabel('Add set'));
+        await pumpWithStorage(tester);
+        expect(find.bySemanticsLabel('Set 2 Kg'), findsOneWidget);
+        await tester.tap(find.byTooltip('Back'));
+        await pumpWithStorage(tester);
+        expect(find.text('Home'), findsOneWidget);
+        expect(find.byType(WorkoutScreen), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets('workout add exercise opens the library picker and autosaves', (
     tester,
   ) async {
