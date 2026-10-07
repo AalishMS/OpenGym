@@ -208,7 +208,7 @@ class _StatsScreenState extends State<StatsScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Completed workouts · Last 52 weeks',
+                                'Days you trained · Last 52 weeks',
                                 style: Theme.of(
                                   context,
                                 ).textTheme.bodySmall?.copyWith(
