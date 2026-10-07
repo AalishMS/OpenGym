@@ -6,15 +6,11 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import android.view.Display
-import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity: FlutterActivity() {
-    private val CHANNEL = "com.aalishms.opengym/refresh_rate"
-
     // Backs the in-app updater's pre-flight check. "Install unknown apps" is not
     // a runtime permission — it is a per-app settings toggle — so there is
     // nothing to request, only something to read and a screen to open.
@@ -22,31 +18,12 @@ class MainActivity: FlutterActivity() {
     private val TIMER_NOTIFICATION_CHANNEL = "com.aalishms.opengym/workout_timer_notification"
     private val NOTIFICATION_PERMISSION_REQUEST = 4103
 
-    private var highRefreshRateEnabled = true
     private var timerChannel: MethodChannel? = null
     private var pendingTimerIntentAction: String? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "setHighRefreshRate" -> {
-                    highRefreshRateEnabled = call.arguments as Boolean
-                    if (highRefreshRateEnabled) {
-                        enableHighRefreshRate()
-                    }
-                    result.success(true)
-                }
-                "getHighRefreshRate" -> {
-                    result.success(highRefreshRateEnabled)
-                }
-                else -> {
-                    result.notImplemented()
-                }
-            }
-        }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INSTALLER_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
@@ -183,34 +160,24 @@ class MainActivity: FlutterActivity() {
         }
     }
     
-    private fun enableHighRefreshRate() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val display = display
-            display?.let {
-                val modes = it.supportedModes
-                val highestMode = modes.maxByOrNull { mode -> mode.refreshRate }
-                highestMode?.let { mode ->
-                    val params = window.attributes
-                    params.preferredDisplayModeId = mode.modeId
-                    window.attributes = params
-                }
-            }
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val display = windowManager.defaultDisplay
-            val modes = display.supportedModes
-            val highestMode = modes.maxByOrNull { mode -> mode.refreshRate }
-            highestMode?.let { mode ->
-                val params = window.attributes
-                params.preferredDisplayModeId = mode.modeId
-                window.attributes = params
-            }
-        }
+    @Suppress("DEPRECATION")
+    private fun requestHighestRefreshRate() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        val currentDisplay = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display
+        } else {
+            windowManager.defaultDisplay
+        } ?: return
+        val highestRate = currentDisplay.supportedModes.maxOfOrNull { it.refreshRate } ?: return
+        val params = window.attributes
+        // Request refresh rate alone so Android can retain the user's resolution.
+        // System display settings and power-saving policies still take precedence.
+        params.preferredRefreshRate = highestRate
+        window.attributes = params
     }
     
     override fun onResume() {
         super.onResume()
-        if (highRefreshRateEnabled) {
-            enableHighRefreshRate()
-        }
+        requestHighestRefreshRate()
     }
 }

@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-const _refreshRateChannel = MethodChannel('com.aalishms.opengym/refresh_rate');
 
 /// A user-selectable accent, stored as a single **seed**.
 ///
@@ -31,7 +28,6 @@ class SettingsProvider with ChangeNotifier {
   static const String _accentColorKey = 'accent_color';
   static const String _weightUnitKey = 'weight_unit';
   static const String _autoFillKey = 'auto_fill_last';
-  static const String _highRefreshRateKey = 'high_refresh_rate';
 
   /// **Order is persisted.** `_accentIndex` is stored as an integer, so indices
   /// 0–6 must keep the accent they have always named. GREEN is therefore
@@ -57,13 +53,11 @@ class SettingsProvider with ChangeNotifier {
   int _accentIndex = defaultAccentIndex;
   String _weightUnit = 'kg';
   bool _autoFillLast = true;
-  bool _highRefreshRate = true;
 
   ThemeMode get themeMode => _themeMode;
   int get accentIndex => _accentIndex;
   String get weightUnit => _weightUnit;
   bool get autoFillLast => _autoFillLast;
-  bool get highRefreshRate => _highRefreshRate;
 
   /// The active accent's seed — the *only* accent value that leaves this
   /// provider, and it exists for exactly one caller: `main.dart`, which hands it
@@ -99,7 +93,6 @@ class SettingsProvider with ChangeNotifier {
 
     _weightUnit = prefs.getString(_weightUnitKey) ?? 'kg';
     _autoFillLast = prefs.getBool(_autoFillKey) ?? true;
-    _highRefreshRate = prefs.getBool(_highRefreshRateKey) ?? true;
 
     notifyListeners();
   }
@@ -131,18 +124,6 @@ class SettingsProvider with ChangeNotifier {
     _autoFillLast = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_autoFillKey, value);
-    notifyListeners();
-  }
-
-  Future<void> setHighRefreshRate(bool value) async {
-    _highRefreshRate = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_highRefreshRateKey, value);
-    try {
-      await _refreshRateChannel.invokeMethod('setHighRefreshRate', value);
-    } catch (e) {
-      debugPrint('Failed to set high refresh rate: $e');
-    }
     notifyListeners();
   }
 }

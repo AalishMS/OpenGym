@@ -507,7 +507,9 @@ void main() {
     );
     await tester.pump();
 
-    for (final title in ['High refresh rate', 'Auto-fill last weights']) {
+    expect(find.text('High refresh rate'), findsNothing);
+    expect(find.text('Enable 90/120 Hz display support'), findsNothing);
+    for (final title in ['Auto-fill last weights']) {
       final tile = tester.widget<SwitchListTile>(
         find.ancestor(
           of: find.text(title),

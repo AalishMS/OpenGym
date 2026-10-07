@@ -81,7 +81,7 @@ Provider is the only app-wide state pattern.
 | `SplitProvider` | Available splits, the active split, split CRUD and preset installs |
 | `WorkoutPlanProvider` | Workout plan list and plan CRUD for the active split |
 | `WorkoutSessionProvider` | Session list, current week, session mutations for the active split |
-| `SettingsProvider` | Theme mode, accent color, units, auto-fill, refresh rate |
+| `SettingsProvider` | Theme mode, accent color, units, auto-fill |
 | `UpdateProvider` | Self-update check against GitHub Releases |
 
 Providers mutate data through `HiveService` (`SplitProvider` goes through
@@ -89,6 +89,12 @@ Providers mutate data through `HiveService` (`SplitProvider` goes through
 where needed. The plan and session providers take
 `SplitProvider` in their constructors and reload when the active split changes.
 See [docs/splits.md](docs/splits.md).
+
+On Android, the activity requests the display's highest supported refresh rate
+whenever it resumes, without changing the display resolution. This is automatic
+and has no user setting; Android display settings and power-saving policies can
+limit the actual rate. Legacy refresh-rate preferences in storage or backups are
+ignored.
 
 ## Data Model
 

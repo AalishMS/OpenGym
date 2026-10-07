@@ -254,18 +254,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const _SectionHeader(title: 'Workout'),
                         _buildSwitchTile(
                           context: context,
-                          icon: LucideIcons.gauge,
-                          title: 'High refresh rate',
-                          subtitle: 'Enable 90/120 Hz display support',
-                          value: settings.highRefreshRate,
-                          onChanged:
-                              (value) => _runSettingsAction(
-                                context,
-                                () => settings.setHighRefreshRate(value),
-                              ),
-                        ),
-                        _buildSwitchTile(
-                          context: context,
                           icon: LucideIcons.zap,
                           title: 'Auto-fill last weights',
                           subtitle:
@@ -747,7 +735,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'accentIndex': settings.accentIndex,
             'weightUnit': settings.weightUnit,
             'autoFillLast': settings.autoFillLast,
-            'highRefreshRate': settings.highRefreshRate,
           },
         );
         await Share.shareXFiles([
@@ -823,9 +810,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             await settings.setAccentColor(values['accentIndex'] as int);
             await settings.setWeightUnit(values['weightUnit'] as String);
             await settings.setAutoFillLast(values['autoFillLast'] as bool);
-            await settings.setHighRefreshRate(
-              values['highRefreshRate'] as bool,
-            );
             SyncService.instance.scheduleSync();
           } finally {
             // A settings write may fail after the workout data was replaced.
@@ -883,7 +867,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final accentIndex = settings['accentIndex'];
     final weightUnit = settings['weightUnit'];
     final autoFillLast = settings['autoFillLast'];
-    final highRefreshRate = settings['highRefreshRate'];
     if (themeMode is! int ||
         themeMode < 0 ||
         themeMode >= ThemeMode.values.length ||
@@ -892,8 +875,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         accentIndex >= SettingsProvider.accents.length ||
         weightUnit is! String ||
         (weightUnit != 'kg' && weightUnit != 'lbs') ||
-        autoFillLast is! bool ||
-        highRefreshRate is! bool) {
+        autoFillLast is! bool) {
       return 'Invalid settings in backup';
     }
     return null;
