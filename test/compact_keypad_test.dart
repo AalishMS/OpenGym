@@ -337,4 +337,71 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets(
+    'tapping outside the keypad closes it; fields and scrolls do not',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(400, 800);
+      addTearDown(tester.view.reset);
+      var outsideTaps = 0;
+      var finishes = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              children: [
+                GestureDetector(
+                  key: const ValueKey('outside'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => outsideTaps++,
+                  child: const SizedBox(height: 120, child: Text('Outside')),
+                ),
+                SetEntryTable(
+                  continuousLog: true,
+                  sets: const [
+                    SetEntry(weight: 70, reps: 8),
+                    SetEntry(weight: 60, reps: 6),
+                  ],
+                  onChanged: (_, _, _) {},
+                  onEntryFinished: () => finishes++,
+                ),
+                const SizedBox(height: 1200),
+              ],
+            ),
+          ),
+        ),
+      );
+      Future<void> open() async {
+        await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+        await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsOneWidget);
+      }
+
+      await open();
+      // The keypad itself.
+      await tester.tap(find.widgetWithText(TextButton, '5'));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsOneWidget);
+      // Another value field re-targets the same keypad.
+      await tester.tap(find.bySemanticsLabel('Set 2 Reps'));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsOneWidget);
+      // A drag that scrolls the page is not a tap.
+      await tester.drag(find.text('Outside'), const Offset(0, -60));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsOneWidget);
+      // A tap elsewhere closes it, and still reaches what was tapped.
+      await tester.pumpAndSettle();
+      await tester.tapAt(const Offset(200, 20));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(SetEntryTable.keyboardHeight.value, 0);
+      expect(finishes, 1);
+      expect(outsideTaps, 1);
+      // It can be reopened afterwards.
+      await open();
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

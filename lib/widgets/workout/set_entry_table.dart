@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../theme/app_theme.dart';
@@ -41,6 +42,16 @@ String entryWeight(double weight) =>
     weight.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
 
 enum _SetField { weight, reps, rpe }
+
+/// Marks the value fields so a tap on one re-targets the open keypad instead of
+/// dismissing it.
+const Object _kValueField = Object();
+
+Widget _valueFieldTarget(Widget child) => MetaData(
+  metaData: _kValueField,
+  behavior: HitTestBehavior.translucent,
+  child: child,
+);
 
 const double _kSetNumberWidth = 32;
 const double _kColumnGap = 8;
@@ -212,6 +223,9 @@ class _SetEntryTableState extends State<SetEntryTable> {
   static _SetEntryTableState? _activeKeyboard;
   final _keyboardKey = GlobalKey<_SetKeyboardState>();
   OverlayEntry? _overlay;
+  OverlayEntry? _dismissOverlay;
+  Offset? _tapStart;
+  int? _tapPointer;
   LocalHistoryEntry? _history;
   bool _changed = false;
   bool _disposing = false;
@@ -254,9 +268,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
         SetEntryTable._keyboardHeight.value = 0;
       }
     }
-    _overlay?.remove();
-    _overlay?.dispose();
-    _overlay = null;
+    _removeOverlays();
     _history = null;
     if (mounted && !_disposing) {
       setState(() {});
@@ -264,13 +276,67 @@ class _SetEntryTableState extends State<SetEntryTable> {
     }
   }
 
+  void _removeOverlays() {
+    for (final entry in [_dismissOverlay, _overlay]) {
+      entry?.remove();
+      entry?.dispose();
+    }
+    _dismissOverlay = null;
+    _overlay = null;
+  }
+
+  // A tap is a pointer that goes down and up without travelling. It closes the
+  // keypad unless it landed on a value field, which re-targets the keypad. The
+  // listener is translucent and never claims a gesture, so the tap still
+  // reaches whatever was underneath it and scrolling is unaffected.
+  void _trackPointer(PointerEvent event) {
+    switch (event) {
+      case PointerDownEvent():
+        _tapPointer = _tapPointer == null ? event.pointer : -1;
+        _tapStart = _tapPointer == event.pointer ? event.position : null;
+      case PointerMoveEvent():
+        if (event.pointer == _tapPointer &&
+            _tapStart != null &&
+            (event.position - _tapStart!).distance > kTouchSlop) {
+          _tapStart = null;
+        }
+      case PointerUpEvent():
+        final start = _tapStart;
+        final wasTap = event.pointer == _tapPointer && start != null;
+        if (event.pointer == _tapPointer || _tapPointer == -1) {
+          _tapPointer = null;
+          _tapStart = null;
+        }
+        // Deferred until the tap itself has been handled, so a target that
+        // pops the route (toolbar Back) still finds the keypad to dismiss
+        // first, as it always has.
+        if (wasTap && !_hitsValueField(event.position)) {
+          scheduleMicrotask(_close);
+        }
+      default:
+        _tapPointer = null;
+        _tapStart = null;
+    }
+  }
+
+  bool _hitsValueField(Offset position) {
+    final result = HitTestResult();
+    WidgetsBinding.instance.hitTestInView(
+      result,
+      position,
+      View.of(context).viewId,
+    );
+    return result.path.any((entry) {
+      final target = entry.target;
+      return target is RenderMetaData && target.metaData == _kValueField;
+    });
+  }
+
   @override
   void dispose() {
     _disposing = true;
     // Remove the overlay before its owning row disappears.
-    _overlay?.remove();
-    _overlay?.dispose();
-    _overlay = null;
+    _removeOverlays();
     _history?.remove();
     super.dispose();
   }
@@ -287,6 +353,18 @@ class _SetEntryTableState extends State<SetEntryTable> {
     _changed = false;
     _history = LocalHistoryEntry(onRemove: _removeKeyboard);
     ModalRoute.of(context)!.addLocalHistoryEntry(_history!);
+    _dismissOverlay = OverlayEntry(
+      builder:
+          (_) => Positioned.fill(
+            child: Listener(
+              behavior: HitTestBehavior.translucent,
+              onPointerDown: _trackPointer,
+              onPointerMove: _trackPointer,
+              onPointerUp: _trackPointer,
+              onPointerCancel: _trackPointer,
+            ),
+          ),
+    );
     _overlay = OverlayEntry(
       builder:
           (overlayContext) => Positioned(
@@ -347,7 +425,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
             ),
           ),
     );
-    Overlay.of(context).insert(_overlay!);
+    Overlay.of(context).insertAll([_dismissOverlay!, _overlay!]);
     setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _overlay != null) {
@@ -798,9 +876,11 @@ class _EntryRow extends StatelessWidget {
           ),
         ),
       ),
-      _field(context, weight, 'Kg', onWeight, _SetField.weight),
-      _field(context, reps, 'Reps', onReps, _SetField.reps),
-      if (onRpe != null) _rpeReadout(context),
+      _valueFieldTarget(
+        _field(context, weight, 'Kg', onWeight, _SetField.weight),
+      ),
+      _valueFieldTarget(_field(context, reps, 'Reps', onReps, _SetField.reps)),
+      if (onRpe != null) _valueFieldTarget(_rpeReadout(context)),
     ],
     trailing: trailing,
     showHistoryColumns: showHistoryColumns,
