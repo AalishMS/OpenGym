@@ -159,8 +159,17 @@ void main() {
     expect(find.text('Workout presets'), findsOneWidget);
     expect(find.text('Hypertrophy'), findsOneWidget);
     expect(find.text('Full-body hypertrophy'), findsOneWidget);
-    expect(find.text('3 days · 55–75 min · Full body'), findsOneWidget);
+    expect(find.text('55–75 min · New or busy lifter'), findsOneWidget);
+    expect(find.text('HYP-FB-3'), findsNothing);
+    expect(find.text('Full-body strength'), findsNothing);
 
+    await tester.tap(find.text('Strength'));
+    await tester.pumpAndSettle();
+    expect(find.text('Full-body strength'), findsOneWidget);
+    expect(find.text('Full-body hypertrophy'), findsNothing);
+
+    await tester.tap(find.text('Hypertrophy'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Full-body hypertrophy'));
     await tester.pumpAndSettle();
     expect(
@@ -173,9 +182,13 @@ void main() {
 
     await tester.tap(find.text('Full body A'));
     await tester.pumpAndSettle();
-    expect(find.text('3 x 6-10'), findsOneWidget);
-    expect(find.textContaining('Seed 8 / 8 / 8'), findsOneWidget);
-    expect(find.textContaining('Alternatives: Front Squat'), findsOneWidget);
+    expect(find.text('3 × 6-10'), findsOneWidget);
+    expect(find.text('Rest 3 min · 2 reps in reserve'), findsOneWidget);
+    expect(find.textContaining('Or swap for Front Squat'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back to workout presets'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('preset-catalog')), findsOneWidget);
   });
 
   testWidgets('new split dialog validates names and selects the result', (
@@ -234,6 +247,14 @@ void main() {
       await tester.tap(find.text('Browse'));
       await tester.pumpAndSettle();
       expect(find.text('Workout presets'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Upper/lower hypertrophy'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('preset-details-HYP-UL-4')),
+        findsOneWidget,
+      );
       expect(tester.takeException(), isNull);
     }
   });

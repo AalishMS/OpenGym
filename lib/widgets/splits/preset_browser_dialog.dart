@@ -27,6 +27,9 @@ class PresetBrowserDialog extends StatefulWidget {
 }
 
 class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
+  // Lives here rather than in the catalog so the chosen goal survives a trip
+  // into a preset's details and back.
+  WorkoutPresetGoal _goal = WorkoutPresetGoal.hypertrophy;
   WorkoutPreset? _selected;
   bool _installing = false;
   String? _error;
@@ -69,6 +72,7 @@ class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
     final content = _BrowserFrame(
+      goal: _goal,
       selected: _selected,
       installing: _installing,
       error: _error,
@@ -78,6 +82,7 @@ class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
             _selected = null;
             _error = null;
           }),
+      onGoalChanged: (goal) => setState(() => _goal = goal),
       onSelect:
           (preset) => setState(() {
             _selected = preset;
@@ -107,20 +112,24 @@ class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
 }
 
 class _BrowserFrame extends StatelessWidget {
+  final WorkoutPresetGoal goal;
   final WorkoutPreset? selected;
   final bool installing;
   final String? error;
   final VoidCallback onClose;
   final VoidCallback onBack;
+  final ValueChanged<WorkoutPresetGoal> onGoalChanged;
   final ValueChanged<WorkoutPreset> onSelect;
   final ValueChanged<WorkoutPreset> onInstall;
 
   const _BrowserFrame({
+    required this.goal,
     required this.selected,
     required this.installing,
     required this.error,
     required this.onClose,
     required this.onBack,
+    required this.onGoalChanged,
     required this.onSelect,
     required this.onInstall,
   });
@@ -137,7 +146,11 @@ class _BrowserFrame extends StatelessWidget {
         Expanded(
           child:
               selected == null
-                  ? _CatalogOverview(onSelect: onSelect)
+                  ? _CatalogOverview(
+                    goal: goal,
+                    onGoalChanged: onGoalChanged,
+                    onSelect: onSelect,
+                  )
                   : _PresetDetails(preset: selected!),
         ),
         if (selected != null)
@@ -193,13 +206,16 @@ class _BrowserHeader extends StatelessWidget {
                     preset?.name ?? 'Workout presets',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       color: textPrimaryColor(context),
                     ),
                   ),
                   if (preset == null)
                     Text(
-                      'Built in, ready to make your own',
+                      'Pick one, then edit it to suit you',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: textSecondaryColor(context),
                       ),
@@ -220,95 +236,110 @@ class _BrowserHeader extends StatelessWidget {
 }
 
 class _CatalogOverview extends StatelessWidget {
+  final WorkoutPresetGoal goal;
+  final ValueChanged<WorkoutPresetGoal> onGoalChanged;
   final ValueChanged<WorkoutPreset> onSelect;
 
-  const _CatalogOverview({required this.onSelect});
+  const _CatalogOverview({
+    required this.goal,
+    required this.onGoalChanged,
+    required this.onSelect,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final presets =
+        workoutPresets.where((preset) => preset.goal == goal).toList();
     return ListView(
       key: const ValueKey('preset-catalog'),
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
+        _GoalFilter(selected: goal, onChanged: onGoalChanged),
+        const SizedBox(height: AppSpacing.sm),
         Text(
-          'Choose a schedule you can repeat consistently. You can edit every plan after adding it.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+          _goalBlurb(goal),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
             color: textSecondaryColor(context),
-            height: 1.45,
+            height: 1.4,
           ),
         ),
-        const SizedBox(height: AppSpacing.xl),
-        for (final goal in WorkoutPresetGoal.values) ...[
-          _GoalHeading(goal: goal),
-          const SizedBox(height: AppSpacing.sm),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final wide =
-                  constraints.maxWidth >= 720 &&
-                  MediaQuery.textScalerOf(context).scale(1) <= 1.3;
-              final presets =
-                  workoutPresets
-                      .where((preset) => preset.goal == goal)
-                      .toList();
-              if (!wide) {
-                return Column(
-                  children: [
-                    for (final preset in presets) ...[
-                      _PresetCard(
-                        preset: preset,
-                        onTap: () => onSelect(preset),
-                      ),
-                      if (preset != presets.last)
-                        const SizedBox(height: AppSpacing.md),
-                    ],
-                  ],
-                );
-              }
-              return GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: 1.95,
-                crossAxisSpacing: AppSpacing.md,
-                mainAxisSpacing: AppSpacing.md,
-                children: [
-                  for (final preset in presets)
-                    _PresetCard(preset: preset, onTap: () => onSelect(preset)),
+        const SizedBox(height: AppSpacing.lg),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns =
+                constraints.maxWidth >= 720 &&
+                        MediaQuery.textScalerOf(context).scale(1) <= 1.3
+                    ? 2
+                    : 1;
+            return Column(
+              children: [
+                for (var row = 0; row < presets.length; row += columns) ...[
+                  if (row > 0) const SizedBox(height: AppSpacing.md),
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var col = 0; col < columns; col++) ...[
+                          if (col > 0) const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child:
+                                row + col < presets.length
+                                    ? _PresetCard(
+                                      preset: presets[row + col],
+                                      onTap: () => onSelect(presets[row + col]),
+                                    )
+                                    : const SizedBox.shrink(),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ],
-              );
-            },
-          ),
-          const SizedBox(height: AppSpacing.xl),
-        ],
+              ],
+            );
+          },
+        ),
       ],
     );
   }
 }
 
-class _GoalHeading extends StatelessWidget {
-  final WorkoutPresetGoal goal;
+class _GoalFilter extends StatelessWidget {
+  final WorkoutPresetGoal selected;
+  final ValueChanged<WorkoutPresetGoal> onChanged;
 
-  const _GoalHeading({required this.goal});
+  const _GoalFilter({required this.selected, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final labelStyle = Theme.of(context).textTheme.labelLarge;
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
       children: [
-        Container(
-          width: 3,
-          height: 24,
-          decoration: BoxDecoration(
-            color: accentColor(context),
-            borderRadius: AppRadius.micro,
+        for (final goal in WorkoutPresetGoal.values)
+          ChoiceChip(
+            label: Text(_goalLabel(goal)),
+            selected: goal == selected,
+            showCheckmark: false,
+            onSelected: (_) => onChanged(goal),
+            labelStyle: labelStyle?.copyWith(
+              color:
+                  goal == selected
+                      ? onAccentColor(context)
+                      : textPrimaryColor(context),
+            ),
+            side: BorderSide(
+              color:
+                  goal == selected
+                      ? accentFillColor(context)
+                      : borderColor(context),
+            ),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.sm,
+              vertical: AppSpacing.xs,
+            ),
           ),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Text(
-          _goalLabel(goal),
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(color: textPrimaryColor(context)),
-        ),
       ],
     );
   }
@@ -322,108 +353,55 @@ class _PresetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = textPrimaryColor(context);
+    final textTheme = Theme.of(context).textTheme;
     final textSecondary = textSecondaryColor(context);
-    final accent = accentColor(context);
 
     return Semantics(
       button: true,
-      label: '${preset.name}, ${preset.days} training days, ${preset.duration}',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: AppRadius.card,
-        child: Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: surfaceColor(context),
-            border: Border.all(color: borderColor(context)),
-            borderRadius: AppRadius.card,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Text(
-                      preset.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: textPrimary,
-                        fontWeight: FontWeight.w600,
+      label:
+          '${preset.name}, ${preset.days} days a week, ${preset.duration}, '
+          'best for ${preset.bestFit}',
+      excludeSemantics: true,
+      child: Material(
+        color: surfaceColor(context),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.card,
+          side: BorderSide(color: borderColor(context)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppRadius.card,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        preset.name,
+                        style: textTheme.titleSmall?.copyWith(
+                          color: textPrimaryColor(context),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    preset.id,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: textPrimary,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                '${preset.days} days · ${preset.duration} · ${preset.splitStyle}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: textSecondary,
-                  fontWeight: FontWeight.w500,
+                    const SizedBox(width: AppSpacing.sm),
+                    _DaysBadge(days: preset.days),
+                  ],
                 ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Row(
-                children: [
-                  Icon(LucideIcons.userCheck, size: 13, color: accent),
-                  const SizedBox(width: AppSpacing.xs),
-                  Expanded(
-                    child: Text(
-                      preset.bestFit,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: textSecondary),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '7-day rotation',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.labelSmall?.copyWith(
-                            color: textSecondary.withAlpha(150),
-                            fontSize: 10,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        _ScheduleStrip(preset: preset),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Icon(
-                    LucideIcons.chevronRight,
-                    size: 16,
-                    color: textSecondary.withAlpha(120),
-                  ),
-                ],
-              ),
-            ],
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  '${preset.duration} · ${preset.bestFit}',
+                  style: textTheme.bodySmall?.copyWith(color: textSecondary),
+                ),
+                const Spacer(),
+                const SizedBox(height: AppSpacing.md),
+                _ScheduleStrip(preset: preset),
+              ],
+            ),
           ),
         ),
       ),
@@ -431,22 +409,65 @@ class _PresetCard extends StatelessWidget {
   }
 }
 
-class _ScheduleStrip extends StatelessWidget {
-  final WorkoutPreset preset;
+class _DaysBadge extends StatelessWidget {
+  final int days;
 
-  const _ScheduleStrip({required this.preset});
+  const _DaysBadge({required this.days});
 
   @override
   Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        border: Border.all(color: borderColor(context)),
+        borderRadius: AppRadius.chip,
+      ),
+      child: Text(
+        '$days days',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: accentColor(context),
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
+/// One cell per day of the rotation: a plan's colour on training days, a
+/// border-coloured cell on rest days. [numbered] makes the cells tall enough
+/// to carry the plan's number, matching the badges in the workout day list.
+class _ScheduleStrip extends StatelessWidget {
+  final WorkoutPreset preset;
+  final bool numbered;
+
+  const _ScheduleStrip({required this.preset, this.numbered = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final slots = preset.scheduleSlots;
+    final description = [
+      for (var index = 0; index < slots.length; index++)
+        'Day ${index + 1} '
+            '${slots[index] == null ? 'rest' : preset.plans[slots[index]!].name}',
+    ].join(', ');
     return Semantics(
-      label:
-          '${preset.scheduleSlots.length}-day schedule with ${preset.days} workouts',
+      label: '${slots.length}-day rotation: $description',
+      excludeSemantics: true,
       child: Row(
         children: [
-          for (var index = 0; index < preset.scheduleSlots.length; index++) ...[
-            Expanded(child: _ScheduleCell(preset: preset, slotIndex: index)),
-            if (index < preset.scheduleSlots.length - 1)
-              const SizedBox(width: AppSpacing.xs),
+          for (var index = 0; index < slots.length; index++) ...[
+            if (index > 0)
+              SizedBox(width: numbered ? AppSpacing.xs : AppSpacing.xxs),
+            Expanded(
+              child: _ScheduleCell(
+                preset: preset,
+                slotIndex: index,
+                numbered: numbered,
+              ),
+            ),
           ],
         ],
       ),
@@ -457,27 +478,46 @@ class _ScheduleStrip extends StatelessWidget {
 class _ScheduleCell extends StatelessWidget {
   final WorkoutPreset preset;
   final int slotIndex;
+  final bool numbered;
 
-  const _ScheduleCell({required this.preset, required this.slotIndex});
+  const _ScheduleCell({
+    required this.preset,
+    required this.slotIndex,
+    required this.numbered,
+  });
 
   @override
   Widget build(BuildContext context) {
     final planIndex = preset.scheduleSlots[slotIndex];
-    final color =
+    final ground =
         planIndex == null
             ? borderColor(context)
-            : planColorOf(
-              kPlanColors[preset.plans[planIndex].colorSlot],
-              context,
-            );
+            : _planColor(preset.plans[planIndex], context);
+    if (!numbered) {
+      return Container(
+        height: 6,
+        decoration: BoxDecoration(color: ground, borderRadius: AppRadius.micro),
+      );
+    }
     return Tooltip(
       message:
           planIndex == null
               ? 'Day ${slotIndex + 1}: Rest'
-              : preset.plans[planIndex].name,
+              : 'Day ${slotIndex + 1}: ${preset.plans[planIndex].name}',
       child: Container(
-        height: 7,
-        decoration: BoxDecoration(color: color, borderRadius: AppRadius.micro),
+        height: 32,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: ground, borderRadius: AppRadius.badge),
+        child:
+            planIndex == null
+                ? null
+                : Text(
+                  '${planIndex + 1}',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: onColor(ground),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
       ),
     );
   }
@@ -490,188 +530,104 @@ class _PresetDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final textPrimary = textPrimaryColor(context);
+    final textSecondary = textSecondaryColor(context);
     return ListView(
       key: ValueKey('preset-details-${preset.id}'),
       padding: const EdgeInsets.all(AppSpacing.lg),
       children: [
-        _PresetOverviewCard(preset: preset),
-        const SizedBox(height: AppSpacing.sm),
-        _PresetBestFitBanner(bestFit: preset.bestFit),
-        const SizedBox(height: AppSpacing.lg),
         Text(
           preset.summary,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            color: textPrimaryColor(context),
-            height: 1.45,
-          ),
+          style: textTheme.bodyLarge?.copyWith(color: textPrimary, height: 1.4),
         ),
         const SizedBox(height: AppSpacing.md),
-        Text(
-          preset.schedule,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: textSecondaryColor(context),
-            height: 1.45,
-          ),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: [
+            _InfoChip(
+              icon: LucideIcons.calendar,
+              label: '${preset.days} days a week',
+            ),
+            _InfoChip(icon: LucideIcons.clock, label: preset.duration),
+            _InfoChip(icon: LucideIcons.userCheck, label: preset.bestFit),
+          ],
         ),
-        const SizedBox(height: AppSpacing.md),
-        _ScheduleStrip(preset: preset),
         const SizedBox(height: AppSpacing.xl),
-        Text(
-          'Workout days',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(color: textPrimaryColor(context)),
+        _SectionTitle(
+          title: 'Schedule',
+          trailing: '${preset.scheduleSlots.length}-day rotation',
         ),
+        const SizedBox(height: AppSpacing.sm),
+        _ScheduleStrip(preset: preset, numbered: true),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          _sentenceCase(preset.schedule),
+          style: textTheme.bodySmall?.copyWith(
+            color: textSecondary,
+            height: 1.4,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        const _SectionTitle(title: 'Workout days'),
         const SizedBox(height: AppSpacing.sm),
         for (var index = 0; index < preset.plans.length; index++) ...[
-          _PlanExpansion(plan: preset.plans[index]),
-          if (index < preset.plans.length - 1)
-            const SizedBox(height: AppSpacing.sm),
+          if (index > 0) const SizedBox(height: AppSpacing.sm),
+          _PlanExpansion(plan: preset.plans[index], number: index + 1),
         ],
         const SizedBox(height: AppSpacing.xl),
-        Text(
-          'Before you start',
-          style: Theme.of(
-            context,
-          ).textTheme.titleMedium?.copyWith(color: textPrimaryColor(context)),
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        for (final guidance in workoutPresetGuidance)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: 5,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: accentColor(context),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    guidance,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: textSecondaryColor(context),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        const _TipsPanel(),
       ],
     );
   }
 }
 
-class _PresetOverviewCard extends StatelessWidget {
-  final WorkoutPreset preset;
+class _SectionTitle extends StatelessWidget {
+  final String title;
+  final String? trailing;
 
-  const _PresetOverviewCard({required this.preset});
-
-  @override
-  Widget build(BuildContext context) {
-    final border = borderColor(context);
-    return Container(
-      decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border.all(color: border),
-        borderRadius: AppRadius.card,
-      ),
-      padding: const EdgeInsets.symmetric(
-        vertical: AppSpacing.md,
-        horizontal: AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _OverviewMetric(
-              icon: LucideIcons.calendar,
-              value: '${preset.days} days',
-              caption: 'Per week',
-            ),
-          ),
-          Container(width: 1, height: 28, color: border),
-          Expanded(
-            child: _OverviewMetric(
-              icon: LucideIcons.clock,
-              value: preset.duration,
-              caption: 'Per session',
-            ),
-          ),
-          Container(width: 1, height: 28, color: border),
-          Expanded(
-            child: _OverviewMetric(
-              icon: LucideIcons.target,
-              value: _goalLabel(preset.goal),
-              caption: 'Focus',
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _OverviewMetric extends StatelessWidget {
-  final IconData icon;
-  final String value;
-  final String caption;
-
-  const _OverviewMetric({
-    required this.icon,
-    required this.value,
-    required this.caption,
-  });
+  const _SectionTitle({required this.title, this.trailing});
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor(context);
-    final textPrimary = textPrimaryColor(context);
-    final textSecondary = textSecondaryColor(context);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: [
-        Icon(icon, size: 16, color: accent),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-            color: textPrimary,
-            fontWeight: FontWeight.w600,
+        Expanded(
+          child: Text(
+            title,
+            style: textTheme.titleMedium?.copyWith(
+              color: textPrimaryColor(context),
+            ),
           ),
         ),
-        Text(
-          caption,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: textSecondary, fontSize: 10),
-        ),
+        if (trailing != null)
+          Text(
+            trailing!,
+            style: textTheme.bodySmall?.copyWith(
+              color: textSecondaryColor(context),
+            ),
+          ),
       ],
     );
   }
 }
 
-class _PresetBestFitBanner extends StatelessWidget {
-  final String bestFit;
+class _InfoChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
 
-  const _PresetBestFitBanner({required this.bestFit});
+  const _InfoChip({required this.icon, required this.label});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
+        horizontal: AppSpacing.sm + AppSpacing.xxs,
+        vertical: AppSpacing.xs + AppSpacing.xxs,
       ),
       decoration: BoxDecoration(
         color: surfaceColor(context),
@@ -679,24 +635,16 @@ class _PresetBestFitBanner extends StatelessWidget {
         borderRadius: AppRadius.chip,
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(LucideIcons.userCheck, size: 14, color: accentColor(context)),
-          const SizedBox(width: AppSpacing.sm),
-          Text(
-            'Best fit: ',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: textSecondaryColor(context),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          Expanded(
+          Icon(icon, size: 14, color: accentColor(context)),
+          const SizedBox(width: AppSpacing.xs + AppSpacing.xxs),
+          Flexible(
             child: Text(
-              bestFit,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: textPrimaryColor(context)),
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: textPrimaryColor(context),
+              ),
             ),
           ),
         ],
@@ -707,12 +655,13 @@ class _PresetBestFitBanner extends StatelessWidget {
 
 class _PlanExpansion extends StatelessWidget {
   final WorkoutPresetPlan plan;
+  final int number;
 
-  const _PlanExpansion({required this.plan});
+  const _PlanExpansion({required this.plan, required this.number});
 
   @override
   Widget build(BuildContext context) {
-    final planColor = planColorOf(kPlanColors[plan.colorSlot], context);
+    final planColor = _planColor(plan, context);
     return Container(
       decoration: BoxDecoration(
         color: surfaceColor(context),
@@ -730,14 +679,22 @@ class _PlanExpansion extends StatelessWidget {
           AppSpacing.md,
           0,
           AppSpacing.md,
-          AppSpacing.md,
+          AppSpacing.sm,
         ),
         leading: Container(
-          width: 3,
+          width: 28,
           height: 28,
+          alignment: Alignment.center,
           decoration: BoxDecoration(
             color: planColor,
-            borderRadius: AppRadius.micro,
+            borderRadius: AppRadius.badge,
+          ),
+          child: Text(
+            '$number',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: onColor(planColor),
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
         title: Text(
@@ -776,7 +733,7 @@ class _ExercisePrescription extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final border = borderColor(context);
+    final textTheme = Theme.of(context).textTheme;
     final accent = accentColor(context);
     final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
@@ -786,7 +743,9 @@ class _ExercisePrescription extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       decoration:
           showDivider
-              ? BoxDecoration(border: Border(top: BorderSide(color: border)))
+              ? BoxDecoration(
+                border: Border(top: BorderSide(color: borderColor(context))),
+              )
               : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -797,7 +756,7 @@ class _ExercisePrescription extends StatelessWidget {
               Expanded(
                 child: Text(
                   exercise.name,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  style: textTheme.bodyMedium?.copyWith(
                     color: textPrimary,
                     fontWeight: FontWeight.w600,
                   ),
@@ -805,69 +764,149 @@ class _ExercisePrescription extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.sm),
               Text(
-                exercise.prescription,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                exercise.prescription.replaceAll(' x ', ' × '),
+                style: textTheme.bodyMedium?.copyWith(
                   color: textPrimary,
                   fontWeight: FontWeight.w700,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: AppSpacing.xs),
+          const SizedBox(height: AppSpacing.xxs),
           Text(
-            'Seed ${exercise.seedReps.join(' / ')}  ·  RIR ${exercise.rir}  ·  Rest ${exercise.rest}',
-            style: Theme.of(
-              context,
-            ).textTheme.bodySmall?.copyWith(color: textSecondary),
+            'Rest ${exercise.rest} · ${exercise.rir} reps in reserve',
+            style: textTheme.bodySmall?.copyWith(color: textSecondary),
           ),
           if (exercise.note != null) ...[
             const SizedBox(height: AppSpacing.xs),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Icon(LucideIcons.info, size: 13, color: accent),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(
-                  child: Text(
-                    exercise.note!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: accent,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-              ],
+            _DetailLine(
+              icon: LucideIcons.info,
+              iconColor: accent,
+              text: exercise.note!,
+              textColor: accent,
             ),
           ],
           if (exercise.substitutions.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.xs),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Icon(
-                    LucideIcons.shuffle,
-                    size: 13,
-                    color: textSecondary.withAlpha(140),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Expanded(
-                  child: Text(
-                    'Alternatives: ${exercise.substitutions.join(', ')}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: textSecondary,
-                      height: 1.35,
-                    ),
-                  ),
-                ),
-              ],
+            _DetailLine(
+              icon: LucideIcons.shuffle,
+              iconColor: textSecondary,
+              text: 'Or swap for ${exercise.substitutions.join(', ')}',
+              textColor: textSecondary,
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailLine extends StatelessWidget {
+  final IconData icon;
+  final Color iconColor;
+  final String text;
+  final Color textColor;
+
+  const _DetailLine({
+    required this.icon,
+    required this.iconColor,
+    required this.text,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, size: 13, color: iconColor),
+        ),
+        const SizedBox(width: AppSpacing.xs + AppSpacing.xxs),
+        Expanded(
+          child: Text(
+            text,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: textColor, height: 1.35),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// General lifting advice is the same for every preset, so it starts folded
+/// away instead of competing with the preset's own details.
+class _TipsPanel extends StatelessWidget {
+  const _TipsPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: surfaceColor(context),
+        border: Border.all(color: borderColor(context)),
+        borderRadius: AppRadius.card,
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.card),
+        collapsedShape: const RoundedRectangleBorder(
+          borderRadius: AppRadius.card,
+        ),
+        tilePadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+        childrenPadding: const EdgeInsets.fromLTRB(
+          AppSpacing.md,
+          0,
+          AppSpacing.md,
+          AppSpacing.md,
+        ),
+        leading: Icon(
+          LucideIcons.lightbulb,
+          size: 18,
+          color: accentColor(context),
+        ),
+        title: Text(
+          'Tips before you start',
+          style: textTheme.titleSmall?.copyWith(
+            color: textPrimaryColor(context),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        children: [
+          for (final guidance in workoutPresetGuidance)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Container(
+                      width: 5,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: accentColor(context),
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      guidance,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: textSecondaryColor(context),
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -906,7 +945,7 @@ class _InstallBar extends StatelessWidget {
             final message = Text(
               error ??
                   blockReason ??
-                  'Adds ${preset.days} ordered workout plans',
+                  'Adds ${preset.days} workout plans you can edit',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color:
                     error != null || blockReason != null
@@ -957,8 +996,23 @@ class _InstallBar extends StatelessWidget {
   }
 }
 
+Color _planColor(WorkoutPresetPlan plan, BuildContext context) =>
+    planColorOf(kPlanColors[plan.colorSlot], context);
+
+String _sentenceCase(String text) =>
+    text.isEmpty ? text : text[0].toUpperCase() + text.substring(1);
+
 String _goalLabel(WorkoutPresetGoal goal) => switch (goal) {
   WorkoutPresetGoal.hypertrophy => 'Hypertrophy',
   WorkoutPresetGoal.strength => 'Strength',
   WorkoutPresetGoal.hybrid => 'Strength + hypertrophy',
+};
+
+String _goalBlurb(WorkoutPresetGoal goal) => switch (goal) {
+  WorkoutPresetGoal.hypertrophy =>
+    'Build muscle size with moderate weights and more reps.',
+  WorkoutPresetGoal.strength =>
+    'Lift heavier on the main lifts with fewer reps and longer rests.',
+  WorkoutPresetGoal.hybrid =>
+    'Heavy lifting and muscle building in the same week.',
 };
