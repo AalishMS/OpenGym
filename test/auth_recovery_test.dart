@@ -543,6 +543,42 @@ void main() {
       findsNothing,
     );
     expect(find.text('Signed-in home'), findsOneWidget);
+    await tester.tap(find.text('Dismiss'));
+    await tester.pumpAndSettle();
+
+    void emitOffline() {
+      // ignore: invalid_use_of_internal_member
+      SupabaseService.auth.notifyException(
+        AuthRetryableFetchException(message: 'No connection'),
+        StackTrace.current,
+      );
+    }
+
+    for (var retry = 0; retry < 3; retry++) {
+      emitOffline();
+      await tester.pumpAndSettle();
+      expect(find.byType(MaterialBanner), findsNothing);
+    }
+    // Different failures must still be visible during the offline cooldown.
+    // ignore: invalid_use_of_internal_member
+    SupabaseService.auth.notifyException(
+      const AuthException('Expired link'),
+      StackTrace.current,
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(MaterialBanner), findsOneWidget);
+    await tester.tap(find.text('Dismiss'));
+    await tester.pumpAndSettle();
+
+    await tester.pump(const Duration(minutes: 29));
+    emitOffline();
+    await tester.pumpAndSettle();
+    expect(find.byType(MaterialBanner), findsNothing);
+    await tester.pump(const Duration(minutes: 1));
+    emitOffline();
+    await tester.pumpAndSettle();
+    expect(find.textContaining("You're offline"), findsOneWidget);
+    expect(find.text('Signed-in home'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 

@@ -40,6 +40,8 @@ class _AuthGateState extends State<AuthGate> {
       kIsWeb && Uri.base.queryParameters['reset_password'] == 'true';
   bool _authStateReady = false;
   String? _authError;
+  bool _authErrorIsOffline = false;
+  Timer? _offlineNoticeCooldown;
   String? _presentedUserId = SupabaseService.currentUserId;
 
   @override
@@ -51,12 +53,15 @@ class _AuthGateState extends State<AuthGate> {
         if (!mounted) return;
         final userId = state.session?.user.id;
         if (userId != _presentedUserId) {
+          _offlineNoticeCooldown?.cancel();
+          _offlineNoticeCooldown = null;
           _presentedUserId = userId;
           widget.onAccountChanged(userId);
         }
         setState(() {
           _authStateReady = true;
           _authError = null;
+          _authErrorIsOffline = false;
           if (state.event == AuthChangeEvent.passwordRecovery) {
             _requestingPasswordReset = false;
             _recoveringPassword = true;
@@ -77,10 +82,15 @@ class _AuthGateState extends State<AuthGate> {
         if (!mounted) return;
         setState(() {
           _authStateReady = true;
+          final offline = isNetworkError(error);
+          // Refresh retries must respect dismissal, even across successful auth
+          // events. Only a new account or the cooldown expiry resets it.
+          if (offline && _offlineNoticeCooldown != null) return;
+          _authErrorIsOffline = offline;
           // A background token refresh with no network lands here too; it is
           // retried automatically and the next auth event clears the banner.
           _authError =
-              isNetworkError(error)
+              offline
                   ? "You're offline. Your workouts are saved on this device and will sync when you reconnect."
                   : error is AuthRetryableFetchException
                   ? kServerUnavailableMessage
@@ -92,8 +102,22 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   void dispose() {
+    _offlineNoticeCooldown?.cancel();
     _subscription?.cancel();
     super.dispose();
+  }
+
+  void _dismissAuthError() {
+    setState(() {
+      if (_authErrorIsOffline) {
+        _offlineNoticeCooldown?.cancel();
+        _offlineNoticeCooldown = Timer(const Duration(minutes: 30), () {
+          _offlineNoticeCooldown = null;
+        });
+      }
+      _authError = null;
+      _authErrorIsOffline = false;
+    });
   }
 
   @override
@@ -144,7 +168,7 @@ class _AuthGateState extends State<AuthGate> {
                         ),
                         actions: [
                           TextButton(
-                            onPressed: () => setState(() => _authError = null),
+                            onPressed: _dismissAuthError,
                             child: const Text('Dismiss'),
                           ),
                         ],
