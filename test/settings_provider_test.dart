@@ -22,13 +22,13 @@ void main() {
 
     expect(settings.themeMode, ThemeMode.light);
     expect(settings.accentIndex, SettingsProvider.defaultAccentIndex);
-    expect(settings.accentSeed, const Color(0xFF83C5C6));
+    expect(settings.accentSeed, const Color(0xFF41B9B9));
 
     await waitForSettingsLoad(settings);
 
     expect(settings.themeMode, ThemeMode.light);
     expect(settings.accentIndex, SettingsProvider.defaultAccentIndex);
-    expect(settings.accentSeed, const Color(0xFF83C5C6));
+    expect(settings.accentSeed, const Color(0xFF41B9B9));
   });
 
   test('saved appearance choices override first-run defaults', () async {
@@ -42,6 +42,6 @@ void main() {
 
     expect(settings.themeMode, ThemeMode.dark);
     expect(settings.accentIndex, 0);
-    expect(settings.accentSeed, const Color(0xFF7CAFE0));
+    expect(settings.accentSeed, const Color(0xFF6AA9ED));
   });
 }

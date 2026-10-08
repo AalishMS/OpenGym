@@ -350,6 +350,13 @@ const double _borderTargetLight = 1.90;
 /// `semantic_colors.dart` — they are steps of the same ramp.
 const double _semanticLightness = 0.62;
 
+/// Absolute chroma ceilings for the accent roles. Vividness alone would let a
+/// gamut-edge seed reach ~0.21 on a pink fill, which is the neon the original
+/// palette had; these hold every accent inside "clearly coloured, not glowing".
+/// Dark mode sits lower because saturated colour on near-black glows harder.
+const double _accentChromaCapLight = 0.15;
+const double _accentChromaCapDark = 0.14;
+
 /// Solves the full token set for [seed] in one brightness. The accent roles are
 /// solved *against these neutrals*, not against constants, so the accent and the
 /// card it sits on are one coupled computation — which is why this lives here
@@ -405,6 +412,17 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
   // kept whenever it already reads and moved only when it doesn't — that single
   // rule is the fix for both the illegible dark-mode label and the dead light
   // mode, which used to draw dark hexes on a light page.
+  //
+  // Chroma follows the seed's *vividness*, not its absolute chroma: a role that
+  // darkens the seed keeps the same share of what sRGB allows at the new
+  // lightness. With fixed chroma, the light-mode text tones came out dusty on
+  // violet and pink, where the gamut is wide, and brown on amber, where it is
+  // narrow. The cap keeps a saturated seed from turning back into neon.
+  final seedTone = oklchOf(seed);
+  final vividness = vividnessOf(seed);
+  final chromaCap = isDark ? _accentChromaCapDark : _accentChromaCapLight;
+  double accentChroma(double l) =>
+      math.min(chromaCap, vividness * maxChroma(l, seedTone.h));
   final worse =
       contrastRatio(seed, background) < contrastRatio(seed, surface)
           ? background
@@ -415,6 +433,7 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
     target: 4.5,
     preferLighter: preferLighter,
     anchor: ToneAnchor.seed,
+    chromaAt: accentChroma,
   );
   final accentFill = solveForContrast(
     seed: seed,
@@ -422,12 +441,12 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
     target: 3.0,
     preferLighter: preferLighter,
     anchor: ToneAnchor.seed,
+    chromaAt: accentChroma,
   );
   final onAccent = bestForeground(accentFill);
   // More chroma gives the signature color without brightening every control.
   // Dark mode also lifts the wordmark; light mode keeps the lightest tone that
   // clears text contrast. Slate retains its deliberately restrained chroma.
-  final seedTone = oklchOf(seed);
   final brandSeed = colorFromOklch(
     isDark ? math.max(seedTone.l, 0.80) : seedTone.l,
     math.min(seedTone.c * 1.8, 0.18),

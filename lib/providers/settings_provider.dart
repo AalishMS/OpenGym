@@ -32,16 +32,23 @@ class SettingsProvider with ChangeNotifier {
   /// **Order is persisted.** `_accentIndex` is stored as an integer, so indices
   /// Each index keeps its original color family so saved preferences survive
   /// palette refinements. Green remains at 7; cyan remains the default at 4.
+  ///
+  /// Every seed sits at OKLab lightness 0.72 — it is also the dark-mode accent
+  /// — and is specified by hue and *vividness* (share of the sRGB chroma ceiling
+  /// at that hue), not by absolute chroma. Vividness is what the roles carry
+  /// into each mode, so matching it keeps the set evenly saturated: 0.64–0.85
+  /// for the colours, lower for rose and violet, whose wide gamut reads as
+  /// louder per unit, and 0.24 for slate.
   static const List<AppAccent> accents = [
-    AppAccent(name: 'Soft blue', seed: Color(0xFF7CAFE0)),
-    AppAccent(name: 'Honey', seed: Color(0xFFD5AE70)),
-    AppAccent(name: 'Apricot', seed: Color(0xFFE5AA86)),
-    AppAccent(name: 'Blush', seed: Color(0xFFE3A6BC)),
-    AppAccent(name: 'Sea glass', seed: Color(0xFF83C5C6)),
-    AppAccent(name: 'Lavender', seed: Color(0xFFB4A3DA)),
+    AppAccent(name: 'Blue', seed: Color(0xFF6AA9ED)), // h252 v.80
+    AppAccent(name: 'Amber', seed: Color(0xFFDB9339)), // h68 v.85
+    AppAccent(name: 'Coral', seed: Color(0xFFE98764)), // h40 v.72
+    AppAccent(name: 'Rose', seed: Color(0xFFE282A4)), // h358 v.64
+    AppAccent(name: 'Teal', seed: Color(0xFF41B9B9)), // h195 v.85
+    AppAccent(name: 'Violet', seed: Color(0xFFA399E1)), // h290 v.66
     // Enough tint to stay distinct from disabled neutral text in light mode.
-    AppAccent(name: 'Slate', seed: Color(0xFF9CAABB)),
-    AppAccent(name: 'Sage', seed: Color(0xFFA8C7A1)),
+    AppAccent(name: 'Slate', seed: Color(0xFF96A6BB)), // h255 v.24
+    AppAccent(name: 'Green', seed: Color(0xFF59BD79)), // h152 v.72
   ];
 
   ThemeMode _themeMode = defaultThemeMode;

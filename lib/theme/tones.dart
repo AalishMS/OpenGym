@@ -100,8 +100,8 @@ Oklch oklchOf(Color color) {
   );
 }
 
-/// Builds an opaque [Color] from OKLCh, clamped into sRGB. See [_toGamma].
-Color colorFromOklch(double l, double c, double h) {
+/// OKLCh → *unclamped* linear sRGB. Channels outside 0..1 mean out of gamut.
+(double, double, double) _linearFromOklch(double l, double c, double h) {
   final a = c * math.cos(h);
   final b = c * math.sin(h);
 
@@ -113,18 +113,56 @@ Color colorFromOklch(double l, double c, double h) {
   final mCone = m_ * m_ * m_;
   final sCone = s_ * s_ * s_;
 
+  return (
+    4.0767416621 * lCone - 3.3077115913 * mCone + 0.2309699292 * sCone,
+    -1.2684380046 * lCone + 2.6097574011 * mCone - 0.3413193965 * sCone,
+    -0.0041960863 * lCone - 0.7034186147 * mCone + 1.7076147010 * sCone,
+  );
+}
+
+/// Builds an opaque [Color] from OKLCh, clamped into sRGB. See [_toGamma].
+Color colorFromOklch(double l, double c, double h) {
+  final (r, g, b) = _linearFromOklch(l, c, h);
   return Color.from(
     alpha: 1.0,
-    red: _toGamma(
-      4.0767416621 * lCone - 3.3077115913 * mCone + 0.2309699292 * sCone,
-    ),
-    green: _toGamma(
-      -1.2684380046 * lCone + 2.6097574011 * mCone - 0.3413193965 * sCone,
-    ),
-    blue: _toGamma(
-      -0.0041960863 * lCone - 0.7034186147 * mCone + 1.7076147010 * sCone,
-    ),
+    red: _toGamma(r),
+    green: _toGamma(g),
+    blue: _toGamma(b),
   );
+}
+
+/// The most chroma sRGB can show at lightness [l] and hue [h].
+///
+/// The gamut is lopsided: at the lightness of a text accent a pink reaches about
+/// 0.21 chroma, a yellow about 0.10. So one *absolute* chroma reads vivid on one
+/// hue and dusty on another, and a pastel seed that looks even at its own
+/// lightness turns uneven once a role darkens it. Expressing chroma as a
+/// fraction of this ceiling — *vividness* — keeps hues matched at every tone.
+double maxChroma(double l, double h) {
+  const eps = 1e-4;
+  var lo = 0.0;
+  var hi = 0.4;
+  for (var i = 0; i < 24; i++) {
+    final mid = (lo + hi) / 2;
+    final (r, g, b) = _linearFromOklch(l, mid, h);
+    final inGamut =
+        r >= -eps && r <= 1 + eps && g >= -eps && g <= 1 + eps &&
+        b >= -eps && b <= 1 + eps;
+    if (inGamut) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+}
+
+/// How much of the available chroma [color] uses at its own lightness and hue,
+/// from 0 (neutral) to 1 (the sRGB edge). See [maxChroma].
+double vividnessOf(Color color) {
+  final t = oklchOf(color);
+  final ceiling = maxChroma(t.l, t.h);
+  return ceiling <= 0 ? 0 : (t.c / ceiling).clamp(0.0, 1.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -205,20 +243,26 @@ const int _bisectionSteps = 22;
 /// high-chroma yellow cannot reach 4.5:1 against white however dark it goes),
 /// which is a best effort rather than a lie — the accompanying test asserts the
 /// targets that must actually hold.
+///
+/// [chromaAt], when given, replaces the seed's fixed chroma with one chosen per
+/// lightness — the accent roles use it to hold *vividness* constant rather than
+/// absolute chroma (see [maxChroma]).
 Color solveForContrast({
   required Color seed,
   required Color against,
   required double target,
   required bool preferLighter,
   ToneAnchor anchor = ToneAnchor.ground,
+  double Function(double l)? chromaAt,
 }) {
   if (anchor == ToneAnchor.seed && contrastRatio(seed, against) >= target) {
     return seed;
   }
 
   final s = oklchOf(seed);
+  Color tone(double l) => colorFromOklch(l, chromaAt?.call(l) ?? s.c, s.h);
 
-  final extreme = colorFromOklch(preferLighter ? 1.0 : 0.0, s.c, s.h);
+  final extreme = tone(preferLighter ? 1.0 : 0.0);
   if (contrastRatio(extreme, against) < target) return extreme;
 
   // Bracket between the ground itself (contrast 1.0, always failing) and the
@@ -229,8 +273,7 @@ Color solveForContrast({
 
   for (var i = 0; i < _bisectionSteps; i++) {
     final mid = (lo + hi) / 2;
-    final passes =
-        contrastRatio(colorFromOklch(mid, s.c, s.h), against) >= target;
+    final passes = contrastRatio(tone(mid), against) >= target;
     if (preferLighter) {
       // Converge downward onto the dimmest passing tone.
       if (passes) {
@@ -248,7 +291,7 @@ Color solveForContrast({
     }
   }
 
-  return colorFromOklch(preferLighter ? hi : lo, s.c, s.h);
+  return tone(preferLighter ? hi : lo);
 }
 
 /// [seed]'s hue and chroma at an explicit [lightness]. The primitive behind
