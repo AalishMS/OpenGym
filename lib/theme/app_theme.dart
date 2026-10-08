@@ -22,6 +22,9 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
   /// either ground. This is the accent to *write with*.
   final Color accent;
 
+  /// A more vivid accent reserved for the wordmark, with readable text contrast.
+  final Color brandAccent;
+
   /// The accent as a ground — a filled button, a selected chip, the FAB. Solved
   /// to ≥3:1 against [background] so its edge reads, and it is what [onAccent] is
   /// legible against. Not the same colour as [accent]: text wants more contrast
@@ -48,6 +51,7 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
     required this.error,
     required this.success,
     required this.accent,
+    required this.brandAccent,
     required this.accentFill,
     required this.accentDim,
     required this.accentMuted,
@@ -64,6 +68,7 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
     Color? error,
     Color? success,
     Color? accent,
+    Color? brandAccent,
     Color? accentFill,
     Color? accentDim,
     Color? accentMuted,
@@ -78,6 +83,7 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
       error: error ?? this.error,
       success: success ?? this.success,
       accent: accent ?? this.accent,
+      brandAccent: brandAccent ?? this.brandAccent,
       accentFill: accentFill ?? this.accentFill,
       accentDim: accentDim ?? this.accentDim,
       accentMuted: accentMuted ?? this.accentMuted,
@@ -100,6 +106,7 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
       error: Color.lerp(error, other.error, t)!,
       success: Color.lerp(success, other.success, t)!,
       accent: Color.lerp(accent, other.accent, t)!,
+      brandAccent: Color.lerp(brandAccent, other.brandAccent, t)!,
       accentFill: Color.lerp(accentFill, other.accentFill, t)!,
       accentDim: Color.lerp(accentDim, other.accentDim, t)!,
       accentMuted: Color.lerp(accentMuted, other.accentMuted, t)!,
@@ -163,6 +170,11 @@ Color accentColor(BuildContext context) {
   return Theme.of(context).extension<AppColorScheme>()?.accent ??
       Theme.of(context).colorScheme.primary;
 }
+
+/// The vivid wordmark tone; ordinary controls use the softer accent roles.
+Color brandAccentColor(BuildContext context) =>
+    Theme.of(context).extension<AppColorScheme>()?.brandAccent ??
+    accentColor(context);
 
 /// The accent as a *ground* — a filled button, a selected chip, the FAB. Draw
 /// [onAccentColor] on top of it. Distinct from [accentColor], which is tuned
@@ -412,6 +424,26 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
     anchor: ToneAnchor.seed,
   );
   final onAccent = bestForeground(accentFill);
+  // More chroma gives the signature color without brightening every control.
+  // Dark mode also lifts the wordmark; light mode keeps the lightest tone that
+  // clears text contrast. Slate retains its deliberately restrained chroma.
+  final seedTone = oklchOf(seed);
+  final brandSeed = colorFromOklch(
+    isDark ? math.max(seedTone.l, 0.80) : seedTone.l,
+    math.min(seedTone.c * 1.8, 0.18),
+    seedTone.h,
+  );
+  final brandGround =
+      contrastRatio(brandSeed, background) < contrastRatio(brandSeed, surface)
+          ? background
+          : surface;
+  final brandAccent = solveForContrast(
+    seed: brandSeed,
+    against: brandGround,
+    target: 4.5,
+    preferLighter: preferLighter,
+    anchor: ToneAnchor.seed,
+  );
   // The two washes are even perceptual steps from the background up to the fill,
   // opaque — not `accent.withAlpha(...)`, which composited differently on every
   // ground and drifted the token between screens.
@@ -458,6 +490,7 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
     error: error,
     success: success,
     accent: accent,
+    brandAccent: brandAccent,
     accentFill: accentFill,
     accentDim: accentDim,
     accentMuted: accentMuted,

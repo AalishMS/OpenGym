@@ -108,6 +108,27 @@ void main() {
     }
   });
 
+  test('vivid wordmark stays readable for every accent in both modes', () {
+    for (final brightness in Brightness.values) {
+      for (final accent in SettingsProvider.accents) {
+        final scheme = deriveColorScheme(accent.seed, brightness);
+        for (final ground in [scheme.background, scheme.surface]) {
+          _expectContrast(
+            scheme.brandAccent,
+            ground,
+            atLeast: 4.5,
+            what: '${accent.name} ${brightness.name} wordmark',
+          );
+        }
+        expect(
+          oklchOf(scheme.brandAccent).c,
+          greaterThan(oklchOf(scheme.accent).c),
+          reason: '${accent.name} wordmark should be more vivid than controls',
+        );
+      }
+    }
+  });
+
   testWidgets('today keeps a neutral outline ground for every trained accent', (
     tester,
   ) async {

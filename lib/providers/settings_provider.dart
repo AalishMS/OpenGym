@@ -30,23 +30,18 @@ class SettingsProvider with ChangeNotifier {
   static const String _autoFillKey = 'auto_fill_last';
 
   /// **Order is persisted.** `_accentIndex` is stored as an integer, so indices
-  /// 0–6 must keep the accent they have always named. GREEN is therefore
-  /// appended at 7 rather than slotted next to CYAN where it belongs visually —
-  /// reordering would silently repaint every existing user's app.
+  /// Each index keeps its original color family so saved preferences survive
+  /// palette refinements. Green remains at 7; cyan remains the default at 4.
   static const List<AppAccent> accents = [
-    AppAccent(name: 'ELECTRIC BLUE', seed: Color(0xFF00A8FF)),
-    AppAccent(name: 'WARM AMBER', seed: Color(0xFFFF9500)),
-    AppAccent(name: 'DEEP ORANGE', seed: Color(0xFFFF5722)),
-    AppAccent(name: 'HOT PINK', seed: Color(0xFFFF1493)),
-    AppAccent(name: 'CYAN', seed: Color(0xFF00CED1)),
-    AppAccent(name: 'PURPLE', seed: Color(0xFF8B5CF6)),
-    // A slate, not the old flat #A0A0A0. Zero chroma made it resolve to exactly
-    // textSecondary in light mode — the same grey as disabled text — so it needs
-    // just enough tint to stay a colour while still reading as grey.
-    AppAccent(name: 'STEEL GRAY', seed: Color(0xFF7C8AA0)),
-    // Fills the 146° gap the old set left between CYAN and WARM AMBER, and a
-    // gym app wants a green.
-    AppAccent(name: 'GREEN', seed: Color(0xFF22C55E)),
+    AppAccent(name: 'Soft blue', seed: Color(0xFF7CAFE0)),
+    AppAccent(name: 'Honey', seed: Color(0xFFD5AE70)),
+    AppAccent(name: 'Apricot', seed: Color(0xFFE5AA86)),
+    AppAccent(name: 'Blush', seed: Color(0xFFE3A6BC)),
+    AppAccent(name: 'Sea glass', seed: Color(0xFF83C5C6)),
+    AppAccent(name: 'Lavender', seed: Color(0xFFB4A3DA)),
+    // Enough tint to stay distinct from disabled neutral text in light mode.
+    AppAccent(name: 'Slate', seed: Color(0xFF9CAABB)),
+    AppAccent(name: 'Sage', seed: Color(0xFFA8C7A1)),
   ];
 
   ThemeMode _themeMode = defaultThemeMode;

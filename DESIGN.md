@@ -229,6 +229,11 @@ signature:
 - Dark and light themes share the same semantic color helpers.
 - User-selectable accents, compact plan markers, and focused data highlights
   carry the app's character.
+- The eight accent families use a soft palette: Soft blue, Honey, Apricot,
+  Blush, Sea glass, Lavender, Slate, and Sage. Saved accent indices retain their
+  original color family. Text and fills are solved separately for readability
+  in each mode. The wordmark uses a dedicated, more saturated `brandAccent`
+  tone of the selected color; ordinary controls retain the softer accent.
 - The `> OpenGym` wordmark serves as the main brand signature. Keep it consistent
   and give it room instead of repeating the prompt symbol elsewhere.
 - Familiar labels and icons make actions understandable outside a technical

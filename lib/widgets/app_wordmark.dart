@@ -22,7 +22,7 @@ class AppWordmark extends StatelessWidget {
       maxLines: maxLines,
       overflow: overflow,
       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-        color: accentColor(context),
+        color: brandAccentColor(context),
         fontSize: fontSize,
         fontWeight: FontWeight.w800,
       ),
