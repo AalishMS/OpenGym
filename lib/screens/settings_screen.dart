@@ -232,14 +232,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         automaticallyImplyLeading: false,
       ),
-      body: Column(
+      body: Stack(
         children: [
-          if (_busyAction != null)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: ActionProgress(_busyAction!),
-            ),
-          Expanded(
+          Positioned.fill(
             child: AbsorbPointer(
               absorbing: _busyAction != null || _confirmingMutation,
               child: Consumer<SettingsProvider>(
@@ -423,6 +418,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
+          // Saving must not resize the viewport or move the controls being used.
+          if (_busyAction != null)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Material(
+                color: surface,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: ActionProgress(_busyAction!),
+                ),
+              ),
+            ),
         ],
       ),
     );
