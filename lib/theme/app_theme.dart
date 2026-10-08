@@ -466,18 +466,20 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
   // The two washes are even perceptual steps from the background up to the fill,
   // opaque — not `accent.withAlpha(...)`, which composited differently on every
   // ground and drifted the token between screens.
-  final accentMuted = toneBetween(
-    seed: seed,
-    from: background,
-    to: accentFill,
-    fraction: 1 / 3,
+  //
+  // Chroma climbs from the neutral page to the fill too, eased by √fraction.
+  // Holding the seed's full chroma near white or black, where cyan and green
+  // have the most gamut, turned the selected-state wash neon in light mode and
+  // a heavy wine or forest green in dark mode.
+  final fillTone = oklchOf(accentFill);
+  final backgroundL = oklchOf(background).l;
+  Color wash(double fraction) => colorFromOklch(
+    backgroundL + (fillTone.l - backgroundL) * fraction,
+    fillTone.c * math.sqrt(fraction),
+    seedTone.h,
   );
-  final accentDim = toneBetween(
-    seed: seed,
-    from: background,
-    to: accentFill,
-    fraction: 2 / 3,
-  );
+  final accentMuted = wash(1 / 3);
+  final accentDim = wash(2 / 3);
 
   // Error and success are the two ends of the same traffic-light ramp the RPE
   // badges use — same hue, same chroma, same lightness seed (see
