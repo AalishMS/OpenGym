@@ -34,6 +34,9 @@ color to make plans and progress easy to recognize. The personality is in the
 details, including the familiar `> OpenGym` wordmark; the workout stays at the
 center.
 
+See the [illustrated guide](docs/illustrations.md) for offline logging, split
+workspaces, and workout progress.
+
 ---
 
 ## Screenshots
