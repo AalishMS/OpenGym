@@ -1,0 +1,6 @@
+interface:
+  display_name: "Ian Xiaohei Illustrations"
+  short_description: "Generate weird, clean, Xiaohei-branded English article illustrations"
+  default_prompt: "Use $ian-xiaohei-illustrations to design and generate a few weird, clean Xiaohei illustrations for this English article."
+policy:
+  allow_implicit_invocation: true
