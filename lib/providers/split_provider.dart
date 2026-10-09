@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../models/coach_proposal.dart';
 import '../models/split.dart';
 import '../repositories/split_repository.dart';
+import '../services/coach/coach_applier.dart';
 import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
 import '../services/workout_preset_installer.dart';
@@ -18,6 +20,7 @@ class SplitProvider with ChangeNotifier {
   final SplitRepository _repository;
   final String? Function() _userIdProvider;
   final WorkoutPresetInstaller _presetInstaller;
+  final CoachApplier _coachApplier;
   List<Split> _splits = [];
   String? _activeSplitId;
   late final StreamSubscription<void> _syncSubscription;
@@ -26,8 +29,10 @@ class SplitProvider with ChangeNotifier {
     SplitRepository? repository,
     String? Function()? userIdProvider,
     WorkoutPresetInstaller? presetInstaller,
+    CoachApplier? coachApplier,
   }) : _repository = repository ?? SplitRepository(),
        _presetInstaller = presetInstaller ?? const WorkoutPresetInstaller(),
+       _coachApplier = coachApplier ?? const CoachApplier(),
        _userIdProvider =
            userIdProvider ?? (() => SupabaseService.currentUserId) {
     _syncSubscription = SyncService.instance.changes.listen(
@@ -153,6 +158,18 @@ class SplitProvider with ChangeNotifier {
         userId: _requireUser(),
         maxSplits: maxSplits,
       );
+    } finally {
+      loadSplits();
+    }
+  }
+
+  /// Writes a Coach proposal, then reloads splits, which also reloads the
+  /// plans of whichever split is now active. A stale proposal writes nothing.
+  Future<CoachApplyOutcome> applyCoachProposal(
+    ValidatedProposal proposal,
+  ) async {
+    try {
+      return await _coachApplier.apply(proposal, userId: _requireUser());
     } finally {
       loadSplits();
     }

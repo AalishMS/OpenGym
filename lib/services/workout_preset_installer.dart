@@ -3,11 +3,9 @@ import 'package:uuid/uuid.dart';
 import '../data/exercise_library.dart';
 import '../data/plan_colors.dart';
 import '../data/workout_presets.dart';
-import '../models/split.dart';
-import '../models/split_preference.dart';
 import '../models/workout_plan.dart';
-import '../utils/split_identity.dart';
 import 'hive_service.dart';
+import 'split_install_target.dart';
 import 'sync_service.dart';
 
 enum PresetInstallStage { plansWritten, splitWritten, preferenceWritten }
@@ -40,137 +38,58 @@ class WorkoutPresetInstaller {
   }) async {
     _validate(preset);
 
-    final result = await SyncService.instance.runExclusiveLocalMutation(() async {
-      final activeSplits = HiveService.getSplits();
-      final originalPreference = HiveService.getSplitPreference(userId);
-      final preferenceSnapshot =
-          originalPreference == null
-              ? null
-              : SplitPreference(
-                userId: originalPreference.userId,
-                activeSplitId: originalPreference.activeSplitId,
-                updatedAt: originalPreference.updatedAt,
-                dirty: originalPreference.dirty,
-              );
-      final activeId = HiveService.getActiveSplitId(userId);
-      final activeSplit =
-          activeId == null ? null : HiveService.getSplitById(activeId);
-      final reusable = _isUntouchedDefault(activeSplit, userId);
-      if (!reusable && activeSplits.length >= maxSplits) {
-        throw StateError(
-          'You can have at most $maxSplits splits. Delete one in Manage splits.',
-        );
-      }
-
-      final now = DateTime.now();
-      final splitId = reusable ? activeSplit!.id : _uuid.v4();
-      final splitName = _uniqueName(
-        preset.installName,
-        activeSplits,
-        exceptId: reusable ? splitId : null,
-      );
-      final originalSplit = reusable ? activeSplit!.copyWith() : null;
-      final installedSplit =
-          reusable
-              ? activeSplit!.copyWith(
-                name: splitName,
-                userId: userId,
-                updatedAt: now,
-                dirty: true,
-              )
-              : Split(
-                id: splitId,
-                name: splitName,
-                userId: userId,
-                createdAt: now,
-                updatedAt: now,
-                dirty: true,
-              );
-
-      final planMap = <String, WorkoutPlan>{};
-      for (var index = 0; index < preset.plans.length; index++) {
-        final source = preset.plans[index];
-        final id = _uuid.v4();
-        planMap[id] = WorkoutPlan(
-          id: id,
+    final result = await SyncService.instance.runExclusiveLocalMutation(
+      () async {
+        final target = SplitInstallTarget.prepare(
+          requestedName: preset.installName,
           userId: userId,
-          splitId: splitId,
-          updatedAt: now,
-          dirty: true,
-          name: source.name,
-          position: index,
-          planColor: kPlanColors[source.colorSlot],
-          exercises: [
-            for (final exercise in source.exercises) exercise.toTemplate(),
-          ],
+          maxSplits: maxSplits,
+          now: DateTime.now(),
         );
-      }
+        final splitId = target.splitId;
 
-      try {
-        await HiveService.putPlansRaw(planMap);
-        await installHook?.call(PresetInstallStage.plansWritten);
-        await HiveService.putSplitRaw(installedSplit);
-        await installHook?.call(PresetInstallStage.splitWritten);
-        await HiveService.putSplitPreferenceRaw(
-          SplitPreference(
+        final planMap = <String, WorkoutPlan>{};
+        for (var index = 0; index < preset.plans.length; index++) {
+          final source = preset.plans[index];
+          final id = _uuid.v4();
+          planMap[id] = WorkoutPlan(
+            id: id,
             userId: userId,
-            activeSplitId: splitId,
-            updatedAt: now,
+            splitId: splitId,
+            updatedAt: target.now,
             dirty: true,
-          ),
-        );
-        await installHook?.call(PresetInstallStage.preferenceWritten);
-      } catch (error) {
-        await HiveService.deletePlansRaw(planMap.keys);
-        if (originalSplit == null) {
-          await HiveService.deleteSplitRaw(splitId);
-        } else {
-          await HiveService.putSplitRaw(originalSplit);
+            name: source.name,
+            position: index,
+            planColor: kPlanColors[source.colorSlot],
+            exercises: [
+              for (final exercise in source.exercises) exercise.toTemplate(),
+            ],
+          );
         }
-        if (preferenceSnapshot == null) {
-          await HiveService.deleteSplitPreferenceRaw(userId);
-        } else {
-          await HiveService.putSplitPreferenceRaw(preferenceSnapshot);
-        }
-        rethrow;
-      }
 
-      return PresetInstallResult(
-        splitId: splitId,
-        splitName: splitName,
-        reusedDefaultSplit: reusable,
-      );
-    });
+        try {
+          await HiveService.putPlansRaw(planMap);
+          await installHook?.call(PresetInstallStage.plansWritten);
+          await target.writeSplit();
+          await installHook?.call(PresetInstallStage.splitWritten);
+          await target.writePreference();
+          await installHook?.call(PresetInstallStage.preferenceWritten);
+        } catch (error) {
+          await HiveService.deletePlansRaw(planMap.keys);
+          await target.rollback();
+          rethrow;
+        }
+
+        return PresetInstallResult(
+          splitId: splitId,
+          splitName: target.splitName,
+          reusedDefaultSplit: target.reusedDefaultSplit,
+        );
+      },
+    );
 
     SyncService.instance.scheduleSync();
     return result;
-  }
-
-  bool _isUntouchedDefault(Split? split, String userId) {
-    if (split == null ||
-        split.id != defaultSplitIdForUser(userId) ||
-        split.name != 'My Split') {
-      return false;
-    }
-    return HiveService.getPlans(splitId: split.id).isEmpty &&
-        HiveService.getSessions(splitId: split.id).isEmpty;
-  }
-
-  String _uniqueName(String requested, List<Split> splits, {String? exceptId}) {
-    final existing = {
-      for (final split in splits.where((split) => split.id != exceptId))
-        split.name.toLowerCase(),
-    };
-    if (!existing.contains(requested.toLowerCase())) return requested;
-    var suffix = 2;
-    while (true) {
-      final tail = ' ($suffix)';
-      final keep = 24 - tail.length;
-      final candidate =
-          '${requested.substring(0, requested.length.clamp(0, keep))}$tail';
-      if (!existing.contains(candidate.toLowerCase())) return candidate;
-      suffix++;
-    }
   }
 
   void _validate(WorkoutPreset preset) {

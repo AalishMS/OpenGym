@@ -238,17 +238,24 @@ as `WorkoutPresetInstaller`.
 - **New plans** get:
   - a UUID
   - the target `splitId` and the user's ID
-  - the next `position` after the split's highest
+  - the next `position` after the split's highest, or `0` in an empty split.
+    If any plan in the split has no position (legacy order), new plans get
+    none either, as in the plan editor, so they sort after the positioned ones
   - the first `kPlanColors` slot the split isn't already using, cycling once
     every slot is taken
-- **Removed plans** go through `HiveService.softDeletePlan`, so they become
-  tombstones.
+- **Removed plans** become tombstones with the same fields
+  `HiveService.softDeletePlan` sets (`deletedAt`, `updatedAt`, `dirty`). They
+  are written as copies, so rollback can put the originals back.
 - **A new split** follows `WorkoutPresetInstaller.install`. The applier
   creates the split, writes its plans with positions 0 to n−1, and makes the
   split active. The "reuse an untouched default split" rule and the 24-character
-  name limit carry over.
-- Every write sets `updatedAt` and `dirty`. Afterwards the providers reload, and
-  `SyncService.instance.scheduleSync()` runs once.
+  name limit carry over. Both use `SplitInstallTarget`, which the installer
+  shares.
+- Every write sets `updatedAt` and `dirty`. Afterwards
+  `SyncService.instance.scheduleSync()` runs once. A stale proposal returns
+  `CoachApplyStale` instead of throwing; other failures throw after rollback.
+- The UI applies through `SplitProvider.applyCoachProposal`, which reloads the
+  splits. That also reloads `WorkoutPlanProvider`, which listens to it.
 
 `ExerciseTemplate.sets` equals the length of the proposal's `sets` list, and
 `setTargets` holds those sets. `note` is the plan guidance that the workout
