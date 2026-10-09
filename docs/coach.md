@@ -1,7 +1,8 @@
 # AI Coach
 
-Status: **design settled. The pure-Dart parts and the proxy are built (the proxy
-is not deployed yet); the UI doesn't exist yet.**
+Status: **design settled. The pure-Dart parts are built, and the proxy is
+deployed (2026-10-09, `coach` v1 with `coach_usage` migrated); the UI doesn't
+exist yet.**
 
 The Coach lets a signed-in user create and restructure workout plans by chatting.
 It proposes changes; the user reviews a diff and applies or discards it. Nothing
@@ -458,6 +459,10 @@ Decisions the build added to the design above:
 The function needs the Supabase CLI and Docker for a local stack. Copy
 `supabase/functions/.env.example` to `supabase/functions/.env` or
 `supabase/.env` (both git-ignored) and add the key.
+
+`supabase/migrations/` holds the whole remote history: the four split
+migrations were applied through the dashboard and pulled in with
+`supabase migration fetch --linked`, so `db push` only sends new files.
 
 ```bash
 supabase start                      # local Postgres, auth, and edge runtime
