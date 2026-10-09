@@ -552,8 +552,10 @@ Decisions the build added to the UI above:
   `upstream` copy.
 - **History.** Each request sends up to five earlier turns as user/assistant
   pairs, plus the new message, so it stays under the proxy's 12. Failed turns
-  are left out, so the roles keep alternating. The assistant side is the raw
-  model output. A turn whose plan failed twice is sent as
+  are left out, so the roles keep alternating. The assistant side is the model
+  output re-encoded as compact JSON: Flash-Lite answers with indented JSON, which
+  is about three times larger (8.3 KB against 3 KB for one proposal on
+  2026-10-10), and the history shares the 32 KB cap with the context. A turn whose plan failed twice is sent as
   `{"reply": ..., "proposal": null}`, so the model doesn't build on a plan the
   user never saw. If the body would exceed 30 KB, the oldest turns are dropped.
 - **Failure lines.** A failed request shows its copy in the chat. `busy`,

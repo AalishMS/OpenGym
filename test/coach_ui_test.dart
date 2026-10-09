@@ -392,6 +392,22 @@ void main() {
       expect(messages.last.content, 'Second');
     });
 
+    testWidgets('history holds the model output as compact JSON', (
+      tester,
+    ) async {
+      final fixture = await _openChat(tester);
+      const pretty = '{\n  "reply": "First answer.",\n  "proposal": null\n}';
+      fixture.client.answer(pretty);
+      fixture.client.answer(_output('Second answer.'));
+      await _send(tester, 'First');
+      await _send(tester, 'Second');
+
+      expect(
+        fixture.client.requests.last.messages[1].content,
+        '{"reply":"First answer.","proposal":null}',
+      );
+    });
+
     testWidgets('a failed proposal is retried once with the errors', (
       tester,
     ) async {

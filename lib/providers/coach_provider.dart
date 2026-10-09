@@ -302,17 +302,28 @@ class CoachProvider with ChangeNotifier {
 
   /// The model's `reply`, read leniently from output that failed validation.
   static String? replyText(String output) {
+    final decoded = _decode(output);
+    final reply = decoded is Map ? decoded['reply'] : null;
+    return reply is String && reply.trim().isNotEmpty ? reply.trim() : null;
+  }
+
+  /// [output] as compact JSON for the history. The model answers with
+  /// indented JSON, about three times the size, and the history shares the
+  /// proxy's 32 KB cap with the context.
+  static String compactOutput(String output) {
+    final decoded = _decode(output);
+    return decoded == null ? output : jsonEncode(decoded);
+  }
+
+  static Object? _decode(String output) {
     var text = output.trim();
     final fence = RegExp(r'^```(?:json)?\s*([\s\S]*?)\s*```$').firstMatch(text);
     if (fence != null) text = fence.group(1)!;
     try {
-      final decoded = jsonDecode(text);
-      final reply = decoded is Map ? decoded['reply'] : null;
-      if (reply is String && reply.trim().isNotEmpty) return reply.trim();
+      return jsonDecode(text);
     } on FormatException {
       return null;
     }
-    return null;
   }
 
   void _onSplitsChanged() {
@@ -391,7 +402,7 @@ class CoachProvider with ChangeNotifier {
         role: CoachEntryRole.coach,
         text: reply.reply,
         prompt: prompt,
-        output: output,
+        output: compactOutput(output),
         proposal: proposal == null ? null : CoachProposalItem(proposal),
       ),
     );
