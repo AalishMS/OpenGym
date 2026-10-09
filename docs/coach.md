@@ -492,7 +492,10 @@ makes it pass; `contract` sends the real v1 prompt and a fixture context.
 ## UI
 
 - **Entry point:** a Coach button in the Home header, next to the split control.
-  It opens `CoachScreen` as a pushed route. The tab bar doesn't change.
+  The app shell shows `CoachScreen` over Home inside the Home tab, so the bottom
+  bar (or the desktop rail) stays on screen. The back arrow, system back, or a
+  second tap on Home closes it. Switching to another tab keeps it open under
+  Home.
 - **Availability:** in an offline-only build, or while signed out, the button is
   hidden. Without a connection, `CoachScreen` opens with a notice: "The Coach
   needs a connection. Your plans still work offline." Plan editing never waits
@@ -508,11 +511,22 @@ makes it pass; `contract` sends the real v1 prompt and a fixture context.
   disabled until it is ticked. The other action is `Not now`. Acceptance is
   stored in SharedPreferences for each user and disclosure version, so changing
   the text asks again.
-- **Chat:** an empty state offers three suggestions: "Build a 4-day
+- **Status strip:** under the title, on the app bar's ground, "Currently on
+  gemini-3.5-flash-lite" names the model that answered last, and "14 of 20 left
+  today" sits over a meter with one segment per request. Both are unknown until
+  a user's first message, and the strip says so.
+- **Chat:** the empty state says what the Coach reads ("your 4 plans in Push
+  Pull Legs and your last four weeks of training") and lists three
+  suggestions as plain rows between hairlines, each with a hint: "Build a 4-day
   upper/lower", "My squat has stalled", and "Swap exercises for a sore
-  shoulder". Below it are the message list and the input. While a request is
-  out, the send button shows progress. Once fewer than five requests are left,
-  the remaining count appears quietly.
+  shoulder". The conversation reads like a log, not a messenger: each question
+  is a line marked with the accent, and the answer follows under a "Coach"
+  label. While a request is out, the send button and a "Reading your plans"
+  line show progress.
+- **Daily limit:** once no requests are left, the input, suggestions, `Try
+  again`, and `Ask again` are disabled, and the input reads "Daily limit
+  reached. Back at 1:45 PM" (the reset in local time). `Review` and `Apply`
+  still work, because they don't call the model.
 - **Proposal card:** a reply that carries a proposal shows a card under it, such
   as "Push Pull Legs · 2 plans changed, 1 added", with a `Review` button. A
   stale proposal shows "Plans changed. Ask again with the latest?" instead.
@@ -566,8 +580,14 @@ Decisions the build added to the UI above:
   (including after a sync pull), and when `Review` is tapped, so an out-of-date
   card usually shows "Plans changed" before the user opens it. `Apply` still
   checks again.
-- **Remaining count** shows once fewer than five requests are left, including
-  "No Coach requests left today" after a 429.
+- **Usage and model** come from the proxy's answers (`quota` and `model`, and
+  the `quota` on a 429). `CoachProvider` keeps the last of each per user in
+  SharedPreferences (`coach_status_{userId}`), so the strip is filled as soon as
+  the Coach opens. A count whose `resetsAt` has passed reads as unused until the
+  next answer says otherwise, and a timer unlocks an open chat at the reset.
+  The model is the one that actually answered, so a fallback shows as such.
+  There's no endpoint to ask for usage without spending a request, so a user
+  who has never sent one sees no count.
 - **A new-split proposal** makes the new split active when it's applied, so the
   conversation starts over, as it does for any split change.
 - **Disclosure** acceptance is the SharedPreferences key
@@ -605,7 +625,8 @@ The disclosure sheet states that the Coach is not medical advice.
 | `lib/providers/coach_provider.dart` | App-session conversation and the turn loop |
 | `lib/screens/coach_screen.dart`, `coach_review_screen.dart` | Chat and review |
 | `lib/services/coach/coach_disclosure.dart` | Per-user, per-version disclosure acceptance |
-| `lib/widgets/coach/` | Home button and open flow, disclosure sheet, chat entries and proposal card, diff cards |
+| `lib/services/coach/coach_status_store.dart` | Last reported usage and model, per user |
+| `lib/widgets/coach/` | Home button, open flow, and `CoachHost` (the shell's hook), disclosure sheet, status strip, chat entries and proposal card, diff cards |
 | `supabase/functions/coach/` | The Edge Function; `contracts/` holds one prompt and schema per version |
 | `supabase/functions/tests/` | Deno unit tests and the schema smoke test |
 | `supabase/migrations/` | `coach_usage`, `coach_charge`, and `coach_record_tokens` |

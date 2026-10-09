@@ -7,8 +7,9 @@ import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 
-/// One chat line. The user's messages sit on the right on a raised surface;
-/// the Coach's replies sit on the left, on the page, with their proposal card.
+/// One chat line. The conversation reads like a training log rather than a
+/// messenger: each question is a line marked with the accent, and the Coach's
+/// answer follows under its name, with its proposal card.
 class CoachChatEntry extends StatelessWidget {
   final CoachEntry entry;
   final VoidCallback? onReview;
@@ -50,32 +51,41 @@ class _UserBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * 0.8,
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.only(
+        left: AppSpacing.md,
+        top: AppSpacing.xxs,
+        bottom: AppSpacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: accentColor(context), width: 3)),
+      ),
+      child: Semantics(
+        label: 'You said',
+        child: Text(
+          text,
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(color: textPrimaryColor(context)),
         ),
-        child: Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.md,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: BoxDecoration(
-            color: raisedSurfaceColor(context),
-            border: Border.all(color: borderColor(context)),
-            borderRadius: AppRadius.card,
-          ),
-          child: Semantics(
-            label: 'You said',
-            child: Text(
-              text,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(color: textPrimaryColor(context)),
-            ),
-          ),
-        ),
+      ),
+    );
+  }
+}
+
+/// "Coach", above each answer and the progress line.
+class CoachSpeakerLabel extends StatelessWidget {
+  const CoachSpeakerLabel({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: Text(
+        'Coach',
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(color: accentColor(context)),
       ),
     );
   }
@@ -95,6 +105,8 @@ class _CoachReply extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const CoachSpeakerLabel(),
+        const SizedBox(height: AppSpacing.xs),
         if (entry.text.isNotEmpty)
           Semantics(
             label: 'Coach said',

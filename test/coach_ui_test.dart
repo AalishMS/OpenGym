@@ -2,25 +2,33 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart' hide Split;
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:gymapp/app_shell.dart';
 import 'package:gymapp/models/coach_proposal.dart';
 import 'package:gymapp/models/split.dart';
 import 'package:gymapp/models/split_preference.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/coach_provider.dart';
+import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/providers/split_provider.dart';
+import 'package:gymapp/providers/update_provider.dart';
+import 'package:gymapp/providers/workout_plan_provider.dart';
+import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/coach_screen.dart';
 import 'package:gymapp/services/coach/coach_applier.dart';
 import 'package:gymapp/services/coach/coach_client.dart';
 import 'package:gymapp/services/coach/coach_disclosure.dart';
+import 'package:gymapp/services/coach/coach_status_store.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/widgets/app_bottom_nav.dart';
 import 'package:gymapp/widgets/coach/coach_button.dart';
 
 import 'support/coach_fixtures.dart';
@@ -36,8 +44,8 @@ class FakeCoachClient implements CoachClient {
   final List<CoachRequest> requests = [];
   final List<FutureOr<CoachClientResult>> _queue = [];
 
-  void answer(String output, {CoachQuota? quota}) =>
-      _queue.add(CoachAnswer(output: output, quota: quota));
+  void answer(String output, {CoachQuota? quota, String? model}) =>
+      _queue.add(CoachAnswer(output: output, quota: quota, model: model));
 
   void fail(CoachFailureKind kind, {CoachQuota? quota}) =>
       _queue.add(CoachFailure(kind, quota: quota));
@@ -157,6 +165,7 @@ class _Fixture {
   late final CoachProvider coach;
   String? userId = _userId;
   bool online = true;
+  DateTime now = DateTime(2026, 10, 10, 9);
 
   _Fixture() {
     splits = SplitProvider(userIdProvider: () => userId, coachApplier: applier);
@@ -166,6 +175,7 @@ class _Fixture {
       userIdProvider: () => userId,
       isConfigured: () => true,
       probeConnection: () async => online,
+      now: () => now,
     );
   }
 
@@ -345,7 +355,8 @@ void main() {
     ) async {
       final fixture = await _openChat(tester);
       for (final suggestion in kCoachSuggestions) {
-        expect(find.text(suggestion), findsOneWidget);
+        expect(find.text(suggestion.prompt), findsOneWidget);
+        expect(find.text(suggestion.hint), findsOneWidget);
       }
       fixture.client.answer(_output('Sure.'));
       await tester.tap(find.text('My squat has stalled'));
@@ -370,11 +381,11 @@ void main() {
       await tester.pump();
 
       expect(find.bySemanticsLabel('Sending'), findsOneWidget);
-      expect(find.text('Thinking'), findsOneWidget);
+      expect(find.text('Reading your plans'), findsOneWidget);
 
       pending.complete(CoachAnswer(output: _output('Hello.')));
       await pumpWithStorage(tester);
-      expect(find.text('Thinking'), findsNothing);
+      expect(find.text('Reading your plans'), findsNothing);
       expect(find.text('Hello.'), findsOneWidget);
     });
 
@@ -497,28 +508,156 @@ void main() {
       expect(find.byKey(const ValueKey('coach-input')), findsOneWidget);
     });
 
-    testWidgets('the remaining count appears only under five', (tester) async {
+    testWidgets("the status shows the model and today's usage", (tester) async {
+      final fixture = await _openChat(tester);
+      expect(
+        find.text(
+          'The model and your daily limit show after your first message.',
+        ),
+        findsOneWidget,
+      );
+
+      fixture.client.answer(
+        _output('One.'),
+        quota: const CoachQuota(used: 6, limit: 20),
+        model: 'gemini-3.5-flash-lite',
+      );
+      await _send(tester, 'Hi');
+      expect(find.text('Currently on gemini-3.5-flash-lite'), findsOneWidget);
+      expect(find.text('14 of 20 left today'), findsOneWidget);
+
+      // A fallback answer names the model that actually answered.
+      fixture.client.answer(
+        _output('Two.'),
+        quota: const CoachQuota(used: 7, limit: 20),
+        model: 'gemini-3.5-flash',
+      );
+      await _send(tester, 'Again');
+      expect(find.text('Currently on gemini-3.5-flash'), findsOneWidget);
+      expect(find.text('13 of 20 left today'), findsOneWidget);
+    });
+
+    testWidgets('the chat locks once the daily limit is reached', (
+      tester,
+    ) async {
       final fixture = await _openChat(tester);
       fixture.client.answer(
         _output('One.'),
-        quota: const CoachQuota(used: 10, limit: 20),
+        quota: const CoachQuota(used: 19, limit: 20),
       );
       await _send(tester, 'Hi');
-      expect(find.textContaining('left today'), findsNothing);
-
-      fixture.client.answer(
-        _output('Two.'),
-        quota: const CoachQuota(used: 16, limit: 20),
-      );
-      await _send(tester, 'Again');
-      expect(find.text('4 Coach requests left today'), findsOneWidget);
-
       fixture.client.fail(
         CoachFailureKind.userQuota,
         quota: const CoachQuota(used: 20, limit: 20),
       );
       await _send(tester, 'More');
-      expect(find.text('No Coach requests left today'), findsOneWidget);
+
+      expect(find.text('0 of 20 left today'), findsOneWidget);
+      expect(fixture.coach.limitReached, isTrue);
+      final input = find.byKey(const ValueKey('coach-input'));
+      expect(tester.widget<TextField>(input).enabled, isFalse);
+      expect(find.text('Daily limit reached'), findsOneWidget);
+
+      await fixture.coach.send('Sneaking one in');
+      await pumpWithStorage(tester);
+      expect(fixture.client.requests, hasLength(2));
+    });
+
+    testWidgets('usage carries over to the next visit and resets on time', (
+      tester,
+    ) async {
+      final resetsAt = DateTime(2026, 10, 10, 10);
+      await tester.runAsync(
+        () => const CoachStatusStore().save(
+          _userId,
+          CoachStatus(
+            quota: CoachQuota(used: 20, limit: 20, resetsAt: resetsAt),
+            model: 'gemini-3.5-flash-lite',
+          ),
+        ),
+      );
+      final fixture = await _openChat(tester);
+      TextField input() =>
+          tester.widget<TextField>(find.byKey(const ValueKey('coach-input')));
+
+      expect(find.text('Currently on gemini-3.5-flash-lite'), findsOneWidget);
+      expect(find.text('0 of 20 left today'), findsOneWidget);
+      expect(input().enabled, isFalse);
+      expect(find.textContaining('Daily limit reached. Back at'), findsOne);
+
+      fixture.now = resetsAt;
+      await tester.pump(const Duration(hours: 1));
+      expect(find.text('20 of 20 left today'), findsOneWidget);
+      expect(fixture.coach.limitReached, isFalse);
+      expect(input().enabled, isTrue);
+    });
+  });
+
+  group('inside the app shell', () {
+    testWidgets('the Coach opens over Home with the navigation in view', (
+      tester,
+    ) async {
+      const timerChannel = MethodChannel(
+        'com.aalishms.opengym/workout_timer_notification',
+      );
+      final messenger = tester.binding.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(timerChannel, (_) async => null);
+      addTearDown(() => messenger.setMockMethodCallHandler(timerChannel, null));
+      final fixture = _Fixture();
+      addTearDown(fixture.dispose);
+      final plans = WorkoutPlanProvider(fixture.splits);
+      final sessions = WorkoutSessionProvider(fixture.splits);
+      addTearDown(() {
+        plans.dispose();
+        sessions.dispose();
+      });
+      await tester.runAsync(() => CoachDisclosure.accept(_userId));
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: fixture.splits),
+            ChangeNotifierProvider.value(value: fixture.coach),
+            ChangeNotifierProvider.value(value: plans),
+            ChangeNotifierProvider.value(value: sessions),
+            ChangeNotifierProvider(create: (_) => SettingsProvider()),
+            ChangeNotifierProvider(create: (_) => UpdateProvider()),
+          ],
+          child: MaterialApp(
+            theme: buildTheme(const Color(0xFF00A2FF), Brightness.light),
+            home: const AppShell(),
+          ),
+        ),
+      );
+      await pumpWithStorage(tester);
+
+      await tester.tap(find.byKey(const ValueKey('coach-button')));
+      await pumpWithStorage(tester);
+      expect(find.byType(CoachScreen), findsOneWidget);
+      expect(find.byType(AppBottomNav), findsOneWidget);
+      expect(find.textContaining('your 2 plans in Push Pull Legs'), findsOne);
+
+      // Another tab keeps the Coach under Home; tapping Home again closes it.
+      final nav = find.byType(AppBottomNav);
+      await tester.tap(
+        find.descendant(of: nav, matching: find.text('History')),
+      );
+      await pumpWithStorage(tester);
+      expect(find.byType(CoachScreen), findsNothing);
+      await tester.tap(find.descendant(of: nav, matching: find.text('Home')));
+      await pumpWithStorage(tester);
+      expect(find.byType(CoachScreen), findsOneWidget);
+      await tester.tap(find.descendant(of: nav, matching: find.text('Home')));
+      await pumpWithStorage(tester);
+      expect(find.byType(CoachScreen, skipOffstage: false), findsNothing);
+
+      // System back closes the Coach rather than leaving the app.
+      await tester.tap(find.byKey(const ValueKey('coach-button')));
+      await pumpWithStorage(tester);
+      expect(find.byType(CoachScreen), findsOneWidget);
+      await tester.binding.handlePopRoute();
+      await pumpWithStorage(tester);
+      expect(find.byType(CoachScreen, skipOffstage: false), findsNothing);
+      expect(find.byType(AppShell), findsOneWidget);
     });
   });
 
@@ -677,7 +816,7 @@ void main() {
 
       expect(fixture.coach.isEmpty, isTrue);
       expect(find.text('Hello.'), findsNothing);
-      expect(find.text('Ask the Coach'), findsOneWidget);
+      expect(find.text('What should we work on?'), findsOneWidget);
       expect(find.text('Upper lower'), findsOneWidget);
     });
 
@@ -707,11 +846,14 @@ void main() {
       );
       await _send(tester, 'Hi');
 
+      // The next account sees neither the conversation nor this one's usage.
+      fixture.userId = 'someone-else';
       fixture.coach.resetForAccount();
       await pumpWithStorage(tester);
 
       expect(fixture.coach.isEmpty, isTrue);
       expect(fixture.coach.quota, isNull);
+      expect(fixture.coach.model, isNull);
       expect(find.text('Hello.'), findsNothing);
     });
   });

@@ -200,7 +200,8 @@ their state.
 | Settings | `SettingsScreen` |
 
 Workout plan creation, editing, and active workout logging are separate screens
-opened from the main flow.
+opened from the main flow. The Coach is the exception: it opens over Home
+inside the Home tab, so the tab bar or rail stays visible (see `docs/coach.md`).
 
 ## Bundled Workout Presets
 

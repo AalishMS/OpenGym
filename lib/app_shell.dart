@@ -5,10 +5,12 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import 'models/workout_session.dart';
+import 'providers/coach_provider.dart';
 import 'providers/split_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/workout_plan_provider.dart';
 import 'providers/workout_session_provider.dart';
+import 'screens/coach_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/intro_screen.dart';
@@ -22,6 +24,7 @@ import 'services/workout_timer_notification_service.dart';
 import 'theme/breakpoints.dart';
 import 'widgets/app_bottom_nav.dart';
 import 'widgets/app_nav_rail.dart';
+import 'widgets/coach/coach_button.dart';
 import 'widgets/guided_tour.dart';
 import 'widgets/history/history_journal_data.dart';
 import 'widgets/update_dialog.dart';
@@ -49,20 +52,35 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   bool _tourActive = false;
   bool _replayingTutorial = false;
 
+  /// The Coach covers Home inside its tab, so the navigation stays visible.
+  bool _coachOpen = false;
+
   /// Guards against a second prompt if this State is rebuilt.
   bool _updatePromptShown = false;
   StreamSubscription<WorkoutTimerNotificationEvent>? _timerSubscription;
   int? _handledTimerIntentRevision;
 
-  List<Widget> get _screens => [
+  List<Widget> _screens({required bool coachShown}) => [
     const DashboardScreen(),
-    HomeScreen(
-      tutorialPlanKey: _planTourKey,
-      tutorialStartKey: _startTourKey,
-      tutorialScrollController: _homeScrollController,
-      tutorialActive: _tourActive,
-      onOpenWeeklyTraining: _openWeeklyTraining,
-      onOpenLastWorkout: _openLastWorkout,
+    CoachHost(
+      open: _openCoach,
+      child: IndexedStack(
+        index: coachShown ? 1 : 0,
+        children: [
+          HomeScreen(
+            tutorialPlanKey: _planTourKey,
+            tutorialStartKey: _startTourKey,
+            tutorialScrollController: _homeScrollController,
+            tutorialActive: _tourActive,
+            onOpenWeeklyTraining: _openWeeklyTraining,
+            onOpenLastWorkout: _openLastWorkout,
+          ),
+          if (coachShown)
+            CoachScreen(onClose: _closeCoach)
+          else
+            const SizedBox.shrink(),
+        ],
+      ),
     ),
     const HistoryScreen(),
     StatsScreen(weeklyTrainingRequest: _weeklyTrainingRequest),
@@ -93,6 +111,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final hasPlans = context.read<WorkoutPlanProvider>().plans.isNotEmpty;
     setState(() {
       _currentIndex = 1;
+      _coachOpen = false;
       _tourSteps = [
         GuidedTourStep(
           target: _planTourKey,
@@ -171,11 +190,35 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
   }
 
-  Widget _withTutorial(Widget shell) {
+  void _openCoach() {
+    setState(() {
+      _coachOpen = true;
+      _currentIndex = 1;
+    });
+  }
+
+  void _closeCoach() {
+    if (_coachOpen) setState(() => _coachOpen = false);
+  }
+
+  /// A tap on the tab that is already showing closes the Coach over Home.
+  void _selectTab(int index, {required int showing}) {
+    setState(() {
+      if (index == showing && index == 1) _coachOpen = false;
+      _currentIndex = index;
+    });
+  }
+
+  Widget _withTutorial(Widget shell, {required bool coachInView}) {
     return PopScope(
-      canPop: !_tourActive,
+      canPop: !_tourActive && !coachInView,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _tourActive) _closeTutorial();
+        if (didPop) return;
+        if (_tourActive) {
+          _closeTutorial();
+        } else if (coachInView) {
+          _closeCoach();
+        }
       },
       child: Stack(
         children: [
@@ -352,7 +395,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final effectiveIndex =
         isWide ? _currentIndex : (_currentIndex == 0 ? 1 : _currentIndex);
 
-    final stack = IndexedStack(index: effectiveIndex, children: _screens);
+    // Signing out hides the Coach even if it was open.
+    final coachShown =
+        _coachOpen &&
+        context.select<CoachProvider?, bool>(
+          (coach) => coach?.available ?? false,
+        );
+    final coachInView = coachShown && effectiveIndex == 1;
+
+    final stack = IndexedStack(
+      index: effectiveIndex,
+      children: _screens(coachShown: coachShown),
+    );
 
     if (isWide) {
       return _withTutorial(
@@ -366,12 +420,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   4: _settingsTourKey,
                 },
                 currentIndex: effectiveIndex,
-                onTap: (i) => setState(() => _currentIndex = i),
+                onTap: (i) => _selectTab(i, showing: effectiveIndex),
               ),
               Expanded(child: stack),
             ],
           ),
         ),
+        coachInView: coachInView,
       );
     }
 
@@ -386,9 +441,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           },
           // Bottom bar slots [PLANS, HISTORY, STATS, SETTINGS] map to screens 1–4.
           currentIndex: (effectiveIndex - 1).clamp(0, 3),
-          onTap: (i) => setState(() => _currentIndex = i + 1),
+          onTap: (i) => _selectTab(i + 1, showing: effectiveIndex),
         ),
       ),
+      coachInView: coachInView,
     );
   }
 }

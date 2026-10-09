@@ -10,6 +10,20 @@ import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import 'coach_disclosure_sheet.dart';
 
+/// Lets the app shell show the Coach inside the Home tab, so the navigation
+/// stays on screen. Without a host, the Coach opens as a pushed route.
+class CoachHost extends InheritedWidget {
+  final VoidCallback open;
+
+  const CoachHost({required this.open, required super.child, super.key});
+
+  static CoachHost? maybeOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<CoachHost>();
+
+  @override
+  bool updateShouldNotify(CoachHost oldWidget) => false;
+}
+
 /// Opens the Coach, asking for the first-use disclosure once per user and
 /// disclosure version.
 Future<void> openCoach(BuildContext context) async {
@@ -21,6 +35,8 @@ Future<void> openCoach(BuildContext context) async {
     await CoachDisclosure.accept(userId);
   }
   if (!context.mounted) return;
+  final host = CoachHost.maybeOf(context);
+  if (host != null) return host.open();
   await Navigator.of(
     context,
   ).push(MaterialPageRoute<void>(builder: (_) => const CoachScreen()));
@@ -63,7 +79,7 @@ class CoachButton extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(LucideIcons.sparkles, size: 16, color: accent),
+                  Icon(LucideIcons.messageSquareText, size: 16, color: accent),
                   const SizedBox(width: AppSpacing.xs),
                   Text(
                     'Coach',

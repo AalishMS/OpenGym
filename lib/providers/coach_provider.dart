@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,7 @@ import '../models/split.dart';
 import '../services/coach/coach_applier.dart';
 import '../services/coach/coach_client.dart';
 import '../services/coach/coach_context_builder.dart';
+import '../services/coach/coach_status_store.dart';
 import '../services/coach/proposal_diff.dart';
 import '../services/coach/proposal_validator.dart';
 import '../services/hive_service.dart';
@@ -90,9 +92,6 @@ class CoachProvider with ChangeNotifier {
   /// under the proxy's twelve.
   static const int maxHistoryTurns = 5;
 
-  /// The remaining count shows once fewer than this many requests are left.
-  static const int lowQuotaThreshold = 5;
-
   final CoachClient _client;
   final SplitProvider _splits;
   final String? Function() _userIdProvider;
@@ -100,9 +99,14 @@ class CoachProvider with ChangeNotifier {
   final CoachContextSource _contextSource;
   final ProposalValidator _validator;
   final Future<bool> Function() _probeConnection;
+  final CoachStatusStore _statusStore;
+  final DateTime Function() _now;
 
   final List<CoachEntry> _entries = [];
   CoachQuota? _quota;
+  String? _model;
+  Timer? _resetTimer;
+  bool _disposed = false;
   bool _sending = false;
   bool _applying = false;
   bool _connectionNotice = false;
@@ -121,6 +125,8 @@ class CoachProvider with ChangeNotifier {
     CoachContextSource? contextSource,
     ProposalValidator validator = const ProposalValidator(),
     Future<bool> Function()? probeConnection,
+    CoachStatusStore statusStore = const CoachStatusStore(),
+    DateTime Function()? now,
   }) : _splits = splitProvider,
        _client = client ?? SupabaseCoachClient(),
        _userIdProvider =
@@ -128,10 +134,13 @@ class CoachProvider with ChangeNotifier {
        _isConfigured = isConfigured ?? (() => SupabaseService.isConfigured),
        _contextSource = contextSource ?? _hiveContext(splitProvider),
        _validator = validator,
-       _probeConnection = probeConnection ?? probeCoachConnection {
+       _probeConnection = probeConnection ?? probeCoachConnection,
+       _statusStore = statusStore,
+       _now = now ?? DateTime.now {
     _splitId = _splits.activeSplitId;
     _userId = _userIdProvider();
     _splits.addListener(_onSplitsChanged);
+    _restoreStatus();
   }
 
   static CoachContextSource _hiveContext(SplitProvider splits) =>
@@ -147,7 +156,24 @@ class CoachProvider with ChangeNotifier {
   bool get isEmpty => _entries.isEmpty;
   bool get sending => _sending;
   bool get applying => _applying;
-  CoachQuota? get quota => _quota;
+
+  /// Today's requests, as last reported. Once the reported reset time has
+  /// passed, the count starts over at zero until the next answer says
+  /// otherwise.
+  CoachQuota? get quota {
+    final quota = _quota;
+    final resetsAt = quota?.resetsAt;
+    if (quota == null || resetsAt == null || _now().isBefore(resetsAt)) {
+      return quota;
+    }
+    return CoachQuota(used: 0, limit: quota.limit);
+  }
+
+  /// Today's requests are used up. Sending is refused until the reset.
+  bool get limitReached => quota?.remaining == 0;
+
+  /// The model that answered last, as the proxy named it.
+  String? get model => _model;
 
   String? get userId => _userIdProvider();
 
@@ -157,18 +183,34 @@ class CoachProvider with ChangeNotifier {
   /// "The Coach needs a connection" shows above the chat.
   bool get connectionNotice => _connectionNotice;
 
-  /// Requests left today, once there are few enough to mention.
-  int? get lowRemaining {
-    final quota = _quota;
-    if (quota == null || quota.remaining >= lowQuotaThreshold) return null;
-    return quota.remaining;
-  }
-
   /// Clears the conversation. Called when the signed-in account changes.
   void resetForAccount() {
     _userId = _userIdProvider();
     _quota = null;
+    _model = null;
+    _resetTimer?.cancel();
     _reset();
+    _restoreStatus();
+  }
+
+  /// Loads what the proxy last reported for this user, unless an answer in
+  /// this session got there first.
+  Future<void> _restoreStatus() async {
+    final userId = _userId;
+    if (userId == null) return;
+    final CoachStatus status;
+    try {
+      status = await _statusStore.load(userId);
+    } catch (error) {
+      debugPrint('Coach status not restored: ${error.runtimeType}');
+      return;
+    }
+    if (_disposed || userId != _userId) return;
+    if (status.quota == null && status.model == null) return;
+    _quota ??= status.quota;
+    _model ??= status.model;
+    _scheduleReset();
+    notifyListeners();
   }
 
   Future<void> checkConnection() async {
@@ -184,6 +226,7 @@ class CoachProvider with ChangeNotifier {
     final split = _splits.activeSplit;
     if (text.isEmpty || _sending || split == null) return;
     if (_userIdProvider() != _userId) resetForAccount();
+    if (limitReached) return;
     if (split.id != _splitId) {
       _splitId = split.id;
       _reset();
@@ -202,7 +245,7 @@ class CoachProvider with ChangeNotifier {
       if (generation != _generation) return;
       if (first is CoachFailure) return _fail(first, text);
       final answer = first as CoachAnswer;
-      _takeQuota(answer.quota);
+      _takeQuota(answer.quota, answer.model);
 
       final checked = _validator.validate(answer.output, context.snapshot);
       if (checked.isValid) return _answer(checked.reply!, answer.output, text);
@@ -219,7 +262,7 @@ class CoachProvider with ChangeNotifier {
       );
       if (generation != _generation) return;
       if (second is CoachAnswer) {
-        _takeQuota(second.quota);
+        _takeQuota(second.quota, second.model);
         final rechecked = _validator.validate(second.output, context.snapshot);
         if (rechecked.isValid) {
           return _answer(rechecked.reply!, second.output, text);
@@ -390,8 +433,32 @@ class CoachProvider with ChangeNotifier {
     }
   }
 
-  void _takeQuota(CoachQuota? quota) {
+  /// Records what the proxy reported and keeps it for the next session.
+  void _takeQuota(CoachQuota? quota, [String? model]) {
+    if (quota == null && model == null) return;
     if (quota != null) _quota = quota;
+    if (model != null) _model = model;
+    _scheduleReset();
+    final userId = _userId;
+    if (userId == null) return;
+    unawaited(
+      _statusStore
+          .save(userId, CoachStatus(quota: _quota, model: _model))
+          .catchError((Object error) {
+            debugPrint('Coach status not saved: ${error.runtimeType}');
+          }),
+    );
+  }
+
+  /// Unlocks the chat when the quota resets while the Coach is open.
+  void _scheduleReset() {
+    _resetTimer?.cancel();
+    _resetTimer = null;
+    final resetsAt = _quota?.resetsAt;
+    if (resetsAt == null) return;
+    final wait = resetsAt.difference(_now());
+    if (wait.isNegative) return;
+    _resetTimer = Timer(wait, notifyListeners);
   }
 
   void _answer(CoachReply reply, String output, String prompt) {
@@ -440,6 +507,8 @@ class CoachProvider with ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
+    _resetTimer?.cancel();
     _splits.removeListener(_onSplitsChanged);
     super.dispose();
   }
