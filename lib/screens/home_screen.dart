@@ -17,6 +17,7 @@ import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../utils/plan_stats.dart';
 import '../widgets/splits/split_switcher.dart';
+import '../widgets/coach/coach_button.dart';
 import '../widgets/app_button.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/persistence_dialog.dart';
@@ -150,6 +151,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               if (splitProvider != null) ...[
                 const SizedBox(width: AppSpacing.sm),
+                const CoachButton(),
+                const SizedBox(width: AppSpacing.xs),
                 const Flexible(child: IntrinsicWidth(child: SplitSwitcher())),
               ],
             ],

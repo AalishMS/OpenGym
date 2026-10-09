@@ -1,8 +1,8 @@
 # AI Coach
 
-Status: **design settled. The pure-Dart parts are built, and the proxy is
-deployed (2026-10-09, `coach` v1 with `coach_usage` migrated); the UI doesn't
-exist yet.**
+Status: **design settled. The pure-Dart parts, the proxy (deployed 2026-10-09,
+`coach` v1 with `coach_usage` migrated), and the UI are built. The eval
+(build step 4) is next.**
 
 The Coach lets a signed-in user create and restructure workout plans by chatting.
 It proposes changes; the user reviews a diff and applies or discards it. Nothing
@@ -533,6 +533,50 @@ makes it pass; `contract` sends the real v1 prompt and a fixture context.
 All of this uses the theme helpers, radius tokens, and sentence-case copy from
 `AGENTS.md`.
 
+### UI implementation notes
+
+Decisions the build added to the UI above:
+
+- **Connection check.** There's no connectivity package. On open,
+  `CoachScreen` resolves the Supabase host (`probeCoachConnection`, skipped on
+  the web) and shows the notice if that fails. A request that fails with no
+  connection raises the same notice, and the next answer clears it. The input
+  stays usable either way.
+- **Status decides the error.** `SupabaseCoachClient` maps by HTTP status, and
+  reads `error` only to split 503 into `busy` and `unavailable`. The Supabase
+  gateway rejects an expired JWT with its own 401 body, which has no `error`
+  field. Any status the table doesn't name shows the `unavailable` copy. A 200
+  stamped with another `contractVersion`, without an `output` string, or not
+  JSON at all, shows the `upstream` copy. The client gives up after 100 seconds,
+  longer than the proxy's two 40-second attempts, and that also shows the
+  `upstream` copy.
+- **History.** Each request sends up to five earlier turns as user/assistant
+  pairs, plus the new message, so it stays under the proxy's 12. Failed turns
+  are left out, so the roles keep alternating. The assistant side is the raw
+  model output. A turn whose plan failed twice is sent as
+  `{"reply": ..., "proposal": null}`, so the model doesn't build on a plan the
+  user never saw. If the body would exceed 30 KB, the oldest turns are dropped.
+- **Failure lines.** A failed request shows its copy in the chat. `busy`,
+  `unavailable`, `upstream`, and no connection add `Try again`, which re-sends
+  the same message. A 426 adds `Check for updates`, which runs the Settings
+  check where the user is rather than switching tabs.
+- **Stale checks** run when the chat opens, whenever `SplitProvider` reloads
+  (including after a sync pull), and when `Review` is tapped, so an out-of-date
+  card usually shows "Plans changed" before the user opens it. `Apply` still
+  checks again.
+- **Remaining count** shows once fewer than five requests are left, including
+  "No Coach requests left today" after a 429.
+- **A new-split proposal** makes the new split active when it's applied, so the
+  conversation starts over, as it does for any split change.
+- **Disclosure** acceptance is the SharedPreferences key
+  `coach_disclosure_v{version}_{userId}`. `kCoachDisclosureVersion` lives in
+  `lib/services/coach/coach_disclosure.dart`.
+- **Tests.** In `test/coach_ui_test.dart`, Hive writes started inside a widget
+  test's fake-async zone leave the plans box unable to close in `tearDownAll`.
+  So the review test's applier defers, and the test runs the real
+  `CoachApplier` inside `tester.runAsync`. The UI path through progress,
+  outcome, navigation, and the snackbar is unchanged.
+
 ## Health guidance
 
 The server-side prompt tells the model to:
@@ -558,7 +602,8 @@ The disclosure sheet states that the Coach is not medical advice.
 | `lib/services/coach/coach_client.dart` | Proxy call, contract version, and error mapping |
 | `lib/providers/coach_provider.dart` | App-session conversation and the turn loop |
 | `lib/screens/coach_screen.dart`, `coach_review_screen.dart` | Chat and review |
-| `lib/widgets/coach/` | Message bubbles, proposal card, diff rows |
+| `lib/services/coach/coach_disclosure.dart` | Per-user, per-version disclosure acceptance |
+| `lib/widgets/coach/` | Home button and open flow, disclosure sheet, chat entries and proposal card, diff cards |
 | `supabase/functions/coach/` | The Edge Function; `contracts/` holds one prompt and schema per version |
 | `supabase/functions/tests/` | Deno unit tests and the schema smoke test |
 | `supabase/migrations/` | `coach_usage`, `coach_charge`, and `coach_record_tokens` |

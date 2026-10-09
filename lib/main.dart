@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'auth/auth_gate.dart';
+import 'providers/coach_provider.dart';
 import 'providers/workout_plan_provider.dart';
 import 'providers/workout_session_provider.dart';
 import 'providers/settings_provider.dart';
@@ -49,6 +50,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late WorkoutSessionProvider _workoutSessionProvider;
   late SettingsProvider _settingsProvider;
   late SplitProvider _splitProvider;
+  late CoachProvider _coachProvider;
   late bool _showIntro;
   GlobalKey<NavigatorState> _accountNavigatorKey = GlobalKey<NavigatorState>();
   String? _navigatorUserId = SupabaseService.currentUserId;
@@ -62,6 +64,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _workoutPlanProvider = WorkoutPlanProvider(_splitProvider);
     _workoutSessionProvider = WorkoutSessionProvider(_splitProvider);
     _settingsProvider = SettingsProvider();
+    _coachProvider = CoachProvider(splitProvider: _splitProvider);
   }
 
   @override
@@ -88,6 +91,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       _navigatorUserId = userId;
       _accountNavigatorKey = GlobalKey<NavigatorState>();
     });
+    _coachProvider.resetForAccount();
   }
 
   @override
@@ -98,6 +102,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ChangeNotifierProvider.value(value: _workoutPlanProvider),
         ChangeNotifierProvider.value(value: _workoutSessionProvider),
         ChangeNotifierProvider.value(value: _settingsProvider),
+        ChangeNotifierProvider.value(value: _coachProvider),
         // Created here rather than in _initialize because it holds no state
         // that has to exist before the first frame — the check itself is
         // kicked off by AppShell once the UI is up.
