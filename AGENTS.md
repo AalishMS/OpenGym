@@ -17,6 +17,8 @@ logging, history, records, statistics, and optional account-based sync.
 - `DESIGN.md` - the current product, architecture, data lifecycle, and visual
   direction. Read it before structural changes and keep it current
 - `docs/splits.md` - split workspaces, which scope all plans and sessions
+- `docs/coach.md` - the AI Coach: context summary, response contract,
+  validation, the Edge Function proxy, and Gemini terms
 - `docs/online_support_verification.md` - manual online-support checks that
   can't be automated
 - Git history records completed work. These documents describe the current
