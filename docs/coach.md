@@ -1,7 +1,7 @@
 # AI Coach
 
-Status: **design settled. The pure-Dart parts are being built; the proxy and UI
-don't exist yet.**
+Status: **design settled. The pure-Dart parts and the proxy are built (the proxy
+is not deployed yet); the UI doesn't exist yet.**
 
 The Coach lets a signed-in user create and restructure workout plans by chatting.
 It proposes changes; the user reviews a diff and applies or discards it. Nothing
@@ -389,6 +389,86 @@ today's `calls`. Every model call counts, retries included, because every call
 spends the shared project quota. Token counts are recorded after each call so
 cost can be watched once billing is on.
 
+### Implementation notes
+
+Decisions the build added to the design above:
+
+- **Layout.** `index.ts` only wires Supabase and the environment. The pipeline
+  is `handler.ts`, with every dependency injected, so the order of checks is
+  tested without Supabase or a model. Each contract version is one module,
+  `contracts/v1.ts` (prompt and schema), registered in `contracts/mod.ts`, so
+  version 2 is additive. Tests live in `supabase/functions/tests/`.
+- **Order.** The version lives in the body, so the 32 KB cap is checked first
+  and nothing larger is parsed. Then `contractVersion` is read alone and
+  checked, and only then the rest of the shape. An old app whose body changed
+  shape still gets 426, not 422. The last message must be from the user.
+- **Where the context goes.** The prompt and the context are two parts of the
+  system instruction, the context labelled as data. That keeps the turns
+  strictly the user's conversation, which Gemini needs to alternate. The retry
+  adds the previous output as a model turn and the errors as a user turn.
+- **Endpoints.** The proxy speaks both styles, picked by `COACH_BASE_URL`: a
+  URL ending in `/openai` uses `chat/completions` with a `json_schema`
+  `response_format`; anything else uses the native
+  `models/{model}:generateContent` with `responseJsonSchema`. The example env
+  defaults to native, because there a schema is enforced or the call fails
+  with a 400; it can't be dropped silently. The smoke test hasn't been run
+  against a real key yet; see Local development.
+- **Fallback** also covers a network error or the 40-second per-attempt
+  timeout, which behave like a 5xx. After the fallback, the last attempt
+  decides the status: 429 is `busy`, anything else `upstream`. An upstream 4xx
+  other than 429 (a bad key, a rejected schema) never falls back.
+- **Charging.** One charge per request, before the model call. The fallback
+  call isn't charged again: it only runs after the primary was refused or
+  failed. Failed calls aren't refunded. If the quota store itself fails, the
+  answer is 503 `unavailable`, and the model isn't called.
+- **Tokens** are recorded by a second service-role function,
+  `coach_record_tokens(user_id, day, input_tokens, output_tokens)`, after a
+  successful call. It takes the day `coach_charge` returned, so a call across
+  Pacific midnight lands on the day it was charged. Thinking tokens count as
+  output. A failure to record is logged and never fails the turn.
+- **`coach_charge`** returns `allowed`, `used`, `blocked_by` (`user`,
+  `global`, or null), `day`, and `resets_at` (the next Pacific midnight, which
+  becomes `quota.resetsAt`). A refused call isn't counted. A per-day advisory
+  lock serialises charges, so two requests can't both take the last global
+  slot. Both functions are executable only by `service_role`.
+- **Logs** are one JSON line per request: status, error code, contract
+  version, each attempt's model and status, token counts, and latency. Not the
+  user ID, not upstream error bodies (they can quote the request), and never
+  content.
+- **Defaults.** `COACH_USER_DAILY_LIMIT` falls back to 20 and
+  `COACH_GLOBAL_DAILY_LIMIT` to a deliberately low 200 when unset or invalid.
+
+### Local development
+
+The function needs the Supabase CLI and Docker for a local stack. Copy
+`supabase/functions/.env.example` to `supabase/functions/.env` (git-ignored)
+and add the key.
+
+```bash
+supabase start                      # local Postgres, auth, and edge runtime
+supabase db reset                   # applies supabase/migrations locally
+supabase functions serve coach --env-file supabase/functions/.env
+```
+
+From `supabase/functions`, the unit tests, formatting, and lint run with Deno
+alone (`npx deno@2.9.6` works without installing it):
+
+```bash
+deno test --allow-read tests/
+deno fmt --check . && deno lint .
+```
+
+The schema smoke test calls the model API directly with the `.env` values. It
+spends two requests per endpoint, and `--both` tries the native and the
+OpenAI-compatible endpoints:
+
+```bash
+deno run --allow-net --allow-read --allow-env   --env-file=supabase/functions/.env supabase/functions/tests/coach_smoke.ts --both
+```
+
+`probe` sends a prompt that never mentions JSON, so only an enforced schema
+makes it pass; `contract` sends the real v1 prompt and a fixture context.
+
 ## UI
 
 - **Entry point:** a Coach button in the Home header, next to the split control.
@@ -459,8 +539,9 @@ The disclosure sheet states that the Coach is not medical advice.
 | `lib/providers/coach_provider.dart` | App-session conversation and the turn loop |
 | `lib/screens/coach_screen.dart`, `coach_review_screen.dart` | Chat and review |
 | `lib/widgets/coach/` | Message bubbles, proposal card, diff rows |
-| `supabase/functions/coach/` | The Edge Function |
-| `supabase/migrations/` | `coach_usage` and `coach_charge` |
+| `supabase/functions/coach/` | The Edge Function; `contracts/` holds one prompt and schema per version |
+| `supabase/functions/tests/` | Deno unit tests and the schema smoke test |
+| `supabase/migrations/` | `coach_usage`, `coach_charge`, and `coach_record_tokens` |
 | `tool/coach_eval/` | Eval cases and runner |
 
 There are no Hive model changes, so there's no adapter regeneration and no

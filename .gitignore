@@ -58,3 +58,8 @@ app.*.map.json
 
 # Temporary browser investigation artifacts.
 .playwright-mcp/
+
+# Supabase CLI local state and function secrets; never commit.
+/supabase/.temp/
+/supabase/.branches/
+/supabase/functions/.env

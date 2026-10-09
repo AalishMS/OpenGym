@@ -1,0 +1,82 @@
+{
+  "today": "2026-10-09",
+  "weightUnit": "kg",
+  "split": { "name": "Push Pull Legs", "splitCount": 2, "maxSplits": 5 },
+  "plans": [
+    {
+      "ref": "p1",
+      "name": "Push",
+      "exercises": [
+        {
+          "name": "Bench Press",
+          "sets": [
+            { "reps": 8, "kg": 60 },
+            { "reps": 8, "kg": 60 },
+            { "reps": 6, "kg": 65 }
+          ],
+          "note": "Pause the first rep"
+        },
+        {
+          "name": "Overhead Press",
+          "sets": [{ "reps": 8, "kg": 40 }, { "reps": 8, "kg": 40 }],
+          "note": null
+        }
+      ]
+    },
+    {
+      "ref": "p2",
+      "name": "Pull",
+      "exercises": [
+        {
+          "name": "Barbell Row",
+          "sets": [{ "reps": 8, "kg": 60 }, { "reps": 8, "kg": 60 }],
+          "note": null
+        }
+      ]
+    },
+    {
+      "ref": "p3",
+      "name": "Legs",
+      "exercises": [
+        {
+          "name": "Squat",
+          "sets": [{ "reps": 5, "kg": 100 }, { "reps": 5, "kg": 100 }],
+          "note": null
+        }
+      ]
+    }
+  ],
+  "training": {
+    "sessionsLast4Weeks": 11,
+    "sessionsPerWeek": 2.8,
+    "firstWorkout": "2026-03-02",
+    "lastWorkout": "2026-10-07"
+  },
+  "exercises": [
+    {
+      "name": "Squat",
+      "lastDate": "2026-10-06",
+      "lastTopSet": { "reps": 5, "kg": 100 },
+      "sessions4w": 4,
+      "metric": "e1rm",
+      "bestRecent": 116.7,
+      "bestEarlier": 116.7,
+      "trend": "stalled"
+    }
+  ],
+  "library": [
+    "Barbell Row",
+    "Bench Press",
+    "Deadlift",
+    "Dumbbell Curl",
+    "Incline Dumbbell Press",
+    "Lat Pulldown",
+    "Leg Press",
+    "Overhead Press",
+    "Pull Up",
+    "Romanian Deadlift",
+    "Squat",
+    "Tricep Pushdown"
+  ],
+  "customExercises": []
+}

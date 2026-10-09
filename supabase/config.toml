@@ -1,0 +1,10 @@
+# Supabase CLI config for local development. Only the settings OpenGym relies
+# on are listed; everything else uses the CLI defaults.
+project_id = "opengym"
+
+[edge_runtime]
+deno_version = 2
+
+[functions.coach]
+# The proxy reads the caller from the JWT; never deploy it with this off.
+verify_jwt = true
