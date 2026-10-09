@@ -411,8 +411,23 @@ Decisions the build added to the design above:
   `response_format`; anything else uses the native
   `models/{model}:generateContent` with `responseJsonSchema`. The example env
   defaults to native, because there a schema is enforced or the call fails
-  with a 400; it can't be dropped silently. The smoke test hasn't been run
-  against a real key yet; see Local development.
+  with a 400; it can't be dropped silently.
+- **Smoke test, 2026-10-09:** both endpoints enforce the schema with
+  `gemini-3.5-flash-lite`. The probe, which never mentions JSON, came back as
+  `{"reply": "Hello!", "proposal": null}` on each, and the contract request
+  parsed and matched v1 on each (about 1.5k tokens in, 200 out, 1.3 s).
+  `gemini-3.5-flash` passed on native too, but spent about 1.3k output tokens
+  on the same request because it thinks, at about 5.5 s. The OpenAI-compatible
+  endpoint forwards `response_format` rather than dropping it: it returned the
+  same 400 as native for an unsupported schema. Native stays the default.
+- **No `maxItems` in the schema.** With `maxItems` on the nested `sets` and
+  `exercises` arrays, Gemini answers a bare 400 `INVALID_ARGUMENT` on both
+  endpoints. Every other bound (`minItems`, lengths, `minimum`/`maximum`,
+  `enum`) is accepted. The prompt states the maximums and the Dart validator
+  enforces them.
+- **Models.** `gemini-2.5-flash-lite` and `gemini-2.5-flash` answer 404 "no
+  longer available to new users", so the defaults are `gemini-3.5-flash-lite`
+  with `gemini-3.5-flash` as the fallback.
 - **Fallback** also covers a network error or the 40-second per-attempt
   timeout, which behave like a 5xx. After the fallback, the last attempt
   decides the status: 429 is `busy`, anything else `upstream`. An upstream 4xx
@@ -441,8 +456,8 @@ Decisions the build added to the design above:
 ### Local development
 
 The function needs the Supabase CLI and Docker for a local stack. Copy
-`supabase/functions/.env.example` to `supabase/functions/.env` (git-ignored)
-and add the key.
+`supabase/functions/.env.example` to `supabase/functions/.env` or
+`supabase/.env` (both git-ignored) and add the key.
 
 ```bash
 supabase start                      # local Postgres, auth, and edge runtime

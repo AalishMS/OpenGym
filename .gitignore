@@ -62,4 +62,5 @@ app.*.map.json
 # Supabase CLI local state and function secrets; never commit.
 /supabase/.temp/
 /supabase/.branches/
+/supabase/.env
 /supabase/functions/.env

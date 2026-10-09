@@ -4,6 +4,11 @@
 // validator still checks everything the schema can't express (library names,
 // refs that exist, unique names, the no-op rule), so the two must agree on
 // field names and limits, never on more than that.
+//
+// No `maxItems`: Gemini rejects this schema with a bare 400 INVALID_ARGUMENT
+// when nested arrays carry one (checked 2026-10-09 on 3.5 Flash-Lite and 3.5
+// Flash, both endpoints). The prompt states the maximums, and the validator
+// enforces them.
 
 import type { Contract, JsonSchema } from "./types.ts";
 
@@ -26,7 +31,7 @@ const exerciseSchema: JsonSchema = {
   type: "object",
   properties: {
     name: { type: "string", minLength: 1, maxLength: 40 },
-    sets: { type: "array", items: setSchema, minItems: 1, maxItems: 10 },
+    sets: { type: "array", items: setSchema, minItems: 1 },
     note: nullableString(200),
     custom: { type: "boolean" },
   },
@@ -43,7 +48,6 @@ const planSchema: JsonSchema = {
       type: "array",
       items: exerciseSchema,
       minItems: 1,
-      maxItems: 15,
     },
   },
   required: ["ref", "name", "exercises"],
@@ -59,7 +63,7 @@ export const responseSchemaV1: JsonSchema = {
       properties: {
         target: { type: "string", enum: ["active_split", "new_split"] },
         newSplitName: nullableString(24),
-        plans: { type: "array", items: planSchema, maxItems: 10 },
+        plans: { type: "array", items: planSchema },
         removePlanRefs: { type: "array", items: { type: "string" } },
       },
       required: ["target", "newSplitName", "plans", "removePlanRefs"],
