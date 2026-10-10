@@ -20,6 +20,7 @@ const String _findingsFile = 'tool/coach_eval/findings.md';
 /// ai.google.dev/gemini-api/docs/pricing on 2026-10-10.
 const Map<String, (double, double, String)> kPrices = {
   'gemini-3.5-flash-lite': (0.30, 2.50, ''),
+  'gemini-3.1-flash-lite': (0.25, 1.50, ''),
   // 3.5 Flash is no longer on the pricing page; 3.6 and 3.8 Flash are, at
   // this price until 2026-12-31 (then $1.50 / $7.50).
   'gemini-3.5-flash': (

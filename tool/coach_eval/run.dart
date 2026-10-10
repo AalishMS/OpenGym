@@ -14,7 +14,7 @@
 //
 // Options: --model, --cases (comma-separated ids), --repeat N, --max-calls N,
 // --prompt FILE (a candidate system prompt, tested without deploying),
-// --label NAME, --pace SECONDS between calls (default 5).
+// --label NAME (also names the prompt in the report), --pace SECONDS between calls (default 5).
 // Reads COACH_API_KEY from supabase/.env (git-ignored). Writes
 // tool/coach_eval/results/<run>.json, then regenerates report.md.
 
@@ -102,7 +102,7 @@ Future<void> main(List<String> args) async {
       'run': '${stamp}_$label',
       'startedAt': started.toIso8601String(),
       'model': options.model,
-      'prompt': options.promptFile == null ? 'v1' : options.label ?? 'custom',
+      'prompt': options.label ?? (options.promptFile == null ? 'v1' : 'custom'),
       'promptFile': options.promptFile,
       'calls': runner.calls,
       'turns': turns,

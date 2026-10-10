@@ -2,9 +2,10 @@
 
 Status: **design settled. The pure-Dart parts, the proxy (deployed 2026-10-09,
 `coach` v1 with `coach_usage` migrated), the UI, and the eval (2026-10-10) are
-built. Model decision: keep Flash-Lite. A v1 prompt revision is proposed in
-`tool/coach_eval/findings.md` and not yet deployed. Next: redeploy v1 with that
-prompt, then the closed-test checklist under Eval.**
+built. Model decision: keep Flash-Lite. The revised v1 prompt and retry
+instruction are in the repo but not yet deployed (deployed `coach` is version
+2): the owner deploys them and sets `COACH_FALLBACK_MODEL` to
+`gemini-3.1-flash-lite`. Next: the closed-test checklist under Eval.**
 
 The Coach lets a signed-in user create and restructure workout plans by chatting.
 It proposes changes; the user reviews a diff and applies or discards it. Nothing
@@ -342,7 +343,7 @@ release:
 | `COACH_API_KEY` | The AI Studio key (secret) |
 | `COACH_BASE_URL` | The Gemini endpoint (see the smoke test under Risks) |
 | `COACH_MODEL` | A Flash-Lite model ID |
-| `COACH_FALLBACK_MODEL` | A Flash model ID, or empty |
+| `COACH_FALLBACK_MODEL` | Another model with its own quota, or empty: `gemini-3.1-flash-lite` (see Eval) |
 | `COACH_USER_DAILY_LIMIT` | `20` |
 | `COACH_GLOBAL_DAILY_LIMIT` | A little below the project's real daily request quota in AI Studio, about 90% |
 | `COACH_ENABLED` | `true`. Set it to `false` to turn the Coach off for everyone |
@@ -433,7 +434,8 @@ Decisions the build added to the design above:
   enforces them.
 - **Models.** `gemini-2.5-flash-lite` and `gemini-2.5-flash` answer 404 "no
   longer available to new users", so the defaults are `gemini-3.5-flash-lite`
-  with `gemini-3.5-flash` as the fallback.
+  with `gemini-3.5-flash` as the fallback. The eval moved the fallback to
+  `gemini-3.1-flash-lite`, because 3.5 Flash allows 2 free requests a day.
 - **Fallback** also covers a network error or the 40-second per-attempt
   timeout, which behave like a 5xx. After the fallback, the last attempt
   decides the status: 429 is `busy`, anything else `upstream`. An upstream 4xx
@@ -721,6 +723,8 @@ dart run tool/coach_eval/report.dart                         # re-render only
 | Flash-Lite · v1 (deployed) | 35/40 · 39/40 | 2.8 s | 3228 / 734 | $0.0028 | 1.60 / 2 |
 | Flash · v1 | 1/2 · 1/2 (one 503) | 4.9 s | 3216 / 660 | ≈$0.0049 | 1 turn graded |
 | Flash-Lite · candidate 2 | 38/40 · 40/40 | 2.3 s | 3571 / 489 | $0.0023 | 1.82 / 2 |
+| Flash-Lite · v1 revision 2 (in the repo) | 38/40 · 40/40 | 2.3 s | 3571 / 465 | $0.0022 | 1.89 / 2 |
+| 3.1 Flash-Lite · v1 revision 2 (fallback) | 18/20 · 20/20 | 3.1 s | 3575 / 734 | $0.0020 | 1.72 / 2 |
 
 Medians per call, from 40 turns (20 cases, each run twice). Costs use the
 paid-tier prices: Flash-Lite $0.30 / $2.50 per million tokens. 3.5 Flash is
@@ -741,11 +745,17 @@ price of $0.75 / $3.75.
   "Use target "active_split" instead", and on the retry the model rewrote the
   whole active split. It now asks for `"proposal": null`, and 8 of 8 reruns
   answered that way.
+- **Revision 2** is candidate 2 plus one `retryInstruction` line, so that
+  after a retry the reply describes the plan rather than the correction. It
+  lives in `contracts/v1.ts` and `prompt.ts`, and the eval ran on those files.
+- **Fallback.** `COACH_FALLBACK_MODEL` becomes `gemini-3.1-flash-lite`, which
+  has its own quota; 3.5 Flash allows 2 requests a day. Its judgement is
+  weaker (it once rewrote a whole split when asked to drop a day), but it
+  only answers when the primary fails, and every proposal is reviewed.
 - **Open issues:**
-  - "Log today's bench at 82.5 kg" still edits the bench target in 1 of 2
-    runs on candidate 2.
-  - After a retry, the reply describes the correction rather than the plan.
-    A `retryInstruction` change is proposed but untested.
+  - "Log today's bench at 82.5 kg" still edits a plan in 1 of 2 runs. One run
+    renamed Legs to "Saturday Legs"; the other changed nothing but said it
+    had.
   - High-rep work that progresses by weight reads as `stalled` (see Context
     sent to the model, Trend).
   - The free-tier fallback (`gemini-3.5-flash`, 2 a day) is nearly empty.
@@ -754,11 +764,10 @@ price of $0.75 / $3.75.
 
 ### Before a closed test
 
-- Redeploy `coach` v1 with the candidate 2 prompt and the `retryInstruction`
-  change, after one more eval pass. The contract version and schema are
-  unchanged.
-- Consider `COACH_FALLBACK_MODEL=gemini-3.1-flash-lite`, which has its own
-  quota. Check its daily limit in AI Studio first.
+- Deploy revision 2 (`supabase functions deploy coach`) and set
+  `COACH_FALLBACK_MODEL=gemini-3.1-flash-lite`. The contract version and
+  schema are unchanged, so no app release is needed.
+- Read `gemini-3.1-flash-lite`'s daily limit in AI Studio and record it here.
 - Device checks still pending from step 3:
   - the Android offline notice
   - the keyboard and the input bar

@@ -279,6 +279,10 @@ Deno.test("prompt: system prompt, then context, then messages, then retry", () =
   assertEquals(conversation.turns[2].text, "Friday");
   assertEquals(conversation.turns[3].text, "{bad");
   assertStringIncludes(conversation.turns[4].text, "proposal.plans[0].name: x");
+  assertStringIncludes(
+    conversation.turns[4].text,
+    "as if answering for the first time",
+  );
 });
 
 // ----------------------------------------------------------------- upstream

@@ -799,5 +799,545 @@
     "clarity": 2,
     "note": "proposal null with the limit explained.",
     "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|new_from_nothing|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 1,
+    "note": "3 sets each now; reply implies it scheduled Mon/Wed/Fri.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|new_split_upper_lower|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|edit_pull_volume|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|add_arms_day|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 1,
+    "note": "Reply mentions Barbell Curls, which aren't in the plan.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|remove_day|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|stalled_question|1": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 1,
+    "note": "No deload number this time.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|stalled_fix|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|sore_shoulder|1": {
+    "correctness": 1,
+    "loads": 2,
+    "minimal": 2,
+    "health": 2,
+    "clarity": 2,
+    "note": "One swap, Push only, professional named; keeps Chest Dips.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|knee_pain|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": 2,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|custom_exercises|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|abbreviations|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|split_limit|1": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "Needed the retry; the retry reply now explains the limit.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|plan_limit|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "Needed the retry; added one Core plan and explained the limit.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|follow_up_plan|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|follow_up_question|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|vague|1": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|log_and_schedule|1": {
+    "correctness": 0,
+    "loads": 1,
+    "minimal": 0,
+    "health": null,
+    "clarity": 1,
+    "note": "Raised bench to 82.5 kg and renamed Legs to \"Saturday Legs\" to fake the schedule.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|edit_history|1": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|progress_weights|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|out_of_scope|1": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|new_from_nothing|2": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 1,
+    "note": "Same scheduling implication.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|new_split_upper_lower|2": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|edit_pull_volume|2": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|add_arms_day|2": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|remove_day|2": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|stalled_question|2": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|stalled_fix|2": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|sore_shoulder|2": {
+    "correctness": 1,
+    "loads": 2,
+    "minimal": 2,
+    "health": 2,
+    "clarity": 2,
+    "note": "As #1.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|knee_pain|2": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": 2,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|custom_exercises|2": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|abbreviations|2": {
+    "correctness": 2,
+    "loads": 1,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "Barbell incline at 60 kg from 2×26 kg dumbbells is a big first step.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|split_limit|2": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|plan_limit|2": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|follow_up_plan|2": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|follow_up_question|2": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|vague|2": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|log_and_schedule|2": {
+    "correctness": 1,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 0,
+    "note": "proposal null, but the reply claims it updated the bench target.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|edit_history|2": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|progress_weights|2": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.5-flash-lite|v1-rev2|out_of_scope|2": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|new_from_nothing|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|new_split_upper_lower|1": {
+    "correctness": 2,
+    "loads": 0,
+    "minimal": 2,
+    "health": null,
+    "clarity": 1,
+    "note": "Ignores the history: every weight 0, even bench and squat.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|edit_pull_volume|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 1,
+    "health": null,
+    "clarity": 0,
+    "note": "Says it added Face Pull, which was already there, and lowered it.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|add_arms_day|1": {
+    "correctness": 2,
+    "loads": 1,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "Weights from history where known.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|remove_day|1": {
+    "correctness": 0,
+    "loads": 1,
+    "minimal": 0,
+    "health": null,
+    "clarity": 1,
+    "note": "Rewrote the whole split into three full-body days on top of removing Arms. Destructive.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|stalled_question|1": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|stalled_fix|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|sore_shoulder|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 1,
+    "health": 2,
+    "clarity": 2,
+    "note": "Swaps OHP and laterals, lightens dips, physio named.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|knee_pain|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": 2,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|custom_exercises|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|abbreviations|1": {
+    "correctness": 2,
+    "loads": 1,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "Correct names; every new weight 0 despite the history.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|split_limit|1": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 1,
+    "note": "Speaks as the user (\"I'm currently at the maximum\").",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|plan_limit|1": {
+    "correctness": 2,
+    "loads": 1,
+    "minimal": 1,
+    "health": null,
+    "clarity": 2,
+    "note": "After the retry folded calves into Arms; Plank \"2×1\".",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|follow_up_plan|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|follow_up_question|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|vague|1": {
+    "correctness": 1,
+    "loads": 1,
+    "minimal": 1,
+    "health": null,
+    "clarity": 2,
+    "note": "Deloads three \"stalled\" lifts instead of asking; Lateral Raise 7.25 kg.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|log_and_schedule|1": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 1,
+    "note": "No change; says it kept Legs ready \"for your Saturday sessions\", which is vague.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|edit_history|1": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|progress_weights|1": {
+    "correctness": 2,
+    "loads": 2,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "Improving lifts only, small steps. Better than 3.5 Flash-Lite here.",
+    "by": "provisional, Claude"
+  },
+  "gemini-3.1-flash-lite|v1-rev2|out_of_scope|1": {
+    "correctness": 2,
+    "loads": null,
+    "minimal": 2,
+    "health": null,
+    "clarity": 2,
+    "note": "",
+    "by": "provisional, Claude"
   }
 }

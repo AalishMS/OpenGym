@@ -25,6 +25,9 @@ export function retryInstruction(errors: string[]): string {
     ...errors.map((error) => `- ${error}`),
     "",
     'Answer again with the whole corrected JSON object: {"reply", "proposal"}.',
+    // Without this the reply described the fix ("I corrected the exercise
+    // name"), and that's all the user would read.
+    'Write "reply" for the user about the plan, as if answering for the first time; do not mention these problems.',
   ].join("\n");
 }
 
