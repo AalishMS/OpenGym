@@ -101,6 +101,7 @@ class CoachProvider with ChangeNotifier {
   final Future<bool> Function() _probeConnection;
   final CoachStatusStore _statusStore;
   final DateTime Function() _now;
+  final Future<void> Function() _signOut;
 
   final List<CoachEntry> _entries = [];
   CoachQuota? _quota;
@@ -127,6 +128,7 @@ class CoachProvider with ChangeNotifier {
     Future<bool> Function()? probeConnection,
     CoachStatusStore statusStore = const CoachStatusStore(),
     DateTime Function()? now,
+    Future<void> Function()? signOut,
   }) : _splits = splitProvider,
        _client = client ?? SupabaseCoachClient(),
        _userIdProvider =
@@ -136,7 +138,8 @@ class CoachProvider with ChangeNotifier {
        _validator = validator,
        _probeConnection = probeConnection ?? probeCoachConnection,
        _statusStore = statusStore,
-       _now = now ?? DateTime.now {
+       _now = now ?? DateTime.now,
+       _signOut = signOut ?? SupabaseService.signOut {
     _splitId = _splits.activeSplitId;
     _userId = _userIdProvider();
     _splits.addListener(_onSplitsChanged);
@@ -286,6 +289,33 @@ class CoachProvider with ChangeNotifier {
       }
     }
   }
+
+  /// `Try again` on a failure line: the failed question and its failure leave
+  /// the chat, and the question is sent again as a new turn.
+  Future<void> retry(CoachEntry failure) {
+    final prompt = failure.prompt;
+    final index = _entries.indexOf(failure);
+    if (prompt == null ||
+        index < 0 ||
+        failure.role != CoachEntryRole.failure ||
+        _sending ||
+        limitReached ||
+        _splits.activeSplit == null) {
+      return Future.value();
+    }
+    final question =
+        index > 0 && _entries[index - 1].role == CoachEntryRole.user
+            ? index - 1
+            : index;
+    _entries.removeRange(question, index + 1);
+    return send(prompt);
+  }
+
+  /// `Sign in` on a 401 line. The session was revoked or expired on the
+  /// server while the app still holds it, so the app looks signed in but
+  /// neither the Coach nor sync works. Signing out hands over to AuthGate's
+  /// login, as Settings → Sign out does.
+  Future<void> signInAgain() => _signOut();
 
   /// Marks a proposal out of date and asks the same question again with the
   /// latest plans.

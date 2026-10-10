@@ -3,7 +3,7 @@
 Status: **design settled. The pure-Dart parts, the proxy (deployed 2026-10-09,
 `coach` v1 with `coach_usage` migrated), the UI, and the eval (2026-10-10) are
 built. Model decision: keep Flash-Lite. The revised v1 prompt and retry
-instruction were deployed on 2026-10-10 (`coach` version 4), with
+instruction were deployed on 2026-10-10 (now `coach` version 5, revision 3), with
 `COACH_FALLBACK_MODEL=gemini-3.1-flash-lite`. Next: the closed-test checklist
 under Eval.**
 
@@ -580,9 +580,12 @@ Decisions the build added to the UI above:
   `{"reply": ..., "proposal": null}`, so the model doesn't build on a plan the
   user never saw. If the body would exceed 30 KB, the oldest turns are dropped.
 - **Failure lines.** A failed request shows its copy in the chat. `busy`,
-  `unavailable`, `upstream`, and no connection add `Try again`, which re-sends
-  the same message. A 426 adds `Check for updates`, which runs the Settings
-  check where the user is rather than switching tabs.
+  `unavailable`, `upstream`, and no connection add `Try again`, which removes
+  the failed question and its failure line and sends the message again, so
+  a recovered turn reads as one question and one answer. A 426 adds `Check
+  for updates`, which runs the Settings check where the user is rather than
+  switching tabs. A 401 adds `Sign in`, which signs out to the login. A
+  session revoked on the server otherwise leaves the app looking signed in.
 - **Stale checks** run when the chat opens, whenever `SplitProvider` reloads
   (including after a sync pull), and when `Review` is tapped, so an out-of-date
   card usually shows "Plans changed" before the user opens it. `Apply` still
@@ -726,6 +729,7 @@ dart run tool/coach_eval/report.dart                         # re-render only
 | Flash-Lite · candidate 2 | 38/40 · 40/40 | 2.3 s | 3571 / 489 | $0.0023 | 1.82 / 2 |
 | Flash-Lite · v1 revision 2 (in the repo) | 38/40 · 40/40 | 2.3 s | 3571 / 465 | $0.0022 | 1.89 / 2 |
 | 3.1 Flash-Lite · v1 revision 2 (fallback) | 18/20 · 20/20 | 3.1 s | 3575 / 734 | $0.0020 | 1.72 / 2 |
+| Flash-Lite · v1 revision 3 (deployed, 21 cases) | 38/42 · 41/42 | 2.5 s | 3591 / 553 | $0.0025 | 1.86 / 2 |
 
 Medians per call, from 40 turns (20 cases, each run twice). Costs use the
 paid-tier prices: Flash-Lite $0.30 / $2.50 per million tokens. 3.5 Flash is
@@ -781,18 +785,21 @@ price of $0.75 / $3.75.
     were deleted on the server. The next message showed "Sign in again to
     use the Coach." and spent no quota. After signing out and back in, the
     Coach answered again, and the conversation had started over.
-- Follow-ups the device checks found:
-  - **The 401 has no way forward.** The app stays "signed in": Settings
-    still shows "Synced / Your data is up to date", even though sync can't
-    work either. The user has to find Settings → Sign out on their own.
-    Either sign out on a 401 or add a `Sign in` action to that chat line.
-  - **A retried failure stays in the chat.** After `Try again` succeeds, the
-    failed entry stays, with the question shown twice and a stale `Try again`
-    button.
-  - **The split-limit rule leaks.** On an account with 5 splits, "Why has my
-    squat stalled" got an unprompted "you're at the maximum of 5 splits" in
-    the reply. The prompt's split rule needs to apply only when a new split
-    is requested.
+- Follow-ups the device checks found, all fixed on 2026-10-10:
+  - **A 401 gave no way forward.** The app stayed "signed in": Settings
+    still showed "Synced", even though sync couldn't work either. The 401
+    chat line now has a `Sign in` action, which signs out (as Settings →
+    Sign out does), so AuthGate shows the login.
+  - **A retried failure stayed in the chat.** `Try again` now removes the
+    failed question and its failure line before sending again
+    (`CoachProvider.retry`).
+  - **The split-limit rule leaked** into unrelated answers on an account
+    with 5 splits. Revision 3 applies the rule only when a new split is
+    requested and never mentions the limit otherwise. The eval case
+    `limit_unrelated` covers it: no mention of the limit in 2 of 2 runs.
+  - **The plan-limit retry miscounted.** The validator's error now gives
+    the exact room left ("It has 9 now, so add at most 1 new plan"), and
+    4 of 4 reruns passed.
   - **Unconfirmed:** once, the Coach screen had closed back to Home while the
     app sat idle. The cause wasn't found.
 - Testers are informed adults only: the free tier lets Google use prompts.

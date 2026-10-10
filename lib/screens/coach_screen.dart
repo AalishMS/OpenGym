@@ -234,8 +234,9 @@ class _CoachScreenState extends State<CoachScreen> {
                                         onRetry:
                                             busy || entry.prompt == null
                                                 ? null
-                                                : () => _send(entry.prompt),
+                                                : () => coach.retry(entry),
                                         onCheckUpdates: _checkUpdates,
+                                        onSignIn: coach.signInAgain,
                                       ),
                                     );
                                   },

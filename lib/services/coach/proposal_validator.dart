@@ -500,7 +500,20 @@ class _Run {
         snapshot.plans.length -
         removed.length +
         plans.where((plan) => plan.isNew).length;
-    if (resulting < 1 || resulting > ProposalValidator.maxPlansInSplit) {
+    if (resulting > ProposalValidator.maxPlansInSplit) {
+      // The exact room left: told only "keep between 1 and 10", the retry
+      // on the eval still added one plan too many.
+      final room =
+          ProposalValidator.maxPlansInSplit -
+          (snapshot.plans.length - removed.length);
+      errors.add(
+        'proposal: the split would have $resulting plans after this change, '
+        'and the maximum is ${ProposalValidator.maxPlansInSplit}. It has '
+        '${snapshot.plans.length} now, so add at most ${room < 0 ? 0 : room} '
+        'new ${room == 1 ? 'plan' : 'plans'}, and say in the reply what '
+        "didn't fit.",
+      );
+    } else if (resulting < 1) {
       errors.add(
         'proposal: the split would have $resulting plans after this change. '
         'Keep between 1 and ${ProposalValidator.maxPlansInSplit}.',

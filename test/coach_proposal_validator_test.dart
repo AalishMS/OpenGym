@@ -186,7 +186,7 @@ void main() {
       ]);
       final tooMany = [for (var i = 0; i < 8; i++) planJson(null, 'Extra $i')];
       expect(errorsOf(output(plans: tooMany)), [
-        contains('would have 11 plans'),
+        allOf(contains('would have 11 plans'), contains('add at most 7 new')),
       ]);
     });
 

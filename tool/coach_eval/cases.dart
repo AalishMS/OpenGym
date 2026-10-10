@@ -251,6 +251,19 @@ final List<EvalCase> evalCases = [
     fixture: () => ppl(extraSplits: fourOtherSplits),
   ),
   EvalCase(
+    id: 'limit_unrelated',
+    covers: 'At the five-split limit, a question that has nothing to do with it',
+    message: 'Why has my squat stalled?',
+    good:
+        'proposal null. Talks about the squat only: flat at 110 kg for weeks, '
+        'a ~10% deload or rep change. Never mentions the split limit (found '
+        'on the device, 2026-10-10).',
+    fixture: () => ppl(
+      extraSplits: fourOtherSplits,
+      lifts: {'Squat': const Lift(Pattern.stalled)},
+    ),
+  ),
+  EvalCase(
     id: 'plan_limit',
     covers: 'A split near the 10-plan limit',
     message:

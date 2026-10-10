@@ -126,7 +126,24 @@ directly (`v1-rev2`):
   proposal, so the owner approved it as the fallback. The status strip
   names the model that answered.
 
-### Server change (revision 2, deployed 2026-10-10 as `coach` version 4)
+### Revision 3, deployed (`coach` version 5)
+
+On the device, an account at 5 splits got "you're at the maximum of 5
+splits" in reply to a squat question. Revision 3 applies the split rule
+only when a new split is requested, and adds "Never mention the split
+limit unless the user asked for a new split". A new eval case,
+`limit_unrelated`, covers it: 2 of 2 runs answered about the squat only.
+
+The full set (21 cases ×2): 38/42 pass first time, 41/42 after the retry,
+mean grade 1.86 (revision 2: 1.89, within run-to-run noise).
+
+The one failure was `plan_limit`: the retry error said only "keep between 1
+and 10", and the model added one plan too many again. The validator now
+gives the exact room left ("It has 9 now, so add at most 1 new plan, and
+say in the reply what didn't fit"). That's an app change, so it ships with
+the next release. With it, 4 of 4 reruns passed (`v1-rev3-planfix`).
+
+### Server change (revision 2, deployed 2026-10-10 as `coach` version 4; revision 3 above is version 5)
 
 The schema and response shape don't change, so this stays **contract v1**:
 redeploy `coach` with the new prompt, and no app release is needed. The

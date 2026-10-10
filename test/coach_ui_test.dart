@@ -165,6 +165,7 @@ class _Fixture {
   late final CoachProvider coach;
   String? userId = _userId;
   bool online = true;
+  int signOuts = 0;
   DateTime now = DateTime(2026, 10, 10, 9);
 
   _Fixture() {
@@ -176,6 +177,7 @@ class _Fixture {
       isConfigured: () => true,
       probeConnection: () async => online,
       now: () => now,
+      signOut: () async => signOuts++,
     );
   }
 
@@ -490,6 +492,40 @@ void main() {
         );
       });
     }
+
+    testWidgets('Try again replaces the failed turn instead of adding one', (
+      tester,
+    ) async {
+      final fixture = await _openChat(tester);
+      fixture.client
+        ..fail(CoachFailureKind.busy)
+        ..answer(_output('Here you go.'));
+      await _send(tester, 'Hi');
+      expect(find.text(CoachFailureKind.busy.message), findsOneWidget);
+
+      await tester.tap(find.text('Try again'));
+      await pumpWithStorage(tester);
+
+      expect(fixture.client.requests, hasLength(2));
+      expect(find.text('Hi'), findsOneWidget);
+      expect(find.text('Here you go.'), findsOneWidget);
+      expect(find.text(CoachFailureKind.busy.message), findsNothing);
+      expect(find.text('Try again'), findsNothing);
+      expect(fixture.coach.entries, hasLength(2));
+    });
+
+    testWidgets('a 401 offers Sign in, which signs out to the login', (
+      tester,
+    ) async {
+      final fixture = await _openChat(tester);
+      fixture.client.fail(CoachFailureKind.unauthenticated);
+      await _send(tester, 'Hi');
+      expect(find.text('Try again'), findsNothing);
+
+      await tester.tap(find.text('Sign in'));
+      await pumpWithStorage(tester);
+      expect(fixture.signOuts, 1);
+    });
 
     testWidgets('the screen opens with the notice when offline', (
       tester,

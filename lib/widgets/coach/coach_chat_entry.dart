@@ -16,6 +16,7 @@ class CoachChatEntry extends StatelessWidget {
   final VoidCallback? onAskAgain;
   final VoidCallback? onRetry;
   final VoidCallback? onCheckUpdates;
+  final VoidCallback? onSignIn;
 
   const CoachChatEntry({
     required this.entry,
@@ -23,6 +24,7 @@ class CoachChatEntry extends StatelessWidget {
     this.onAskAgain,
     this.onRetry,
     this.onCheckUpdates,
+    this.onSignIn,
     super.key,
   });
 
@@ -39,6 +41,7 @@ class CoachChatEntry extends StatelessWidget {
         entry: entry,
         onRetry: onRetry,
         onCheckUpdates: onCheckUpdates,
+        onSignIn: onSignIn,
       ),
     };
   }
@@ -221,11 +224,13 @@ class _FailureNotice extends StatelessWidget {
   final CoachEntry entry;
   final VoidCallback? onRetry;
   final VoidCallback? onCheckUpdates;
+  final VoidCallback? onSignIn;
 
   const _FailureNotice({
     required this.entry,
     this.onRetry,
     this.onCheckUpdates,
+    this.onSignIn,
   });
 
   @override
@@ -270,6 +275,9 @@ class _FailureNotice extends StatelessWidget {
               onPressed: onCheckUpdates,
               child: const Text('Check for updates'),
             )
+          else if (kind == CoachFailureKind.unauthenticated &&
+              onSignIn != null)
+            TextButton(onPressed: onSignIn, child: const Text('Sign in'))
           else if (retryable && onRetry != null)
             TextButton(onPressed: onRetry, child: const Text('Try again')),
         ],
