@@ -1,0 +1,1315 @@
+{
+  "run": "2026-10-10T09-39-54_v1-candidate1",
+  "startedAt": "2026-10-10T09:39:54.174675",
+  "model": "gemini-3.5-flash-lite",
+  "prompt": "v1-candidate1",
+  "promptFile": "tool/coach_eval/prompts/v1_candidate1.txt",
+  "calls": 42,
+  "turns": [
+    {
+      "case": "new_from_nothing",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 3902,
+          "output": "{\n  \"reply\": \"Welcome to the gym! I have created a balanced 3-day full body routine for you to do on Monday, Wednesday, and Friday, featuring fundamental compound movements with comfortable starting weights.\",\n  \"proposal\": {\n    \"target\": \"new_split\",\n    \"newSplitName\": \"Full Body Routine\",\n    \"plans\": [\n      {\n        \"ref\": null,\n        \"name\": \"Full Body A\",\n        \"exercises\": [\n          {\n            \"name\": \"Squat\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": \"Start with just the bar or a light weight to learn form.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": \"Focus on a controlled descent and stable setup.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Barbell Row\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": \"Keep your back flat and pull towards your lower chest.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Plank\",\n            \"sets\": [\n              {\"reps\": 1, \"kg\": 0},\n              {\"reps\": 1, \"kg\": 0}\n            ],\n            \"note\": \"Hold for 30 to 45 seconds per set.\",\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": null,\n        \"name\": \"Full Body B\",\n        \"exercises\": [\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": \"Hinge at the hips with a slight bend in the knees.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": \"Press overhead while keeping your core braced.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lat Pulldown\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": \"Pull the bar down smoothly to your upper chest.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Crunches\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 0},\n              {\"reps\": 15, \"kg\": 0}\n            ],\n            \"note\": \"Focus on contracting your abs without straining your neck.\",\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": null,\n        \"name\": \"Full Body C\",\n        \"exercises\": [\n          {\n            \"name\": \"Leg Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": \"Place feet comfortably shoulder-width apart.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Incline Bench Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": \"Targets the upper chest and shoulders.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Seated Cable Row\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": \"Keep your torso upright and squeeze your shoulder blades.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Calf Raise\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 0},\n              {\"reps\": 12, \"kg\": 0},\n              {\"reps\": 12, \"kg\": 0}\n            ],\n            \"note\": \"Get a full stretch at the bottom and a squeeze at the top.\",\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 1753,
+          "outputTokens": 1303,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 3902,
+      "reply": "Welcome to the gym! I have created a balanced 3-day full body routine for you to do on Monday, Wednesday, and Friday, featuring fundamental compound movements with comfortable starting weights.",
+      "proposal": {
+        "target": "newSplit",
+        "newSplitName": "Full Body Routine",
+        "summary": "3 plans added",
+        "counts": {
+          "plansChanged": 0,
+          "plansAdded": 3,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "ADDED · Full Body A\n  + Squat  3×10 @ no target\n      note: Start with just the bar or a light weight to learn form.\n  + Bench Press  3×10 @ no target\n      note: Focus on a controlled descent and stable setup.\n  + Barbell Row  3×10 @ no target\n      note: Keep your back flat and pull towards your lower chest.\n  + Plank  2×1 @ no target\n      note: Hold for 30 to 45 seconds per set.\nADDED · Full Body B\n  + Romanian Deadlift  3×10 @ no target\n      note: Hinge at the hips with a slight bend in the knees.\n  + Overhead Press  3×10 @ no target\n      note: Press overhead while keeping your core braced.\n  + Lat Pulldown  3×10 @ no target\n      note: Pull the bar down smoothly to your upper chest.\n  + Crunches  2×15 @ no target\n      note: Focus on contracting your abs without straining your neck.\nADDED · Full Body C\n  + Leg Press  3×10 @ no target\n      note: Place feet comfortably shoulder-width apart.\n  + Incline Bench Press  3×10 @ no target\n      note: Targets the upper chest and shoulders.\n  + Seated Cable Row  3×10 @ no target\n      note: Keep your torso upright and squeeze your shoulder blades.\n  + Calf Raise  3×12 @ no target\n      note: Get a full stretch at the bottom and a squeeze at the top."
+      }
+    },
+    {
+      "case": "new_split_upper_lower",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 4311,
+          "output": "{\"reply\": \"I've created a new 4-day Upper/Lower split for your next block while keeping your current Push Pull Legs split untouched.\", \"proposal\": {\"target\": \"new_split\", \"newSplitName\": \"Upper Lower\", \"plans\": [{\"ref\": null, \"name\": \"Upper A\", \"exercises\": [{\"name\": \"Bench Press\", \"sets\": [{\"reps\": 5, \"kg\": 80}, {\"reps\": 5, \"kg\": 80}, {\"reps\": 5, \"kg\": 80}], \"note\": null, \"custom\": false}, {\"name\": \"Barbell Row\", \"sets\": [{\"reps\": 8, \"kg\": 70}, {\"reps\": 8, \"kg\": 70}, {\"reps\": 8, \"kg\": 70}], \"note\": null, \"custom\": false}, {\"name\": \"Overhead Press\", \"sets\": [{\"reps\": 8, \"kg\": 45}, {\"reps\": 8, \"kg\": 45}, {\"reps\": 8, \"kg\": 45}], \"note\": null, \"custom\": false}, {\"name\": \"Lat Pulldown\", \"sets\": [{\"reps\": 10, \"kg\": 60}, {\"reps\": 10, \"kg\": 60}, {\"reps\": 10, \"kg\": 60}], \"note\": null, \"custom\": false}, {\"name\": \"Bicep Curl\", \"sets\": [{\"reps\": 12, \"kg\": 14}, {\"reps\": 12, \"kg\": 14}], \"note\": null, \"custom\": false}, {\"name\": \"Tricep Pushdown\", \"sets\": [{\"reps\": 12, \"kg\": 25}, {\"reps\": 12, \"kg\": 25}], \"note\": null, \"custom\": false}]}, {\"ref\": null, \"name\": \"Lower A\", \"exercises\": [{\"name\": \"Squat\", \"sets\": [{\"reps\": 5, \"kg\": 110}, {\"reps\": 5, \"kg\": 110}, {\"reps\": 5, \"kg\": 110}], \"note\": null, \"custom\": false}, {\"name\": \"Romanian Deadlift\", \"sets\": [{\"reps\": 8, \"kg\": 90}, {\"reps\": 8, \"kg\": 90}, {\"reps\": 8, \"kg\": 90}], \"note\": null, \"custom\": false}, {\"name\": \"Leg Press\", \"sets\": [{\"reps\": 12, \"kg\": 180}, {\"reps\": 12, \"kg\": 180}], \"note\": null, \"custom\": false}, {\"name\": \"Leg Curl\", \"sets\": [{\"reps\": 12, \"kg\": 45}, {\"reps\": 12, \"kg\": 45}], \"note\": null, \"custom\": false}, {\"name\": \"Calf Raise\", \"sets\": [{\"reps\": 15, \"kg\": 60}, {\"reps\": 15, \"kg\": 60}], \"note\": null, \"custom\": false}]}, {\"ref\": null, \"name\": \"Upper B\", \"exercises\": [{\"name\": \"Incline Dumbbell Press\", \"sets\": [{\"reps\": 10, \"kg\": 26}, {\"reps\": 10, \"kg\": 26}, {\"reps\": 10, \"kg\": 26}], \"note\": null, \"custom\": false}, {\"name\": \"Seated Cable Row\", \"sets\": [{\"reps\": 10, \"kg\": 50}, {\"reps\": 10, \"kg\": 50}, {\"reps\": 10, \"kg\": 50}], \"note\": null, \"custom\": false}, {\"name\": \"Dumbbell Shoulder Press\", \"sets\": [{\"reps\": 10, \"kg\": 20}, {\"reps\": 10, \"kg\": 20}, {\"reps\": 10, \"kg\": 20}], \"note\": null, \"custom\": false}, {\"name\": \"Face Pull\", \"sets\": [{\"reps\": 15, \"kg\": 20}, {\"reps\": 15, \"kg\": 20}], \"note\": null, \"custom\": false}, {\"name\": \"Lateral Raise\", \"sets\": [{\"reps\": 15, \"kg\": 8}, {\"reps\": 15, \"kg\": 8}], \"note\": null, \"custom\": false}]}, {\"ref\": null, \"name\": \"Lower B\", \"exercises\": [{\"name\": \"Deadlift\", \"sets\": [{\"reps\": 5, \"kg\": 140}], \"note\": null, \"custom\": false}, {\"name\": \"Front Squat\", \"sets\": [{\"reps\": 8, \"kg\": 70}, {\"reps\": 8, \"kg\": 70}, {\"reps\": 8, \"kg\": 70}], \"note\": null, \"custom\": false}, {\"name\": \"Bulgarian Split Squat\", \"sets\": [{\"reps\": 10, \"kg\": 16}, {\"reps\": 10, \"kg\": 16}], \"note\": null, \"custom\": false}, {\"name\": \"Leg Curl\", \"sets\": [{\"reps\": 12, \"kg\": 45}, {\"reps\": 12, \"kg\": 45}], \"note\": null, \"custom\": false}, {\"name\": \"Hanging Leg Raise\", \"sets\": [{\"reps\": 12, \"kg\": 0}, {\"reps\": 12, \"kg\": 0}], \"note\": null, \"custom\": false}]}], \"removePlanRefs\": []}}",
+          "inputTokens": 3497,
+          "outputTokens": 1317,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 4311,
+      "reply": "I've created a new 4-day Upper/Lower split for your next block while keeping your current Push Pull Legs split untouched.",
+      "proposal": {
+        "target": "newSplit",
+        "newSplitName": "Upper Lower",
+        "summary": "4 plans added",
+        "counts": {
+          "plansChanged": 0,
+          "plansAdded": 4,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "ADDED · Upper A\n  + Bench Press  3×5 @ 80 kg\n  + Barbell Row  3×8 @ 70 kg\n  + Overhead Press  3×8 @ 45 kg\n  + Lat Pulldown  3×10 @ 60 kg\n  + Bicep Curl  2×12 @ 14 kg\n  + Tricep Pushdown  2×12 @ 25 kg\nADDED · Lower A\n  + Squat  3×5 @ 110 kg\n  + Romanian Deadlift  3×8 @ 90 kg\n  + Leg Press  2×12 @ 180 kg\n  + Leg Curl  2×12 @ 45 kg\n  + Calf Raise  2×15 @ 60 kg\nADDED · Upper B\n  + Incline Dumbbell Press  3×10 @ 26 kg\n  + Seated Cable Row  3×10 @ 50 kg\n  + Dumbbell Shoulder Press  3×10 @ 20 kg\n  + Face Pull  2×15 @ 20 kg\n  + Lateral Raise  2×15 @ 8 kg\nADDED · Lower B\n  + Deadlift  1×5 @ 140 kg\n  + Front Squat  3×8 @ 70 kg\n  + Bulgarian Split Squat  2×10 @ 16 kg\n  + Leg Curl  2×12 @ 45 kg\n  + Hanging Leg Raise  2×12 @ no target"
+      }
+    },
+    {
+      "case": "edit_pull_volume",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2756,
+          "output": "{\n  \"reply\": \"I've added Seated Cable Row to your Pull day to increase back volume.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p2\",\n        \"name\": \"Pull\",\n        \"exercises\": [\n          {\n            \"name\": \"Deadlift\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 140\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Barbell Row\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 70\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 70\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 70\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lat Pulldown\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 60\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Seated Cable Row\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 50\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 50\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 50\n              }\n            ],\n            \"note\": \"Choose a moderate weight to start.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Face Pull\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Bicep Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3484,
+          "outputTokens": 719,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 2756,
+      "reply": "I've added Seated Cable Row to your Pull day to increase back volume.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 1,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "CHANGED · Pull\n  = Deadlift  1×5 @ 140 kg\n  = Barbell Row  3×8 @ 70 kg\n  = Lat Pulldown  3×10 @ 60 kg\n  + Seated Cable Row  3×10 @ 50 kg\n      note: Choose a moderate weight to start.\n  = Face Pull  3×15 @ 20 kg\n  = Bicep Curl  3×12 @ 14 kg"
+      }
+    },
+    {
+      "case": "add_arms_day",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 3383,
+          "output": "{\n  \"reply\": \"I've added a new 'Arms & Shoulders' day to your split, featuring a mix of shoulder presses, raises, and direct arm work.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": null,\n        \"name\": \"Arms & Shoulders\",\n        \"exercises\": [\n          {\n            \"name\": \"Dumbbell Shoulder Press\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 18\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 18\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 18\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Bicep Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Hammer Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 12\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 12\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 12\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Tricep Extension\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 20\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3481,
+          "outputTokens": 781,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 3383,
+      "reply": "I've added a new 'Arms & Shoulders' day to your split, featuring a mix of shoulder presses, raises, and direct arm work.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan added",
+        "counts": {
+          "plansChanged": 0,
+          "plansAdded": 1,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "ADDED · Arms & Shoulders\n  + Dumbbell Shoulder Press  3×10 @ 18 kg\n  + Lateral Raise  3×15 @ 8 kg\n  + Bicep Curl  3×12 @ 14 kg\n  + Tricep Pushdown  3×12 @ 25 kg\n  + Hammer Curl  3×12 @ 12 kg\n  + Overhead Tricep Extension  3×12 @ 20 kg"
+      }
+    },
+    {
+      "case": "remove_day",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1739,
+          "output": "{\n  \"reply\": \"I've removed the Arms plan so your split fits your new 3-day training schedule.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [],\n    \"removePlanRefs\": [\n      \"p4\"\n    ]\n  }\n}",
+          "inputTokens": 3711,
+          "outputTokens": 80,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1739,
+      "reply": "I've removed the Arms plan so your split fits your new 3-day training schedule.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan removed",
+        "counts": {
+          "plansChanged": 0,
+          "plansAdded": 0,
+          "plansRemoved": 1,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "REMOVED · Arms\n  - Bicep Curl  3×12 @ 14 kg\n  - Hammer Curl  3×10 @ 16 kg\n  - Preacher Curl  3×10 @ 25 kg\n  - Tricep Pushdown  3×12 @ 25 kg\n  - Skull Crusher  3×10 @ 30 kg"
+      }
+    },
+    {
+      "case": "stalled_question",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1517,
+          "output": "{\"reply\": \"Your Bench Press shows a stalled trend at 80 kg for 5 reps over the last month. Stalls are completely normal as you progress past initial gains. To break through, ensure you are eating and sleeping enough, consider adding a slight volume or accessory variation, or temporarily deloading by 10% to let fatigue clear before building back up.\", \"proposal\": null}",
+          "inputTokens": 3478,
+          "outputTokens": 82,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1517,
+      "reply": "Your Bench Press shows a stalled trend at 80 kg for 5 reps over the last month. Stalls are completely normal as you progress past initial gains. To break through, ensure you are eating and sleeping enough, consider adding a slight volume or accessory variation, or temporarily deloading by 10% to let fatigue clear before building back up.",
+      "proposal": null
+    },
+    {
+      "case": "stalled_fix",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2862,
+          "output": "{\n  \"reply\": \"Your squat has stalled at 110 kg, so I've applied a conservative 10% deload down to 99 kg (rounded to 100 kg) for your working sets to help you recover and break through the plateau.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p3\",\n        \"name\": \"Legs\",\n        \"exercises\": [\n          {\n            \"name\": \"Squat\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 100\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 100\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 100\n              }\n            ],\n            \"note\": \"Deloaded by about 10% due to stalled progress; focus on explosive and clean reps.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 90\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 90\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 90\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Press\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 180\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 180\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 180\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 45\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 45\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 45\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Calf Raise\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3484,
+          "outputTokens": 708,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 2862,
+      "reply": "Your squat has stalled at 110 kg, so I've applied a conservative 10% deload down to 99 kg (rounded to 100 kg) for your working sets to help you recover and break through the plateau.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 1
+        },
+        "diff": "CHANGED · Legs\n  ~ Squat  3×5 @ 110 kg → 3×5 @ 100 kg\n      note: Deloaded by about 10% due to stalled progress; focus on explosive and clean reps.\n  = Romanian Deadlift  3×8 @ 90 kg\n  = Leg Press  3×12 @ 180 kg\n  = Leg Curl  3×12 @ 45 kg\n  = Calf Raise  3×15 @ 60 kg"
+      }
+    },
+    {
+      "case": "sore_shoulder",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 3369,
+          "output": "{\n  \"reply\": \"I've swapped out the barbell Overhead Press for a neutral-grip dumbbell movement and adjusted some of your shoulder and chest volume to take stress off your sore shoulder. Please consult a qualified professional if the pain is sharp, persistent, or worsening.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p1\",\n        \"name\": \"Push\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Dumbbell Shoulder Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 16},\n              {\"reps\": 10, \"kg\": 16},\n              {\"reps\": 10, \"kg\": 16}\n            ],\n            \"note\": \"Replaced Overhead Press with lighter dumbbells for shoulder comfort.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Incline Dumbbell Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 24},\n              {\"reps\": 10, \"kg\": 24},\n              {\"reps\": 10, \"kg\": 24}\n            ],\n            \"note\": \"Slightly reduced weight to protect the shoulder.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": \"Reduced volume due to shoulder soreness.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 6},\n              {\"reps\": 15, \"kg\": 6}\n            ],\n            \"note\": \"Lowered weight and volume during shoulder recovery.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 25},\n              {\"reps\": 12, \"kg\": 25},\n              {\"reps\": 12, \"kg\": 25}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3478,
+          "outputTokens": 665,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 3369,
+      "reply": "I've swapped out the barbell Overhead Press for a neutral-grip dumbbell movement and adjusted some of your shoulder and chest volume to take stress off your sore shoulder. Please consult a qualified professional if the pain is sharp, persistent, or worsening.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 1,
+          "exercisesRemoved": 1,
+          "exercisesChanged": 3
+        },
+        "diff": "CHANGED · Push\n  = Bench Press  3×5 @ 80 kg\n  + Dumbbell Shoulder Press  3×10 @ 16 kg\n      note: Replaced Overhead Press with lighter dumbbells for shoulder comfort.\n  ~ Incline Dumbbell Press  3×10 @ 26 kg → 3×10 @ 24 kg\n      note: Slightly reduced weight to protect the shoulder.\n  ~ Chest Dips  3×10 @ no target → 2×10 @ no target\n      note: Reduced volume due to shoulder soreness.\n  ~ Lateral Raise  3×15 @ 8 kg → 2×15 @ 6 kg\n      note: Lowered weight and volume during shoulder recovery.\n  = Tricep Pushdown  3×12 @ 25 kg\n  - Overhead Press  3×8 @ 45 kg"
+      }
+    },
+    {
+      "case": "knee_pain",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 3020,
+          "output": "{\n  \"reply\": \"I have adjusted your Leg day plan by replacing the deep Squat with Leg Press and Bulgarian Split Squat to reduce knee strain, and kept the rest of the session safe and stable. Since your right knee is aching, please consider consulting a qualified physiotherapist or medical professional if the pain persists or worsens.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p3\",\n        \"name\": \"Legs\",\n        \"exercises\": [\n          {\n            \"name\": \"Leg Press\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 180\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 180\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 180\n              }\n            ],\n            \"note\": \"Adjust range of motion to avoid knee discomfort.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Bulgarian Split Squat\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              }\n            ],\n            \"note\": \"Start with bodyweight and control the depth.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 90\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 90\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 90\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 45\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 45\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 45\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Calf Raise\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3486,
+          "outputTokens": 712,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 3020,
+      "reply": "I have adjusted your Leg day plan by replacing the deep Squat with Leg Press and Bulgarian Split Squat to reduce knee strain, and kept the rest of the session safe and stable. Since your right knee is aching, please consider consulting a qualified physiotherapist or medical professional if the pain persists or worsens.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 1,
+          "exercisesRemoved": 1,
+          "exercisesChanged": 1
+        },
+        "diff": "CHANGED · Legs\n  ~ Leg Press  3×12 @ 180 kg\n      note: Adjust range of motion to avoid knee discomfort.\n  + Bulgarian Split Squat  3×10 @ no target\n      note: Start with bodyweight and control the depth.\n  = Romanian Deadlift  3×8 @ 90 kg\n  = Leg Curl  3×12 @ 45 kg\n  = Calf Raise  3×15 @ 60 kg\n  - Squat  3×5 @ 110 kg"
+      }
+    },
+    {
+      "case": "custom_exercises",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 3556,
+          "output": "{\n  \"reply\": \"I've added Landmine Press to your Push workout and Nordic Curls to your Legs workout. Since you haven't logged these before, I set their starting weights to 0 kg—just pick a comfortable weight to begin with!\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p1\",\n        \"name\": \"Push\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Press\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 45},\n              {\"reps\": 8, \"kg\": 45},\n              {\"reps\": 8, \"kg\": 45}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Incline Dumbbell Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 26},\n              {\"reps\": 10, \"kg\": 26},\n              {\"reps\": 10, \"kg\": 26}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Landmine Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": \"Choose a light starting weight and focus on form.\",\n            \"custom\": true\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 8},\n              {\"reps\": 15, \"kg\": 8},\n              {\"reps\": 15, \"kg\": 8}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 25},\n              {\"reps\": 12, \"kg\": 25},\n              {\"reps\": 12, \"kg\": 25}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": \"p3\",\n        \"name\": \"Legs\",\n        \"exercises\": [\n          {\n            \"name\": \"Squat\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 110},\n              {\"reps\": 5, \"kg\": 110},\n              {\"reps\": 5, \"kg\": 110}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 90},\n              {\"reps\": 8, \"kg\": 90},\n              {\"reps\": 8, \"kg\": 90}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Press\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 180},\n              {\"reps\": 12, \"kg\": 180},\n              {\"reps\": 12, \"kg\": 180}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Curl\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 45},\n              {\"reps\": 12, \"kg\": 45},\n              {\"reps\": 12, \"kg\": 45}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Nordic Curls\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 0},\n              {\"reps\": 8, \"kg\": 0},\n              {\"reps\": 8, \"kg\": 0}\n            ],\n            \"note\": \"Use assistance if needed to control the eccentric phase.\",\n            \"custom\": true\n          },\n          {\n            \"name\": \"Calf Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 60},\n              {\"reps\": 15, \"kg\": 60},\n              {\"reps\": 15, \"kg\": 60}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3487,
+          "outputTokens": 1322,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 3556,
+      "reply": "I've added Landmine Press to your Push workout and Nordic Curls to your Legs workout. Since you haven't logged these before, I set their starting weights to 0 kg—just pick a comfortable weight to begin with!",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "2 plans changed",
+        "counts": {
+          "plansChanged": 2,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 2,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "CHANGED · Push\n  = Bench Press  3×5 @ 80 kg\n  = Overhead Press  3×8 @ 45 kg\n  = Incline Dumbbell Press  3×10 @ 26 kg\n  = Chest Dips  3×10 @ no target\n  + Landmine Press [custom]  3×10 @ no target\n      note: Choose a light starting weight and focus on form.\n  = Lateral Raise  3×15 @ 8 kg\n  = Tricep Pushdown  3×12 @ 25 kg\nCHANGED · Legs\n  = Squat  3×5 @ 110 kg\n  = Romanian Deadlift  3×8 @ 90 kg\n  = Leg Press  3×12 @ 180 kg\n  = Leg Curl  3×12 @ 45 kg\n  + Nordic Curls [custom]  3×8 @ no target\n      note: Use assistance if needed to control the eccentric phase.\n  = Calf Raise  3×15 @ 60 kg"
+      }
+    },
+    {
+      "case": "abbreviations",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 3728,
+          "output": "{\n  \"reply\": \"I've swapped Overhead Press for Dumbbell Shoulder Press, changed Incline Dumbbell Press to Incline Bench Press, and added Dumbbell Row (3 sets of 10) to your Pull plan.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p1\",\n        \"name\": \"Push\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 80\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 80\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 80\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Dumbbell Shoulder Press\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 20\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Incline Bench Press\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 50\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 50\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 50\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": \"p2\",\n        \"name\": \"Pull\",\n        \"exercises\": [\n          {\n            \"name\": \"Deadlift\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 140\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Barbell Row\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 70\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 70\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 70\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Dumbbell Row\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 26\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 26\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 26\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lat Pulldown\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 60\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Face Pull\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Bicep Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3500,
+          "outputTokens": 1421,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 3728,
+      "reply": "I've swapped Overhead Press for Dumbbell Shoulder Press, changed Incline Dumbbell Press to Incline Bench Press, and added Dumbbell Row (3 sets of 10) to your Pull plan.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "2 plans changed",
+        "counts": {
+          "plansChanged": 2,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 3,
+          "exercisesRemoved": 2,
+          "exercisesChanged": 0
+        },
+        "diff": "CHANGED · Push\n  = Bench Press  3×5 @ 80 kg\n  + Dumbbell Shoulder Press  3×8 @ 20 kg\n  + Incline Bench Press  3×10 @ 50 kg\n  = Chest Dips  3×10 @ no target\n  = Lateral Raise  3×15 @ 8 kg\n  = Tricep Pushdown  3×12 @ 25 kg\n  - Overhead Press  3×8 @ 45 kg\n  - Incline Dumbbell Press  3×10 @ 26 kg\nCHANGED · Pull\n  = Deadlift  1×5 @ 140 kg\n  = Barbell Row  3×8 @ 70 kg\n  + Dumbbell Row  3×10 @ 26 kg\n  = Lat Pulldown  3×10 @ 60 kg\n  = Face Pull  3×15 @ 20 kg\n  = Bicep Curl  3×12 @ 14 kg"
+      }
+    },
+    {
+      "case": "split_limit",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1463,
+          "output": "{\n  \"reply\": \"You currently have the maximum number of 5 splits in your active setup, so I cannot create a new separate split right now. You can delete one of your existing splits to free up a slot, or I can help you modify your current split for powerlifting prep.\",\n  \"proposal\": null\n}",
+          "inputTokens": 3483,
+          "outputTokens": 69,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1463,
+      "reply": "You currently have the maximum number of 5 splits in your active setup, so I cannot create a new separate split right now. You can delete one of your existing splits to free up a slot, or I can help you modify your current split for powerlifting prep.",
+      "proposal": null
+    },
+    {
+      "case": "plan_limit",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2952,
+          "output": "{\n  \"reply\": \"I've added three new plans to your split for a second arms day, a calves day, and a core day, keeping you within the maximum plan limit.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": null,\n        \"name\": \"Arms 2\",\n        \"exercises\": [\n          {\n            \"name\": \"Hammer Curl\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 12},\n              {\"reps\": 12, \"kg\": 12},\n              {\"reps\": 12, \"kg\": 12}\n            ],\n            \"note\": \"Choose a weight where you can complete all reps with good control.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Tricep Extension\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 20},\n              {\"reps\": 12, \"kg\": 20},\n              {\"reps\": 12, \"kg\": 20}\n            ],\n            \"note\": \"Choose a weight where you can complete all reps with good control.\",\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": null,\n        \"name\": \"Calves\",\n        \"exercises\": [\n          {\n            \"name\": \"Seated Calf Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 40},\n              {\"reps\": 15, \"kg\": 40},\n              {\"reps\": 15, \"kg\": 40},\n              {\"reps\": 15, \"kg\": 40}\n            ],\n            \"note\": \"Focus on a full stretch at the bottom and a hard contraction at the top.\",\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": null,\n        \"name\": \"Core\",\n        \"exercises\": [\n          {\n            \"name\": \"Hanging Leg Raise\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 0},\n              {\"reps\": 12, \"kg\": 0},\n              {\"reps\": 12, \"kg\": 0}\n            ],\n            \"note\": \"Keep your core braced and avoid swinging.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Cable Ab Crunch\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 25},\n              {\"reps\": 15, \"kg\": 25},\n              {\"reps\": 15, \"kg\": 25}\n            ],\n            \"note\": \"Use your abs to curl downward rather than pulling with your arms.\",\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 4306,
+          "outputTokens": 701,
+          "errors": [
+            "proposal: the split would have 12 plans after this change. Keep between 1 and 10."
+          ]
+        },
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2352,
+          "output": "{\"reply\": \"You already have 9 plans in your split and the maximum is 10, so I can only add one plan instead of three. I've added a new core day plan for you.\", \"proposal\": {\"target\": \"active_split\", \"newSplitName\": null, \"plans\": [{\"ref\": null, \"name\": \"Core\", \"exercises\": [{\"name\": \"Hanging Leg Raise\", \"sets\": [{\"reps\": 12, \"kg\": 0}, {\"reps\": 12, \"kg\": 0}, {\"reps\": 12, \"kg\": 0}], \"note\": \"Keep your core braced and avoid swinging.\", \"custom\": false}, {\"name\": \"Cable Ab Crunch\", \"sets\": [{\"reps\": 15, \"kg\": 25}, {\"reps\": 15, \"kg\": 25}, {\"reps\": 15, \"kg\": 25}], \"note\": \"Use your abs to curl downward rather than pulling with your arms.\", \"custom\": false}]}], \"removePlanRefs\": []}}",
+          "inputTokens": 5064,
+          "outputTokens": 236,
+          "errors": []
+        }
+      ],
+      "passedFirst": false,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 5304,
+      "reply": "You already have 9 plans in your split and the maximum is 10, so I can only add one plan instead of three. I've added a new core day plan for you.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan added",
+        "counts": {
+          "plansChanged": 0,
+          "plansAdded": 1,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "ADDED · Core\n  + Hanging Leg Raise  3×12 @ no target\n      note: Keep your core braced and avoid swinging.\n  + Cable Ab Crunch  3×15 @ 25 kg\n      note: Use your abs to curl downward rather than pulling with your arms."
+      }
+    },
+    {
+      "case": "follow_up_plan",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1998,
+          "output": "{\n  \"reply\": \"I've trimmed the Arms day down to 3 key exercises: Bicep Curl, Tricep Pushdown, and Skull Crusher.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p4\",\n        \"name\": \"Arms\",\n        \"exercises\": [\n          {\n            \"name\": \"Bicep Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Skull Crusher\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 30\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 30\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 30\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 4037,
+          "outputTokens": 449,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1998,
+      "reply": "I've trimmed the Arms day down to 3 key exercises: Bicep Curl, Tricep Pushdown, and Skull Crusher.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 2,
+          "exercisesChanged": 0
+        },
+        "diff": "CHANGED · Arms\n  = Bicep Curl  3×12 @ 14 kg\n  = Tricep Pushdown  3×12 @ 25 kg\n  = Skull Crusher  3×10 @ 30 kg\n  - Hammer Curl  3×10 @ 16 kg\n  - Preacher Curl  3×10 @ 25 kg"
+      }
+    },
+    {
+      "case": "follow_up_question",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2617,
+          "output": "{\"reply\": \"I have updated your Bench Press on Push day with a deload weight of 72.5 kg. Run this for a couple of sessions and then build back up.\", \"proposal\": {\"target\": \"active_split\", \"newSplitName\": null, \"plans\": [{\"ref\": \"p1\", \"name\": \"Push\", \"exercises\": [{\"name\": \"Bench Press\", \"sets\": [{\"reps\": 5, \"kg\": 72.5}, {\"reps\": 5, \"kg\": 72.5}, {\"reps\": 5, \"kg\": 72.5}], \"note\": \"Deload week\", \"custom\": false}, {\"name\": \"Overhead Press\", \"sets\": [{\"reps\": 8, \"kg\": 45}, {\"reps\": 8, \"kg\": 45}, {\"reps\": 8, \"kg\": 45}], \"note\": null, \"custom\": false}, {\"name\": \"Incline Dumbbell Press\", \"sets\": [{\"reps\": 10, \"kg\": 26}, {\"reps\": 10, \"kg\": 26}, {\"reps\": 10, \"kg\": 26}], \"note\": null, \"custom\": false}, {\"name\": \"Chest Dips\", \"sets\": [{\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}], \"note\": null, \"custom\": false}, {\"name\": \"Lateral Raise\", \"sets\": [{\"reps\": 15, \"kg\": 8}, {\"reps\": 15, \"kg\": 8}, {\"reps\": 15, \"kg\": 8}], \"note\": null, \"custom\": false}, {\"name\": \"Tricep Pushdown\", \"sets\": [{\"reps\": 12, \"kg\": 25}, {\"reps\": 12, \"kg\": 25}, {\"reps\": 12, \"kg\": 25}], \"note\": null, \"custom\": false}]}], \"removePlanRefs\": []}}",
+          "inputTokens": 3559,
+          "outputTokens": 479,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 2617,
+      "reply": "I have updated your Bench Press on Push day with a deload weight of 72.5 kg. Run this for a couple of sessions and then build back up.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 1
+        },
+        "diff": "CHANGED · Push\n  ~ Bench Press  3×5 @ 80 kg → 3×5 @ 72.5 kg\n      note: Deload week\n  = Overhead Press  3×8 @ 45 kg\n  = Incline Dumbbell Press  3×10 @ 26 kg\n  = Chest Dips  3×10 @ no target\n  = Lateral Raise  3×15 @ 8 kg\n  = Tricep Pushdown  3×12 @ 25 kg"
+      }
+    },
+    {
+      "case": "vague",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 4913,
+          "output": "{\n  \"reply\": \"Your current Push, Pull, Legs split is solid and you've been making great progress across most lifts. I've given a small progression bump to the lifts where your trend is improving, such as upping Bench Press to 82.5 kg and Squat to 112.5 kg.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p1\",\n        \"name\": \"Push\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 82.5\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 82.5\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 82.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Press\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 47.5\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 47.5\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 47.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Incline Dumbbell Press\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 28\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 28\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 28\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              }\n            ],\n            \"note\": \"Stalled recently, keep weight steady and focus on strict form.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 27.5\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 27.5\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 27.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": \"p2\",\n        \"name\": \"Pull\",\n        \"exercises\": [\n          {\n            \"name\": \"Deadlift\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 145\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Barbell Row\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 72.5\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 72.5\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 72.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lat Pulldown\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 62.5\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 62.5\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 62.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Face Pull\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              }\n            ],\n            \"note\": \"Stalled recently, keep weight steady.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Bicep Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 16\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 16\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 16\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": \"p3\",\n        \"name\": \"Legs\",\n        \"exercises\": [\n          {\n            \"name\": \"Squat\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 112.5\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 112.5\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 112.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 95\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 95\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 95\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Press\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 190\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 190\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 190\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 47.5\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 47.5\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 47.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Calf Raise\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              }\n            ],\n            \"note\": \"Stalled recently, keep weight steady.\",\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3477,
+          "outputTokens": 1980,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 4913,
+      "reply": "Your current Push, Pull, Legs split is solid and you've been making great progress across most lifts. I've given a small progression bump to the lifts where your trend is improving, such as upping Bench Press to 82.5 kg and Squat to 112.5 kg.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "3 plans changed",
+        "counts": {
+          "plansChanged": 3,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 15
+        },
+        "diff": "CHANGED · Push\n  ~ Bench Press  3×5 @ 80 kg → 3×5 @ 82.5 kg\n  ~ Overhead Press  3×8 @ 45 kg → 3×8 @ 47.5 kg\n  ~ Incline Dumbbell Press  3×10 @ 26 kg → 3×10 @ 28 kg\n  = Chest Dips  3×10 @ no target\n  ~ Lateral Raise  3×15 @ 8 kg\n      note: Stalled recently, keep weight steady and focus on strict form.\n  ~ Tricep Pushdown  3×12 @ 25 kg → 3×12 @ 27.5 kg\nCHANGED · Pull\n  ~ Deadlift  1×5 @ 140 kg → 1×5 @ 145 kg\n  ~ Barbell Row  3×8 @ 70 kg → 3×8 @ 72.5 kg\n  ~ Lat Pulldown  3×10 @ 60 kg → 3×10 @ 62.5 kg\n  ~ Face Pull  3×15 @ 20 kg\n      note: Stalled recently, keep weight steady.\n  ~ Bicep Curl  3×12 @ 14 kg → 3×12 @ 16 kg\nCHANGED · Legs\n  ~ Squat  3×5 @ 110 kg → 3×5 @ 112.5 kg\n  ~ Romanian Deadlift  3×8 @ 90 kg → 3×8 @ 95 kg\n  ~ Leg Press  3×12 @ 180 kg → 3×12 @ 190 kg\n  ~ Leg Curl  3×12 @ 45 kg → 3×12 @ 47.5 kg\n  ~ Calf Raise  3×15 @ 60 kg\n      note: Stalled recently, keep weight steady."
+      }
+    },
+    {
+      "case": "log_and_schedule",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 3006,
+          "output": "{\n  \"reply\": \"I can only update workout plans, so I cannot log your completed workout directly in history. However, I have updated your Bench Press weight to 82.5 kg for your Push plan. As for scheduling days, the app manages workout dates dynamically, so your plan is ready whenever you train.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p1\",\n        \"name\": \"Push\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 82.5\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 82.5\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 82.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Press\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 45\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 45\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 45\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Incline Dumbbell Press\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 26\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 26\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 26\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3498,
+          "outputTokens": 802,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 3006,
+      "reply": "I can only update workout plans, so I cannot log your completed workout directly in history. However, I have updated your Bench Press weight to 82.5 kg for your Push plan. As for scheduling days, the app manages workout dates dynamically, so your plan is ready whenever you train.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 1
+        },
+        "diff": "CHANGED · Push\n  ~ Bench Press  3×5 @ 80 kg → 3×5 @ 82.5 kg\n  = Overhead Press  3×8 @ 45 kg\n  = Incline Dumbbell Press  3×10 @ 26 kg\n  = Chest Dips  3×10 @ no target\n  = Lateral Raise  3×15 @ 8 kg\n  = Tricep Pushdown  3×12 @ 25 kg"
+      }
+    },
+    {
+      "case": "edit_history",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1394,
+          "output": "{\"reply\": \"I can only help you update your workout plans and exercise targets. I'm unable to edit your past workout logs or history directly.\", \"proposal\": null}",
+          "inputTokens": 3497,
+          "outputTokens": 36,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1394,
+      "reply": "I can only help you update your workout plans and exercise targets. I'm unable to edit your past workout logs or history directly.",
+      "proposal": null
+    },
+    {
+      "case": "progress_weights",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 3844,
+          "output": "{\n  \"reply\": \"I've updated your targets for the exercises where your trend is improving, bumping up weights conservatively on your compound lifts.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p1\",\n        \"name\": \"Push\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Press\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 47.5},\n              {\"reps\": 8, \"kg\": 47.5},\n              {\"reps\": 8, \"kg\": 47.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Incline Dumbbell Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 28},\n              {\"reps\": 10, \"kg\": 28},\n              {\"reps\": 10, \"kg\": 28}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 8},\n              {\"reps\": 15, \"kg\": 8},\n              {\"reps\": 15, \"kg\": 8}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 27.5},\n              {\"reps\": 12, \"kg\": 27.5},\n              {\"reps\": 12, \"kg\": 27.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": \"p2\",\n        \"name\": \"Pull\",\n        \"exercises\": [\n          {\n            \"name\": \"Deadlift\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 145}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Barbell Row\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 72.5},\n              {\"reps\": 8, \"kg\": 72.5},\n              {\"reps\": 8, \"kg\": 72.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lat Pulldown\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 62.5},\n              {\"reps\": 10, \"kg\": 62.5},\n              {\"reps\": 10, \"kg\": 62.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Face Pull\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 20},\n              {\"reps\": 15, \"kg\": 20},\n              {\"reps\": 15, \"kg\": 20}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Bicep Curl\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 15},\n              {\"reps\": 12, \"kg\": 15},\n              {\"reps\": 12, \"kg\": 15}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": \"p3\",\n        \"name\": \"Legs\",\n        \"exercises\": [\n          {\n            \"name\": \"Squat\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 115},\n              {\"reps\": 5, \"kg\": 115},\n              {\"reps\": 5, \"kg\": 115}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 95},\n              {\"reps\": 8, \"kg\": 95},\n              {\"reps\": 8, \"kg\": 95}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Press\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 190},\n              {\"reps\": 12, \"kg\": 190},\n              {\"reps\": 12, \"kg\": 190}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Curl\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 47.5},\n              {\"reps\": 12, \"kg\": 47.5},\n              {\"reps\": 12, \"kg\": 47.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Calf Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 60},\n              {\"reps\": 15, \"kg\": 60},\n              {\"reps\": 15, \"kg\": 60}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3495,
+          "outputTokens": 1580,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 3844,
+      "reply": "I've updated your targets for the exercises where your trend is improving, bumping up weights conservatively on your compound lifts.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "3 plans changed",
+        "counts": {
+          "plansChanged": 3,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 11
+        },
+        "diff": "CHANGED · Push\n  = Bench Press  3×5 @ 80 kg\n  ~ Overhead Press  3×8 @ 45 kg → 3×8 @ 47.5 kg\n  ~ Incline Dumbbell Press  3×10 @ 26 kg → 3×10 @ 28 kg\n  = Chest Dips  3×10 @ no target\n  = Lateral Raise  3×15 @ 8 kg\n  ~ Tricep Pushdown  3×12 @ 25 kg → 3×12 @ 27.5 kg\nCHANGED · Pull\n  ~ Deadlift  1×5 @ 140 kg → 1×5 @ 145 kg\n  ~ Barbell Row  3×8 @ 70 kg → 3×8 @ 72.5 kg\n  ~ Lat Pulldown  3×10 @ 60 kg → 3×10 @ 62.5 kg\n  = Face Pull  3×15 @ 20 kg\n  ~ Bicep Curl  3×12 @ 14 kg → 3×12 @ 15 kg\nCHANGED · Legs\n  ~ Squat  3×5 @ 110 kg → 3×5 @ 115 kg\n  ~ Romanian Deadlift  3×8 @ 90 kg → 3×8 @ 95 kg\n  ~ Leg Press  3×12 @ 180 kg → 3×12 @ 190 kg\n  ~ Leg Curl  3×12 @ 45 kg → 3×12 @ 47.5 kg\n  = Calf Raise  3×15 @ 60 kg"
+      }
+    },
+    {
+      "case": "out_of_scope",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1442,
+          "output": "{\n  \"reply\": \"I can only help with training, exercise selection, and workout plan structure in this app. For a cutting meal plan, I recommend consulting with a nutrition professional.\",\n  \"proposal\": null\n}",
+          "inputTokens": 3480,
+          "outputTokens": 48,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1442,
+      "reply": "I can only help with training, exercise selection, and workout plan structure in this app. For a cutting meal plan, I recommend consulting with a nutrition professional.",
+      "proposal": null
+    },
+    {
+      "case": "new_from_nothing",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2998,
+          "output": "{\"reply\": \"Welcome to the gym! I have created a balanced 3-day full body routine for Monday, Wednesday, and Friday to help you build a strong foundation. Start with a comfortable weight and focus on good form.\", \"proposal\": {\"target\": \"new_split\", \"newSplitName\": \"Full Body Routine\", \"plans\": [{\"ref\": null, \"name\": \"Day 1 - Monday\", \"exercises\": [{\"name\": \"Squat\", \"sets\": [{\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}], \"note\": \"Pick a light weight where 10 reps feel moderate.\", \"custom\": false}, {\"name\": \"Bench Press\", \"sets\": [{\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}], \"note\": \"Keep your feet flat and shoulders tucked.\", \"custom\": false}, {\"name\": \"Seated Cable Row\", \"sets\": [{\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}], \"note\": \"Squeeze your shoulder blades together.\", \"custom\": false}, {\"name\": \"Plank\", \"sets\": [{\"reps\": 30, \"kg\": 0}, {\"reps\": 30, \"kg\": 0}], \"note\": \"Hold for 30 seconds per set.\", \"custom\": false}]}, {\"ref\": null, \"name\": \"Day 2 - Wednesday\", \"exercises\": [{\"name\": \"Romanian Deadlift\", \"sets\": [{\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}], \"note\": \"Hinge at the hips with a slight knee bend.\", \"custom\": false}, {\"name\": \"Lat Pulldown\", \"sets\": [{\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}], \"note\": \"Pull down towards your upper chest.\", \"custom\": false}, {\"name\": \"Dumbbell Shoulder Press\", \"sets\": [{\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}], \"note\": \"Press overhead without arching your lower back.\", \"custom\": false}, {\"name\": \"Crunches\", \"sets\": [{\"reps\": 15, \"kg\": 0}, {\"reps\": 15, \"kg\": 0}], \"note\": \"Lift your shoulder blades off the floor.\", \"custom\": false}]}, {\"ref\": null, \"name\": \"Day 3 - Friday\", \"exercises\": [{\"name\": \"Leg Press\", \"sets\": [{\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}], \"note\": \"Keep your knees aligned with your toes.\", \"custom\": false}, {\"name\": \"Incline Bench Press\", \"sets\": [{\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}], \"note\": \"Target your upper chest.\", \"custom\": false}, {\"name\": \"Barbell Row\", \"sets\": [{\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}], \"note\": \"Keep your back straight and core braced.\", \"custom\": false}, {\"name\": \"Tricep Pushdown\", \"sets\": [{\"reps\": 12, \"kg\": 0}, {\"reps\": 12, \"kg\": 0}], \"note\": \"Keep your elbows locked by your sides.\", \"custom\": false}]}], \"removePlanRefs\": []}}",
+          "inputTokens": 1753,
+          "outputTokens": 940,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 2998,
+      "reply": "Welcome to the gym! I have created a balanced 3-day full body routine for Monday, Wednesday, and Friday to help you build a strong foundation. Start with a comfortable weight and focus on good form.",
+      "proposal": {
+        "target": "newSplit",
+        "newSplitName": "Full Body Routine",
+        "summary": "3 plans added",
+        "counts": {
+          "plansChanged": 0,
+          "plansAdded": 3,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "ADDED · Day 1 - Monday\n  + Squat  3×10 @ no target\n      note: Pick a light weight where 10 reps feel moderate.\n  + Bench Press  3×10 @ no target\n      note: Keep your feet flat and shoulders tucked.\n  + Seated Cable Row  3×10 @ no target\n      note: Squeeze your shoulder blades together.\n  + Plank  2×30 @ no target\n      note: Hold for 30 seconds per set.\nADDED · Day 2 - Wednesday\n  + Romanian Deadlift  3×10 @ no target\n      note: Hinge at the hips with a slight knee bend.\n  + Lat Pulldown  3×10 @ no target\n      note: Pull down towards your upper chest.\n  + Dumbbell Shoulder Press  3×10 @ no target\n      note: Press overhead without arching your lower back.\n  + Crunches  2×15 @ no target\n      note: Lift your shoulder blades off the floor.\nADDED · Day 3 - Friday\n  + Leg Press  3×10 @ no target\n      note: Keep your knees aligned with your toes.\n  + Incline Bench Press  3×10 @ no target\n      note: Target your upper chest.\n  + Barbell Row  3×10 @ no target\n      note: Keep your back straight and core braced.\n  + Tricep Pushdown  2×12 @ no target\n      note: Keep your elbows locked by your sides."
+      }
+    },
+    {
+      "case": "new_split_upper_lower",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1436,
+          "output": "{\"reply\": \"Since you have reached the maximum of 5 splits, I cannot create a new 4-day split right now. Please delete an existing split if you'd like to add a new one.\", \"proposal\": null}",
+          "inputTokens": 3497,
+          "outputTokens": 49,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1436,
+      "reply": "Since you have reached the maximum of 5 splits, I cannot create a new 4-day split right now. Please delete an existing split if you'd like to add a new one.",
+      "proposal": null
+    },
+    {
+      "case": "edit_pull_volume",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2875,
+          "output": "{\n  \"reply\": \"I've added Seated Cable Row to your Pull day to increase your back volume.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p2\",\n        \"name\": \"Pull\",\n        \"exercises\": [\n          {\n            \"name\": \"Deadlift\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 140\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Barbell Row\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 70\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 70\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 70\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lat Pulldown\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 60\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Seated Cable Row\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 50\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 50\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 50\n              }\n            ],\n            \"note\": \"Added for extra back volume.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Face Pull\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Bicep Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 14\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3484,
+          "outputTokens": 719,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 2875,
+      "reply": "I've added Seated Cable Row to your Pull day to increase your back volume.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 1,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "CHANGED · Pull\n  = Deadlift  1×5 @ 140 kg\n  = Barbell Row  3×8 @ 70 kg\n  = Lat Pulldown  3×10 @ 60 kg\n  + Seated Cable Row  3×10 @ 50 kg\n      note: Added for extra back volume.\n  = Face Pull  3×15 @ 20 kg\n  = Bicep Curl  3×12 @ 14 kg"
+      }
+    },
+    {
+      "case": "add_arms_day",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2201,
+          "output": "{\n  \"reply\": \"I've added a new Arms and Shoulders day to your split, focusing on your upper body with movements like Overhead Press, curls, and pushdowns.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": null,\n        \"name\": \"Arms & Shoulders\",\n        \"exercises\": [\n          {\n            \"name\": \"Overhead Press\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 47.5},\n              {\"reps\": 8, \"kg\": 47.5},\n              {\"reps\": 8, \"kg\": 47.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 8},\n              {\"reps\": 15, \"kg\": 8},\n              {\"reps\": 15, \"kg\": 8}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Bicep Curl\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 16},\n              {\"reps\": 12, \"kg\": 16},\n              {\"reps\": 12, \"kg\": 16}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 27.5},\n              {\"reps\": 12, \"kg\": 27.5},\n              {\"reps\": 12, \"kg\": 27.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3481,
+          "outputTokens": 483,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 2201,
+      "reply": "I've added a new Arms and Shoulders day to your split, focusing on your upper body with movements like Overhead Press, curls, and pushdowns.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan added",
+        "counts": {
+          "plansChanged": 0,
+          "plansAdded": 1,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "ADDED · Arms & Shoulders\n  + Overhead Press  3×8 @ 47.5 kg\n  + Lateral Raise  3×15 @ 8 kg\n  + Bicep Curl  3×12 @ 16 kg\n  + Tricep Pushdown  3×12 @ 27.5 kg"
+      }
+    },
+    {
+      "case": "remove_day",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1913,
+          "output": "{\n  \"reply\": \"I've updated your split to a 3-day routine by removing the dedicated Arms plan, so you can focus on your core Push, Pull, and Legs sessions.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [],\n    \"removePlanRefs\": [\n      \"p4\"\n    ]\n  }\n}",
+          "inputTokens": 3711,
+          "outputTokens": 95,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1913,
+      "reply": "I've updated your split to a 3-day routine by removing the dedicated Arms plan, so you can focus on your core Push, Pull, and Legs sessions.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan removed",
+        "counts": {
+          "plansChanged": 0,
+          "plansAdded": 0,
+          "plansRemoved": 1,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "REMOVED · Arms\n  - Bicep Curl  3×12 @ 14 kg\n  - Hammer Curl  3×10 @ 16 kg\n  - Preacher Curl  3×10 @ 25 kg\n  - Tricep Pushdown  3×12 @ 25 kg\n  - Skull Crusher  3×10 @ 30 kg"
+      }
+    },
+    {
+      "case": "stalled_question",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1669,
+          "output": "{\"reply\": \"Your Bench Press has been at 80 kg for a few sessions with an estimated 1-rep max holding steady around 93 kg. A stall is completely normal! To break through, you could try lowering the weight slightly for a short deload to recover, add a bit more volume with an extra set or accessory chest movement, or ensure you are eating and sleeping enough to support recovery.\", \"proposal\": null}",
+          "inputTokens": 3478,
+          "outputTokens": 90,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1669,
+      "reply": "Your Bench Press has been at 80 kg for a few sessions with an estimated 1-rep max holding steady around 93 kg. A stall is completely normal! To break through, you could try lowering the weight slightly for a short deload to recover, add a bit more volume with an extra set or accessory chest movement, or ensure you are eating and sleeping enough to support recovery.",
+      "proposal": null
+    },
+    {
+      "case": "stalled_fix",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2705,
+          "output": "{\n  \"reply\": \"Your squat has stalled recently, so I've deloaded it by roughly 10% to 100 kg to help you break through the plateau. Let's build back up from there.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p3\",\n        \"name\": \"Legs\",\n        \"exercises\": [\n          {\n            \"name\": \"Squat\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 100.0\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 100.0\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 100.0\n              }\n            ],\n            \"note\": \"Deloaded by 10% to break the plateau.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 90.0\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 90.0\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 90.0\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Press\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 180.0\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 180.0\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 180.0\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 45.0\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 45.0\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 45.0\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Calf Raise\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 60.0\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 60.0\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 60.0\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3484,
+          "outputTokens": 720,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 2705,
+      "reply": "Your squat has stalled recently, so I've deloaded it by roughly 10% to 100 kg to help you break through the plateau. Let's build back up from there.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 1
+        },
+        "diff": "CHANGED · Legs\n  ~ Squat  3×5 @ 110 kg → 3×5 @ 100 kg\n      note: Deloaded by 10% to break the plateau.\n  = Romanian Deadlift  3×8 @ 90 kg\n  = Leg Press  3×12 @ 180 kg\n  = Leg Curl  3×12 @ 45 kg\n  = Calf Raise  3×15 @ 60 kg"
+      }
+    },
+    {
+      "case": "sore_shoulder",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2885,
+          "output": "{\n  \"reply\": \"I've swapped the barbell Overhead Press for a lighter, dumbbell-based shoulder press and adjusted some of the pressing movements to be kinder to your shoulders. Since you're experiencing pain, please remember to see a qualified professional if it is sharp, persistent, or getting worse.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p1\",\n        \"name\": \"Push\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 72.5},\n              {\"reps\": 5, \"kg\": 72.5},\n              {\"reps\": 5, \"kg\": 72.5}\n            ],\n            \"note\": \"Deloaded by 10% to protect sore shoulders.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Dumbbell Shoulder Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 16},\n              {\"reps\": 10, \"kg\": 16},\n              {\"reps\": 10, \"kg\": 16}\n            ],\n            \"note\": \"Replaced Overhead Press with a joint-friendly dumbbell variation.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Incline Dumbbell Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 22},\n              {\"reps\": 10, \"kg\": 22},\n              {\"reps\": 10, \"kg\": 22}\n            ],\n            \"note\": \"Lighter weight to ease shoulder strain.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 6},\n              {\"reps\": 15, \"kg\": 6},\n              {\"reps\": 15, \"kg\": 6}\n            ],\n            \"note\": \"Reduced weight to manage shoulder discomfort.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 25},\n              {\"reps\": 12, \"kg\": 25},\n              {\"reps\": 12, \"kg\": 25}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3478,
+          "outputTokens": 713,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 2885,
+      "reply": "I've swapped the barbell Overhead Press for a lighter, dumbbell-based shoulder press and adjusted some of the pressing movements to be kinder to your shoulders. Since you're experiencing pain, please remember to see a qualified professional if it is sharp, persistent, or getting worse.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 1,
+          "exercisesRemoved": 1,
+          "exercisesChanged": 3
+        },
+        "diff": "CHANGED · Push\n  ~ Bench Press  3×5 @ 80 kg → 3×5 @ 72.5 kg\n      note: Deloaded by 10% to protect sore shoulders.\n  + Dumbbell Shoulder Press  3×10 @ 16 kg\n      note: Replaced Overhead Press with a joint-friendly dumbbell variation.\n  ~ Incline Dumbbell Press  3×10 @ 26 kg → 3×10 @ 22 kg\n      note: Lighter weight to ease shoulder strain.\n  = Chest Dips  3×10 @ no target\n  ~ Lateral Raise  3×15 @ 8 kg → 3×15 @ 6 kg\n      note: Reduced weight to manage shoulder discomfort.\n  = Tricep Pushdown  3×12 @ 25 kg\n  - Overhead Press  3×8 @ 45 kg"
+      }
+    },
+    {
+      "case": "knee_pain",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2682,
+          "output": "{\n  \"reply\": \"I'm sorry to hear about your knee pain. Since deep squats are causing discomfort, I have replaced Squat with Leg Press in your Legs plan to reduce direct knee stress while keeping your lower body work. Please remember to see a qualified medical professional if the pain is sharp, persistent, or getting worse.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p3\",\n        \"name\": \"Legs\",\n        \"exercises\": [\n          {\n            \"name\": \"Leg Press\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 180\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 180\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 180\n              }\n            ],\n            \"note\": \"Swapped for Squat to avoid knee pain. Adjust range of motion as comfortable.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 90\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 90\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 90\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 45\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 45\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 45\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Calf Raise\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3486,
+          "outputTokens": 604,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 2682,
+      "reply": "I'm sorry to hear about your knee pain. Since deep squats are causing discomfort, I have replaced Squat with Leg Press in your Legs plan to reduce direct knee stress while keeping your lower body work. Please remember to see a qualified medical professional if the pain is sharp, persistent, or getting worse.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 1,
+          "exercisesChanged": 1
+        },
+        "diff": "CHANGED · Legs\n  ~ Leg Press  3×12 @ 180 kg\n      note: Swapped for Squat to avoid knee pain. Adjust range of motion as comfortable.\n  = Romanian Deadlift  3×8 @ 90 kg\n  = Leg Curl  3×12 @ 45 kg\n  = Calf Raise  3×15 @ 60 kg\n  - Squat  3×5 @ 110 kg"
+      }
+    },
+    {
+      "case": "custom_exercises",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 3564,
+          "output": "{\n  \"reply\": \"I've added Landmine Press to your Push day and Nordic Curls to your Legs day with starting weights for you.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p1\",\n        \"name\": \"Push\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Press\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 45},\n              {\"reps\": 8, \"kg\": 45},\n              {\"reps\": 8, \"kg\": 45}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Landmine Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 20},\n              {\"reps\": 10, \"kg\": 20},\n              {\"reps\": 10, \"kg\": 20}\n            ],\n            \"note\": \"Start with bar plus weight and adjust based on feel.\",\n            \"custom\": true\n          },\n          {\n            \"name\": \"Incline Dumbbell Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 26},\n              {\"reps\": 10, \"kg\": 26},\n              {\"reps\": 10, \"kg\": 26}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 8},\n              {\"reps\": 15, \"kg\": 8},\n              {\"reps\": 15, \"kg\": 8}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 25},\n              {\"reps\": 12, \"kg\": 25},\n              {\"reps\": 12, \"kg\": 25}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": \"p3\",\n        \"name\": \"Legs\",\n        \"exercises\": [\n          {\n            \"name\": \"Squat\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 110},\n              {\"reps\": 5, \"kg\": 110},\n              {\"reps\": 5, \"kg\": 110}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 90},\n              {\"reps\": 8, \"kg\": 90},\n              {\"reps\": 8, \"kg\": 90}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Nordic Curls\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 0},\n              {\"reps\": 8, \"kg\": 0},\n              {\"reps\": 8, \"kg\": 0}\n            ],\n            \"note\": \"Use bodyweight and assist with hands as needed.\",\n            \"custom\": true\n          },\n          {\n            \"name\": \"Leg Press\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 180},\n              {\"reps\": 12, \"kg\": 180},\n              {\"reps\": 12, \"kg\": 180}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Curl\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 45},\n              {\"reps\": 12, \"kg\": 45},\n              {\"reps\": 12, \"kg\": 45}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Calf Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 60},\n              {\"reps\": 15, \"kg\": 60},\n              {\"reps\": 15, \"kg\": 60}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3487,
+          "outputTokens": 1303,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 3564,
+      "reply": "I've added Landmine Press to your Push day and Nordic Curls to your Legs day with starting weights for you.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "2 plans changed",
+        "counts": {
+          "plansChanged": 2,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 2,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "CHANGED · Push\n  = Bench Press  3×5 @ 80 kg\n  = Overhead Press  3×8 @ 45 kg\n  + Landmine Press [custom]  3×10 @ 20 kg\n      note: Start with bar plus weight and adjust based on feel.\n  = Incline Dumbbell Press  3×10 @ 26 kg\n  = Chest Dips  3×10 @ no target\n  = Lateral Raise  3×15 @ 8 kg\n  = Tricep Pushdown  3×12 @ 25 kg\nCHANGED · Legs\n  = Squat  3×5 @ 110 kg\n  = Romanian Deadlift  3×8 @ 90 kg\n  + Nordic Curls [custom]  3×8 @ no target\n      note: Use bodyweight and assist with hands as needed.\n  = Leg Press  3×12 @ 180 kg\n  = Leg Curl  3×12 @ 45 kg\n  = Calf Raise  3×15 @ 60 kg"
+      }
+    },
+    {
+      "case": "abbreviations",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 3609,
+          "output": "{\n  \"reply\": \"I've swapped Overhead Press for Dumbbell Shoulder Press, changed Incline Dumbbell Press to Incline Bench Press, and added Barbell Row or rather Dumbbell Row 3x10 to your Pull day.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p1\",\n        \"name\": \"Push\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Dumbbell Shoulder Press\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 20},\n              {\"reps\": 8, \"kg\": 20},\n              {\"reps\": 8, \"kg\": 20}\n            ],\n            \"note\": \"Starting fresh with dumbbells\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Incline Bench Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 50},\n              {\"reps\": 10, \"kg\": 50},\n              {\"reps\": 10, \"kg\": 50}\n            ],\n            \"note\": \"Switched from dumbbell to barbell incline\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 8},\n              {\"reps\": 15, \"kg\": 8},\n              {\"reps\": 15, \"kg\": 8}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 25},\n              {\"reps\": 12, \"kg\": 25},\n              {\"reps\": 12, \"kg\": 25}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": \"p2\",\n        \"name\": \"Pull\",\n        \"exercises\": [\n          {\n            \"name\": \"Deadlift\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 140}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Barbell Row\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 70},\n              {\"reps\": 8, \"kg\": 70},\n              {\"reps\": 8, \"kg\": 70}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Dumbbell Row\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 24},\n              {\"reps\": 10, \"kg\": 24},\n              {\"reps\": 10, \"kg\": 24}\n            ],\n            \"note\": \"Added as requested\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lat Pulldown\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 60},\n              {\"reps\": 10, \"kg\": 60},\n              {\"reps\": 10, \"kg\": 60}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Face Pull\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 20},\n              {\"reps\": 15, \"kg\": 20},\n              {\"reps\": 15, \"kg\": 20}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Bicep Curl\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 14},\n              {\"reps\": 12, \"kg\": 14},\n              {\"reps\": 12, \"kg\": 14}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3500,
+          "outputTokens": 1199,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 3609,
+      "reply": "I've swapped Overhead Press for Dumbbell Shoulder Press, changed Incline Dumbbell Press to Incline Bench Press, and added Barbell Row or rather Dumbbell Row 3x10 to your Pull day.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "2 plans changed",
+        "counts": {
+          "plansChanged": 2,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 3,
+          "exercisesRemoved": 2,
+          "exercisesChanged": 0
+        },
+        "diff": "CHANGED · Push\n  = Bench Press  3×5 @ 80 kg\n  + Dumbbell Shoulder Press  3×8 @ 20 kg\n      note: Starting fresh with dumbbells\n  + Incline Bench Press  3×10 @ 50 kg\n      note: Switched from dumbbell to barbell incline\n  = Chest Dips  3×10 @ no target\n  = Lateral Raise  3×15 @ 8 kg\n  = Tricep Pushdown  3×12 @ 25 kg\n  - Overhead Press  3×8 @ 45 kg\n  - Incline Dumbbell Press  3×10 @ 26 kg\nCHANGED · Pull\n  = Deadlift  1×5 @ 140 kg\n  = Barbell Row  3×8 @ 70 kg\n  + Dumbbell Row  3×10 @ 24 kg\n      note: Added as requested\n  = Lat Pulldown  3×10 @ 60 kg\n  = Face Pull  3×15 @ 20 kg\n  = Bicep Curl  3×12 @ 14 kg"
+      }
+    },
+    {
+      "case": "split_limit",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1502,
+          "output": "{\"reply\": \"You already have the maximum of 5 splits in your active split list. Please delete a split first if you'd like to create a new one, or let me know if you want to restructure your current Push Pull Legs split for your meet prep instead.\", \"proposal\": null}",
+          "inputTokens": 3483,
+          "outputTokens": 61,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1502,
+      "reply": "You already have the maximum of 5 splits in your active split list. Please delete a split first if you'd like to create a new one, or let me know if you want to restructure your current Push Pull Legs split for your meet prep instead.",
+      "proposal": null
+    },
+    {
+      "case": "plan_limit",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2813,
+          "output": "{\n  \"reply\": \"I've added three new plans to your active split for a second Arms day, a Calves day, and a Core day with appropriate exercises.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": null,\n        \"name\": \"Arms B\",\n        \"exercises\": [\n          {\n            \"name\": \"Hammer Curl\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 12},\n              {\"reps\": 12, \"kg\": 12},\n              {\"reps\": 12, \"kg\": 12}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Tricep Extension\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 20},\n              {\"reps\": 12, \"kg\": 20},\n              {\"reps\": 12, \"kg\": 20}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": null,\n        \"name\": \"Calves\",\n        \"exercises\": [\n          {\n            \"name\": \"Seated Calf Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 40},\n              {\"reps\": 15, \"kg\": 40},\n              {\"reps\": 15, \"kg\": 40}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Calf Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 60},\n              {\"reps\": 15, \"kg\": 60},\n              {\"reps\": 15, \"kg\": 60}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": null,\n        \"name\": \"Core\",\n        \"exercises\": [\n          {\n            \"name\": \"Cable Ab Crunch\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 30},\n              {\"reps\": 15, \"kg\": 30},\n              {\"reps\": 15, \"kg\": 30}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Hanging Leg Raise\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 0},\n              {\"reps\": 12, \"kg\": 0},\n              {\"reps\": 12, \"kg\": 0}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Plank\",\n            \"sets\": [\n              {\"reps\": 60, \"kg\": 0},\n              {\"reps\": 60, \"kg\": 0}\n            ],\n            \"note\": \"Hold for 60 seconds per set\",\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 4306,
+          "outputTokens": 788,
+          "errors": [
+            "proposal: the split would have 12 plans after this change. Keep between 1 and 10."
+          ]
+        },
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2291,
+          "output": "{\n  \"reply\": \"Since the maximum is 10 plans per split and you already have 9, I cannot add all three new days without exceeding the limit. I have instead added a combined Arms and Core plan to your active split.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": null,\n        \"name\": \"Arms & Core\",\n        \"exercises\": [\n          {\n            \"name\": \"Hammer Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 12\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 12\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 12\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Tricep Extension\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 20\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Hanging Leg Raise\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 0\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 5151,
+          "outputTokens": 460,
+          "errors": []
+        }
+      ],
+      "passedFirst": false,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 5104,
+      "reply": "Since the maximum is 10 plans per split and you already have 9, I cannot add all three new days without exceeding the limit. I have instead added a combined Arms and Core plan to your active split.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan added",
+        "counts": {
+          "plansChanged": 0,
+          "plansAdded": 1,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 0
+        },
+        "diff": "ADDED · Arms & Core\n  + Hammer Curl  3×12 @ 12 kg\n  + Overhead Tricep Extension  3×12 @ 20 kg\n  + Hanging Leg Raise  3×12 @ no target"
+      }
+    },
+    {
+      "case": "follow_up_plan",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1468,
+          "output": "{\"reply\":\"I've trimmed your Arms day down to 3 key exercises: Bicep Curl, Tricep Pushdown, and Skull Crusher.\",\"proposal\":{\"target\":\"active_split\",\"newSplitName\":null,\"plans\":[{\"ref\":\"p4\",\"name\":\"Arms\",\"exercises\":[{\"name\":\"Bicep Curl\",\"sets\":[{\"reps\":12,\"kg\":14},{\"reps\":12,\"kg\":14},{\"reps\":12,\"kg\":14}],\"note\":null,\"custom\":false},{\"name\":\"Tricep Pushdown\",\"sets\":[{\"reps\":12,\"kg\":25},{\"reps\":12,\"kg\":25},{\"reps\":12,\"kg\":25}],\"note\":null,\"custom\":false},{\"name\":\"Skull Crusher\",\"sets\":[{\"reps\":10,\"kg\":30},{\"reps\":10,\"kg\":30},{\"reps\":10,\"kg\":30}],\"note\":null,\"custom\":false}]}],\"removePlanRefs\":[]}}",
+          "inputTokens": 4037,
+          "outputTokens": 221,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1468,
+      "reply": "I've trimmed your Arms day down to 3 key exercises: Bicep Curl, Tricep Pushdown, and Skull Crusher.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 2,
+          "exercisesChanged": 0
+        },
+        "diff": "CHANGED · Arms\n  = Bicep Curl  3×12 @ 14 kg\n  = Tricep Pushdown  3×12 @ 25 kg\n  = Skull Crusher  3×10 @ 30 kg\n  - Hammer Curl  3×10 @ 16 kg\n  - Preacher Curl  3×10 @ 25 kg"
+      }
+    },
+    {
+      "case": "follow_up_question",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2032,
+          "output": "{\"reply\": \"I've updated your Bench Press target to 72.5 kg for 5 reps to start a deload phase. Stick with this weight for the next couple of sessions, then gradually work your way back up.\", \"proposal\": {\"target\": \"active_split\", \"newSplitName\": null, \"plans\": [{\"ref\": \"p1\", \"name\": \"Push\", \"exercises\": [{\"name\": \"Bench Press\", \"sets\": [{\"reps\": 5, \"kg\": 72.5}, {\"reps\": 5, \"kg\": 72.5}, {\"reps\": 5, \"kg\": 72.5}], \"note\": \"Deloading to break through the plateau\", \"custom\": false}, {\"name\": \"Overhead Press\", \"sets\": [{\"reps\": 8, \"kg\": 45}, {\"reps\": 8, \"kg\": 45}, {\"reps\": 8, \"kg\": 45}], \"note\": null, \"custom\": false}, {\"name\": \"Incline Dumbbell Press\", \"sets\": [{\"reps\": 10, \"kg\": 26}, {\"reps\": 10, \"kg\": 26}, {\"reps\": 10, \"kg\": 26}], \"note\": null, \"custom\": false}, {\"name\": \"Chest Dips\", \"sets\": [{\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}, {\"reps\": 10, \"kg\": 0}], \"note\": null, \"custom\": false}, {\"name\": \"Lateral Raise\", \"sets\": [{\"reps\": 15, \"kg\": 8}, {\"reps\": 15, \"kg\": 8}, {\"reps\": 15, \"kg\": 8}], \"note\": null, \"custom\": false}, {\"name\": \"Tricep Pushdown\", \"sets\": [{\"reps\": 12, \"kg\": 25}, {\"reps\": 12, \"kg\": 25}, {\"reps\": 12, \"kg\": 25}], \"note\": null, \"custom\": false}]}], \"removePlanRefs\": []}}",
+          "inputTokens": 3559,
+          "outputTokens": 494,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 2032,
+      "reply": "I've updated your Bench Press target to 72.5 kg for 5 reps to start a deload phase. Stick with this weight for the next couple of sessions, then gradually work your way back up.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 1
+        },
+        "diff": "CHANGED · Push\n  ~ Bench Press  3×5 @ 80 kg → 3×5 @ 72.5 kg\n      note: Deloading to break through the plateau\n  = Overhead Press  3×8 @ 45 kg\n  = Incline Dumbbell Press  3×10 @ 26 kg\n  = Chest Dips  3×10 @ no target\n  = Lateral Raise  3×15 @ 8 kg\n  = Tricep Pushdown  3×12 @ 25 kg"
+      }
+    },
+    {
+      "case": "vague",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 4346,
+          "output": "{\n  \"reply\": \"Your current Push Pull Legs split is well-structured and you are making great progress on most lifts! I've given a small conservative progression boost to your improving lifts (like adding 2.5kg to your Bench Press and Squat top sets, and slightly increasing working weights on your accessories). Keep up the fantastic consistency!\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p1\",\n        \"name\": \"Push\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 82.5},\n              {\"reps\": 5, \"kg\": 82.5},\n              {\"reps\": 5, \"kg\": 82.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Press\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 47.5},\n              {\"reps\": 8, \"kg\": 47.5},\n              {\"reps\": 8, \"kg\": 47.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Incline Dumbbell Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 28},\n              {\"reps\": 10, \"kg\": 28},\n              {\"reps\": 10, \"kg\": 28}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 8},\n              {\"reps\": 15, \"kg\": 8},\n              {\"reps\": 15, \"kg\": 8}\n            ],\n            \"note\": \"Stalled recently, focus on strict form before adding weight.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 27.5},\n              {\"reps\": 12, \"kg\": 27.5},\n              {\"reps\": 12, \"kg\": 27.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": \"p2\",\n        \"name\": \"Pull\",\n        \"exercises\": [\n          {\n            \"name\": \"Deadlift\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 145}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Barbell Row\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 72.5},\n              {\"reps\": 8, \"kg\": 72.5},\n              {\"reps\": 8, \"kg\": 72.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lat Pulldown\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 62.5},\n              {\"reps\": 10, \"kg\": 62.5},\n              {\"reps\": 10, \"kg\": 62.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Face Pull\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 20},\n              {\"reps\": 15, \"kg\": 20},\n              {\"reps\": 15, \"kg\": 20}\n            ],\n            \"note\": \"Stalled recently, keep reps controlled.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Bicep Curl\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 16},\n              {\"reps\": 12, \"kg\": 16},\n              {\"reps\": 12, \"kg\": 16}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": \"p3\",\n        \"name\": \"Legs\",\n        \"exercises\": [\n          {\n            \"name\": \"Squat\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 112.5},\n              {\"reps\": 5, \"kg\": 112.5},\n              {\"reps\": 5, \"kg\": 112.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 95},\n              {\"reps\": 8, \"kg\": 95},\n              {\"reps\": 8, \"kg\": 95}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Press\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 190},\n              {\"reps\": 12, \"kg\": 190},\n              {\"reps\": 12, \"kg\": 190}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Curl\",\n            \"sets\": [\n              {\"reps\": 12, \"kg\": 47.5},\n              {\"reps\": 12, \"kg\": 47.5},\n              {\"reps\": 12, \"kg\": 47.5}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Calf Raise\",\n            \"sets\": [\n              {\"reps\": 15, \"kg\": 60},\n              {\"reps\": 15, \"kg\": 60},\n              {\"reps\": 15, \"kg\": 60}\n            ],\n            \"note\": \"Stalled recently, focus on a full stretch at the bottom.\",\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3477,
+          "outputTokens": 1665,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 4346,
+      "reply": "Your current Push Pull Legs split is well-structured and you are making great progress on most lifts! I've given a small conservative progression boost to your improving lifts (like adding 2.5kg to your Bench Press and Squat top sets, and slightly increasing working weights on your accessories). Keep up the fantastic consistency!",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "3 plans changed",
+        "counts": {
+          "plansChanged": 3,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 15
+        },
+        "diff": "CHANGED · Push\n  ~ Bench Press  3×5 @ 80 kg → 3×5 @ 82.5 kg\n  ~ Overhead Press  3×8 @ 45 kg → 3×8 @ 47.5 kg\n  ~ Incline Dumbbell Press  3×10 @ 26 kg → 3×10 @ 28 kg\n  = Chest Dips  3×10 @ no target\n  ~ Lateral Raise  3×15 @ 8 kg\n      note: Stalled recently, focus on strict form before adding weight.\n  ~ Tricep Pushdown  3×12 @ 25 kg → 3×12 @ 27.5 kg\nCHANGED · Pull\n  ~ Deadlift  1×5 @ 140 kg → 1×5 @ 145 kg\n  ~ Barbell Row  3×8 @ 70 kg → 3×8 @ 72.5 kg\n  ~ Lat Pulldown  3×10 @ 60 kg → 3×10 @ 62.5 kg\n  ~ Face Pull  3×15 @ 20 kg\n      note: Stalled recently, keep reps controlled.\n  ~ Bicep Curl  3×12 @ 14 kg → 3×12 @ 16 kg\nCHANGED · Legs\n  ~ Squat  3×5 @ 110 kg → 3×5 @ 112.5 kg\n  ~ Romanian Deadlift  3×8 @ 90 kg → 3×8 @ 95 kg\n  ~ Leg Press  3×12 @ 180 kg → 3×12 @ 190 kg\n  ~ Leg Curl  3×12 @ 45 kg → 3×12 @ 47.5 kg\n  ~ Calf Raise  3×15 @ 60 kg\n      note: Stalled recently, focus on a full stretch at the bottom."
+      }
+    },
+    {
+      "case": "log_and_schedule",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2862,
+          "output": "{\n  \"reply\": \"I've updated your Bench Press target to 82.5 kg following your progress! Please note that I can't log workouts directly in your history, but I've updated your active plan. Regarding moving Leg Day to Saturdays, day scheduling isn't handled through plan editing, but your Leg workout remains ready for whenever you train.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p1\",\n        \"name\": \"Push\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 82.5\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 82.5\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 82.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Press\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 45\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 45\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 45\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Incline Dumbbell Press\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 26\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 26\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 26\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 25\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3498,
+          "outputTokens": 812,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 2862,
+      "reply": "I've updated your Bench Press target to 82.5 kg following your progress! Please note that I can't log workouts directly in your history, but I've updated your active plan. Regarding moving Leg Day to Saturdays, day scheduling isn't handled through plan editing, but your Leg workout remains ready for whenever you train.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "1 plan changed",
+        "counts": {
+          "plansChanged": 1,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 1
+        },
+        "diff": "CHANGED · Push\n  ~ Bench Press  3×5 @ 80 kg → 3×5 @ 82.5 kg\n  = Overhead Press  3×8 @ 45 kg\n  = Incline Dumbbell Press  3×10 @ 26 kg\n  = Chest Dips  3×10 @ no target\n  = Lateral Raise  3×15 @ 8 kg\n  = Tricep Pushdown  3×12 @ 25 kg"
+      }
+    },
+    {
+      "case": "edit_history",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1457,
+          "output": "{\"reply\": \"I can only help you update your workout plans and exercise structures in the app, but I cannot modify your past workout history or logs. You'll need to update your past session log manually in your history.\", \"proposal\": null}",
+          "inputTokens": 3497,
+          "outputTokens": 51,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1457,
+      "reply": "I can only help you update your workout plans and exercise structures in the app, but I cannot modify your past workout history or logs. You'll need to update your past session log manually in your history.",
+      "proposal": null
+    },
+    {
+      "case": "progress_weights",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 4367,
+          "output": "{\n  \"reply\": \"I've reviewed your recent progress and bumped up the weights on your improving lifts, such as Squat, Overhead Press, and Barbell Row, while keeping stalled exercises like Bench Press steady.\",\n  \"proposal\": {\n    \"target\": \"active_split\",\n    \"newSplitName\": null,\n    \"plans\": [\n      {\n        \"ref\": \"p1\",\n        \"name\": \"Push\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 80\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 80\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 80\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Press\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 47.5\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 47.5\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 47.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Incline Dumbbell Press\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 28\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 28\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 28\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 0\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lateral Raise\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 8\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Tricep Pushdown\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 27.5\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 27.5\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 27.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": \"p2\",\n        \"name\": \"Pull\",\n        \"exercises\": [\n          {\n            \"name\": \"Deadlift\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 145\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Barbell Row\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 72.5\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 72.5\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 72.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lat Pulldown\",\n            \"sets\": [\n              {\n                \"reps\": 10,\n                \"kg\": 62.5\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 62.5\n              },\n              {\n                \"reps\": 10,\n                \"kg\": 62.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Face Pull\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 20\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Bicep Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 16\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 16\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 16\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": \"p3\",\n        \"name\": \"Legs\",\n        \"exercises\": [\n          {\n            \"name\": \"Squat\",\n            \"sets\": [\n              {\n                \"reps\": 5,\n                \"kg\": 115\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 115\n              },\n              {\n                \"reps\": 5,\n                \"kg\": 115\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\n                \"reps\": 8,\n                \"kg\": 95\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 95\n              },\n              {\n                \"reps\": 8,\n                \"kg\": 95\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Press\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 190\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 190\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 190\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Curl\",\n            \"sets\": [\n              {\n                \"reps\": 12,\n                \"kg\": 47.5\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 47.5\n              },\n              {\n                \"reps\": 12,\n                \"kg\": 47.5\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Calf Raise\",\n            \"sets\": [\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              },\n              {\n                \"reps\": 15,\n                \"kg\": 60\n              }\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3495,
+          "outputTokens": 1918,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 4367,
+      "reply": "I've reviewed your recent progress and bumped up the weights on your improving lifts, such as Squat, Overhead Press, and Barbell Row, while keeping stalled exercises like Bench Press steady.",
+      "proposal": {
+        "target": "activeSplit",
+        "newSplitName": null,
+        "summary": "3 plans changed",
+        "counts": {
+          "plansChanged": 3,
+          "plansAdded": 0,
+          "plansRemoved": 0,
+          "exercisesAdded": 0,
+          "exercisesRemoved": 0,
+          "exercisesChanged": 11
+        },
+        "diff": "CHANGED · Push\n  = Bench Press  3×5 @ 80 kg\n  ~ Overhead Press  3×8 @ 45 kg → 3×8 @ 47.5 kg\n  ~ Incline Dumbbell Press  3×10 @ 26 kg → 3×10 @ 28 kg\n  = Chest Dips  3×10 @ no target\n  = Lateral Raise  3×15 @ 8 kg\n  ~ Tricep Pushdown  3×12 @ 25 kg → 3×12 @ 27.5 kg\nCHANGED · Pull\n  ~ Deadlift  1×5 @ 140 kg → 1×5 @ 145 kg\n  ~ Barbell Row  3×8 @ 70 kg → 3×8 @ 72.5 kg\n  ~ Lat Pulldown  3×10 @ 60 kg → 3×10 @ 62.5 kg\n  = Face Pull  3×15 @ 20 kg\n  ~ Bicep Curl  3×12 @ 14 kg → 3×12 @ 16 kg\nCHANGED · Legs\n  ~ Squat  3×5 @ 110 kg → 3×5 @ 115 kg\n  ~ Romanian Deadlift  3×8 @ 90 kg → 3×8 @ 95 kg\n  ~ Leg Press  3×12 @ 180 kg → 3×12 @ 190 kg\n  ~ Leg Curl  3×12 @ 45 kg → 3×12 @ 47.5 kg\n  = Calf Raise  3×15 @ 60 kg"
+      }
+    },
+    {
+      "case": "out_of_scope",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1300,
+          "output": "{\n  \"reply\": \"I can only help with training, exercise selection, and workout plan structure in this app. I cannot generate meal plans or provide nutrition advice.\",\n  \"proposal\": null\n}",
+          "inputTokens": 3480,
+          "outputTokens": 43,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1300,
+      "reply": "I can only help with training, exercise selection, and workout plan structure in this app. I cannot generate meal plans or provide nutrition advice.",
+      "proposal": null
+    }
+  ]
+}

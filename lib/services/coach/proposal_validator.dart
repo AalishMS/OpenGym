@@ -212,8 +212,12 @@ class _Run {
     const path = 'proposal.newSplitName';
     if (snapshot.splitNames.length >= snapshot.maxSplits) {
       errors.add(
+        // Not "use active_split instead": on the eval that hint made the
+        // retry rewrite every plan in the active split.
         '$path: the user already has ${snapshot.maxSplits} splits, the '
-        'maximum. Use target "active_split" instead.',
+        'maximum, so no split can be created. Answer with "proposal": null '
+        'and tell the user to delete a split first. Change the active split '
+        'only if the user asked for that.',
       );
       return null;
     }

@@ -1,0 +1,50 @@
+{
+  "run": "2026-10-10T09-34-14_gemini-3.5-flash",
+  "startedAt": "2026-10-10T09:34:14.119990",
+  "model": "gemini-3.5-flash",
+  "prompt": "v1",
+  "promptFile": null,
+  "calls": 2,
+  "turns": [
+    {
+      "case": "progress_weights",
+      "model": "gemini-3.5-flash",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "retryable",
+          "status": 503,
+          "latencyMs": 3209
+        }
+      ],
+      "passedFirst": false,
+      "passedAfterRetry": false,
+      "infraFailure": true,
+      "latencyMs": 3209,
+      "reply": null,
+      "planUnusable": false
+    },
+    {
+      "case": "split_limit",
+      "model": "gemini-3.5-flash",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 4884,
+          "output": "{\"reply\":\"You've reached the maximum limit of 5 splits, so I can't create a new split right now. You can delete one of your other splits to make room, or if you prefer, I can restructure your active Push Pull Legs split into a powerlifting meet prep routine. Let me know how you'd like to proceed!\",\"proposal\":null}",
+          "inputTokens": 3216,
+          "outputTokens": 660,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 4884,
+      "reply": "You've reached the maximum limit of 5 splits, so I can't create a new split right now. You can delete one of your other splits to make room, or if you prefer, I can restructure your active Push Pull Legs split into a powerlifting meet prep routine. Let me know how you'd like to proceed!",
+      "proposal": null
+    }
+  ]
+}

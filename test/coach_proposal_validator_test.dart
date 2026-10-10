@@ -421,6 +421,8 @@ void main() {
         full,
       );
       expect(result.errors, [contains('already has 5 splits')]);
+      // Steering the retry to active_split made it rewrite the whole split.
+      expect(result.errors.single, contains('"proposal": null'));
     });
   });
 

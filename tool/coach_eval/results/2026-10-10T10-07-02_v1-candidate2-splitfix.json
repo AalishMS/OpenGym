@@ -1,0 +1,120 @@
+{
+  "run": "2026-10-10T10-07-02_v1-candidate2-splitfix",
+  "startedAt": "2026-10-10T10:07:02.391795",
+  "model": "gemini-3.5-flash-lite",
+  "prompt": "v1-candidate2-splitfix",
+  "promptFile": "tool/coach_eval/prompts/v1_candidate2.txt",
+  "calls": 6,
+  "turns": [
+    {
+      "case": "split_limit",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 3497,
+          "output": "{\n  \"reply\": \"I've created a separate powerlifting split called 'Meet Prep' with a focus on squat, bench press, and deadlift alongside key accessories.\",\n  \"proposal\": {\n    \"target\": \"new_split\",\n    \"newSplitName\": \"Meet Prep\",\n    \"plans\": [\n      {\n        \"ref\": null,\n        \"name\": \"Squat Focus\",\n        \"exercises\": [\n          {\n            \"name\": \"Squat\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 110},\n              {\"reps\": 5, \"kg\": 110},\n              {\"reps\": 5, \"kg\": 110}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 90},\n              {\"reps\": 8, \"kg\": 90},\n              {\"reps\": 8, \"kg\": 90}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Leg Press\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 180},\n              {\"reps\": 10, \"kg\": 180},\n              {\"reps\": 10, \"kg\": 180}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": null,\n        \"name\": \"Bench Focus\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Close Grip Bench Press\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 60},\n              {\"reps\": 8, \"kg\": 60},\n              {\"reps\": 8, \"kg\": 60}\n            ],\n            \"note\": \"Select a starting weight that allows clean reps.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Chest Dips\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0},\n              {\"reps\": 10, \"kg\": 0}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": null,\n        \"name\": \"Deadlift Focus\",\n        \"exercises\": [\n          {\n            \"name\": \"Deadlift\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 140}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Barbell Row\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 70},\n              {\"reps\": 8, \"kg\": 70},\n              {\"reps\": 8, \"kg\": 70}\n            ],\n            \"note\": null,\n            \"custom\": false\n          },\n          {\n            \"name\": \"Lat Pulldown\",\n            \"sets\": [\n              {\"reps\": 10, \"kg\": 60},\n              {\"reps\": 10, \"kg\": 60},\n              {\"reps\": 10, \"kg\": 60}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3567,
+          "outputTokens": 943,
+          "errors": [
+            "proposal.newSplitName: the user already has 5 splits, the maximum, so no split can be created. Answer with \"proposal\": null and tell the user to delete a split first. Change the active split only if the user asked for that."
+          ]
+        },
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1188,
+          "output": "{\"reply\": \"You've already reached the maximum limit of 5 splits, so I can't create a new one right now. Please delete an existing split first if you'd like to make a new one, or let me know if you want to modify your current Push Pull Legs split instead.\", \"proposal\": null}",
+          "inputTokens": 4596,
+          "outputTokens": 68,
+          "errors": []
+        }
+      ],
+      "passedFirst": false,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 4685,
+      "reply": "You've already reached the maximum limit of 5 splits, so I can't create a new one right now. Please delete an existing split first if you'd like to make a new one, or let me know if you want to modify your current Push Pull Legs split instead.",
+      "proposal": null
+    },
+    {
+      "case": "split_limit",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2518,
+          "output": "{\n  \"reply\": \"I have created a new powerlifting split for your meet prep with plans focused on the squat, bench press, and deadlift.\",\n  \"proposal\": {\n    \"target\": \"new_split\",\n    \"newSplitName\": \"Meet Prep\",\n    \"plans\": [\n      {\n        \"ref\": null,\n        \"name\": \"Squat Focus\",\n        \"exercises\": [\n          {\n            \"name\": \"Squat\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 110},\n              {\"reps\": 5, \"kg\": 110},\n              {\"reps\": 5, \"kg\": 110}\n            ],\n            \"note\": \"Focuses on building heavy single-rep strength and speed.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Romanian Deadlift\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 90},\n              {\"reps\": 8, \"kg\": 90},\n              {\"reps\": 8, \"kg\": 90}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": null,\n        \"name\": \"Bench Focus\",\n        \"exercises\": [\n          {\n            \"name\": \"Bench Press\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80},\n              {\"reps\": 5, \"kg\": 80}\n            ],\n            \"note\": \"Pause on chest for competition standards.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Overhead Press\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 45},\n              {\"reps\": 8, \"kg\": 45},\n              {\"reps\": 8, \"kg\": 45}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      },\n      {\n        \"ref\": null,\n        \"name\": \"Deadlift Focus\",\n        \"exercises\": [\n          {\n            \"name\": \"Deadlift\",\n            \"sets\": [\n              {\"reps\": 5, \"kg\": 140}\n            ],\n            \"note\": \"Heavy working sets for pulling power.\",\n            \"custom\": false\n          },\n          {\n            \"name\": \"Barbell Row\",\n            \"sets\": [\n              {\"reps\": 8, \"kg\": 70},\n              {\"reps\": 8, \"kg\": 70},\n              {\"reps\": 8, \"kg\": 70}\n            ],\n            \"note\": null,\n            \"custom\": false\n          }\n        ]\n      }\n    ],\n    \"removePlanRefs\": []\n  }\n}",
+          "inputTokens": 3567,
+          "outputTokens": 686,
+          "errors": [
+            "proposal.newSplitName: the user already has 5 splits, the maximum, so no split can be created. Answer with \"proposal\": null and tell the user to delete a split first. Change the active split only if the user asked for that."
+          ]
+        },
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1624,
+          "output": "{\n  \"reply\": \"You already have the maximum number of 5 splits created. Please delete one of your existing splits before creating a new one, or I can help you modify your current Push Pull Legs split instead.\",\n  \"proposal\": null\n}",
+          "inputTokens": 4339,
+          "outputTokens": 54,
+          "errors": []
+        }
+      ],
+      "passedFirst": false,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 4142,
+      "reply": "You already have the maximum number of 5 splits created. Please delete one of your existing splits before creating a new one, or I can help you modify your current Push Pull Legs split instead.",
+      "proposal": null
+    },
+    {
+      "case": "split_limit",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 3,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2151,
+          "output": "{\n  \"reply\": \"You have reached the maximum of 5 splits in this split group. Please delete one of your existing splits first if you would like to add a new powerlifting split.\",\n  \"proposal\": null\n}",
+          "inputTokens": 3567,
+          "outputTokens": 49,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 2151,
+      "reply": "You have reached the maximum of 5 splits in this split group. Please delete one of your existing splits first if you would like to add a new powerlifting split.",
+      "proposal": null
+    },
+    {
+      "case": "split_limit",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 4,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1277,
+          "output": "{\n  \"reply\": \"You have reached the maximum of 5 splits in this split group, so I cannot create a new one. Please delete an existing split first if you wish to add a new powerlifting split.\",\n  \"proposal\": null\n}",
+          "inputTokens": 3567,
+          "outputTokens": 54,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1277,
+      "reply": "You have reached the maximum of 5 splits in this split group, so I cannot create a new one. Please delete an existing split first if you wish to add a new powerlifting split.",
+      "proposal": null
+    }
+  ]
+}

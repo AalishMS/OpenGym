@@ -1,0 +1,109 @@
+{
+  "run": "2026-10-10T09-55-00_v1-candidate2-splitfix",
+  "startedAt": "2026-10-10T09:55:00.022976",
+  "model": "gemini-3.5-flash-lite",
+  "prompt": "v1-candidate2-splitfix",
+  "promptFile": "tool/coach_eval/prompts/v1_candidate2.txt",
+  "calls": 5,
+  "turns": [
+    {
+      "case": "split_limit",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 1,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1962,
+          "output": "{\"reply\": \"You have reached the maximum of 5 splits, so I cannot create a new one right now. Please delete an existing split first if you would like to add a meet prep program.\", \"proposal\": null}",
+          "inputTokens": 3567,
+          "outputTokens": 46,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1962,
+      "reply": "You have reached the maximum of 5 splits, so I cannot create a new one right now. Please delete an existing split first if you would like to add a meet prep program.",
+      "proposal": null
+    },
+    {
+      "case": "split_limit",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 2,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 2866,
+          "output": "{\"reply\": \"I've created a new powerlifting split for your meet prep with plans focused on the squat, bench press, and deadlift. You currently have 5 of 5 splits, so you'll need to delete an existing split before adding this one if you are at your maximum.\", \"proposal\": {\"target\": \"new_split\", \"newSplitName\": \"Meet Prep\", \"plans\": [{\"ref\": null, \"name\": \"Squat Focus\", \"exercises\": [{\"name\": \"Squat\", \"sets\": [{\"reps\": 5, \"kg\": 110}, {\"reps\": 5, \"kg\": 110}, {\"reps\": 5, \"kg\": 110}], \"note\": null, \"custom\": false}, {\"name\": \"Romanian Deadlift\", \"sets\": [{\"reps\": 8, \"kg\": 90}, {\"reps\": 8, \"kg\": 90}, {\"reps\": 8, \"kg\": 90}], \"note\": null, \"custom\": false}, {\"name\": \"Leg Press\", \"sets\": [{\"reps\": 12, \"kg\": 180}, {\"reps\": 12, \"kg\": 180}, {\"reps\": 12, \"kg\": 180}], \"note\": null, \"custom\": false}]}, {\"ref\": null, \"name\": \"Bench Focus\", \"exercises\": [{\"name\": \"Bench Press\", \"sets\": [{\"reps\": 5, \"kg\": 80}, {\"reps\": 5, \"kg\": 80}, {\"reps\": 5, \"kg\": 80}], \"note\": null, \"custom\": false}, {\"name\": \"Incline Dumbbell Press\", \"sets\": [{\"reps\": 10, \"kg\": 26}, {\"reps\": 10, \"kg\": 26}, {\"reps\": 10, \"kg\": 26}], \"note\": null, \"custom\": false}, {\"name\": \"Overhead Press\", \"sets\": [{\"reps\": 8, \"kg\": 45}, {\"reps\": 8, \"kg\": 45}, {\"reps\": 8, \"kg\": 45}], \"note\": null, \"custom\": false}]}, {\"ref\": null, \"name\": \"Deadlift Focus\", \"exercises\": [{\"name\": \"Deadlift\", \"sets\": [{\"reps\": 5, \"kg\": 140}], \"note\": null, \"custom\": false}, {\"name\": \"Barbell Row\", \"sets\": [{\"reps\": 8, \"kg\": 70}, {\"reps\": 8, \"kg\": 70}, {\"reps\": 8, \"kg\": 70}], \"note\": null, \"custom\": false}, {\"name\": \"Lat Pulldown\", \"sets\": [{\"reps\": 10, \"kg\": 60}, {\"reps\": 10, \"kg\": 60}, {\"reps\": 10, \"kg\": 60}], \"note\": null, \"custom\": false}]}], \"removePlanRefs\": []}}",
+          "inputTokens": 3567,
+          "outputTokens": 695,
+          "errors": [
+            "proposal.newSplitName: the user already has 5 splits, the maximum, so no split can be created. Answer with \"proposal\": null and tell the user to delete a split first. Change the active split only if the user asked for that."
+          ]
+        },
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1297,
+          "output": "{\"reply\": \"You currently have 5 of 5 splits, which is the maximum. Please delete an existing split first before creating a new one, or let me know if you would like to modify your active Push Pull Legs split instead.\", \"proposal\": null}",
+          "inputTokens": 4348,
+          "outputTokens": 54,
+          "errors": []
+        }
+      ],
+      "passedFirst": false,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 4163,
+      "reply": "You currently have 5 of 5 splits, which is the maximum. Please delete an existing split first before creating a new one, or let me know if you would like to modify your active Push Pull Legs split instead.",
+      "proposal": null
+    },
+    {
+      "case": "split_limit",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 3,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1466,
+          "output": "{\"reply\": \"You have reached the maximum number of 5 splits in your active program. Please delete an existing split first if you would like to add a new one, or let me know if you'd like to adjust your current Push Pull Legs routine instead.\", \"proposal\": null}",
+          "inputTokens": 3567,
+          "outputTokens": 59,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1466,
+      "reply": "You have reached the maximum number of 5 splits in your active program. Please delete an existing split first if you would like to add a new one, or let me know if you'd like to adjust your current Push Pull Legs routine instead.",
+      "proposal": null
+    },
+    {
+      "case": "split_limit",
+      "model": "gemini-3.5-flash-lite",
+      "rep": 4,
+      "attempts": [
+        {
+          "kind": "ok",
+          "status": 200,
+          "latencyMs": 1634,
+          "output": "{\n  \"reply\": \"You already have the maximum of 5 splits created. Please delete one of your existing splits first before creating a new one for your meet prep, or we can adjust your current Push Pull Legs split.\",\n  \"proposal\": null\n}",
+          "inputTokens": 3567,
+          "outputTokens": 55,
+          "errors": []
+        }
+      ],
+      "passedFirst": true,
+      "passedAfterRetry": true,
+      "infraFailure": false,
+      "latencyMs": 1634,
+      "reply": "You already have the maximum of 5 splits created. Please delete one of your existing splits first before creating a new one for your meet prep, or we can adjust your current Push Pull Legs split.",
+      "proposal": null
+    }
+  ]
+}

@@ -1,8 +1,10 @@
 # AI Coach
 
 Status: **design settled. The pure-Dart parts, the proxy (deployed 2026-10-09,
-`coach` v1 with `coach_usage` migrated), and the UI are built. The eval
-(build step 4) is next.**
+`coach` v1 with `coach_usage` migrated), the UI, and the eval (2026-10-10) are
+built. Model decision: keep Flash-Lite. A v1 prompt revision is proposed in
+`tool/coach_eval/findings.md` and not yet deployed. Next: redeploy v1 with that
+prompt, then the closed-test checklist under Eval.**
 
 The Coach lets a signed-in user create and restructure workout plans by chatting.
 It proposes changes; the user reviews a diff and applies or discards it. Nothing
@@ -121,6 +123,9 @@ exercises. The validator and the applier both work against that snapshot.
   - `improving`: `bestRecent` is more than 2.5% above `bestEarlier`.
   - `declining`: `bestRecent` is more than 2.5% below `bestEarlier`.
   - `stalled`: anything else.
+
+  Known gap, found by the eval: above 12 reps, a weight increase doesn't show.
+  So a 15-rep Face Pull that gains 1 kg a week reads as `stalled`.
 - **Caps.** The summary includes the 25 most recently trained exercises and
   every plan in the split. It counts only completed, non-deleted sessions.
 - **Never sent:** session and set notes (free text the user wrote for
@@ -621,6 +626,7 @@ The disclosure sheet states that the Coach is not medical advice.
 | `lib/services/coach/proposal_validator.dart` | Parsing, validation, and error messages |
 | `lib/services/coach/proposal_diff.dart` | Diff between the snapshot and the proposal |
 | `lib/services/coach/coach_applier.dart` | Exclusive write with rollback |
+| `lib/services/coach/coach_request.dart` | The request body, free of Flutter so the eval can use it |
 | `lib/services/coach/coach_client.dart` | Proxy call, contract version, and error mapping |
 | `lib/providers/coach_provider.dart` | App-session conversation and the turn loop |
 | `lib/screens/coach_screen.dart`, `coach_review_screen.dart` | Chat and review |
@@ -630,7 +636,7 @@ The disclosure sheet states that the Coach is not medical advice.
 | `supabase/functions/coach/` | The Edge Function; `contracts/` holds one prompt and schema per version |
 | `supabase/functions/tests/` | Deno unit tests and the schema smoke test |
 | `supabase/migrations/` | `coach_usage`, `coach_charge`, and `coach_record_tokens` |
-| `tool/coach_eval/` | Eval cases and runner |
+| `tool/coach_eval/` | Eval cases, runner, Deno model-call helper, report, grades, and results |
 
 There are no Hive model changes, so there's no adapter regeneration and no
 backup format change.
@@ -645,10 +651,121 @@ backup format change.
    and a local run with the Supabase CLI.
 3. **UI:** `CoachProvider`, the chat, the proposal card, and the review screen,
    with widget tests that use a fake `CoachClient`.
-4. **Eval:** 15–20 realistic requests with fixture histories, run through the
-   real proxy against Flash-Lite and Flash. Each model is scored on the
+4. **Eval:** 15–20 realistic requests with fixture histories, run against
+   Flash-Lite and Flash through the proxy's own request code (see Eval; the
+   deployed proxy was skipped to spare the per-user quota and the secrets). Each model is scored on the
    validator pass rate first time, the pass rate after a retry, and a manual
    quality grade.
+
+## Eval
+
+`tool/coach_eval/` scores a model on 20 realistic requests (build step 4).
+
+### Method
+
+- **Cases** (`cases.dart`): each has a fixture split, plans, and a generated
+  six-week log (`fixtures.dart`) whose trends come out as the case needs, for
+  example a stalled bench. Each case also notes what a good answer looks like.
+  The context comes from the real `CoachContextBuilder` with "today" fixed at
+  2026-10-10. The cases cover a new program from nothing, a new split, edits,
+  adding and removing plans, a stalled lift as a question and as a fix, pain
+  in the shoulder and the knee, custom exercises, abbreviations, the
+  five-split and ten-plan limits, two follow-ups that need the history, a
+  vague request, logging, rescheduling and editing history (which the
+  contract can't express), load progression, and an out-of-scope request.
+- **Transport**: the model is called directly, not through the deployed proxy.
+  The per-user limit and the function secrets stay untouched.
+  `model_call.ts` (Deno) imports the proxy's own `bodyTooLarge`,
+  `parseCoachRequest`, `buildConversation`, and `attempt`, together with
+  `contracts/v1.ts`. So the request is what the proxy would send, minus auth,
+  quota, and the fallback. `run.dart` builds the body with the app's
+  `CoachRequest` (`lib/services/coach/coach_request.dart`, kept free of
+  Flutter for this), fits the history the way `CoachProvider` does, validates
+  with the real `ProposalValidator`, and retries once with `{previousOutput,
+  errors}`. History is sent as compact JSON, as the app sends it.
+- **Plain Dart.** The context builder, validator, and diff only need
+  `package:hive`, so the eval runs with `dart run`. It isn't a `_test.dart`
+  file and it reads the git-ignored `supabase/.env`, so `flutter test` and CI
+  never run it.
+- **Recorded per turn**: whether it passed first time and after the retry, the
+  validator errors, latency around the model call, input and output tokens
+  (thinking counts as output), the reply, and the diff rendered the way the
+  review screen shows it. `--prompt FILE` tries a candidate system prompt
+  without deploying it.
+- **Results** are committed: each run's JSON and the generated
+  `results/report.md` in `tool/coach_eval/results/`. The fixtures are
+  synthetic, so nothing personal is in them, and the report is the evidence
+  behind the model choice. The manual grades are in `grades.json`, and the
+  findings are in `findings.md`.
+- **Grading.** Each turn gets 0–2 on correctness, sensible loads, minimal
+  change, health guidance (pain cases only), and reply clarity. The grades
+  recorded on 2026-10-10 are Claude's provisional ones, for the owner to
+  confirm.
+
+Free-tier limits read in AI Studio on 2026-10-10: `gemini-3.5-flash-lite`
+500 requests a day, `gemini-3.5-flash` **2** a day. Pass `--max-calls` for any
+model with a small limit.
+
+```bash
+dart run tool/coach_eval/run.dart --dry-run                  # contexts only
+dart run tool/coach_eval/run.dart --model gemini-3.5-flash-lite --repeat 2
+dart run tool/coach_eval/run.dart --model gemini-3.5-flash \
+  --cases sore_shoulder --max-calls 2                        # spend-capped
+dart run tool/coach_eval/report.dart                         # re-render only
+```
+
+### Results, 2026-10-10
+
+| Model · prompt | Pass first / after retry | Median call | Tokens in / out | Paid cost per call | Grade |
+| --- | --- | --- | --- | --- | --- |
+| Flash-Lite · v1 (deployed) | 35/40 · 39/40 | 2.8 s | 3228 / 734 | $0.0028 | 1.60 / 2 |
+| Flash · v1 | 1/2 · 1/2 (one 503) | 4.9 s | 3216 / 660 | ≈$0.0049 | 1 turn graded |
+| Flash-Lite · candidate 2 | 38/40 · 40/40 | 2.3 s | 3571 / 489 | $0.0023 | 1.82 / 2 |
+
+Medians per call, from 40 turns (20 cases, each run twice). Costs use the
+paid-tier prices: Flash-Lite $0.30 / $2.50 per million tokens. 3.5 Flash is
+no longer on the pricing page, so its cost uses the current 3.6/3.8 Flash
+price of $0.75 / $3.75.
+
+- **Decision: keep `gemini-3.5-flash-lite` and revise the prompt.** Its
+  failures were judgement, not schema, and they repeated across runs:
+  - one set per exercise for a beginner
+  - a target edited to stand in for a logged workout
+  - a stalled lift made heavier
+  - whole plans rewritten at the split and plan limits
+
+  Prompt candidate 2 fixes most of them. Flash can't be compared fairly on
+  the free tier (2 requests a day), costs more, is slower, and the 3.5
+  generation is off the price list.
+- **Validator fix (in the app).** At five splits, the retry error used to say
+  "Use target "active_split" instead", and on the retry the model rewrote the
+  whole active split. It now asks for `"proposal": null`, and 8 of 8 reruns
+  answered that way.
+- **Open issues:**
+  - "Log today's bench at 82.5 kg" still edits the bench target in 1 of 2
+    runs on candidate 2.
+  - After a retry, the reply describes the correction rather than the plan.
+    A `retryInstruction` change is proposed but untested.
+  - High-rep work that progresses by weight reads as `stalled` (see Context
+    sent to the model, Trend).
+  - The free-tier fallback (`gemini-3.5-flash`, 2 a day) is nearly empty.
+
+  The details and the exact prompt diff are in `tool/coach_eval/findings.md`.
+
+### Before a closed test
+
+- Redeploy `coach` v1 with the candidate 2 prompt and the `retryInstruction`
+  change, after one more eval pass. The contract version and schema are
+  unchanged.
+- Consider `COACH_FALLBACK_MODEL=gemini-3.1-flash-lite`, which has its own
+  quota. Check its daily limit in AI Studio first.
+- Device checks still pending from step 3:
+  - the Android offline notice
+  - the keyboard and the input bar
+  - a 401 after an expired session
+- Testers are informed adults only: the free tier lets Google use prompts.
+  Before any public release, turn billing on (EEA/UK/Switzerland rule) and
+  set a spend control. See Risks and terms.
 
 ## Risks and terms
 
