@@ -166,7 +166,10 @@ class CoachProposalCard extends StatelessWidget {
         null,
         TextButton(onPressed: onReview, child: const Text('Review')),
       ),
-      CoachProposalStatus.applied => ('Applied', null),
+      CoachProposalStatus.applied => (
+        item.appliedPartly ? 'Applied some changes' : 'Applied',
+        null,
+      ),
       CoachProposalStatus.discarded => ('Discarded', null),
       CoachProposalStatus.stale => (
         'Plans changed. Ask again with the latest?',
@@ -275,8 +278,7 @@ class _FailureNotice extends StatelessWidget {
               onPressed: onCheckUpdates,
               child: const Text('Check for updates'),
             )
-          else if (kind == CoachFailureKind.unauthenticated &&
-              onSignIn != null)
+          else if (kind == CoachFailureKind.unauthenticated && onSignIn != null)
             TextButton(onPressed: onSignIn, child: const Text('Sign in'))
           else if (retryable && onRetry != null)
             TextButton(onPressed: onRetry, child: const Text('Try again')),

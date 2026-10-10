@@ -20,6 +20,16 @@ class ExerciseDiff {
   /// Not in the exercise library; the review screen labels these.
   final bool custom;
 
+  /// The stored exercise, null for an added one. Declining a change keeps it
+  /// exactly as stored.
+  final ExerciseTemplate? original;
+
+  /// Its index in the stored plan, null for an added exercise.
+  final int? originalIndex;
+
+  /// What the Coach proposed, null for a removed exercise.
+  final CoachExercise? proposed;
+
   ExerciseDiff({
     required this.kind,
     required this.name,
@@ -29,6 +39,9 @@ class ExerciseDiff {
     this.noteAfter,
     this.moved = false,
     this.custom = false,
+    this.original,
+    this.originalIndex,
+    this.proposed,
   }) : before = List.unmodifiable(before),
        after = List.unmodifiable(after);
 
@@ -48,6 +61,9 @@ class PlanDiff {
 
   /// The stored plan, null for an added one.
   final WorkoutPlan? existing;
+
+  /// What the Coach proposed, null for a removed plan.
+  final CoachPlan? proposed;
   final List<ExerciseDiff> exercises;
 
   PlanDiff({
@@ -55,10 +71,14 @@ class PlanDiff {
     required this.name,
     required this.existing,
     required List<ExerciseDiff> exercises,
+    this.proposed,
     this.previousName,
   }) : exercises = List.unmodifiable(exercises);
 
   bool get renamed => previousName != null;
+
+  /// Some exercise kept by both versions changed position.
+  bool get reordered => exercises.any((exercise) => exercise.moved);
 }
 
 /// What applying a [ValidatedProposal] would change, for the review screen
@@ -85,7 +105,8 @@ class ProposalDiff {
             name: plan.name,
             existing: plan,
             exercises: [
-              for (final exercise in plan.exercises) _removed(exercise),
+              for (var index = 0; index < plan.exercises.length; index++)
+                _removed(plan.exercises[index], index),
             ],
           ),
       ]);
@@ -97,17 +118,8 @@ class ProposalDiff {
         kind: DiffKind.added,
         name: plan.name,
         existing: null,
-        exercises: [
-          for (final exercise in plan.exercises)
-            ExerciseDiff(
-              kind: DiffKind.added,
-              name: exercise.name,
-              before: const [],
-              after: exercise.sets,
-              noteAfter: exercise.note,
-              custom: exercise.custom,
-            ),
-        ],
+        proposed: plan,
+        exercises: [for (final exercise in plan.exercises) _added(exercise)],
       );
     }
 
@@ -123,6 +135,7 @@ class ProposalDiff {
       name: plan.name,
       previousName: renamed ? existing.name : null,
       existing: existing,
+      proposed: plan,
       exercises: exercises,
     );
   }
@@ -152,25 +165,20 @@ class ProposalDiff {
         if (pairedIndex[index] case final oldIndex?)
           _paired(
             before[oldIndex],
+            oldIndex,
             after[index],
             moved: !stayed.contains(oldIndex),
           )
         else
-          ExerciseDiff(
-            kind: DiffKind.added,
-            name: after[index].name,
-            before: const [],
-            after: after[index].sets,
-            noteAfter: after[index].note,
-            custom: after[index].custom,
-          ),
+          _added(after[index]),
       for (final indices in unpaired.values)
-        for (final oldIndex in indices) _removed(before[oldIndex]),
+        for (final oldIndex in indices) _removed(before[oldIndex], oldIndex),
     ];
   }
 
   static ExerciseDiff _paired(
     ExerciseTemplate before,
+    int beforeIndex,
     CoachExercise after, {
     required bool moved,
   }) {
@@ -186,16 +194,32 @@ class ProposalDiff {
       noteAfter: after.note,
       moved: moved,
       custom: after.custom,
+      original: before,
+      originalIndex: beforeIndex,
+      proposed: after,
     );
   }
 
-  static ExerciseDiff _removed(ExerciseTemplate exercise) => ExerciseDiff(
-    kind: DiffKind.removed,
+  static ExerciseDiff _added(CoachExercise exercise) => ExerciseDiff(
+    kind: DiffKind.added,
     name: exercise.name,
-    before: coachSetsOf(exercise),
-    after: const [],
-    noteBefore: coachNote(exercise.note),
+    before: const [],
+    after: exercise.sets,
+    noteAfter: exercise.note,
+    custom: exercise.custom,
+    proposed: exercise,
   );
+
+  static ExerciseDiff _removed(ExerciseTemplate exercise, int index) =>
+      ExerciseDiff(
+        kind: DiffKind.removed,
+        name: exercise.name,
+        before: coachSetsOf(exercise),
+        after: const [],
+        noteBefore: coachNote(exercise.note),
+        original: exercise,
+        originalIndex: index,
+      );
 
   /// The values of a longest strictly increasing subsequence. Exercises in it
   /// kept their relative order; the rest count as moved, so moving one

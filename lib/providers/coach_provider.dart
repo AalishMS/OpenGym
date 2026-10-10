@@ -10,6 +10,7 @@ import '../services/coach/coach_client.dart';
 import '../services/coach/coach_context_builder.dart';
 import '../services/coach/coach_status_store.dart';
 import '../services/coach/proposal_diff.dart';
+import '../services/coach/proposal_selection.dart';
 import '../services/coach/proposal_validator.dart';
 import '../services/hive_service.dart';
 import '../services/supabase_service.dart';
@@ -24,7 +25,14 @@ enum CoachProposalStatus { pending, applied, discarded, stale }
 class CoachProposalItem {
   final ValidatedProposal proposal;
   final ProposalDiff diff;
+
+  /// The changes the user keeps. Lives here so leaving the review screen and
+  /// coming back keeps their choices.
+  late final ProposalSelection selection = ProposalSelection(diff);
   CoachProposalStatus status = CoachProposalStatus.pending;
+
+  /// Applied with some changes skipped.
+  bool appliedPartly = false;
 
   CoachProposalItem(this.proposal) : diff = ProposalDiff.compute(proposal);
 
@@ -357,18 +365,20 @@ class CoachProvider with ChangeNotifier {
     return entry?.proposal?.status == CoachProposalStatus.pending;
   }
 
-  /// Writes [entry]'s proposal. Throws when the write fails; a stale proposal
-  /// writes nothing and is marked out of date.
+  /// Writes the changes kept in [entry]'s review. Throws when the write
+  /// fails; a stale proposal writes nothing and is marked out of date.
   Future<CoachApplyOutcome> apply(CoachEntry entry) async {
     final item = entry.proposal!;
+    final selection = item.selection;
     _applying = true;
     notifyListeners();
     try {
-      final outcome = await _splits.applyCoachProposal(item.proposal);
+      final outcome = await _splits.applyCoachProposal(selection.resolve());
       item.status = switch (outcome) {
         CoachApplied() => CoachProposalStatus.applied,
         CoachApplyStale() => CoachProposalStatus.stale,
       };
+      item.appliedPartly = outcome is CoachApplied && !selection.keepsAll;
       return outcome;
     } finally {
       _applying = false;

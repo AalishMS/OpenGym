@@ -721,27 +721,24 @@ void main() {
       await tester.tap(find.text('Review'));
       await pumpWithStorage(tester);
       expect(find.text('Review changes'), findsOneWidget);
+      expect(find.text('3 of 3 changes selected'), findsOneWidget);
       expect(find.text('Incline Dumbbell Press'), findsOneWidget);
-      expect(
-        find.bySemanticsLabel(
-          'Added: Incline Dumbbell Press, 2 × 10 · 22.5 kg',
-        ),
-        findsOne,
-      );
-      expect(
-        find.bySemanticsLabel('Removed: Bench Press, 2 × 8 · 60 kg'),
-        findsOne,
-      );
+      expect(find.text('2 × 10 · 22.5 kg'), findsOneWidget);
+      expect(find.text('Bench Press'), findsOneWidget);
+      expect(find.text('2 × 8 · 60 kg'), findsOneWidget);
       expect(find.text('New plan'), findsOneWidget);
 
-      final removed = tester.widget<Text>(find.text('Bench Press'));
-      expect(removed.style!.decoration, TextDecoration.lineThrough);
+      // The kind of change is a word, with colour only as a second cue.
       final context = tester.element(find.text('Bench Press'));
-      expect(removed.style!.color, errorColor(context));
       expect(
-        tester.widget<Text>(find.text('Incline Dumbbell Press')).style!.color,
+        tester.widget<Text>(find.text('Remove')).style!.color,
+        errorColor(context),
+      );
+      expect(
+        tester.widget<Text>(find.text('Add')).style!.color,
         accentColor(context),
       );
+      expect(find.text('Apply'), findsOneWidget);
 
       await tester.tap(find.byKey(const ValueKey('coach-apply')));
       await tester.pump();
@@ -760,6 +757,75 @@ void main() {
       );
       final item = fixture.coach.entries.last.proposal!;
       expect(item.status, CoachProposalStatus.applied);
+    });
+
+    testWidgets('apply writes only the kept changes', (tester) async {
+      final fixture = await _openChat(tester);
+      fixture.client.answer(_validProposal);
+      await _send(tester, 'Swap my bench and add legs');
+      await tester.tap(find.text('Review'));
+      await pumpWithStorage(tester);
+
+      // Skipping the removal keeps Bench Press next to the new exercise.
+      await tester.tap(find.text('Bench Press'));
+      await tester.pump();
+      expect(find.text('2 of 3 changes selected'), findsOneWidget);
+      expect(find.text('Skipped'), findsOneWidget);
+      expect(find.text('1 of 2 changes selected'), findsOneWidget);
+      expect(find.text('Apply 2 of 3'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('coach-apply')));
+      await tester.pump();
+      await fixture.applier.complete(tester);
+      await pumpWithStorage(tester);
+
+      expect(find.text('Plans updated'), findsOneWidget);
+      final push = HiveService.getPlanById('a')!;
+      expect(push.exercises.map((exercise) => exercise.name), [
+        'Bench Press',
+        'Incline Dumbbell Press',
+      ]);
+      expect(push.exercises.first.setTargets!.first.weight, 60);
+      expect(
+        HiveService.getPlans(splitId: kSplitId).map((plan) => plan.name),
+        containsAll(['Push', 'Pull', 'Legs']),
+      );
+      final item = fixture.coach.entries.last.proposal!;
+      expect(item.status, CoachProposalStatus.applied);
+      expect(item.appliedPartly, isTrue);
+    });
+
+    testWidgets('apply is off until the kept changes fit together', (
+      tester,
+    ) async {
+      final fixture = await _openChat(tester);
+      fixture.client.answer(_validProposal);
+      await _send(tester, 'Swap my bench');
+      await tester.tap(find.text('Review'));
+      await pumpWithStorage(tester);
+      ElevatedButton apply() => tester.widget<ElevatedButton>(
+        find.byKey(const ValueKey('coach-apply')),
+      );
+
+      // Without its replacement, removing Bench Press empties Push.
+      await tester.tap(find.text('Incline Dumbbell Press'));
+      await tester.pump();
+      expect(
+        find.text('Push would have no exercises. Keep at least one.'),
+        findsOneWidget,
+      );
+      expect(apply().onPressed, isNull);
+
+      await tester.tap(find.text('Select all'));
+      await tester.pump();
+      expect(find.text('3 of 3 changes selected'), findsOneWidget);
+      expect(apply().onPressed, isNotNull);
+
+      await tester.tap(find.text('Clear all'));
+      await tester.pump();
+      expect(find.text('0 of 3 changes selected'), findsOneWidget);
+      expect(find.text('Select at least one change to apply.'), findsOne);
+      expect(apply().onPressed, isNull);
     });
 
     testWidgets('discard writes nothing', (tester) async {

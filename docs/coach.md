@@ -8,8 +8,9 @@ instruction were deployed on 2026-10-10 (now `coach` version 5, revision 3), wit
 under Eval.**
 
 The Coach lets a signed-in user create and restructure workout plans by chatting.
-It proposes changes; the user reviews a diff and applies or discards it. Nothing
-is written to Hive until the user applies.
+It proposes changes; the user reviews a diff, picks the changes to keep, and
+applies them or discards the lot. Nothing is written to Hive until the user
+applies.
 
 ## Settled direction
 
@@ -33,7 +34,8 @@ user message
   -> CoachClient -> Edge Function     auth, contract version, quota, prompt + schema, model call
   -> model returns {reply, proposal}  structured JSON, one call
   -> ProposalValidator (Dart)
-       ok      -> ProposalDiff -> proposal card -> review screen -> Apply / Discard
+       ok      -> ProposalDiff -> proposal card -> review screen (ProposalSelection)
+               -> Apply kept changes / Discard
        errors  -> one retry with the exact errors -> validate again
        errors  -> show the reply, explain the plan could not be used
 ```
@@ -224,7 +226,37 @@ it reports a rename and, per exercise, whether it was `added`, `removed`,
 `changed` (with old and new sets), or `unchanged`. It also flags exercises that
 moved, and notes that changed. Exercises are matched by name, ignoring case.
 The review screen renders the diff, and the same object supplies the summary on
-the chat's proposal card ("2 plans changed, 1 added").
+the chat's proposal card ("2 plans changed, 1 added"). Each `PlanDiff` and
+`ExerciseDiff` also keeps the stored plan or exercise and what the Coach
+proposed, so a partial selection can be rebuilt from either side.
+
+## Choosing changes
+
+`ProposalSelection` (`lib/services/coach/proposal_selection.dart`) turns the
+diff into changes the user can keep or skip. All of them start kept:
+
+- each added, removed, or changed exercise, including each exercise of a new
+  plan
+- a plan's rename
+- a plan's exercise order, when the Coach moved exercises it kept
+- removing a whole plan
+
+`resolve()` rebuilds a `ValidatedProposal` from the kept changes, with the same
+snapshot. `CoachApplier` writes it exactly as it writes a whole proposal, with
+the same stale check and rollback.
+
+- A skipped edit or removal writes the stored exercise unchanged
+  (`CoachExercise.stored`), so missing targets aren't padded and the note isn't
+  trimmed. Unchanged exercises are copied the same way.
+- A skipped removal goes back after the exercise it followed in the stored
+  plan. With the reorder skipped, the stored order stays, and a kept addition
+  goes after the exercise it followed in the proposal.
+- A plan with nothing kept isn't written, so its `updatedAt` doesn't move. A
+  new plan with no kept exercises isn't created.
+- `problems` lists combinations the validator would have refused, in words for
+  the user, and the review screen keeps `Apply` off while there are any: a plan
+  left with no exercises, an active split left with no plans or more than 10,
+  and two plans with the same name (a skipped rename can cause that).
 
 ## Applying
 
@@ -537,14 +569,30 @@ makes it pass; `contract` sends the real v1 prompt and a fixture context.
 - **Proposal card:** a reply that carries a proposal shows a card under it, such
   as "Push Pull Legs · 2 plans changed, 1 added", with a `Review` button. A
   stale proposal shows "Plans changed. Ask again with the latest?" instead.
-- **Review screen:** one card per affected plan:
-  - added exercises in the accent ink
-  - removed exercises struck through in the error colour
-  - changed sets shown as old → new
+- **Review screen:** a header names the split ("Changes to your split" or "New
+  split"), says nothing is saved until the user applies, and counts the
+  selection ("6 of 8 changes selected") next to `Select all` / `Clear all`.
+  Then one card per affected plan:
+  - a header with a checkbox for the whole plan (mixed when only some changes
+    are kept), the plan name, a status label (`New plan`, `Edited`, or `Delete
+    plan`), and "1 of 2 changes selected"
+  - one checkbox row per change. Tapping anywhere on the row toggles it. A
+    verb line says what happens (`Add` in the accent ink, `Remove` in the
+    error colour, `Change`, `Rename`, `Reorder`), so colour is never the only
+    cue. Rows in a new plan skip the verb, since all of them are additions
+  - changed sets, notes, names, and orders as `Before` and `After` lines, with
+    the side that will be written in the stronger weight
+  - a skipped row turns secondary and says `Skipped`
+  - unchanged exercises folded into one "Unchanged: …" line
   - a label on custom exercises
 
-  The bottom bar has `Discard` and `Apply`. Apply shows progress, writes the
-  changes, returns to Home, and shows "Plans updated".
+  A deleted plan's card lists its exercises and has only the header checkbox.
+  The bottom bar has `Discard` and `Apply`, which reads "Apply 6 of 8" when
+  some changes are skipped. With nothing kept, or with a conflict, `Apply` is
+  off, and the reason sits above the buttons. Apply shows progress, writes the
+  kept changes, returns to Home, and shows "Plans updated". The chat card then
+  says "Applied", or "Applied some changes". The selection lives on the
+  proposal, so leaving the review and coming back keeps it.
 - **Conversation memory:** the conversation is held in a `CoachProvider` for the
   whole app session, so leaving and reopening the Coach keeps it. It isn't
   saved to Hive, synced, or included in backups. It clears when the account
@@ -632,6 +680,7 @@ The disclosure sheet states that the Coach is not medical advice.
 | `lib/services/coach/coach_context_builder.dart` | Training summary, context JSON, and snapshot |
 | `lib/services/coach/proposal_validator.dart` | Parsing, validation, and error messages |
 | `lib/services/coach/proposal_diff.dart` | Diff between the snapshot and the proposal |
+| `lib/services/coach/proposal_selection.dart` | The changes the user keeps, resolved back into a proposal |
 | `lib/services/coach/coach_applier.dart` | Exclusive write with rollback |
 | `lib/services/coach/coach_request.dart` | The request body, free of Flutter so the eval can use it |
 | `lib/services/coach/coach_client.dart` | Proxy call, contract version, and error mapping |
@@ -639,7 +688,7 @@ The disclosure sheet states that the Coach is not medical advice.
 | `lib/screens/coach_screen.dart`, `coach_review_screen.dart` | Chat and review |
 | `lib/services/coach/coach_disclosure.dart` | Per-user, per-version disclosure acceptance |
 | `lib/services/coach/coach_status_store.dart` | Last reported usage and model, per user |
-| `lib/widgets/coach/` | Home button, open flow, and `CoachHost` (the shell's hook), disclosure sheet, status strip, chat entries and proposal card, diff cards |
+| `lib/widgets/coach/` | Home button, open flow, and `CoachHost` (the shell's hook), disclosure sheet, status strip, chat entries and proposal card, review cards |
 | `supabase/functions/coach/` | The Edge Function; `contracts/` holds one prompt and schema per version |
 | `supabase/functions/tests/` | Deno unit tests and the schema smoke test |
 | `supabase/migrations/` | `coach_usage`, `coach_charge`, and `coach_record_tokens` |

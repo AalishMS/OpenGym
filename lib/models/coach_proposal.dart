@@ -106,19 +106,50 @@ class CoachExercise {
   /// Not in the exercise library. The review screen labels these.
   final bool custom;
 
+  /// Set when the user kept a stored exercise as it was, by declining a
+  /// change or because nothing changed. [toTemplate] then copies it
+  /// unchanged, so missing targets aren't padded and the note isn't trimmed.
+  final ExerciseTemplate? stored;
+
   CoachExercise({
     required this.name,
     required List<CoachSet> sets,
     this.note,
     this.custom = false,
-  }) : sets = List.unmodifiable(sets);
+  }) : sets = List.unmodifiable(sets),
+       stored = null;
 
-  ExerciseTemplate toTemplate() => ExerciseTemplate(
-    name: name,
-    sets: sets.length,
-    setTargets: [for (final set in sets) set.toTemplate()],
-    note: note,
-  );
+  /// [template] as it is stored.
+  CoachExercise.stored(ExerciseTemplate template)
+    : name = template.name,
+      sets = List.unmodifiable(coachSetsOf(template)),
+      note = coachNote(template.note),
+      custom = false,
+      stored = template;
+
+  ExerciseTemplate toTemplate() {
+    final stored = this.stored;
+    if (stored != null) {
+      return ExerciseTemplate(
+        name: stored.name,
+        sets: stored.sets,
+        setTargets:
+            stored.setTargets == null
+                ? null
+                : [
+                  for (final target in stored.setTargets!)
+                    SetTemplate(reps: target.reps, weight: target.weight),
+                ],
+        note: stored.note,
+      );
+    }
+    return ExerciseTemplate(
+      name: name,
+      sets: sets.length,
+      setTargets: [for (final set in sets) set.toTemplate()],
+      note: note,
+    );
+  }
 }
 
 class CoachPlan {
