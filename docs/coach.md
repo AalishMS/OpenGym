@@ -797,6 +797,10 @@ price of $0.75 / $3.75.
     with 5 splits. Revision 3 applies the rule only when a new split is
     requested and never mentions the limit otherwise. The eval case
     `limit_unrelated` covers it: no mention of the limit in 2 of 2 runs.
+  - Rechecked on the emulator with a rebuilt app against `coach` version 5:
+    `Try again` after an offline failure leaves one question and its answer.
+    The squat reply on the 5-split account doesn't mention the limit. The
+    `Sign in` action is covered by a widget test, not yet on a device.
   - **The plan-limit retry miscounted.** The validator's error now gives
     the exact room left ("It has 9 now, so add at most 1 new plan"), and
     4 of 4 reruns passed.
