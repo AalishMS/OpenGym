@@ -3,9 +3,9 @@
 Status: **design settled. The pure-Dart parts, the proxy (deployed 2026-10-09,
 `coach` v1 with `coach_usage` migrated), the UI, and the eval (2026-10-10) are
 built. Model decision: keep Flash-Lite. The revised v1 prompt and retry
-instruction are in the repo but not yet deployed (deployed `coach` is version
-2): the owner deploys them and sets `COACH_FALLBACK_MODEL` to
-`gemini-3.1-flash-lite`. Next: the closed-test checklist under Eval.**
+instruction were deployed on 2026-10-10 (`coach` version 4), with
+`COACH_FALLBACK_MODEL=gemini-3.1-flash-lite`. Next: the closed-test checklist
+under Eval.**
 
 The Coach lets a signed-in user create and restructure workout plans by chatting.
 It proposes changes; the user reviews a diff and applies or discards it. Nothing
@@ -705,7 +705,8 @@ backup format change.
   confirm.
 
 Free-tier limits read in AI Studio on 2026-10-10: `gemini-3.5-flash-lite`
-500 requests a day, `gemini-3.5-flash` **2** a day. Pass `--max-calls` for any
+500 requests a day, `gemini-3.1-flash-lite` 500 a day (a separate quota),
+`gemini-3.5-flash` **2** a day. Pass `--max-calls` for any
 model with a small limit.
 
 ```bash
@@ -764,10 +765,9 @@ price of $0.75 / $3.75.
 
 ### Before a closed test
 
-- Deploy revision 2 (`supabase functions deploy coach`) and set
-  `COACH_FALLBACK_MODEL=gemini-3.1-flash-lite`. The contract version and
-  schema are unchanged, so no app release is needed.
-- Read `gemini-3.1-flash-lite`'s daily limit in AI Studio and record it here.
+- Done 2026-10-10: revision 2 deployed (`coach` version 4, JWT verification
+  on) and `COACH_FALLBACK_MODEL=gemini-3.1-flash-lite`. The validator message
+  fix reaches users with the next app release.
 - Device checks still pending from step 3:
   - the Android offline notice
   - the keyboard and the input bar

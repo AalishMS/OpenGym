@@ -96,7 +96,7 @@ candidate 2 always includes it.
 - `COACH_GLOBAL_DAILY_LIMIT` is 450 against Flash-Lite's 500 a day, which is
   the planned 90%.
 
-### Revision 2, ready to deploy (later on 2026-10-10)
+### Revision 2, deployed (later on 2026-10-10)
 
 Candidate 2 and the `retryInstruction` line are now in the repo
 (`contracts/v1.ts`, `prompt.ts`), and the eval ran against those files
@@ -126,7 +126,7 @@ directly (`v1-rev2`):
   proposal, so the owner approved it as the fallback. The status strip
   names the model that answered.
 
-### Server change (in the repo since revision 2; deployed by the owner)
+### Server change (revision 2, deployed 2026-10-10 as `coach` version 4)
 
 The schema and response shape don't change, so this stays **contract v1**:
 redeploy `coach` with the new prompt, and no app release is needed. The

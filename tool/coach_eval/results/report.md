@@ -100,7 +100,37 @@ candidate 2 always includes it.
 - `COACH_GLOBAL_DAILY_LIMIT` is 450 against Flash-Lite's 500 a day, which is
   the planned 90%.
 
-### Proposed server change (not deployed)
+### Revision 2, deployed (later on 2026-10-10)
+
+Candidate 2 and the `retryInstruction` line are now in the repo
+(`contracts/v1.ts`, `prompt.ts`), and the eval ran against those files
+directly (`v1-rev2`):
+
+| Model | Pass first / after retry | Median call | Tokens in / out | Cost per call | Mean grade |
+| --- | --- | --- | --- | --- | --- |
+| `gemini-3.5-flash-lite` (primary) | 38/40 · 40/40 | 2.3 s | 3571 / 465 | $0.0022 | 1.89 |
+| `gemini-3.1-flash-lite` (new fallback) | 18/20 · 20/20 | 3.1 s | 3575 / 734 | $0.0020 | 1.72 |
+
+- **The retry fix works.** Replies after a retry now describe the plan, for
+  example "I've added a core day for you".
+- **Fixed on both runs:** the split limit, the plan limit, and the vague
+  request.
+- **Still open:** logging and rescheduling. Run 1 raised the bench and
+  renamed Legs to "Saturday Legs". Run 2 changed nothing, but its reply
+  claims it updated the bench. The review screen shows any such change
+  before it's applied, so the harm is limited. It needs a further prompt
+  pass, or a rule in the validator.
+- **The fallback model is weaker.** `gemini-3.1-flash-lite` always produced
+  valid output, but its judgement is worse:
+  - `remove_day`: rewrote the whole split into full-body days
+  - `new_split`: ignored the history and set every weight to 0
+  - `vague`: deloaded three lifts instead of asking
+
+  It only answers when the primary fails, and the user reviews every
+  proposal, so the owner approved it as the fallback. The status strip
+  names the model that answered.
+
+### Server change (revision 2, deployed 2026-10-10 as `coach` version 4)
 
 The schema and response shape don't change, so this stays **contract v1**:
 redeploy `coach` with the new prompt, and no app release is needed. The
