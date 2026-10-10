@@ -290,14 +290,22 @@ class CoachProvider with ChangeNotifier {
     }
   }
 
+  /// Only the newest failure can be retried. Once the conversation has moved
+  /// on, an older failure stays as a plain line rather than offering a stale
+  /// `Try again`.
+  bool canRetry(CoachEntry failure) =>
+      failure.role == CoachEntryRole.failure &&
+      failure.prompt != null &&
+      _entries.isNotEmpty &&
+      identical(_entries.last, failure);
+
   /// `Try again` on a failure line: the failed question and its failure leave
   /// the chat, and the question is sent again as a new turn.
   Future<void> retry(CoachEntry failure) {
     final prompt = failure.prompt;
     final index = _entries.indexOf(failure);
     if (prompt == null ||
-        index < 0 ||
-        failure.role != CoachEntryRole.failure ||
+        !canRetry(failure) ||
         _sending ||
         limitReached ||
         _splits.activeSplit == null) {

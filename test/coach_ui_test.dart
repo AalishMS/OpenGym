@@ -514,6 +514,21 @@ void main() {
       expect(fixture.coach.entries, hasLength(2));
     });
 
+    testWidgets('only the newest failure offers Try again', (tester) async {
+      final fixture = await _openChat(tester);
+      fixture.client
+        ..fail(CoachFailureKind.busy)
+        ..answer(_output('Fine now.'));
+      await _send(tester, 'First');
+      expect(find.text('Try again'), findsOneWidget);
+
+      await _send(tester, 'Second');
+      // The first failure stays as a line, without a stale button.
+      expect(find.text(CoachFailureKind.busy.message), findsOneWidget);
+      expect(find.text('Fine now.'), findsOneWidget);
+      expect(find.text('Try again'), findsNothing);
+    });
+
     testWidgets('a 401 offers Sign in, which signs out to the login', (
       tester,
     ) async {

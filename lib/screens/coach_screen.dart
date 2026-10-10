@@ -232,7 +232,7 @@ class _CoachScreenState extends State<CoachScreen> {
                                                 ? null
                                                 : () => coach.askAgain(entry),
                                         onRetry:
-                                            busy || entry.prompt == null
+                                            busy || !coach.canRetry(entry)
                                                 ? null
                                                 : () => coach.retry(entry),
                                         onCheckUpdates: _checkUpdates,

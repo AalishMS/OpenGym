@@ -584,7 +584,9 @@ Decisions the build added to the UI above:
   the failed question and its failure line and sends the message again, so
   a recovered turn reads as one question and one answer. A 426 adds `Check
   for updates`, which runs the Settings check where the user is rather than
-  switching tabs. A 401 adds `Sign in`, which signs out to the login. A
+  switching tabs. Only the newest failure offers `Try again`: once the
+  conversation moves on, an older failure stays as a plain line. A 401 adds
+  `Sign in`, which signs out to the login. A
   session revoked on the server otherwise leaves the app looking signed in.
 - **Stale checks** run when the chat opens, whenever `SplitProvider` reloads
   (including after a sync pull), and when `Review` is tapped, so an out-of-date
