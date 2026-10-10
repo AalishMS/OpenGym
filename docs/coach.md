@@ -768,10 +768,33 @@ price of $0.75 / $3.75.
 - Done 2026-10-10: revision 2 deployed (`coach` version 4, JWT verification
   on) and `COACH_FALLBACK_MODEL=gemini-3.1-flash-lite`. The validator message
   fix reaches users with the next app release.
-- Device checks still pending from step 3:
-  - the Android offline notice
-  - the keyboard and the input bar
-  - a 401 after an expired session
+- Device checks, done 2026-10-10 on the Android emulator (API 36, debug
+  build, deployed `coach` version 4). All three passed:
+  - **Offline notice.** In airplane mode the Coach shows the connection
+    notice, the input stays usable, and a message sent offline fails with the
+    same copy and `Try again`, spending no quota. The notice clears on the
+    next answer.
+  - **Keyboard and input bar.** With Gboard open, the input bar and send
+    button stay fully visible above it. The bottom bar hides behind the
+    keyboard, and nothing is clipped.
+  - **401 after an expired session.** The test user's `auth.sessions` rows
+    were deleted on the server. The next message showed "Sign in again to
+    use the Coach." and spent no quota. After signing out and back in, the
+    Coach answered again, and the conversation had started over.
+- Follow-ups the device checks found:
+  - **The 401 has no way forward.** The app stays "signed in": Settings
+    still shows "Synced / Your data is up to date", even though sync can't
+    work either. The user has to find Settings → Sign out on their own.
+    Either sign out on a 401 or add a `Sign in` action to that chat line.
+  - **A retried failure stays in the chat.** After `Try again` succeeds, the
+    failed entry stays, with the question shown twice and a stale `Try again`
+    button.
+  - **The split-limit rule leaks.** On an account with 5 splits, "Why has my
+    squat stalled" got an unprompted "you're at the maximum of 5 splits" in
+    the reply. The prompt's split rule needs to apply only when a new split
+    is requested.
+  - **Unconfirmed:** once, the Coach screen had closed back to Home while the
+    app sat idle. The cause wasn't found.
 - Testers are informed adults only: the free tier lets Google use prompts.
   Before any public release, turn billing on (EEA/UK/Switzerland rule) and
   set a spend control. See Risks and terms.
