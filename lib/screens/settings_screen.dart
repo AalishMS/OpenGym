@@ -104,10 +104,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     context.read<UpdateProvider>().loadInstalledVersion();
   }
 
-  String _getAccentColorName(SettingsProvider settings) {
-    return SettingsProvider.accents[settings.accentIndex].name;
-  }
-
   String? _signedInEmail() {
     try {
       return SupabaseService.currentUser?.email;
@@ -512,67 +508,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
     BuildContext context,
     SettingsProvider settings,
   ) {
-    final border = borderColor(context);
-    final accent = accentColor(context);
-    final textSecondary = textSecondaryColor(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const columns = 4;
+    const gap = 8.0;
+    final count = SettingsProvider.accents.length;
+    final rows = (count / columns).ceil();
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Accent color',
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: accent,
-            ),
-          ),
+          Text('Accent color', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
-            _getAccentColorName(settings),
-            style: GoogleFonts.jetBrainsMono(
-              fontSize: 10,
-              color: textSecondary,
-            ),
+            'Used for buttons, highlights and charts.',
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: List.generate(SettingsProvider.accents.length, (index) {
-              final option = SettingsProvider.accents[index];
-              final isSelected = settings.accentIndex == index;
-              final isDark = Theme.of(context).brightness == Brightness.dark;
-              return _buildColorBox(
-                option,
-                isSelected,
-                settings,
-                isDark,
-                border,
-                textSecondary,
-              );
-            }),
-          ),
+          // Equal-width cells in a fixed grid, so the eight options always
+          // fill complete rows instead of wrapping to a ragged last line.
+          for (var row = 0; row < rows; row++) ...[
+            if (row > 0) const SizedBox(height: gap),
+            Row(
+              children: [
+                for (var col = 0; col < columns; col++) ...[
+                  if (col > 0) const SizedBox(width: gap),
+                  Expanded(
+                    child:
+                        row * columns + col < count
+                            ? _buildColorBox(
+                              context,
+                              row * columns + col,
+                              settings,
+                              isDark,
+                            )
+                            : const SizedBox.shrink(),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildColorBox(
-    AppAccent option,
-    bool isSelected,
+    BuildContext context,
+    int index,
     SettingsProvider settings,
     bool isDark,
-    Color border,
-    Color textSecondary,
   ) {
-    // One swatch, not two. The old box showed the hand-picked dark and light
-    // hexes side by side; they differed by about a shade, so the pair read as
-    // noise rather than as information. There is now a single tone per mode,
-    // resolved through the same solver the theme uses, so this chip is exactly
-    // the colour that selecting it will paint.
+    final option = SettingsProvider.accents[index];
+    final isSelected = settings.accentIndex == index;
+    // One tone per mode, resolved through the same solver the theme uses, so
+    // this swatch is exactly the colour that selecting it will paint.
     final swatch = accentToneFor(
       option.seed,
       isDark ? Brightness.dark : Brightness.light,
@@ -582,44 +573,60 @@ class _SettingsScreenState extends State<SettingsScreen> {
       label: '${option.name} accent',
       button: true,
       selected: isSelected,
+      excludeSemantics: true,
       child: InkWell(
-        key: ValueKey(
-          'accent-swatch-${SettingsProvider.accents.indexOf(option)}',
-        ),
+        key: ValueKey('accent-swatch-$index'),
         onTap:
             () => _runSettingsAction(
               context,
-              () => settings.setAccentColor(
-                SettingsProvider.accents.indexOf(option),
-              ),
+              () => settings.setAccentColor(index),
             ),
         borderRadius: AppRadius.button,
         child: Container(
-          width: 64,
-          height: 64,
-          padding: const EdgeInsets.all(8),
+          height: 76,
           decoration: BoxDecoration(
             color:
                 isSelected ? accentMutedColor(context) : surfaceColor(context),
+            // Constant width so selecting never shifts the layout.
             border: Border.all(
-              color: isSelected ? swatch : border,
-              width: isSelected ? 2 : 1,
+              color: isSelected ? swatch : Colors.transparent,
+              width: 2,
             ),
             borderRadius: AppRadius.button,
           ),
-          child: Stack(
-            alignment: Alignment.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Container(
                 width: 32,
                 height: 32,
+                alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: swatch,
-                  borderRadius: AppRadius.badge,
+                  shape: BoxShape.circle,
+                ),
+                child:
+                    isSelected
+                        ? Icon(
+                          LucideIcons.check,
+                          size: 18,
+                          color: onColor(swatch),
+                        )
+                        : null,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                option.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color:
+                      isSelected
+                          ? textPrimaryColor(context)
+                          : textSecondaryColor(context),
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
-              if (isSelected)
-                Icon(LucideIcons.check, size: 18, color: onColor(swatch)),
             ],
           ),
         ),
