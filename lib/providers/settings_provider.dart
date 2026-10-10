@@ -28,6 +28,7 @@ class SettingsProvider with ChangeNotifier {
   static const String _accentColorKey = 'accent_color';
   static const String _weightUnitKey = 'weight_unit';
   static const String _autoFillKey = 'auto_fill_last';
+  static const String _coachEnabledKey = 'coach_enabled';
 
   /// **Order is persisted.** `_accentIndex` is stored as an integer, so indices
   /// Each index keeps its original color family so saved preferences survive
@@ -55,11 +56,15 @@ class SettingsProvider with ChangeNotifier {
   int _accentIndex = defaultAccentIndex;
   String _weightUnit = 'kg';
   bool _autoFillLast = true;
+  bool _coachEnabled = false;
 
   ThemeMode get themeMode => _themeMode;
   int get accentIndex => _accentIndex;
   String get weightUnit => _weightUnit;
   bool get autoFillLast => _autoFillLast;
+
+  /// The AI Coach is opt-in: off until the user turns it on in Settings.
+  bool get coachEnabled => _coachEnabled;
 
   /// The active accent's seed — the *only* accent value that leaves this
   /// provider, and it exists for exactly one caller: `main.dart`, which hands it
@@ -95,6 +100,7 @@ class SettingsProvider with ChangeNotifier {
 
     _weightUnit = prefs.getString(_weightUnitKey) ?? 'kg';
     _autoFillLast = prefs.getBool(_autoFillKey) ?? true;
+    _coachEnabled = prefs.getBool(_coachEnabledKey) ?? false;
 
     notifyListeners();
   }
@@ -126,6 +132,13 @@ class SettingsProvider with ChangeNotifier {
     _autoFillLast = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_autoFillKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setCoachEnabled(bool value) async {
+    _coachEnabled = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_coachEnabledKey, value);
     notifyListeners();
   }
 }

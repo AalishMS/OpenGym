@@ -64,12 +64,21 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _workoutPlanProvider = WorkoutPlanProvider(_splitProvider);
     _workoutSessionProvider = WorkoutSessionProvider(_splitProvider);
     _settingsProvider = SettingsProvider();
-    _coachProvider = CoachProvider(splitProvider: _splitProvider);
+    _coachProvider = CoachProvider(
+      splitProvider: _splitProvider,
+      enabled: _settingsProvider.coachEnabled,
+    );
+    _settingsProvider.addListener(_syncCoachEnabled);
+  }
+
+  void _syncCoachEnabled() {
+    _coachProvider.enabled = _settingsProvider.coachEnabled;
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _settingsProvider.removeListener(_syncCoachEnabled);
     super.dispose();
   }
 

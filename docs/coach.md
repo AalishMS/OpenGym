@@ -535,8 +535,11 @@ makes it pass; `contract` sends the real v1 prompt and a fixture context.
   bar (or the desktop rail) stays on screen. The back arrow, system back, or a
   second tap on Home closes it. Switching to another tab keeps it open under
   Home.
-- **Availability:** in an offline-only build, or while signed out, the button is
-  hidden. Without a connection, `CoachScreen` opens with a notice: "The Coach
+- **Availability:** the Coach is opt-in. Settings → Artificial intelligence →
+  Coach turns it on, and it starts off (`coach_enabled` in SharedPreferences).
+  While it is off, in an offline-only build, or while signed out, the button is
+  hidden, an open Coach closes, and `send` does nothing. Turning it off also
+  drops the conversation. The toggle is hidden in offline-only builds. Without a connection, `CoachScreen` opens with a notice: "The Coach
   needs a connection. Your plans still work offline." Plan editing never waits
   on the Coach.
 - **First use:** a disclosure sheet covers:

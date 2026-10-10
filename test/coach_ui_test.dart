@@ -288,6 +288,33 @@ void main() {
       expect(find.byKey(const ValueKey('coach-button')), findsNothing);
     });
 
+    testWidgets('the Settings toggle hides and shows the button', (
+      tester,
+    ) async {
+      final fixture = _Fixture();
+      addTearDown(fixture.dispose);
+      fixture.coach.enabled = false;
+      await tester.pumpWidget(fixture.app(const _Home()));
+      await pumpWithStorage(tester);
+      expect(find.byKey(const ValueKey('coach-button')), findsNothing);
+      expect(fixture.coach.available, isFalse);
+
+      fixture.coach.enabled = true;
+      await pumpWithStorage(tester);
+      expect(find.byKey(const ValueKey('coach-button')), findsOneWidget);
+    });
+
+    test(
+      'turning the Coach off drops the conversation and refuses sends',
+      () async {
+        final fixture = _Fixture();
+        addTearDown(fixture.dispose);
+        fixture.coach.enabled = false;
+        await fixture.coach.send('Build me a plan');
+        expect(fixture.coach.entries, isEmpty);
+      },
+    );
+
     testWidgets('Continue waits for the age box, then opens the Coach', (
       tester,
     ) async {

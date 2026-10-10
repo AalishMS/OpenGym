@@ -121,6 +121,7 @@ class CoachProvider with ChangeNotifier {
   bool _connectionNotice = false;
   String? _splitId;
   String? _userId;
+  bool _enabled;
 
   /// Bumped on every reset, so a reply to an abandoned conversation is
   /// dropped.
@@ -137,7 +138,9 @@ class CoachProvider with ChangeNotifier {
     CoachStatusStore statusStore = const CoachStatusStore(),
     DateTime Function()? now,
     Future<void> Function()? signOut,
-  }) : _splits = splitProvider,
+    bool enabled = true,
+  }) : _enabled = enabled,
+       _splits = splitProvider,
        _client = client ?? SupabaseCoachClient(),
        _userIdProvider =
            userIdProvider ?? (() => SupabaseService.currentUserId),
@@ -188,8 +191,21 @@ class CoachProvider with ChangeNotifier {
 
   String? get userId => _userIdProvider();
 
-  /// Hidden in offline-only builds and while signed out.
-  bool get available => _isConfigured() && _userIdProvider() != null;
+  /// Hidden in offline-only builds, while signed out, and while the user has
+  /// it turned off in Settings.
+  bool get available =>
+      _enabled && _isConfigured() && _userIdProvider() != null;
+
+  bool get enabled => _enabled;
+
+  /// Follows the Settings toggle. Turning it off drops the conversation and
+  /// any reply still on its way.
+  set enabled(bool value) {
+    if (value == _enabled) return;
+    _enabled = value;
+    if (!value) _reset();
+    notifyListeners();
+  }
 
   /// "The Coach needs a connection" shows above the chat.
   bool get connectionNotice => _connectionNotice;
@@ -235,7 +251,7 @@ class CoachProvider with ChangeNotifier {
   Future<void> send(String rawText) async {
     final text = rawText.trim();
     final split = _splits.activeSplit;
-    if (text.isEmpty || _sending || split == null) return;
+    if (text.isEmpty || _sending || split == null || !available) return;
     if (_userIdProvider() != _userId) resetForAccount();
     if (limitReached) return;
     if (split.id != _splitId) {

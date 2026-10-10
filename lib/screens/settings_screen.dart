@@ -261,6 +261,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 () => settings.setAutoFillLast(value),
                               ),
                         ),
+                        if (SupabaseService.isConfigured) ...[
+                          const _SectionHeader(
+                            title: 'Artificial intelligence',
+                          ),
+                          _buildSwitchTile(
+                            context: context,
+                            icon: LucideIcons.messageSquareText,
+                            title: 'Coach',
+                            subtitle:
+                                'Ask the AI Coach to build or change your plans',
+                            value: settings.coachEnabled,
+                            onChanged:
+                                (value) => _runSettingsAction(
+                                  context,
+                                  () => settings.setCoachEnabled(value),
+                                ),
+                          ),
+                        ],
                         const _SectionHeader(title: 'Data'),
                         _buildSettingsTile(
                           icon: LucideIcons.flaskConical,

@@ -44,4 +44,17 @@ void main() {
     expect(settings.accentIndex, 0);
     expect(settings.accentSeed, const Color(0xFF6AA9ED));
   });
+
+  test('the Coach is off until the user turns it on', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final settings = SettingsProvider();
+    await waitForSettingsLoad(settings);
+    expect(settings.coachEnabled, isFalse);
+
+    await settings.setCoachEnabled(true);
+    final reloaded = SettingsProvider();
+    await waitForSettingsLoad(reloaded);
+    expect(reloaded.coachEnabled, isTrue);
+  });
 }
