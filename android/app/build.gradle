@@ -24,9 +24,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
-        // Required by ota_update, which uses java.nio.file APIs that do not
-        // exist on older Android runtimes. Without this the release build fails
-        // at :app:checkReleaseAarMetadata.
+        // Lets plugins use java.time and java.nio APIs that older Android
+        // runtimes lack. A plugin that needs it fails the release build at
+        // :app:checkReleaseAarMetadata without it.
         coreLibraryDesugaringEnabled = true
     }
 

@@ -12,21 +12,12 @@
          then confirm the install; this only allows us to ask. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
 
-    <!-- ota_update's own manifest merges these two in, and neither belongs in a
-         normal app. The plugin downloads to internal storage
-         (dataDir/files/ota_update) and never touches the shared volume, so
-         WRITE_EXTERNAL_STORAGE only adds a scary line to the permission list.
-         INSTALL_PACKAGES is signature|privileged: a sideloaded app can never
-         hold it, and the plugin already falls back to asking the system
-         installer when it is denied. -->
+    <!-- No feature touches shared storage: update downloads land in the app's
+         own external files directory, which needs no permission. These
+         removals keep a dependency from adding a storage permission line the
+         app never uses. -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         tools:node="remove"/>
-    <uses-permission android:name="android.permission.INSTALL_PACKAGES"
-        tools:node="remove"/>
-    <!-- The merger derives this from ota_update's WRITE_EXTERNAL_STORAGE before
-         it honours the removal above, so the implied sibling has to go too.
-         Nothing else needs it: file_picker declares no storage permission and
-         reaches files through the Storage Access Framework. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         tools:node="remove"/>
 
@@ -70,30 +61,26 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- ota_update ships the OtaUpdateFileProvider class but does NOT declare
-             it, so the app has to. Without this entry the plugin's
-             FileProvider.getUriForFile call throws once the download finishes and
-             takes the app down with it. The authority must stay exactly
-             "<applicationId>.ota_update_provider" — that is the default the
-             plugin derives from the package name. -->
+        <!-- Hands the downloaded update APK to the system installer. Only the
+             updates/ folder is exposed; see res/xml/filepaths.xml. -->
         <provider
-            android:name="sk.fourq.otaupdate.OtaUpdateFileProvider"
-            android:authorities="${applicationId}.ota_update_provider"
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.update_provider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/filepaths" />
         </provider>
-        <!-- Only used by the plugin's PackageInstaller path, which needs a
-             broadcast target for the install result. We take the
-             ACTION_INSTALL_PACKAGE path instead, but declaring this costs
-             nothing and keeps the plugin whole if that path is ever taken. -->
+        <!-- Posts "Update ready to install" when the system finishes the update
+             download while OpenGym is in the background. Exported because the
+             sender is the system download provider; the receiver re-reads the
+             real status from DownloadManager instead of trusting the intent. -->
         <receiver
-            android:name="sk.fourq.otaupdate.InstallResultReceiver"
-            android:exported="false">
+            android:name=".UpdateDownloadReceiver"
+            android:exported="true">
             <intent-filter>
-                <action android:name="${applicationId}.ACTION_INSTALL_COMPLETE"/>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
             </intent-filter>
         </receiver>
         <receiver

@@ -134,7 +134,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
       case UpdateStatus.upToDate:
         return "You're up to date";
       case UpdateStatus.downloading:
+        if (updates.isWaitingForNetwork) return 'Waiting for network...';
         return 'Downloading... ${(updates.progress * 100).round()}%';
+      case UpdateStatus.downloaded:
+        return '${updates.release?.version.displayLabel ?? 'The update'} is ready to install';
       case UpdateStatus.installing:
         return 'Opening the installer...';
       case UpdateStatus.failed:

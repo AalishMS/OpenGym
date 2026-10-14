@@ -250,6 +250,83 @@ void main() {
     );
   });
 
+  group('UpdateDownloadSnapshot.fromMap', () {
+    test('reads a running download and its progress', () {
+      final snapshot = UpdateDownloadSnapshot.fromMap(const {
+        'state': 'running',
+        'tag': 'v1.0.1+2',
+        'downloaded': 25,
+        'total': 100,
+        'reason': 0,
+      });
+      expect(snapshot.state, UpdateDownloadState.running);
+      expect(snapshot.tag, 'v1.0.1+2');
+      expect(snapshot.fraction, 0.25);
+      expect(snapshot.isActive, isTrue);
+      expect(snapshot.isWaitingForNetwork, isFalse);
+    });
+
+    test('leaves progress unknown until the size is known', () {
+      final snapshot = UpdateDownloadSnapshot.fromMap(const {
+        'state': 'pending',
+        'tag': 'v1.0.1+2',
+        'total': -1,
+      });
+      expect(snapshot.fraction, isNull);
+    });
+
+    test('recognises a pause that waits for the network', () {
+      for (final reason in [1, 2, 3]) {
+        final snapshot = UpdateDownloadSnapshot.fromMap({
+          'state': 'paused',
+          'tag': 'v1.0.1+2',
+          'reason': reason,
+        });
+        expect(snapshot.isWaitingForNetwork, isTrue, reason: '$reason');
+      }
+    });
+
+    test('treats missing or unknown data as no download', () {
+      expect(
+        UpdateDownloadSnapshot.fromMap(null).state,
+        UpdateDownloadState.none,
+      );
+      expect(
+        UpdateDownloadSnapshot.fromMap(const {'state': 'exploded'}).state,
+        UpdateDownloadState.none,
+      );
+    });
+  });
+
+  group('InstallResult.fromMap', () {
+    test('reads the installer outcome and failure code', () {
+      final result = InstallResult.fromMap({'outcome': 'failed', 'code': -7})!;
+      expect(result.outcome, InstallOutcome.failed);
+      expect(result.code, -7);
+    });
+
+    test('returns null when the installer said nothing usable', () {
+      expect(InstallResult.fromMap(null), isNull);
+      expect(InstallResult.fromMap({'outcome': 'maybe'}), isNull);
+    });
+  });
+
+  group('failure messages', () {
+    test('name the fix for storage and signing problems', () {
+      expect(downloadFailureMessage(1006), contains('free storage'));
+      expect(downloadFailureMessage(404), contains('no longer on GitHub'));
+      expect(downloadFailureMessage(1004), contains('connection'));
+      expect(installFailureMessage(-7), contains('uninstall OpenGym'));
+      expect(installFailureMessage(-4), contains('free storage'));
+      expect(installFailureMessage(-110), contains('error -110'));
+    });
+  });
+
+  test('update file names keep only path-safe characters', () {
+    expect(updateFileName('v1.0.12+13'), 'OpenGym-v1.0.12_13.apk');
+    expect(updateFileName('../evil'), 'OpenGym-.._evil.apk');
+  });
+
   group('formatBytes', () {
     test('renders a download size the way a person reads it', () {
       expect(formatBytes(24117248), '23.0 MB');

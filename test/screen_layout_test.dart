@@ -640,6 +640,8 @@ void main() {
               ? 'Only available on Android'
               : status == UpdateStatus.failed
               ? 'Network unavailable'
+              : status == UpdateStatus.downloaded
+              ? 'ready to install'
               : status == UpdateStatus.available
               ? 'ready'
               : status == UpdateStatus.upToDate

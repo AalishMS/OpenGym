@@ -22,6 +22,10 @@ class MainActivity: FlutterActivity() {
     private var pendingTimerIntentAction: String? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
 
+    // The installer's answer, held until Dart asks for it on resume. Android
+    // delivers it in onActivityResult, just before onResume.
+    private var pendingInstallResult: Map<String, Any?>? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
@@ -32,6 +36,39 @@ class MainActivity: FlutterActivity() {
                 }
                 "openInstallPermissionSettings" -> {
                     result.success(openInstallPermissionSettings())
+                }
+                "startDownload" -> {
+                    try {
+                        UpdateDownloads.start(
+                            this,
+                            url = call.argument<String>("url")!!,
+                            tag = call.argument<String>("tag")!!,
+                            fileName = call.argument<String>("fileName")!!,
+                            title = call.argument<String>("title") ?: "OpenGym update",
+                        )
+                        result.success(null)
+                    } catch (e: Exception) {
+                        result.error("download_failed", e.message, null)
+                    }
+                }
+                "downloadStatus" -> {
+                    try {
+                        result.success(UpdateDownloads.status(this))
+                    } catch (e: Exception) {
+                        result.error("status_failed", e.message, null)
+                    }
+                }
+                "cancelDownload" -> {
+                    UpdateDownloads.cancel(this)
+                    result.success(null)
+                }
+                "installDownload" -> {
+                    pendingInstallResult = null
+                    result.success(UpdateDownloads.install(this))
+                }
+                "takeInstallResult" -> {
+                    result.success(pendingInstallResult)
+                    pendingInstallResult = null
                 }
                 else -> {
                     result.notImplemented()
@@ -176,8 +213,24 @@ class MainActivity: FlutterActivity() {
         window.attributes = params
     }
     
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == INSTALL_REQUEST_CODE) {
+            pendingInstallResult = UpdateDownloads.installResult(resultCode, data)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
+        UpdateDownloads.appInForeground = true
+        // The app is in front, so the update dialog takes over from the
+        // "ready to install" notification.
+        UpdateDownloads.clearNotification(this)
         requestHighestRefreshRate()
+    }
+
+    override fun onPause() {
+        UpdateDownloads.appInForeground = false
+        super.onPause()
     }
 }

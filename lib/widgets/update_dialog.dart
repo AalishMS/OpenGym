@@ -128,7 +128,7 @@ class UpdateDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ReleaseHeader(release: release, failed: failed),
+              _ReleaseHeader(release: release, status: status),
               if (failed) ...[
                 const SizedBox(height: 20),
                 _FailureMessage(
@@ -154,7 +154,11 @@ class UpdateDialog extends StatelessWidget {
               if (status == UpdateStatus.downloading ||
                   status == UpdateStatus.installing) ...[
                 const SizedBox(height: 20),
-                _Progress(status: status, progress: updates.progress),
+                _Progress(
+                  status: status,
+                  progress: updates.progress,
+                  waitingForNetwork: updates.isWaitingForNetwork,
+                ),
               ],
               const SizedBox(height: 20),
               _Actions(updates: updates, showError: _showError),
@@ -167,13 +171,15 @@ class UpdateDialog extends StatelessWidget {
 }
 
 class _ReleaseHeader extends StatelessWidget {
-  const _ReleaseHeader({required this.release, required this.failed});
+  const _ReleaseHeader({required this.release, required this.status});
 
   final ReleaseInfo release;
-  final bool failed;
+  final UpdateStatus status;
 
   @override
   Widget build(BuildContext context) {
+    final failed = status == UpdateStatus.failed;
+    final downloaded = status == UpdateStatus.downloaded;
     final accent = accentColor(context);
     final error = errorColor(context);
     final size = formatBytes(release.apkSize);
@@ -195,7 +201,11 @@ class _ReleaseHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                failed ? 'Update needs attention' : 'A new build is ready',
+                failed
+                    ? 'Update needs attention'
+                    : downloaded
+                    ? 'Ready to install'
+                    : 'A new build is ready',
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                   color: failed ? error : textPrimaryColor(context),
                 ),
@@ -204,6 +214,9 @@ class _ReleaseHeader extends StatelessWidget {
               Text(
                 failed
                     ? 'Nothing was changed. You can retry when ready.'
+                    : downloaded
+                    ? 'The update is downloaded. Android will ask you to '
+                        'confirm the install.'
                     : 'Update OpenGym to get the latest improvements.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
@@ -328,10 +341,15 @@ class _FailureMessage extends StatelessWidget {
 }
 
 class _Progress extends StatelessWidget {
-  const _Progress({required this.status, required this.progress});
+  const _Progress({
+    required this.status,
+    required this.progress,
+    required this.waitingForNetwork,
+  });
 
   final UpdateStatus status;
   final double progress;
+  final bool waitingForNetwork;
 
   @override
   Widget build(BuildContext context) {
@@ -343,7 +361,11 @@ class _Progress extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                installing ? 'Opening installer' : 'Downloading update',
+                installing
+                    ? 'Opening installer'
+                    : waitingForNetwork
+                    ? 'Waiting for network'
+                    : 'Downloading update',
                 style: Theme.of(context).textTheme.labelLarge,
               ),
             ),
@@ -368,6 +390,13 @@ class _Progress extends StatelessWidget {
             valueColor: AlwaysStoppedAnimation<Color>(accentColor(context)),
           ),
         ),
+        if (!installing) ...[
+          const SizedBox(height: 9),
+          Text(
+            'You can leave OpenGym. The download continues in the background.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       ],
     );
   }
@@ -400,17 +429,30 @@ class _Actions extends StatelessWidget {
     // second install attempt.
     if (status == UpdateStatus.installing) return const SizedBox.shrink();
 
+    // The system owns the download, so closing the dialog leaves it running;
+    // Settings shows its progress and reopens this dialog.
     if (status == UpdateStatus.downloading) {
-      return Align(
-        alignment: Alignment.centerRight,
-        child: AppButton.text(
-          label: 'Cancel download',
-          onPressed: () => _runAction(context, updates.cancelUpdate),
-        ),
+      return Row(
+        children: [
+          Expanded(
+            child: AppButton.text(
+              label: 'Hide',
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: AppButton.text(
+              label: 'Cancel download',
+              onPressed: () => _runAction(context, updates.cancelUpdate),
+            ),
+          ),
+        ],
       );
     }
 
     final failed = status == UpdateStatus.failed;
+    final downloaded = status == UpdateStatus.downloaded;
     return Row(
       children: [
         Expanded(
@@ -425,7 +467,12 @@ class _Actions extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: AppButton.primary(
-            label: failed ? 'Try again' : 'Update now',
+            label:
+                failed
+                    ? 'Try again'
+                    : downloaded
+                    ? 'Install update'
+                    : 'Update now',
             onPressed: () => _runAction(context, updates.startUpdate),
           ),
         ),

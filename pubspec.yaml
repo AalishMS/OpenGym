@@ -4,10 +4,6 @@ publish_to: 'none'
 version: 1.0.12+13
 
 environment:
-  # Floor raised from ^3.5.4 because ota_update 7.1.0 requires Dart >=3.7.0.
-  # The old floor let an SDK too old for that package resolve silently to an
-  # ancient version of it instead of failing, which would have bitten CI rather
-  # than a local build.
   sdk: ^3.7.0
 
 dependencies:
@@ -36,7 +32,6 @@ dependencies:
   # change to the working export flow, and 9.x reads version/buildNumber the
   # same way, so there is nothing to gain by forcing it.
   package_info_plus: ^9.0.1
-  ota_update: ^7.1.0
   url_launcher: ^6.3.2
 
 dev_dependencies:

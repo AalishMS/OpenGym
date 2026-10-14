@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:ota_update/ota_update.dart';
+import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/update_service.dart';
@@ -24,7 +24,10 @@ enum UpdateStatus {
   /// The APK is coming down; [UpdateProvider.progress] is meaningful.
   downloading,
 
-  /// The APK is handed off to the system installer.
+  /// The APK is on the phone and waiting for the user to install it.
+  downloaded,
+
+  /// The system installer is open.
   installing,
 
   /// The last action failed; [UpdateProvider.error] says how.
@@ -33,7 +36,7 @@ enum UpdateStatus {
 
 /// Owns the update check, the prompt's visibility, and the download.
 ///
-/// Two rules shape this class:
+/// Three rules shape this class:
 ///
 /// 1. **A startup check must never be felt.** Nothing here is awaited before
 ///    the first frame, no failure surfaces, and the network call is throttled.
@@ -41,7 +44,17 @@ enum UpdateStatus {
 ///    clears when the process dies and the next launch prompts again. To make
 ///    that free, the last release payload is cached in shared_preferences and
 ///    the *network call* is what gets throttled — not the prompt.
-class UpdateProvider with ChangeNotifier {
+/// 3. **Leaving the app must not lose the download.** Android's DownloadManager
+///    owns it (see [UpdateDownloader]), so this class only polls for progress,
+///    picks a running or finished download back up after a restart, and opens
+///    the installer once the app is in front again — Android will not let a
+///    background app open it.
+class UpdateProvider with ChangeNotifier, WidgetsBindingObserver {
+  UpdateProvider({UpdateDownloader downloader = const UpdateDownloader()})
+    : _downloader = downloader;
+
+  final UpdateDownloader _downloader;
+
   static const String _lastCheckKey = 'update_last_check';
   static const String _cachedReleaseKey = 'update_cached_release';
   static const bool _previewUpdate = bool.fromEnvironment(
@@ -86,15 +99,39 @@ class UpdateProvider with ChangeNotifier {
   /// Tag the user said "Later" to. Not persisted — see the class doc.
   String? _dismissedTag;
 
-  StreamSubscription<OtaEvent>? _subscription;
+  /// How often progress is read while the download runs.
+  static const Duration pollInterval = Duration(milliseconds: 500);
+
+  Timer? _poll;
+  bool _refreshing = false;
+  bool _observing = false;
+  bool _waitingForNetwork = false;
+
+  /// The user tapped "Update now" in this process, so a download that finishes
+  /// while the app is in front goes straight to the installer.
+  bool _installWhenReady = false;
+
+  /// Set once the app loses focus to the installer, so the resume that follows
+  /// is read as "the installer closed" rather than as a stray lifecycle event.
+  bool _leftForInstaller = false;
+
+  /// "Install unknown apps" was off and its settings screen was opened; the
+  /// update continues by itself if the user switches it on and comes back.
+  bool _awaitingPermission = false;
 
   UpdateStatus get status => _status;
   ReleaseInfo? get release => _release;
   double get progress => _progress;
   String? get error => _error;
 
-  /// True while the prompt should be on screen.
-  bool get isUpdateAvailable => _status == UpdateStatus.available;
+  /// True while the prompt should be on screen: an offer, or a finished
+  /// download waiting to be installed.
+  bool get isUpdateAvailable =>
+      _status == UpdateStatus.available || _status == UpdateStatus.downloaded;
+
+  /// True while a download is paused until the phone is back online.
+  bool get isWaitingForNetwork =>
+      _status == UpdateStatus.downloading && _waitingForNetwork;
 
   /// True while the download or install is underway, so the UI can keep the
   /// dialog open and refuse a second tap.
@@ -129,9 +166,13 @@ class UpdateProvider with ChangeNotifier {
       _showPreview();
       return;
     }
-    if (!UpdateService.isSupportedPlatform) return;
+    if (!_downloader.isSupported) return;
     await loadInstalledVersion();
     if (_installed == null) return;
+
+    // A download from an earlier run, still going or finished, takes priority
+    // over a fresh offer. This also deletes the APK once it has been installed.
+    if (await _restoreDownload()) return;
 
     // Offer from the cache first. This is what re-prompts after "Later"
     // without spending a request, and it works with no network at all.
@@ -155,12 +196,12 @@ class UpdateProvider with ChangeNotifier {
   /// The Settings check. Ignores the throttle and reports its outcome, because
   /// here the user asked and silence would read as a broken button.
   Future<void> checkManually() async {
-    if (isBusy) return;
+    if (isBusy || _status == UpdateStatus.downloaded) return;
     if (isPreview) {
       _showPreview();
       return;
     }
-    if (!UpdateService.isSupportedPlatform) {
+    if (!_downloader.isSupported) {
       _error = 'Self-updating is only available on Android.';
       _status = UpdateStatus.failed;
       notifyListeners();
@@ -201,9 +242,12 @@ class UpdateProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// "Later" — hides the prompt until the next launch.
+  /// "Later" — hides the prompt until the next launch. A finished download is
+  /// kept, so the next launch offers to install it without fetching it again.
   void dismiss() {
     if (_release != null) _dismissedTag = _release!.tagName;
+    _installWhenReady = false;
+    _awaitingPermission = false;
     _status = UpdateStatus.idle;
     notifyListeners();
   }
@@ -217,84 +261,285 @@ class UpdateProvider with ChangeNotifier {
     }
   }
 
-  /// Downloads the offered APK and hands it to the system installer.
+  /// Downloads the offered APK, or reuses a finished download of the same
+  /// build, and hands it to the system installer.
   Future<void> startUpdate() async {
     if (isPreview) return;
     final release = _release;
     if (release == null || isBusy) return;
-    if (!UpdateService.isSupportedPlatform) return;
+    if (!_downloader.isSupported) return;
 
     _error = null;
+    _observeLifecycle();
 
     // Without this the download would succeed and the install would silently
     // do nothing, which looks exactly like a broken update.
-    if (!await UpdateService.ensureInstallPermission()) {
+    if (!await _downloader.ensureInstallPermission()) {
+      _awaitingPermission = true;
       _fail(
         'OpenGym needs permission to install apps. Enable "Install unknown '
-        'apps" for OpenGym in system settings, then try again.',
+        'apps" for OpenGym in system settings, then come back.',
       );
       return;
+    }
+    _awaitingPermission = false;
+    _installWhenReady = true;
+
+    final existing = await _readDownload();
+    if (existing.tag == release.tagName) {
+      // "Try again" after a cancelled install must not fetch 60 MB again, and
+      // a download that is still running is picked up rather than restarted.
+      if (existing.state == UpdateDownloadState.successful) {
+        await _install();
+        return;
+      }
+      if (existing.isActive) {
+        _status = UpdateStatus.downloading;
+        _applyProgress(existing);
+        notifyListeners();
+        _startPolling();
+        return;
+      }
     }
 
     _status = UpdateStatus.downloading;
     _progress = 0;
+    _waitingForNetwork = false;
     notifyListeners();
 
     try {
-      _subscription = UpdateService.downloadAndInstall(release).listen(
-        _onOtaEvent,
-        onError: (Object e) => _fail('Download failed: $e'),
-        cancelOnError: true,
-      );
+      await _downloader.start(release);
     } catch (e) {
-      _fail('Could not start the download: $e');
+      debugPrint('UpdateProvider: could not start the download: $e');
+      _fail(
+        'Could not start the download. Try again, or get the update from '
+        'GitHub.',
+      );
+      return;
     }
+    _startPolling();
   }
 
-  /// Abandons an in-flight download.
+  /// Abandons the download and deletes whatever had arrived.
   Future<void> cancelUpdate() async {
-    await _subscription?.cancel();
-    _subscription = null;
-    if (_status == UpdateStatus.downloading) {
+    _stopPolling();
+    _installWhenReady = false;
+    try {
+      await _downloader.cancel();
+    } catch (e) {
+      debugPrint('UpdateProvider: could not cancel the download: $e');
+    }
+    if (_status == UpdateStatus.downloading ||
+        _status == UpdateStatus.downloaded) {
       _status = UpdateStatus.available;
       _progress = 0;
+      _waitingForNetwork = false;
       notifyListeners();
     }
   }
 
-  void _onOtaEvent(OtaEvent event) {
-    switch (event.status) {
-      case OtaStatus.DOWNLOADING:
-        final percent = double.tryParse(event.value ?? '');
-        if (percent != null) _progress = (percent / 100).clamp(0.0, 1.0);
-        _status = UpdateStatus.downloading;
-      case OtaStatus.INSTALLING:
-        _progress = 1;
-        _status = UpdateStatus.installing;
-      case OtaStatus.INSTALLATION_DONE:
-        // Reached only when Android installs without a confirmation screen.
-        // Usually the process is replaced before this arrives.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      if (_status == UpdateStatus.installing) _leftForInstaller = true;
+      return;
+    }
+    unawaited(_onResumed());
+  }
+
+  Future<void> _onResumed() async {
+    switch (_status) {
+      case UpdateStatus.installing:
+        if (!_leftForInstaller) return;
+        _leftForInstaller = false;
+        InstallResult? result;
+        try {
+          result = await _downloader.takeInstallResult();
+        } catch (e) {
+          debugPrint('UpdateProvider: could not read the install result: $e');
+        }
+        _onInstallResult(result);
+      case UpdateStatus.downloading:
+        // Catch up at once instead of showing stale progress for a tick.
+        await _refreshDownload();
+      case UpdateStatus.downloaded:
+        if (_installWhenReady) await _install();
+      case UpdateStatus.failed when _awaitingPermission:
+        if (await _downloader.hasInstallPermission()) {
+          _awaitingPermission = false;
+          _status = UpdateStatus.available;
+          _error = null;
+          await startUpdate();
+        }
+      default:
+        break;
+    }
+  }
+
+  /// A successful self-update replaces this process, so arriving here at all
+  /// usually means the update is not installed yet.
+  void _onInstallResult(InstallResult? result) {
+    if (_status != UpdateStatus.installing) return;
+    switch (result?.outcome) {
+      case InstallOutcome.installed:
         _status = UpdateStatus.idle;
-      case OtaStatus.CANCELED:
-        _status = UpdateStatus.available;
-        _progress = 0;
-      case OtaStatus.PERMISSION_NOT_GRANTED_ERROR:
-        _error = 'Permission to install apps was denied.';
-        _status = UpdateStatus.failed;
-      case OtaStatus.ALREADY_RUNNING_ERROR:
-        // Another download is already in flight; leave it alone.
-        _status = UpdateStatus.downloading;
-      case OtaStatus.DOWNLOAD_ERROR:
-      case OtaStatus.CHECKSUM_ERROR:
-      case OtaStatus.INSTALLATION_ERROR:
-      case OtaStatus.INTERNAL_ERROR:
-        _error =
-            event.value?.trim().isNotEmpty == true
-                ? event.value!.trim()
-                : 'The update could not be installed.';
-        _status = UpdateStatus.failed;
+        notifyListeners();
+      case InstallOutcome.failed:
+        _fail(installFailureMessage(result!.code));
+      case InstallOutcome.canceled:
+      case null:
+        // Backed out of the installer, or it closed without saying. The file
+        // is still here, so offer to install it again.
+        _status = UpdateStatus.downloaded;
+        _error = null;
+        notifyListeners();
+    }
+  }
+
+  Future<void> _install() async {
+    _installWhenReady = false;
+    _leftForInstaller = false;
+    _status = UpdateStatus.installing;
+    _progress = 1;
+    notifyListeners();
+
+    var launched = false;
+    try {
+      launched = await _downloader.install();
+    } catch (e) {
+      debugPrint('UpdateProvider: could not open the installer: $e');
+    }
+    if (!launched && _status == UpdateStatus.installing) {
+      _fail('Could not open the Android installer. Try again.');
+    }
+  }
+
+  /// Picks up a download left by an earlier run. Returns true when it now
+  /// drives the prompt, false when there was nothing worth keeping.
+  Future<bool> _restoreDownload() async {
+    final snapshot = await _readDownload();
+    if (snapshot.state == UpdateDownloadState.none) return false;
+
+    final version = AppVersion.tryParse(snapshot.tag);
+    final cached = await _readCachedRelease();
+    final wanted =
+        version != null &&
+        cached != null &&
+        cached.tagName == snapshot.tag &&
+        UpdateService.isNewer(installed: _installed!, candidate: version);
+    final usable =
+        snapshot.isActive || snapshot.state == UpdateDownloadState.successful;
+    if (!wanted || !usable) {
+      // Already installed, superseded, or failed: free the space.
+      try {
+        await _downloader.cancel();
+      } catch (e) {
+        debugPrint('UpdateProvider: could not clear an old download: $e');
+      }
+      return false;
+    }
+
+    _release = cached;
+    _observeLifecycle();
+    if (snapshot.state == UpdateDownloadState.successful) {
+      _status = UpdateStatus.downloaded;
+      _progress = 1;
+    } else {
+      // The user started this one, so finish the job when it lands.
+      _installWhenReady = true;
+      _status = UpdateStatus.downloading;
+      _applyProgress(snapshot);
+      _startPolling();
     }
     notifyListeners();
+    return true;
+  }
+
+  Future<UpdateDownloadSnapshot> _readDownload() async {
+    try {
+      return await _downloader.status();
+    } catch (e) {
+      debugPrint('UpdateProvider: could not read the download: $e');
+      return UpdateDownloadSnapshot.none;
+    }
+  }
+
+  void _startPolling() {
+    _poll?.cancel();
+    _poll = Timer.periodic(pollInterval, (_) => _refreshDownload());
+  }
+
+  void _stopPolling() {
+    _poll?.cancel();
+    _poll = null;
+  }
+
+  Future<void> _refreshDownload() async {
+    if (_refreshing) return;
+    _refreshing = true;
+    try {
+      _onDownloadSnapshot(await _readDownload());
+    } finally {
+      _refreshing = false;
+    }
+  }
+
+  void _onDownloadSnapshot(UpdateDownloadSnapshot snapshot) {
+    if (_status != UpdateStatus.downloading) {
+      _stopPolling();
+      return;
+    }
+    final ours = snapshot.tag != null && snapshot.tag == _release?.tagName;
+
+    if (ours && snapshot.isActive) {
+      _applyProgress(snapshot);
+      notifyListeners();
+      return;
+    }
+
+    _stopPolling();
+    _waitingForNetwork = false;
+    if (ours && snapshot.state == UpdateDownloadState.successful) {
+      _progress = 1;
+      _status = UpdateStatus.downloaded;
+      notifyListeners();
+      // In the background, the resume handler opens the installer instead.
+      if (_installWhenReady && _inForeground) unawaited(_install());
+      return;
+    }
+    _installWhenReady = false;
+    if (ours && snapshot.state == UpdateDownloadState.failed) {
+      unawaited(_discardDownload());
+      _fail(downloadFailureMessage(snapshot.reason));
+      return;
+    }
+    // The system dropped the download, for example when its list was cleared.
+    _fail('The download was removed before it finished. Try again.');
+  }
+
+  Future<void> _discardDownload() async {
+    try {
+      await _downloader.cancel();
+    } catch (e) {
+      debugPrint('UpdateProvider: could not discard the download: $e');
+    }
+  }
+
+  void _applyProgress(UpdateDownloadSnapshot snapshot) {
+    final fraction = snapshot.fraction;
+    if (fraction != null) _progress = fraction;
+    _waitingForNetwork = snapshot.isWaitingForNetwork;
+  }
+
+  bool get _inForeground {
+    final state = WidgetsBinding.instance.lifecycleState;
+    return state == null || state == AppLifecycleState.resumed;
+  }
+
+  void _observeLifecycle() {
+    if (_observing) return;
+    WidgetsBinding.instance.addObserver(this);
+    _observing = true;
   }
 
   /// Records an offer, unless the release is not newer or was dismissed.
@@ -303,6 +548,7 @@ class UpdateProvider with ChangeNotifier {
     // check's result (upToDate/failed) is only a readout, so it may be replaced.
     if (_status == UpdateStatus.checking ||
         _status == UpdateStatus.downloading ||
+        _status == UpdateStatus.downloaded ||
         _status == UpdateStatus.installing) {
       return;
     }
@@ -329,6 +575,8 @@ class UpdateProvider with ChangeNotifier {
   }
 
   void _fail(String message) {
+    _stopPolling();
+    _waitingForNetwork = false;
     _error = message;
     _status = UpdateStatus.failed;
     _progress = 0;
@@ -383,7 +631,8 @@ class UpdateProvider with ChangeNotifier {
 
   @override
   void dispose() {
-    _subscription?.cancel();
+    _stopPolling();
+    if (_observing) WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 }

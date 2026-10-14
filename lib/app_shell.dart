@@ -385,7 +385,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (!mounted || _updatePromptShown || _tourActive || _replayingTutorial) {
       return;
     }
-    if (!updates.isUpdateAvailable) return;
+    // A download picked up from an earlier run shows its progress too.
+    if (!updates.isUpdateAvailable && !updates.isBusy) return;
     _updatePromptShown = true;
     await showUpdateDialog(context);
   }

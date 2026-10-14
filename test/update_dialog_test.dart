@@ -94,6 +94,48 @@ void main() {
     expect(find.text('Cancel download'), findsNothing);
   });
 
+  testWidgets('downloading can be hidden without stopping the download', (
+    tester,
+  ) async {
+    final updates = _FakeUpdates(UpdateStatus.downloading, release);
+    await tester.pumpWidget(host(updates));
+    await tester.tap(find.text('Open'));
+    await tester.pump();
+    expect(find.text('Downloading update'), findsOneWidget);
+    expect(find.text('42%'), findsOneWidget);
+    expect(find.textContaining('continues in the background'), findsOneWidget);
+
+    await tester.tap(find.text('Hide'));
+    await tester.pumpAndSettle();
+    expect(find.text('Downloading update'), findsNothing);
+    expect(updates.cancelCount, 0);
+    expect(updates.status, UpdateStatus.downloading);
+  });
+
+  testWidgets('a paused download says it is waiting for the network', (
+    tester,
+  ) async {
+    final updates = _FakeUpdates(UpdateStatus.downloading, release)
+      ..waiting = true;
+    await tester.pumpWidget(host(updates));
+    await tester.tap(find.text('Open'));
+    await tester.pump();
+    expect(find.text('Waiting for network'), findsOneWidget);
+  });
+
+  testWidgets('a finished download offers to install it', (tester) async {
+    final updates = _FakeUpdates(UpdateStatus.downloaded, release);
+    await tester.pumpWidget(host(updates));
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ready to install'), findsOneWidget);
+    expect(find.text('Update now'), findsNothing);
+
+    await tester.tap(find.text('Install update'));
+    await tester.pump();
+    expect(updates.startCount, 1);
+  });
+
   testWidgets('GitHub action opens the exact release page', (tester) async {
     Uri? openedUri;
     await tester.pumpWidget(
@@ -161,6 +203,10 @@ class _FakeUpdates extends UpdateProvider {
   var cancelCount = 0;
   var dismissCount = 0;
   var throwOnStart = false;
+  var waiting = false;
+
+  @override
+  bool get isWaitingForNetwork => waiting;
 
   @override
   double get progress => 0.42;

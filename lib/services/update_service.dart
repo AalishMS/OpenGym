@@ -5,7 +5,6 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:ota_update/ota_update.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 /// Reads the "install unknown apps" toggle and opens its settings screen.
@@ -221,8 +220,8 @@ String formatBytes(int bytes) {
 class UpdateService {
   const UpdateService._();
 
-  /// Whether self-updating can work at all here. `ota_update` is Android-only,
-  /// and this app also builds for web and desktop, where calling it would throw.
+  /// Whether self-updating can work at all here. The downloader and installer
+  /// are Android-only, and this app also builds for web and desktop.
   static bool get isSupportedPlatform => !kIsWeb && Platform.isAndroid;
 
   /// True when [candidate] should be offered over [installed].
@@ -312,16 +311,184 @@ class UpdateService {
     // but the first read raced, this lets the update proceed immediately.
     return hasInstallPermission();
   }
+}
 
-  /// Downloads [release] and hands it to the system installer, reporting
-  /// progress as a 0..1 fraction.
-  ///
-  /// Completes when the installer has been launched. The install itself is the
-  /// user's decision, and Android gives us no callback for their answer.
-  static Stream<OtaEvent> downloadAndInstall(ReleaseInfo release) {
-    return OtaUpdate().execute(
-      release.apkUrl,
-      destinationFilename: 'OpenGym-${release.tagName}.apk'.replaceAll('+', '_'),
+/// Where the system download of an update stands.
+enum UpdateDownloadState { none, pending, running, paused, successful, failed }
+
+/// One reading of the system download, as reported by `UpdateDownloads.kt`.
+@immutable
+class UpdateDownloadSnapshot {
+  final UpdateDownloadState state;
+
+  /// The release tag the download belongs to, so a restarted app can tell
+  /// whether it is still the build it wants.
+  final String? tag;
+  final int downloadedBytes;
+  final int totalBytes;
+
+  /// DownloadManager's COLUMN_REASON: why it paused, why it failed, or the
+  /// HTTP status of a failed request. Zero when there is nothing to explain.
+  final int reason;
+
+  const UpdateDownloadSnapshot({
+    required this.state,
+    this.tag,
+    this.downloadedBytes = 0,
+    this.totalBytes = 0,
+    this.reason = 0,
+  });
+
+  static const UpdateDownloadSnapshot none = UpdateDownloadSnapshot(
+    state: UpdateDownloadState.none,
+  );
+
+  /// Reads the platform map, treating anything unexpected as "no download".
+  factory UpdateDownloadSnapshot.fromMap(Map<Object?, Object?>? map) {
+    if (map == null) return none;
+    final state = UpdateDownloadState.values.asNameMap()[map['state']];
+    if (state == null || state == UpdateDownloadState.none) return none;
+    final tag = map['tag'];
+    int count(Object? value) => value is int ? value : 0;
+    return UpdateDownloadSnapshot(
+      state: state,
+      tag: tag is String ? tag : null,
+      downloadedBytes: count(map['downloaded']),
+      totalBytes: count(map['total']),
+      reason: count(map['reason']),
     );
   }
+
+  /// Still working towards a file: queued, running, or paused to retry.
+  bool get isActive =>
+      state == UpdateDownloadState.pending ||
+      state == UpdateDownloadState.running ||
+      state == UpdateDownloadState.paused;
+
+  /// Paused until the phone is back online (DownloadManager's
+  /// PAUSED_WAITING_TO_RETRY, PAUSED_WAITING_FOR_NETWORK, PAUSED_QUEUED_FOR_WIFI).
+  bool get isWaitingForNetwork =>
+      state == UpdateDownloadState.paused && reason >= 1 && reason <= 3;
+
+  /// Progress as 0..1, or null while the size is still unknown.
+  double? get fraction {
+    if (totalBytes <= 0) return null;
+    return (downloadedBytes / totalBytes).clamp(0.0, 1.0);
+  }
 }
+
+/// How the system installer answered.
+enum InstallOutcome { installed, canceled, failed }
+
+@immutable
+class InstallResult {
+  final InstallOutcome outcome;
+
+  /// PackageManager's INSTALL_FAILED code when [outcome] is failed, else 0.
+  final int code;
+
+  const InstallResult(this.outcome, [this.code = 0]);
+
+  static InstallResult? fromMap(Map<Object?, Object?>? map) {
+    if (map == null) return null;
+    final outcome = InstallOutcome.values.asNameMap()[map['outcome']];
+    if (outcome == null) return null;
+    final code = map['code'];
+    return InstallResult(outcome, code is int ? code : 0);
+  }
+}
+
+/// Explains a failed system download in words a person can act on.
+String downloadFailureMessage(int reason) {
+  switch (reason) {
+    case 1006: // ERROR_INSUFFICIENT_SPACE
+    case 1007: // ERROR_DEVICE_NOT_FOUND
+      return 'There is not enough free storage for the update. Free up some '
+          'space and try again.';
+    case 404:
+    case 410:
+      return 'The update file is no longer on GitHub. Check for updates '
+          'again.';
+    default:
+      return 'The download stopped before it finished. Check your connection '
+          'and try again.';
+  }
+}
+
+/// Explains a failed install, keyed by PackageManager's INSTALL_FAILED code.
+String installFailureMessage(int code) {
+  switch (code) {
+    case -7: // INSTALL_FAILED_UPDATE_INCOMPATIBLE
+      return 'Android could not install this update because the OpenGym on '
+          'this phone was signed differently, such as a test build. Back up '
+          'your data in Settings, uninstall OpenGym, then install the latest '
+          'release from GitHub.';
+    case -25: // INSTALL_FAILED_VERSION_DOWNGRADE
+      return 'This phone already has a newer OpenGym than this release.';
+    case -4: // INSTALL_FAILED_INSUFFICIENT_STORAGE
+      return 'There is not enough free storage to install the update. Free '
+          'up some space and try again.';
+    default:
+      return code == 0
+          ? 'Android could not install the update. Try again.'
+          : 'Android could not install the update (error $code). Try again.';
+  }
+}
+
+/// Runs the update download through Android's DownloadManager and opens the
+/// system installer. See `UpdateDownloads.kt`.
+///
+/// The download is owned by the system, not by this process, which is the
+/// point: it survives the screen turning off, a switch to another app, and the
+/// app being killed. Tests replace this class to drive the provider.
+class UpdateDownloader {
+  const UpdateDownloader();
+
+  bool get isSupported => UpdateService.isSupportedPlatform;
+
+  Future<bool> hasInstallPermission() => UpdateService.hasInstallPermission();
+
+  Future<bool> ensureInstallPermission() =>
+      UpdateService.ensureInstallPermission();
+
+  /// Starts a fresh download of [release], replacing any earlier one.
+  Future<void> start(ReleaseInfo release) {
+    return _installerChannel.invokeMethod<void>('startDownload', {
+      'url': release.apkUrl,
+      'tag': release.tagName,
+      'fileName': updateFileName(release.tagName),
+      'title': 'OpenGym ${release.version.displayLabel}',
+    });
+  }
+
+  Future<UpdateDownloadSnapshot> status() async {
+    final map = await _installerChannel.invokeMapMethod<Object?, Object?>(
+      'downloadStatus',
+    );
+    return UpdateDownloadSnapshot.fromMap(map);
+  }
+
+  /// Stops any download and deletes its file.
+  Future<void> cancel() =>
+      _installerChannel.invokeMethod<void>('cancelDownload');
+
+  /// Opens the system installer. False when there is no finished file.
+  Future<bool> install() async {
+    final launched = await _installerChannel.invokeMethod<bool>(
+      'installDownload',
+    );
+    return launched ?? false;
+  }
+
+  /// The installer's answer since the last [install], or null if it gave none.
+  Future<InstallResult?> takeInstallResult() async {
+    final map = await _installerChannel.invokeMapMethod<Object?, Object?>(
+      'takeInstallResult',
+    );
+    return InstallResult.fromMap(map);
+  }
+}
+
+/// The APK's file name: the tag without characters a path should not carry.
+String updateFileName(String tagName) =>
+    'OpenGym-${tagName.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_')}.apk';
