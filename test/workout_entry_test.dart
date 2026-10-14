@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -17,12 +16,13 @@ import 'package:gymapp/services/hive_service.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
+import 'support/test_fonts.dart';
 
 void main() {
   final hiveHarness = HiveTestHarness();
 
   setUpAll(() async {
-    GoogleFonts.config.allowRuntimeFetching = false;
+    await loadTestFonts();
     SharedPreferences.setMockInitialValues({});
     await Supabase.initialize(
       url: 'https://example.supabase.co',

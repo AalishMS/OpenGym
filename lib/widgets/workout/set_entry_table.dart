@@ -8,6 +8,7 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../theme/semantic_colors.dart';
@@ -1043,8 +1044,12 @@ class _EntryRow extends StatelessWidget {
                   continuousLog
                       ? surfaceColor(context)
                       : backgroundColor(context),
+              // The ring marks the cell the keys edit; the large figure in
+              // the keypad header carries the value and replace mode.
               border:
-                  continuousLog
+                  _active(field)
+                      ? Border.all(color: accentColor(context), width: 2)
+                      : continuousLog
                       ? null
                       : Border.all(color: borderColor(context)),
               borderRadius: AppRadius.field,
@@ -1052,7 +1057,6 @@ class _EntryRow extends StatelessWidget {
             child: _EntryValue(
               value: _active(field) ? editing!._input : value,
               active: _active(field),
-              selected: _active(field) && editing!._replace,
               style: Theme.of(context).textTheme.titleLarge!.copyWith(
                 fontSize: continuousLog ? 18 : 20,
                 fontFeatures: const [FontFeature.tabularFigures()],
@@ -1332,8 +1336,9 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     _SetField.rpe => 'RPE (1–10)',
   };
 
-  /// Names what the keys are editing, plus the one action that targets
-  /// another set and so reads better as a sentence than as a key.
+  /// Names what the keys are editing above the value at a readable size,
+  /// plus the one action that targets another set and so reads better as a
+  /// sentence than as a key.
   Widget _header(BuildContext context) {
     final style = Theme.of(context).textTheme.labelLarge!;
     final hasNextSet = _index + 1 < widget.sets.length;
@@ -1344,22 +1349,39 @@ class _SetKeyboardState extends State<_SetKeyboard> {
         child: Row(
           children: [
             Expanded(
-              child: Text.rich(
-                TextSpan(
-                  children: [
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text.rich(
                     TextSpan(
-                      text: 'Set ${_index + 1}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: textPrimaryColor(context),
-                      ),
+                      children: [
+                        TextSpan(
+                          text: 'Set ${_index + 1}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: textPrimaryColor(context),
+                          ),
+                        ),
+                        TextSpan(text: '  ·  $_fieldLabel'),
+                      ],
                     ),
-                    TextSpan(text: '  ·  $_fieldLabel'),
-                  ],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: style.copyWith(color: textSecondaryColor(context)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                      fontWeight: FontWeight.w500,
+                      color: textSecondaryColor(context),
+                    ),
+                  ),
+                  // The cell is the live region; reading this too would
+                  // announce every keystroke twice.
+                  ExcludeSemantics(
+                    child: _HeaderValue(
+                      value: _input,
+                      replace: _replace && _input.isNotEmpty,
+                    ),
+                  ),
+                ],
               ),
             ),
             if (hasNextSet)
@@ -1608,6 +1630,7 @@ class _KeyLabel extends StatelessWidget {
 
 const double _kKeyGap = 6;
 const double _kKeypadPadding = 8;
+const double _kHeaderValueSize = 28;
 
 /// Keys are wider than tall on a phone; they grow with short screens' floor of
 /// 48dp and with the text scale so a scaled label never clips.
@@ -1616,8 +1639,14 @@ double _keyHeight(BuildContext context) => math.max(
   MediaQuery.textScalerOf(context).scale(24) + 24,
 );
 
-double _headerHeight(BuildContext context) =>
-    math.max(44.0, MediaQuery.textScalerOf(context).scale(14) + 30);
+/// A 12px label over the 28px value, with room for the replace underline.
+double _headerHeight(BuildContext context) {
+  final scaler = MediaQuery.textScalerOf(context);
+  return math.max(
+    64.0,
+    scaler.scale(12) * 1.25 + scaler.scale(_kHeaderValueSize) * 1.2 + 14,
+  );
+}
 
 double _keypadHeight(BuildContext context) =>
     _headerHeight(context) +
@@ -1639,12 +1668,10 @@ double _keypadSheetHeight(BuildContext context) {
 class _EntryValue extends StatefulWidget {
   final String value;
   final bool active;
-  final bool selected;
   final TextStyle style;
   const _EntryValue({
     required this.value,
     required this.active,
-    required this.selected,
     required this.style,
   });
   @override
@@ -1698,9 +1725,38 @@ class _EntryValueState extends State<_EntryValue> {
     return Text(
       widget.value.isEmpty ? '—' : widget.value,
       softWrap: false,
-      style: widget.style.copyWith(
-        backgroundColor: widget.selected ? accentMutedColor(context) : null,
-      ),
+      style: widget.style,
     );
   }
+}
+
+/// The value being edited, large enough to read at arm's length. An accent
+/// underline says the next digit replaces it rather than appending.
+class _HeaderValue extends StatelessWidget {
+  final String value;
+  final bool replace;
+  const _HeaderValue({required this.value, required this.replace});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.only(bottom: 1),
+    decoration: BoxDecoration(
+      border: Border(
+        bottom: BorderSide(
+          color: replace ? accentColor(context) : Colors.transparent,
+          width: 2,
+        ),
+      ),
+    ),
+    child: _EntryValue(
+      value: value,
+      active: true,
+      style: AppTypography.figures(
+        fontSize: _kHeaderValueSize,
+        fontWeight: FontWeight.w700,
+        color: textPrimaryColor(context),
+        height: 1.2,
+      ),
+    ),
+  );
 }

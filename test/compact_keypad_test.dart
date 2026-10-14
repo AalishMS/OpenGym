@@ -212,7 +212,7 @@ void main() {
     );
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
-    expect(tester.getSize(find.byType(BottomSheet)).height, closeTo(278, 1));
+    expect(tester.getSize(find.byType(BottomSheet)).height, closeTo(298, 1));
     expect(
       tester
           .widgetList<ModalBarrier>(find.byType(ModalBarrier))
@@ -220,10 +220,58 @@ void main() {
       isTrue,
     );
     expect(find.textContaining('Previous:'), findsNothing);
-    expect(find.text('70'), findsOneWidget);
+    // The cell and the large header figure both show the value; only the
+    // cell is announced, and neither looks like a text selection.
+    final activeCell = find.bySemanticsLabel('Set 1 Kg');
+    final cellValue = find.descendant(
+      of: activeCell,
+      matching: find.text('70'),
+    );
+    expect(find.text('70'), findsNWidgets(2));
+    expect(cellValue, findsOneWidget);
+    expect(tester.widget<Text>(cellValue).style!.backgroundColor, isNull);
+    final headerValue = find.descendant(
+      of: find.byType(ExcludeSemantics),
+      matching: find.text('70'),
+    );
+    expect(headerValue, findsOneWidget);
+    expect(tester.widget<Text>(headerValue).style!.fontSize, 28);
+    expect(tester.widget<Text>(headerValue).style!.backgroundColor, isNull);
+    final ring =
+        tester
+                .widget<Container>(
+                  find
+                      .descendant(
+                        of: activeCell,
+                        matching: find.byWidgetPredicate(
+                          (widget) =>
+                              widget is Container &&
+                              widget.decoration is BoxDecoration,
+                        ),
+                      )
+                      .first,
+                )
+                .decoration!
+            as BoxDecoration;
+    final ringSide = (ring.border! as Border).top;
+    expect(ringSide.color, accentColor(tester.element(activeCell)));
+    expect(ringSide.width, 2);
+    // Replace mode is the header value's accent underline.
+    final underline =
+        tester
+                .widget<Container>(
+                  find
+                      .ancestor(
+                        of: headerValue,
+                        matching: find.byType(Container),
+                      )
+                      .first,
+                )
+                .decoration!
+            as BoxDecoration;
     expect(
-      tester.widget<Text>(find.text('70')).style!.backgroundColor,
-      isNotNull,
+      (underline.border! as Border).bottom.color,
+      accentColor(tester.element(headerValue)),
     );
     final one = tester.getCenter(find.widgetWithText(TextButton, '1'));
     final two = tester.getCenter(find.widgetWithText(TextButton, '2'));
@@ -280,7 +328,8 @@ void main() {
     'switching exercises leaves one keypad and structural edits close it',
     (tester) async {
       tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(400, 800);
+      // Tall enough that the open keypad leaves 'Add test set' uncovered.
+      tester.view.physicalSize = const Size(400, 900);
       addTearDown(tester.view.reset);
       var second = const [SetEntry(weight: 60, reps: 8)];
       var finishes = 0;
