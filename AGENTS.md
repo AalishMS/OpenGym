@@ -144,6 +144,12 @@ import '../services/hive_service.dart';
 - Plan colours stay on Home. Header actions use the accent, never the plan's
   colour
 
+### Figures
+- Numbers that line up or change in place use `AppTypography.figures(...)`:
+  Manrope with `FontFeature.tabularFigures()`, same signature as
+  `trainingData`. Don't reach for JetBrains Mono for alignment; Stats and
+  Settings are source-scanned for it in `test/theme_typography_test.dart`
+
 ### Interface Copy
 Action labels should say what happens in familiar, concise language:
 

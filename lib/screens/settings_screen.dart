@@ -3,7 +3,6 @@ import 'dart:io' show File;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
@@ -20,6 +19,7 @@ import '../services/supabase_service.dart';
 import '../services/update_service.dart';
 import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_typography.dart';
 import '../theme/radii.dart';
 import '../widgets/app_header.dart';
 import '../widgets/update_dialog.dart';
@@ -172,7 +172,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SnackBar(
         content: Text(
           failed ? updates.error ?? 'Update check failed' : "You're up to date",
-          style: GoogleFonts.jetBrainsMono(color: onColor(ground)),
+          style: TextStyle(color: onColor(ground)),
         ),
         backgroundColor: ground,
       ),
@@ -203,7 +203,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       SnackBar(
         content: Text(
           message,
-          style: GoogleFonts.jetBrainsMono(color: onColor(errorColor(context))),
+          style: TextStyle(color: onColor(errorColor(context))),
         ),
         backgroundColor: errorColor(context),
       ),
@@ -381,7 +381,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           title: 'Check for updates',
                           subtitle: _updateSubtitle(updates),
                           onTap: () => _handleUpdateCheck(context, updates),
-                          valueIsMono: true,
                         ),
                         const _SectionHeader(title: 'About'),
                         if (widget.onReplayTutorial != null)
@@ -408,7 +407,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               const SizedBox(height: 4),
                               Text(
                                 updates.installedVersionLabel,
-                                style: GoogleFonts.jetBrainsMono(
+                                style: AppTypography.figures(
                                   fontSize: 14,
                                   color: textPrimaryColor(context),
                                 ),
@@ -654,7 +653,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String subtitle,
     required VoidCallback onTap,
     bool isDestructive = false,
-    bool valueIsMono = false,
   }) {
     final textColor =
         isDestructive ? errorColor(context) : textPrimaryColor(context);
@@ -688,13 +686,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       Text(
                         subtitle,
-                        style:
-                            valueIsMono
-                                ? GoogleFonts.jetBrainsMono(
-                                  fontSize: 11,
-                                  color: textSecondaryColor(context),
-                                )
-                                : Theme.of(context).textTheme.bodySmall,
+                        // Tabular figures keep version numbers and dates in
+                        // the update status from shifting width.
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontFeatures: const [FontFeature.tabularFigures()],
+                        ),
                       ),
                     ],
                   ),

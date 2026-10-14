@@ -1,7 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/theme/app_typography.dart';
 import 'package:gymapp/widgets/app_button.dart';
 import 'package:gymapp/widgets/app_wordmark.dart';
 
@@ -227,5 +230,57 @@ void main() {
     }
     expect(find.byTooltip('More options'), findsOneWidget);
     expect(tester.getSize(find.byTooltip('More options')).height, 48);
+  });
+
+  group('figures use tabular Manrope instead of monospace', () {
+    test('figures() is Manrope with tabular figures', () {
+      final style = AppTypography.figures(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        letterSpacing: 0.2,
+        height: 1.2,
+      );
+      expect(style.fontFamily, startsWith('Manrope'));
+      expect(style.fontFeatures, contains(const FontFeature.tabularFigures()));
+      expect(style.fontSize, 14);
+      expect(style.fontWeight, FontWeight.w600);
+      expect(style.letterSpacing, 0.2);
+      expect(style.height, 1.2);
+    });
+
+    // Why a source scan: Stats and Settings draw their numbers from a dozen
+    // call sites, and the rule is that none of them reaches for monospace
+    // again. A widget test per site would pin today's widgets, not the next
+    // figure someone adds.
+    test('Stats and Settings no longer ask for monospace', () {
+      final files = <File>[
+        ...Directory('lib/widgets/statistics')
+            .listSync(recursive: true)
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.dart')),
+        File('lib/screens/stats_screen.dart'),
+        File('lib/screens/settings_screen.dart'),
+      ];
+      final banned = RegExp(r'jetBrainsMono|trainingData\(');
+      final offenders = <String>[];
+
+      for (final file in files) {
+        final lines = file.readAsLinesSync();
+        for (var i = 0; i < lines.length; i++) {
+          if (banned.hasMatch(lines[i])) {
+            offenders.add('${file.path}:${i + 1}: ${lines[i].trim()}');
+          }
+        }
+      }
+
+      expect(files.length, greaterThan(2), reason: 'scan found no Stats files');
+      expect(
+        offenders,
+        isEmpty,
+        reason:
+            'Use AppTypography.figures for numbers in Stats and Settings:\n'
+            '${offenders.join('\n')}',
+      );
+    });
   });
 }

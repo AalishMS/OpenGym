@@ -3,9 +3,12 @@ import 'package:google_fonts/google_fonts.dart';
 
 /// Central type roles for OpenGym.
 ///
-/// Manrope carries the interface. JetBrains Mono is intentionally kept out of
-/// the theme-wide text styles and is only requested for compact training data
-/// that benefits from aligned figures.
+/// Manrope carries the interface. Numbers that sit in columns, change in place
+/// or get compared at a glance (Stats figures, chart axes, record rows, the
+/// app version) use [figures]: the same Manrope with tabular figures, so every
+/// digit takes the same width without switching typeface. JetBrains Mono is
+/// kept out of the theme-wide text styles and is only requested through
+/// [trainingData] for the remaining compact training data.
 class AppTypography {
   AppTypography._();
 
@@ -98,6 +101,26 @@ class AppTypography {
       color: color,
       letterSpacing: letterSpacing,
       height: height,
+    );
+  }
+
+  /// Manrope with tabular figures, for numbers that must line up or hold their
+  /// width as they change. Same signature as [trainingData], so a call site
+  /// can swap one for the other.
+  static TextStyle figures({
+    double? fontSize,
+    FontWeight? fontWeight,
+    Color? color,
+    double? letterSpacing,
+    double? height,
+  }) {
+    return GoogleFonts.manrope(
+      fontSize: fontSize,
+      fontWeight: fontWeight,
+      color: color,
+      letterSpacing: letterSpacing,
+      height: height,
+      fontFeatures: const [FontFeature.tabularFigures()],
     );
   }
 }

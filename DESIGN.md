@@ -252,8 +252,11 @@ signature:
   parts of the same system.
 
 Broad monospaced typography, square-bracket labels, and all-uppercase copy are
-not part of the product identity. A monospaced face may still serve a specific
-data-alignment need. The `>` symbol is reserved for the OpenGym wordmark rather
+not part of the product identity. Figures that need to line up or hold their
+width (Stats numbers and chart axes, record rows, the update status, the app
+version) use `AppTypography.figures`: Manrope with tabular figures, so digits
+align without a change of typeface. JetBrains Mono (`trainingData`) remains
+only in a few compact training-data spots outside Stats and Settings. The `>` symbol is reserved for the OpenGym wordmark rather
 than used as a general interface decoration.
 
 UI code should use theme helpers from `lib/theme/app_theme.dart` instead of

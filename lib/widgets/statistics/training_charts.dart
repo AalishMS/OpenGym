@@ -112,7 +112,7 @@ class _WeeklyVolumeChartState extends State<WeeklyVolumeChart> {
                                                     widget.weightUnit,
                                                   ),
                                                 ),
-                                                style: AppTypography.trainingData(
+                                                style: AppTypography.figures(
                                                   fontSize: 11,
                                                   color:
                                                       i == index
@@ -336,7 +336,7 @@ class _ExerciseTrendChartState extends State<ExerciseTrendChart> {
                     child: IgnorePointer(
                       child: _ValueLabel(
                         formatChartNumber(values.last),
-                        style: AppTypography.trainingData(
+                        style: AppTypography.figures(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                           color: textPrimaryColor(context),
@@ -438,7 +438,7 @@ class ChartReadout extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           value,
-          style: AppTypography.trainingData(
+          style: AppTypography.figures(
             fontSize: compact ? 20 : 30,
             fontWeight: FontWeight.w700,
             color: textPrimaryColor(context),
@@ -508,7 +508,7 @@ class _ScrollablePlotState extends State<_ScrollablePlot> {
     final scale = MediaQuery.textScalerOf(context).scale(1);
     final textScaler = MediaQuery.textScalerOf(context);
     final axisStyle = DefaultTextStyle.of(context).style.merge(
-      AppTypography.trainingData(
+      AppTypography.figures(
         fontSize: 11,
         letterSpacing: 0,
         color: textSecondaryColor(context),

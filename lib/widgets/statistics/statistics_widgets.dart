@@ -72,7 +72,7 @@ class RecordEventRow extends StatelessWidget {
                   '${formatAnalyticsWeight(producer.setWeight, weightUnit)} × '
                   '${producer.setReps} · ${event.session.planName} · '
                   '${formatStatisticsDate(event.session.date)}',
-                  style: AppTypography.trainingData(
+                  style: AppTypography.figures(
                     fontSize: 12,
                     color: textPrimaryColor(context),
                   ),

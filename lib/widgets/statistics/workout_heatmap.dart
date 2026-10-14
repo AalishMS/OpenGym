@@ -305,7 +305,7 @@ class _Summary extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 value,
-                style: AppTypography.trainingData(
+                style: AppTypography.figures(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: textPrimaryColor(context),
