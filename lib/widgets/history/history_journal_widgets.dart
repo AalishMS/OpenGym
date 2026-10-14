@@ -175,12 +175,9 @@ class _HistoryDate extends StatelessWidget {
         children: [day, const SizedBox(width: AppSpacing.sm), weekday],
       );
     }
-    return Container(
+    return Padding(
+      key: const ValueKey('history-date'),
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: backgroundColor(context),
-        borderRadius: AppRadius.control,
-      ),
       child: Column(
         children: [day, const SizedBox(height: AppSpacing.xxs), weekday],
       ),
@@ -225,11 +222,12 @@ class _WorkoutSummaryContent extends StatelessWidget {
               label: 'Volume load',
               value: formatVolumeLoad(stats.volumeLoad, weightUnit),
             ),
-            if (session.durationSeconds != null)
+            if (knownDurationSeconds(session.durationSeconds)
+                case final duration?)
               _HistoryMetric(
                 icon: LucideIcons.timer,
                 label: 'Duration',
-                value: formatStatisticsDuration(session.durationSeconds!),
+                value: formatStatisticsDuration(duration),
               ),
           ],
         ),

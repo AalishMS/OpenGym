@@ -49,6 +49,12 @@ String formatExerciseValue(
   ExerciseMetric.totalSets => formatAnalyticsNumber(value),
 };
 
+/// A recorded duration worth showing, or null when it is unknown. Sessions
+/// start at 0 seconds, so anything under a minute means the timer never ran
+/// and would only print as "0m".
+int? knownDurationSeconds(int? seconds) =>
+    seconds == null || seconds < 60 ? null : seconds;
+
 String formatStatisticsDuration(int totalSeconds) {
   final safe = totalSeconds < 0 ? 0 : totalSeconds;
   final hours = safe ~/ 3600;

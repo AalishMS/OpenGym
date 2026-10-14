@@ -9,6 +9,7 @@ import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import '../../utils/statistics_format.dart';
+import '../read_only_value.dart';
 import '../readable_table_viewport.dart';
 
 bool _isPrMarker(String? note) {
@@ -34,6 +35,7 @@ class WorkoutDetailsSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = statistics.session;
+    final duration = knownDurationSeconds(session.durationSeconds);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -57,13 +59,11 @@ class WorkoutDetailsSummary extends StatelessWidget {
               label: 'Performed sets',
               value: statistics.totalSets.toString(),
             ),
-            _SummaryData(
-              label: 'Duration',
-              value:
-                  session.durationSeconds == null
-                      ? 'Not recorded'
-                      : formatStatisticsDuration(session.durationSeconds!),
-            ),
+            if (duration != null)
+              _SummaryData(
+                label: 'Duration',
+                value: formatStatisticsDuration(duration),
+              ),
             _SummaryData(
               label: 'Volume load',
               value: formatVolumeLoad(statistics.volumeLoad, weightUnit),
@@ -277,8 +277,18 @@ class WorkoutExerciseDetails extends StatelessWidget {
                     child: _SetHeader(weightUnit: weightUnit),
                   ),
                   for (final entry in exercise.sets.indexed)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                    Container(
+                      key: ValueKey('saved-set-row-${entry.$1}'),
+                      // Ruled rows: a square hairline over each set, so the
+                      // header and every set are separated by one rule.
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.xxs,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(color: borderColor(context)),
+                        ),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
@@ -366,11 +376,7 @@ double _minimumSavedTableWidth(
   Exercise exercise,
   String unit,
 ) {
-  final style = Theme.of(context).textTheme.titleLarge!.copyWith(
-    fontSize: 18,
-    fontWeight: FontWeight.bold,
-    fontFeatures: const [FontFeature.tabularFigures()],
-  );
+  final style = ReadOnlyValue.style(context);
   final weightWidth = exercise.sets.fold<double>(
     48,
     (width, set) => math.max(
@@ -463,35 +469,8 @@ class _SetValues extends StatelessWidget {
     required this.isPrAttempt,
   });
 
-  Widget _value(
-    BuildContext context,
-    Widget child, {
-    required String label,
-    required String value,
-  }) => Semantics(
-    label: label,
-    value: value,
-    excludeSemantics: true,
-    child: Container(
-      constraints: const BoxConstraints(minHeight: 44),
-      padding: const EdgeInsets.all(AppSpacing.xs),
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: surfaceColor(context),
-        borderRadius: AppRadius.field,
-      ),
-      child: child,
-    ),
-  );
-
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.titleLarge!.copyWith(
-      fontSize: 18,
-      fontWeight: FontWeight.bold,
-      fontFeatures: const [FontFeature.tabularFigures()],
-      color: textPrimaryColor(context),
-    );
     final quiet = Theme.of(context).textTheme.labelLarge?.copyWith(
       fontWeight: FontWeight.w400,
       fontFeatures: const [FontFeature.tabularFigures()],
@@ -509,18 +488,14 @@ class _SetValues extends StatelessWidget {
               style: quiet,
             ),
           ),
-          _value(
-            context,
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(formatWeight(weight), style: style),
-                if (isPrAttempt) ...[
-                  const SizedBox(width: AppSpacing.xs),
-                  Semantics(
-                    label: 'Personal record',
-                    excludeSemantics: true,
-                    child: Container(
+          ReadOnlyValue(
+            formatWeight(weight),
+            semanticsLabel: 'Set ${index + 1} weight',
+            semanticsValue:
+                '${formatWeight(weight)} ${weightUnit == 'lbs' ? 'pounds' : 'kilograms'}${isPrAttempt ? ', Personal record' : ''}',
+            trailing:
+                isPrAttempt
+                    ? Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: AppSpacing.xs,
                         vertical: AppSpacing.xxs,
@@ -536,21 +511,10 @@ class _SetValues extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                         ),
                       ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            label: 'Set ${index + 1} weight',
-            value:
-                '${formatWeight(weight)} ${weightUnit == 'lbs' ? 'pounds' : 'kilograms'}${isPrAttempt ? ', Personal record' : ''}',
+                    )
+                    : null,
           ),
-          _value(
-            context,
-            Text('$reps', style: style),
-            label: 'Set ${index + 1} reps',
-            value: '$reps',
-          ),
+          ReadOnlyValue('$reps', semanticsLabel: 'Set ${index + 1} reps'),
           Semantics(
             label: 'Set ${index + 1} RPE',
             value: rpe?.toString() ?? 'Not recorded',

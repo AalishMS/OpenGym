@@ -246,6 +246,16 @@ signature:
   tooltip, including the steps back inside the exercise picker and preset
   browser. Header actions keep the accent. Plan colours stay on Home, so the
   plan editor's Save and Add exercise use the accent too.
+- A ground means tappable. Read-only values, such as the saved sets in Workout
+  details, use `ReadOnlyValue`: a bold `figures` value in the primary text
+  colour with no ground and no border. The table rows are separated by square
+  single-edge hairlines, so the values read as a record and not as editable
+  cells. Only the live set table draws boxed cells.
+- Unknown data is left out rather than given a placeholder. A session
+  duration that is null or under a minute counts as unknown
+  (`knownDurationSeconds`), so History and Workout details never show "0m".
+- Don't nest a ground inside a card. The History row's date sits directly on
+  the card, which is the tap target.
 - Familiar labels and icons make actions understandable outside a technical
   audience.
 - Pressed, focused, disabled, loading, empty, and error states should feel like

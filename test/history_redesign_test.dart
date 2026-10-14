@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -13,9 +14,11 @@ import 'package:gymapp/screens/history_screen.dart';
 
 import 'support/hive_test_harness.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/utils/statistics_format.dart';
 import 'package:gymapp/widgets/history/history_journal_data.dart';
 import 'package:gymapp/widgets/history/history_journal_widgets.dart';
 import 'package:gymapp/widgets/history/workout_details_widgets.dart';
+import 'package:gymapp/widgets/read_only_value.dart';
 
 void main() {
   final hiveHarness = HiveTestHarness();
@@ -354,7 +357,8 @@ void main() {
         find.byKey(const ValueKey('workout-details-readout')),
         findsOneWidget,
       );
-      expect(find.text('Not recorded'), findsOneWidget);
+      expect(find.text('Duration'), findsNothing);
+      expect(find.text('Not recorded'), findsNothing);
       expect(find.text('Performed sets'), findsOneWidget);
       expect(find.text('0'), findsWidgets);
       expect(find.text('Weight (lbs)'), findsOneWidget);
@@ -376,6 +380,172 @@ void main() {
       );
     },
   );
+
+  test('a duration under a minute is unknown', () {
+    expect(knownDurationSeconds(null), isNull);
+    expect(knownDurationSeconds(0), isNull);
+    expect(knownDurationSeconds(59), isNull);
+    expect(knownDurationSeconds(60), 60);
+    expect(knownDurationSeconds(1800), 1800);
+  });
+
+  testWidgets('journal hides an unknown duration instead of showing 0m', (
+    tester,
+  ) async {
+    final provider = _Sessions([
+      session(
+        id: 'zero',
+        name: 'Zero day',
+        date: DateTime(2026, 9, 13),
+        durationSeconds: 0,
+      ),
+      session(
+        id: 'short',
+        name: 'Short day',
+        date: DateTime(2026, 9, 12),
+        durationSeconds: 30,
+      ),
+      session(
+        id: 'timed',
+        name: 'Timed day',
+        date: DateTime(2026, 9, 11),
+        durationSeconds: 1800,
+      ),
+    ]);
+    await tester.pumpWidget(host(provider));
+    await tester.pump();
+
+    Finder timerIn(String name) => find.descendant(
+      of: find.ancestor(
+        of: find.text(name),
+        matching: find.byType(HistoryWorkoutRow),
+      ),
+      matching: find.byIcon(LucideIcons.timer),
+    );
+    expect(timerIn('Zero day'), findsNothing);
+    expect(timerIn('Short day'), findsNothing);
+    expect(timerIn('Timed day'), findsOneWidget);
+    expect(find.text('0m'), findsNothing);
+    expect(find.text('30m'), findsOneWidget);
+  });
+
+  testWidgets('details leave out an unknown duration and show a known one', (
+    tester,
+  ) async {
+    final provider = _Sessions([
+      session(
+        id: 'short',
+        name: 'Short day',
+        date: DateTime(2026, 9, 12),
+        durationSeconds: 30,
+      ),
+      session(
+        id: 'timed',
+        name: 'Timed day',
+        date: DateTime(2026, 9, 11),
+        durationSeconds: 1800,
+      ),
+    ]);
+    await tester.pumpWidget(host(provider));
+    await tester.tap(find.text('Short day'));
+    await tester.pumpAndSettle();
+    expect(find.text('Duration'), findsNothing);
+    expect(find.text('0m'), findsNothing);
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Timed day'));
+    await tester.pumpAndSettle();
+    expect(find.text('Duration'), findsOneWidget);
+    expect(find.text('30m'), findsOneWidget);
+  });
+
+  testWidgets('saved set values sit on no ground, in ruled rows', (
+    tester,
+  ) async {
+    for (final brightness in Brightness.values) {
+      await tester.pumpWidget(
+        host(
+          _Sessions([]),
+          brightness: brightness,
+          screen: Scaffold(
+            body: WorkoutExerciseDetails(
+              exercise: Exercise(
+                name: 'Bench Press',
+                sets: [
+                  Set(weight: 80, reps: 5, note: 'PR'),
+                  Set(weight: 75, reps: 6),
+                ],
+              ),
+              weightUnit: 'kg',
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      for (final value in ['80', '5', '75', '6']) {
+        final grounds = tester
+            .widgetList<Container>(
+              find.ancestor(
+                of: find.text(value),
+                matching: find.byType(Container),
+              ),
+            )
+            .map((container) => container.decoration)
+            .whereType<BoxDecoration>()
+            .where(
+              (decoration) =>
+                  decoration.color != null ||
+                  decoration.borderRadius != null ||
+                  decoration.border is Border &&
+                      (decoration.border! as Border).isUniform,
+            );
+        expect(grounds, isEmpty, reason: '$value ($brightness) has a box');
+        expect(
+          find.ancestor(
+            of: find.text(value),
+            matching: find.byType(ReadOnlyValue),
+          ),
+          findsOneWidget,
+        );
+      }
+      final rule =
+          tester
+                  .widget<Container>(
+                    find.byKey(const ValueKey('saved-set-row-1')),
+                  )
+                  .decoration!
+              as BoxDecoration;
+      expect(rule.borderRadius, isNull);
+      expect((rule.border! as Border).top.style, BorderStyle.solid);
+      expect((rule.border! as Border).bottom, BorderSide.none);
+    }
+  });
+
+  testWidgets('journal date sits on the card with no ground of its own', (
+    tester,
+  ) async {
+    final provider = _Sessions([
+      session(id: 'one', name: 'Push Day', date: DateTime(2026, 9, 11)),
+    ]);
+    await tester.pumpWidget(host(provider));
+    await tester.pump();
+
+    final date = find.byKey(const ValueKey('history-date'));
+    expect(date, findsOneWidget);
+    expect(tester.widget(date), isA<Padding>());
+    expect(
+      find.descendant(of: date, matching: find.byType(DecoratedBox)),
+      findsNothing,
+    );
+    final row = find.byType(HistoryWorkoutRow);
+    final betweenCardAndDate = find.descendant(
+      of: row,
+      matching: find.ancestor(of: date, matching: find.byType(DecoratedBox)),
+    );
+    expect(betweenCardAndDate, findsNothing);
+  });
 
   testWidgets('saved PR note is a compact marker beside the set weight', (
     tester,
