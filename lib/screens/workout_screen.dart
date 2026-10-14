@@ -919,57 +919,96 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     );
   }
 
-  void _deleteWeek(int index) async {
-    final week = _weeks[index];
-    final saved =
-        _weekSessions[week] ??
-        HiveService.getSessionForPlanAndWeek(
-          widget.plan.name,
-          week,
-          widget.plan.splitId,
-        );
-    if (saved != null && !saved.isCompleted) {
-      if (index == _currentWeekIndex) {
-        await _discardCurrentWorkout();
-      } else if (await _confirmDiscard(saved) && saved.id != null && mounted) {
-        await context.read<WorkoutSessionProvider>().deleteSession(saved.id!);
-        _weekSessions.remove(week);
-      }
-      return;
-    }
-    if (_weeks.length == 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '> Cannot delete the last week',
-            style: GoogleFonts.jetBrainsMono(),
-          ),
-          backgroundColor: errorColor(context),
-        ),
+  /// The saved session behind a week tab. Null when the tab only holds the
+  /// placeholder that [_getOrCreateSession] builds for display, which has
+  /// plan-shaped sets but has never been written.
+  WorkoutSession? _persistedSessionForWeek(int week) {
+    final id = _weekSessions[week]?.id;
+    final session =
+        id != null
+            ? HiveService.getSessionById(id)
+            : HiveService.getSessionForPlanAndWeek(
+              widget.plan.name,
+              week,
+              widget.plan.splitId,
+            );
+    return session?.deletedAt == null ? session : null;
+  }
+
+  void _showWeekMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _deleteWeek(int index) async {
+    if (_timerAction != null || _isNavigating) {
+      _showWeekMessage(
+        'Wait for the workout to finish updating, then try again',
       );
       return;
     }
+    // An autosave still in flight would write the week back after the delete.
+    final pendingSave = _saveFuture;
+    if (pendingSave != null) await pendingSave;
+    if (!mounted) return;
+    if (_weeks.length == 1) {
+      _showWeekMessage("You can't delete the only week");
+      return;
+    }
 
-    final confirmed = await WorkoutDialogs.showDeleteWeekDialog(
-      context,
-      week: week,
-    );
+    final week = _weeks[index];
+    final saved = _persistedSessionForWeek(week);
+    final unsavedEdits = index == _currentWeekIndex && _hasUnsavedChanges;
+    // An empty week has nothing to lose, so it goes without a dialog.
+    if (saved != null || unsavedEdits) {
+      final confirmed = await WorkoutDialogs.showDeleteWeekDialog(
+        context,
+        week: week,
+        logged: saved?.isCompleted ?? false,
+      );
+      if (!confirmed || !mounted) return;
+    }
 
-    if (confirmed) {
-      await HiveService.deleteSessionForPlanAndWeek(
+    if (saved != null) {
+      final provider = context.read<WorkoutSessionProvider>();
+      await provider.deleteSessionsForPlanWeek(
         widget.plan.name,
         week,
         widget.plan.splitId,
       );
-      setState(() {
-        _weeks.removeAt(index);
-        if (_currentWeekIndex >= _weeks.length) {
-          _currentWeekIndex = _weeks.length - 1;
-        } else if (_currentWeekIndex > index) {
-          _currentWeekIndex -= 1;
-        }
-      });
+      // A draft opened under an older plan name is only reachable by id.
+      if (HiveService.getSessionById(saved.id!)?.deletedAt == null) {
+        await provider.deleteSession(saved.id!);
+      }
+      final notification =
+          await WorkoutTimerNotificationService.instance.snapshot();
+      if (notification?.sessionId == saved.id) {
+        await WorkoutTimerNotificationService.instance.dismiss();
+      }
+      if (!mounted) return;
     }
+
+    // The tab list may have changed while the dialog was open.
+    final removeAt = _weeks.indexOf(week);
+    if (removeAt < 0) return;
+    final wasCurrent = removeAt == _currentWeekIndex;
+    setState(() {
+      _weeks.removeAt(removeAt);
+      _weekSessions.remove(week);
+      if (_currentWeekIndex >= _weeks.length) {
+        _currentWeekIndex = _weeks.length - 1;
+      } else if (_currentWeekIndex > removeAt) {
+        _currentWeekIndex -= 1;
+      }
+      if (wasCurrent) {
+        // Drop the deleted draft's edits so they can't be saved to a new week.
+        _hasUnsavedChanges = false;
+        _draftRevision++;
+        _saveError = null;
+      }
+    });
+    if (wasCurrent) _loadSessionForCurrentWeek();
   }
 
   void _deleteExercise(int exerciseIndex) async {

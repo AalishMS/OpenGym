@@ -56,7 +56,7 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
         MediaQuery.sizeOf(context).width - (AppSpacing.lg * 2);
     final menuWidth = math.min(292.0, availableWidth);
 
-    return MenuAnchor(
+    final menu = MenuAnchor(
       controller: _menuController,
       alignmentOffset: const Offset(0, AppSpacing.xs),
       style: const MenuStyle(
@@ -180,6 +180,16 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
               ),
             ),
           ),
+    );
+
+    // The menu lives in an overlay, not a route, so the Navigator never sees
+    // it. Without this, Android Back pops the shell and closes the app.
+    return PopScope(
+      canPop: !_menuController.isOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _closeMenu();
+      },
+      child: menu,
     );
   }
 }

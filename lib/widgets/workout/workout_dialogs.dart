@@ -482,7 +482,7 @@ class WorkoutDialogs {
               children: [
                 ListTile(
                   leading: Icon(LucideIcons.pencil, color: accent),
-                  title: Text('Rename', style: GoogleFonts.jetBrainsMono()),
+                  title: const Text('Rename week'),
                   onTap: () {
                     Navigator.pop(context);
                     onRename();
@@ -491,10 +491,8 @@ class WorkoutDialogs {
                 ListTile(
                   leading: Icon(LucideIcons.trash2, color: errorColor(context)),
                   title: Text(
-                    'DELETE',
-                    style: GoogleFonts.jetBrainsMono(
-                      color: errorColor(context),
-                    ),
+                    'Delete week',
+                    style: TextStyle(color: errorColor(context)),
                   ),
                   onTap: () {
                     Navigator.pop(context);
@@ -519,13 +517,21 @@ class WorkoutDialogs {
     if (newWeek != null && context.mounted) onRename(newWeek);
   }
 
+  /// [logged] picks the wording: a logged workout also leaves History and
+  /// records, while an unlogged one only loses the sets entered so far.
   static Future<bool> showDeleteWeekDialog(
     BuildContext context, {
     required int week,
+    bool logged = true,
   }) => _showDestructiveConfirmation(
     context,
     title: 'Delete week?',
-    message: 'This will permanently delete this week\'s workout data.',
+    message:
+        logged
+            ? 'Week $week\'s logged workout will be removed from History, '
+                'Stats and personal records.'
+            : 'The sets entered for week $week will be removed. This workout '
+                'hasn\'t been logged, so History and records won\'t change.',
     confirmLabel: 'Delete',
   );
 

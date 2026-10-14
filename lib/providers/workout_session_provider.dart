@@ -41,6 +41,17 @@ class WorkoutSessionProvider with ChangeNotifier {
     SyncService.instance.scheduleSync();
   }
 
+  /// Tombstones every session a plan has in [week], logged or not.
+  Future<void> deleteSessionsForPlanWeek(
+    String planName,
+    int week,
+    String? splitId,
+  ) async {
+    await HiveService.deleteSessionForPlanAndWeek(planName, week, splitId);
+    loadSessions();
+    SyncService.instance.scheduleSync();
+  }
+
   String _requireActiveSplit() {
     final splitId = _splitProvider?.activeSplitId;
     if (splitId == null) throw StateError('No active split is available.');

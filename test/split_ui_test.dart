@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
@@ -381,6 +382,43 @@ void main() {
     await tester.tapAt(Offset(outsideX, 10));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('split-menu')), findsNothing);
+  });
+
+  testWidgets('system Back closes the open menu and keeps the app open', (
+    tester,
+  ) async {
+    final harness = (await tester.runAsync(_createHarness))!;
+    addTearDown(harness.dispose);
+    var exitRequests = 0;
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'SystemNavigator.pop') exitRequests++;
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.pumpWidget(harness.host(const HomeScreen()));
+
+    await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('split-menu')), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('split-menu')), findsNothing);
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(exitRequests, 0);
+
+    // With the menu closed, Back is the app's again.
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(exitRequests, 1);
   });
 }
 
