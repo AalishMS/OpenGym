@@ -105,14 +105,13 @@ class _WeeklyVolumeChartState extends State<WeeklyVolumeChart> {
                                               bottom: height + 6,
                                               left: 0,
                                               right: 0,
-                                              child: Text(
+                                              child: _ValueLabel(
                                                 formatChartNumber(
                                                   displayWeight(
                                                     weeks[i].volumeLoad,
                                                     widget.weightUnit,
                                                   ),
                                                 ),
-                                                textAlign: TextAlign.center,
                                                 style: AppTypography.trainingData(
                                                   fontSize: 11,
                                                   color:
@@ -308,14 +307,23 @@ class _ExerciseTrendChartState extends State<ExerciseTrendChart> {
                             alignment: Alignment.bottomCenter,
                             child: Padding(
                               padding: const EdgeInsets.only(bottom: 12),
-                              child: Text(
-                                '${points[i].session.date.day} ${_month(points[i].session.date)}',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.labelMedium?.copyWith(
-                                  color: textSecondaryColor(context),
-                                ),
-                              ),
+                              // Several workouts on one day share a single
+                              // date label; Semantics keeps each one's date.
+                              child:
+                                  i > 0 &&
+                                          DateUtils.isSameDay(
+                                            points[i - 1].session.date,
+                                            points[i].session.date,
+                                          )
+                                      ? null
+                                      : Text(
+                                        '${points[i].session.date.day} ${_month(points[i].session.date)}',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.labelMedium?.copyWith(
+                                          color: textSecondaryColor(context),
+                                        ),
+                                      ),
                             ),
                           ),
                         ),
@@ -326,9 +334,8 @@ class _ExerciseTrendChartState extends State<ExerciseTrendChart> {
                     width: pitch,
                     top: math.max(0, offsets.last.dy - 27 * scale),
                     child: IgnorePointer(
-                      child: Text(
+                      child: _ValueLabel(
                         formatChartNumber(values.last),
-                        textAlign: TextAlign.center,
                         style: AppTypography.trainingData(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -378,6 +385,29 @@ double _niceStep(double target) {
 }
 
 String _month(DateTime date) => formatStatisticsDate(date).split(' ')[1];
+
+/// A value printed inside the plot. The surface-coloured ground masks any
+/// gridline the label happens to land on, at whatever height that is.
+class _ValueLabel extends StatelessWidget {
+  final String text;
+  final TextStyle style;
+
+  const _ValueLabel(this.text, {required this.style});
+
+  @override
+  Widget build(BuildContext context) => Center(
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: surfaceColor(context),
+        borderRadius: AppRadius.badge,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3),
+        child: Text(text, textAlign: TextAlign.center, style: style),
+      ),
+    ),
+  );
+}
 
 class ChartReadout extends StatelessWidget {
   final String value;

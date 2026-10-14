@@ -313,6 +313,78 @@ void main() {
     },
   );
 
+  testWidgets('same-day workouts label their date on the x-axis once', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final day = DateTime(2026, 10, 7);
+    final data = [
+      session('earlier', DateTime(2026, 10, 3)),
+      session('a', day),
+      session('b', day.add(const Duration(hours: 2))),
+      session('c', day.add(const Duration(hours: 4))),
+    ];
+    await tester.pumpWidget(
+      host(
+        ExerciseTrendChart(
+          progress: analytics.exerciseProgress(
+            data,
+            'Bench press',
+            ExerciseMetric.bestWeight,
+          ),
+          metric: ExerciseMetric.bestWeight,
+          weightUnit: 'kg',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('7 Oct'), findsOneWidget);
+    expect(find.text('3 Oct'), findsOneWidget);
+    for (var i = 1; i <= 3; i++) {
+      expect(
+        tester
+            .getSemantics(find.byKey(ValueKey('progress-point-$i')))
+            .label,
+        contains(formatStatisticsDate(day)),
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('bar value labels sit on a surface-coloured mask', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final data = weeks(3);
+    await tester.pumpWidget(
+      host(WeeklyVolumeChart(weeks: data, weightUnit: 'kg')),
+    );
+    await tester.pumpAndSettle();
+    final surface = surfaceColor(
+      tester.element(find.byType(WeeklyVolumeChart)),
+    );
+    for (final week in data) {
+      final label = find.text(formatChartNumber(week.volumeLoad));
+      expect(label, findsOneWidget);
+      final masks = tester.widgetList<DecoratedBox>(
+        find.ancestor(of: label, matching: find.byType(DecoratedBox)),
+      );
+      expect(
+        masks.any(
+          (box) =>
+              box.decoration is BoxDecoration &&
+              (box.decoration as BoxDecoration).color == surface,
+        ),
+        isTrue,
+      );
+    }
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('screen order and independent exercise selectors', (
     tester,
   ) async {
