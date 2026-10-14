@@ -139,23 +139,41 @@ class _HomeScreenState extends State<HomeScreen> {
           vertical: AppSpacing.md,
         ),
         child: _CappedWidth(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Expanded(
-                child: AppWordmark(
-                  fontSize: 20,
-                  maxLines: 1,
-                  overflow: TextOverflow.clip,
+          child: LayoutBuilder(
+            // The wordmark keeps its natural width and the switcher takes the
+            // rest, so a split name only shortens once the row is truly full.
+            // The cap only matters at large text on a narrow phone.
+            builder:
+                (context, constraints) => Row(
+                  children: [
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: constraints.maxWidth * 0.4,
+                      ),
+                      child: const AppWordmark(
+                        fontSize: 20,
+                        maxLines: 1,
+                        overflow: TextOverflow.clip,
+                      ),
+                    ),
+                    if (splitProvider != null) ...[
+                      const SizedBox(width: AppSpacing.sm),
+                      const Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CoachButton(),
+                              SizedBox(width: AppSpacing.xs),
+                              Flexible(child: SplitSwitcher()),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              ),
-              if (splitProvider != null) ...[
-                const SizedBox(width: AppSpacing.sm),
-                const CoachButton(),
-                const SizedBox(width: AppSpacing.xs),
-                const Flexible(child: IntrinsicWidth(child: SplitSwitcher())),
-              ],
-            ],
           ),
         ),
       ),
@@ -307,14 +325,14 @@ class _HomeScreenState extends State<HomeScreen> {
               durationMinutes: durationMinutes,
               onStart: () => _openWorkout(context, plans[nextIndex], nextIndex),
             ),
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.md),
             TrainingSnapshot(
               plans: plans,
               sessions: sessions,
               onOpenWeeklyTraining: widget.onOpenWeeklyTraining,
               onOpenLastWorkout: widget.onOpenLastWorkout,
             ),
-            const SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.lg),
           ],
           Row(
             children: [

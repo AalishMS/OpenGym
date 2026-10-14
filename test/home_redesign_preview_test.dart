@@ -85,10 +85,11 @@ void main() {
       ];
       await tester.pumpWidget(_host([fullBody], sessions, Brightness.light));
       expect(find.textContaining('~30 min'), findsOneWidget);
-      expect(find.text('Chest'), findsOneWidget);
-      expect(find.text('Back'), findsOneWidget);
-      expect(find.text('Shoulders'), findsOneWidget);
-      expect(find.text('Legs'), findsOneWidget);
+      // Muscle groups lead the meta line instead of sitting in a chip row.
+      expect(
+        find.textContaining('Chest, Back, Shoulders, Legs · Day 1 of 1'),
+        findsOneWidget,
+      );
       await tester.pumpWidget(_host([fullBody], const [], Brightness.light));
       expect(find.textContaining(' min'), findsNothing);
       expect(tester.takeException(), isNull);

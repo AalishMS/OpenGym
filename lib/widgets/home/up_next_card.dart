@@ -51,13 +51,18 @@ class UpNextCard extends StatelessWidget {
             .toList();
     final sets = plan.exercises.fold<int>(0, (sum, e) => sum + e.sets);
     final count = plan.exercises.length;
-    final chipGround = Color.alphaBlend(
-      accentColor(context).withAlpha(16),
-      raisedSurfaceColor(context),
-    );
+    // One meta line instead of a chip row keeps the card short enough for the
+    // plan list to show below it on a phone.
+    final meta = [
+      if (groups.isNotEmpty) groups.join(', '),
+      'Day $day of $dayCount',
+      '$count ${count == 1 ? 'exercise' : 'exercises'}',
+      '$sets ${sets == 1 ? 'set' : 'sets'}',
+      if (durationMinutes != null) '~$durationMinutes min',
+    ].join(' · ');
 
     return Container(
-      padding: const EdgeInsets.all(AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         color: raisedSurfaceColor(context),
         // This edge groups content; the start button owns the tap target.
@@ -83,7 +88,7 @@ class UpNextCard extends StatelessWidget {
                 ),
             ],
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           Semantics(
             label:
                 'Day $day of $dayCount. ${trainedDays.length} plans trained this week',
@@ -111,48 +116,17 @@ class UpNextCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
-          Text(
-            titleCase(plan.name),
-            style: textTheme.displayLarge?.copyWith(
-              color: textPrimaryColor(context),
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          if (groups.isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.lg),
-            Wrap(
-              spacing: AppSpacing.sm,
-              runSpacing: AppSpacing.sm,
-              children: [
-                for (final group in groups)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: AppSpacing.xs,
-                    ),
-                    decoration: BoxDecoration(
-                      color: chipGround,
-                      borderRadius: AppRadius.chip,
-                    ),
-                    child: Text(
-                      group,
-                      style: textTheme.bodySmall?.copyWith(
-                        color: onColor(chipGround),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ],
           const SizedBox(height: AppSpacing.md),
           Text(
-            'Day $day of $dayCount · $count ${count == 1 ? 'exercise' : 'exercises'} · '
-            '$sets ${sets == 1 ? 'set' : 'sets'}'
-            '${durationMinutes == null ? '' : ' · ~$durationMinutes min'}',
-            style: textTheme.bodySmall?.copyWith(color: secondary),
+            titleCase(plan.name),
+            style: textTheme.headlineLarge?.copyWith(
+              color: textPrimaryColor(context),
+              fontWeight: FontWeight.w600,
+            ),
           ),
-          const SizedBox(height: AppSpacing.xl),
+          const SizedBox(height: AppSpacing.xs),
+          Text(meta, style: textTheme.bodySmall?.copyWith(color: secondary)),
+          const SizedBox(height: AppSpacing.lg),
           AppButton.primary(
             key: tutorialStartKey,
             label: 'Start workout',

@@ -67,6 +67,38 @@ class TrainingSnapshot extends StatelessWidget {
       'Sunday',
     ];
 
+    // Seven empty bars say nothing an empty count doesn't, and they push the
+    // plan list off the first screen. The bars come back with the first log.
+    if (workouts == 0) {
+      final summary = '0 of ${plans.length} this week';
+      return Material(
+        type: MaterialType.transparency,
+        child: Semantics(
+          button: onOpenWeeklyTraining != null,
+          label: '$summary. View weekly training statistics',
+          excludeSemantics: true,
+          child: InkWell(
+            key: const ValueKey('weekly-training-link'),
+            onTap: onOpenWeeklyTraining,
+            borderRadius: AppRadius.control,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 48),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                  child: Text(
+                    summary,
+                    style: textTheme.bodyMedium?.copyWith(color: secondary),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Material(
       type: MaterialType.transparency,
       child: Column(

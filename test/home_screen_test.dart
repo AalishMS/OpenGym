@@ -13,6 +13,7 @@ import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/screens/home_screen.dart';
+import 'package:gymapp/widgets/home/home_plan_row.dart';
 import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
@@ -800,8 +801,46 @@ void main() {
     await tester.pumpWidget(homeHost(plans: plans, sessions: [draft]));
 
     expect(find.textContaining('Day 1 of 3'), findsOneWidget);
-    expect(find.text('0 workouts · 0 sets'), findsOneWidget);
+    expect(find.text('0 of 3 this week'), findsOneWidget);
     expect(find.byIcon(LucideIcons.check), findsNothing);
+  });
+
+  testWidgets('an empty week leaves room for four of five plans on a phone', (
+    tester,
+  ) async {
+    // A 412x915dp phone less what the emulator measures outside Home: a 24dp
+    // status bar and a 92dp tab bar with gesture navigation.
+    const size = Size(412, 915 - 24 - 92);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = size;
+    addTearDown(tester.view.reset);
+    final plans = [
+      for (var index = 0; index < 5; index++)
+        populatedPlan().copyWith(
+          id: 'plan-${index + 1}',
+          name: 'Day ${index + 1}',
+          planColor: kPlanColors[index],
+        ),
+    ];
+    for (final brightness in Brightness.values) {
+      await tester.pumpWidget(
+        homeHost(size: size, brightness: brightness, plans: plans),
+      );
+      await tester.pump();
+
+      expect(find.text('0 of 5 this week'), findsOneWidget);
+      expect(find.byKey(const ValueKey('weekly-training-link')), findsOneWidget);
+      expect(find.byKey(const ValueKey('training-day-0')), findsNothing);
+      final fourth = find.byWidgetPredicate(
+        (widget) => widget is HomePlanRow && widget.plan.id == 'plan-4',
+      );
+      expect(fourth, findsOneWidget);
+      expect(
+        tester.getRect(fourth).bottom,
+        lessThanOrEqualTo(size.height),
+        reason: '$brightness',
+      );
+    }
   });
 
   testWidgets('up next starts the plan after the last one trained', (

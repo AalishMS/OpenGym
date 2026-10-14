@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -13,6 +14,7 @@ import 'package:gymapp/models/split.dart' as gym;
 import 'package:gymapp/models/split_preference.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/providers/coach_provider.dart';
 import 'package:gymapp/providers/split_provider.dart';
 import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
@@ -22,6 +24,7 @@ import 'package:gymapp/screens/history_screen.dart';
 import 'package:gymapp/screens/home_screen.dart';
 import 'package:gymapp/screens/stats_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/widgets/splits/split_switcher.dart';
 
 import 'support/hive_test_harness.dart';
 import 'package:gymapp/theme/app_theme.dart';
@@ -80,7 +83,8 @@ void main() {
           .height,
       36,
     );
-    expect(find.text('Ppl Plan'), findsOneWidget);
+    // Up next and the plan row both name the active split's plan.
+    expect(find.text('Ppl Plan'), findsWidgets);
     expect(find.text('Ul Plan'), findsNothing);
     expect(
       tester
@@ -106,7 +110,7 @@ void main() {
     expect(find.text('UL'), findsOneWidget);
     expect(find.text('[UL]'), findsNothing);
     expect(find.text('Ppl Plan'), findsNothing);
-    expect(find.text('Ul Plan'), findsOneWidget);
+    expect(find.text('Ul Plan'), findsWidgets);
     expect(harness.sessions.sessions.single.splitId, 'ul');
     semantics.dispose();
   });
@@ -356,6 +360,109 @@ void main() {
     }
   });
 
+  test('split names keep a trailing copy counter apart from the base', () {
+    expect(splitNameParts('Powerbuilding PPLUL (2)'), (
+      'Powerbuilding PPLUL',
+      ' (2)',
+    ));
+    expect(splitNameParts('PPL'), ('PPL', ''));
+    expect(splitNameParts('(2)'), ('(2)', ''));
+    expect(splitNameParts('Upper (2) Lower'), ('Upper (2) Lower', ''));
+  });
+
+  testWidgets('the copy counter stays visible with the Coach on and off', (
+    tester,
+  ) async {
+    const size = Size(412, 800);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = size;
+    addTearDown(tester.view.reset);
+
+    RenderParagraph paragraph(String text) => tester.renderObject(
+      find.descendant(
+        of: find.byKey(const ValueKey('split-switcher-button')),
+        matching: find.text(text),
+      ),
+    );
+
+    // The test font draws every glyph as a square, so the long name can't fit
+    // at phone width and with the Coach on even the short one is cut. The
+    // counter has to survive both.
+    for (final names in [
+      ['PPL (2)', 'PPL'],
+      ['Powerbuilding PPLUL (2)', 'Powerbuilding PPLUL'],
+    ]) {
+      final harness = (await tester.runAsync(
+        () => _createHarness(splitNames: names),
+      ))!;
+      addTearDown(harness.dispose);
+      final coach = CoachProvider(
+        splitProvider: harness.splits,
+        userIdProvider: () => 'user-1',
+        isConfigured: () => true,
+      );
+      addTearDown(coach.dispose);
+      final fits = names.first.length < 10;
+
+      for (final withCoach in [false, true]) {
+        await tester.pumpWidget(
+          harness.host(
+            const HomeScreen(),
+            size: size,
+            coach: withCoach ? coach : null,
+          ),
+        );
+        await tester.pump();
+        final reason = '${names.first}, Coach ${withCoach ? 'on' : 'off'}';
+        expect(tester.takeException(), isNull, reason: reason);
+        expect(
+          find.byKey(const ValueKey('coach-button')),
+          withCoach ? findsOneWidget : findsNothing,
+          reason: reason,
+        );
+
+        final suffix = paragraph(' (2)');
+        expect(suffix.didExceedMaxLines, isFalse, reason: reason);
+        final suffixRect = tester.getRect(find.text(' (2)'));
+        expect(suffixRect.right, lessThanOrEqualTo(size.width), reason: reason);
+        expect(suffixRect.width, greaterThan(0), reason: reason);
+        final base = names.first.substring(0, names.first.length - 4);
+        if (!withCoach) {
+          expect(
+            paragraph(base).didExceedMaxLines,
+            !fits,
+            reason: '$reason: only an overlong base name is cut off',
+          );
+        }
+        // The menu measures its rows with IntrinsicWidth.
+        await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: '$reason: menu');
+        final menuSuffix = find.descendant(
+          of: find.byKey(const ValueKey('split-menu')),
+          matching: find.text(' (2)'),
+        );
+        expect(menuSuffix, findsOneWidget, reason: '$reason: menu');
+        expect(
+          tester.renderObject<RenderParagraph>(menuSuffix).didExceedMaxLines,
+          isFalse,
+          reason: '$reason: menu',
+        );
+        await tester.tapAt(const Offset(10, 790));
+        await tester.pumpAndSettle();
+        if (!fits && !withCoach) {
+          expect(
+            tester
+                .getSize(find.byKey(const ValueKey('split-switcher-content')))
+                .width,
+            greaterThan(180),
+            reason: '$reason: the switcher takes the width the wordmark leaves',
+          );
+        }
+      }
+    }
+  });
+
   testWidgets('menu dismisses outside and honors reduced motion', (
     tester,
   ) async {
@@ -498,8 +605,10 @@ class _Harness {
     Size size = const Size(390, 800),
     double textScale = 1,
     bool disableAnimations = false,
+    CoachProvider? coach,
   }) => MultiProvider(
     providers: [
+      if (coach != null) ChangeNotifierProvider<CoachProvider>.value(value: coach),
       ChangeNotifierProvider<SplitProvider>.value(value: splits),
       ChangeNotifierProvider<WorkoutPlanProvider>.value(value: plans),
       ChangeNotifierProvider<WorkoutSessionProvider>.value(value: sessions),
