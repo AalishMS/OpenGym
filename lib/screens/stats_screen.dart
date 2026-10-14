@@ -18,7 +18,15 @@ import '../widgets/statistics/workout_heatmap.dart';
 class StatsScreen extends StatefulWidget {
   final int weeklyTrainingRequest;
 
-  const StatsScreen({this.weeklyTrainingRequest = 0, super.key});
+  /// Bumped each time the tab is entered from another tab. The screen lives
+  /// in the shell's IndexedStack, so without this it would keep its offset.
+  final int visitRequest;
+
+  const StatsScreen({
+    this.weeklyTrainingRequest = 0,
+    this.visitRequest = 0,
+    super.key,
+  });
 
   @override
   State<StatsScreen> createState() => _StatsScreenState();
@@ -37,8 +45,10 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   void didUpdateWidget(covariant StatsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.weeklyTrainingRequest == oldWidget.weeklyTrainingRequest) return;
-    _allExercises = true;
+    final weekly =
+        widget.weeklyTrainingRequest != oldWidget.weeklyTrainingRequest;
+    if (!weekly && widget.visitRequest == oldWidget.visitRequest) return;
+    if (weekly) _allExercises = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _scrollController.hasClients) _scrollController.jumpTo(0);
     });
@@ -203,15 +213,7 @@ class _StatsScreenState extends State<StatsScreen> {
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                'Days you trained · Last 52 weeks',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: textSecondaryColor(context),
-                                ),
-                              ),
-                              const SizedBox(height: 20),
+                              // Captions itself with the weeks that fit.
                               WorkoutHeatmap(sessions: sessions),
                             ],
                           ),
@@ -332,7 +334,13 @@ class _StatsScreenState extends State<StatsScreen> {
                           )
                         else
                           for (final event in records)
-                            RecordEventRow(event: event, weightUnit: unit),
+                            RecordEventRow(
+                              key: ValueKey(
+                                'record-${event.session.id}-${event.exerciseName}',
+                              ),
+                              event: event,
+                              weightUnit: unit,
+                            ),
                       ],
                     ),
                   ),
@@ -428,11 +436,8 @@ class _ProgressSummary extends StatelessWidget {
         .map((point) => point.value)
         .reduce((a, b) => a > b ? a : b);
     final change = progress.change;
+    // The latest value is already the readout under the chart.
     final values = [
-      (
-        'Latest',
-        formatChartExerciseValue(progress.currentValue!, metric, unit),
-      ),
       (
         'Change',
         change == null

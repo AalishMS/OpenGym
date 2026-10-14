@@ -12,6 +12,7 @@ import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/stats_screen.dart';
 import 'package:gymapp/services/statistics_analytics_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/widgets/statistics/statistics_widgets.dart';
 import 'package:gymapp/widgets/statistics/training_charts.dart';
 import 'package:gymapp/utils/statistics_format.dart';
 
@@ -209,7 +210,11 @@ void main() {
       final plot = find.byKey(const ValueKey('weekly-volume-scroll'));
       final controller = tester.widget<SingleChildScrollView>(plot).controller!;
       expect(controller.offset, 0);
-      expect(find.text('19,200 kg'), findsOneWidget);
+      // Leads with the last complete week, not the one in progress.
+      expect(find.text('Last week'), findsOneWidget);
+      expect(find.text('19,080 kg'), findsOneWidget);
+      expect(find.text('1% more than the week before'), findsOneWidget);
+      expect(find.text('This week · In progress'), findsNothing);
       expect(
         tester.getSize(find.byKey(const ValueKey('volume-bar-0'))).width,
         24,
@@ -234,14 +239,22 @@ void main() {
       await tester.tap(find.text('Latest'));
       await tester.pumpAndSettle();
       expect(controller.offset, 0);
+      // The week in progress can still be read, without a partial comparison.
+      await tester.tap(
+        find.byKey(ValueKey('week-${data.last.weekStart.toIso8601String()}')),
+      );
+      await tester.pump();
+      expect(find.text('This week · In progress'), findsOneWidget);
+      expect(find.text('19,200 kg'), findsOneWidget);
+      expect(find.textContaining('the week before'), findsNothing);
       await tester.tap(
         find.byKey(
-          ValueKey('week-${data[data.length - 2].weekStart.toIso8601String()}'),
+          ValueKey('week-${data[data.length - 3].weekStart.toIso8601String()}'),
         ),
       );
       await tester.pump();
-      expect(find.text('19,080 kg'), findsOneWidget);
-      expect(find.text('This week · In progress'), findsNothing);
+      expect(find.text('18,960 kg'), findsOneWidget);
+      expect(find.text('Last week'), findsNothing);
       await tester.pumpWidget(
         host(
           WeeklyVolumeChart(
@@ -344,9 +357,7 @@ void main() {
     expect(find.text('3 Oct'), findsOneWidget);
     for (var i = 1; i <= 3; i++) {
       expect(
-        tester
-            .getSemantics(find.byKey(ValueKey('progress-point-$i')))
-            .label,
+        tester.getSemantics(find.byKey(ValueKey('progress-point-$i'))).label,
         contains(formatStatisticsDate(day)),
       );
     }
@@ -428,5 +439,107 @@ void main() {
     );
     expect(find.text('800 kg'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the progress summary leaves the latest value to the readout', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final today = DateTime.now();
+    final data = _Sessions([
+      session('one', today.subtract(const Duration(days: 2))),
+      session('two', today),
+    ]);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<WorkoutSessionProvider>.value(
+        value: data,
+        child: host(const StatsScreen()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Change'), findsOneWidget);
+    expect(find.text('Best in period'), findsOneWidget);
+    expect(find.text('Latest'), findsNothing);
+    expect(find.text('Latest workout'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  group('record rows', () {
+    RecordAchievement achievement(RecordType type, {int? reps}) =>
+        RecordAchievement(
+          type: type,
+          value: 100,
+          setWeight: 85,
+          setReps: 8,
+          reps: reps,
+        );
+    RecordEvent event(List<RecordAchievement> achievements) => RecordEvent(
+      exerciseName: 'Bench press',
+      session: session('record', now),
+      achievements: achievements,
+    );
+
+    testWidgets('lead with heaviest weight and expand in place', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          RecordEventRow(
+            event: event([
+              achievement(RecordType.setVolume),
+              achievement(RecordType.estimatedOneRepMax),
+              achievement(RecordType.heaviestWeight),
+            ]),
+            weightUnit: 'kg',
+          ),
+        ),
+      );
+      expect(find.text('Heaviest weight'), findsOneWidget);
+      expect(find.text('Estimated 1RM'), findsNothing);
+      expect(find.text('Best set volume'), findsNothing);
+      await tester.tap(find.text('+2 more'));
+      await tester.pump();
+      final heaviest = tester.getTopLeft(find.text('Heaviest weight')).dy;
+      final oneRepMax = tester.getTopLeft(find.text('Estimated 1RM')).dy;
+      final volume = tester.getTopLeft(find.text('Best set volume')).dy;
+      expect(heaviest, lessThan(oneRepMax));
+      expect(oneRepMax, lessThan(volume));
+      expect(find.text('+2 more'), findsNothing);
+      await tester.tap(find.text('Show less'));
+      await tester.pump();
+      expect(find.text('Estimated 1RM'), findsNothing);
+      expect(find.text('+2 more'), findsOneWidget);
+    });
+
+    testWidgets('fall back by priority and skip the button for one tag', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        host(
+          RecordEventRow(
+            event: event([
+              achievement(RecordType.setVolume),
+              achievement(RecordType.repBest, reps: 8),
+            ]),
+            weightUnit: 'kg',
+          ),
+        ),
+      );
+      expect(find.text('8-rep best'), findsOneWidget);
+      expect(find.text('+1 more'), findsOneWidget);
+      await tester.pumpWidget(
+        host(
+          RecordEventRow(
+            key: const ValueKey('single'),
+            event: event([achievement(RecordType.setVolume)]),
+            weightUnit: 'kg',
+          ),
+        ),
+      );
+      expect(find.text('Best set volume'), findsOneWidget);
+      expect(find.byType(TextButton), findsNothing);
+    });
   });
 }

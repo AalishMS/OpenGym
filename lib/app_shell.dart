@@ -41,6 +41,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   // bottom bar addresses screens 1–4.
   int _currentIndex = 0;
   int _weeklyTrainingRequest = 0;
+  int _statsVisit = 0;
   bool _openingHistoryWorkout = false;
   final ScrollController _homeScrollController = ScrollController();
   final GlobalKey _planTourKey = GlobalKey(debugLabel: 'tutorial-plan');
@@ -83,7 +84,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       ),
     ),
     const HistoryScreen(),
-    StatsScreen(weeklyTrainingRequest: _weeklyTrainingRequest),
+    StatsScreen(
+      weeklyTrainingRequest: _weeklyTrainingRequest,
+      visitRequest: _statsVisit,
+    ),
     SettingsScreen(onReplayTutorial: _replayTutorial),
   ];
 
@@ -205,6 +209,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void _selectTab(int index, {required int showing}) {
     setState(() {
       if (index == showing && index == 1) _coachOpen = false;
+      // Stats reopens at the top whenever it is entered from another tab.
+      if (index == 3 && showing != 3) _statsVisit++;
       _currentIndex = index;
     });
   }

@@ -31,7 +31,10 @@ class _WeeklyVolumeChartState extends State<WeeklyVolumeChart> {
     final weeks = widget.weeks;
     if (weeks.isEmpty) return const Text('No performed sets yet.');
     final selected = weeks.indexWhere((week) => week.weekStart == _selected);
-    final index = selected < 0 ? weeks.length - 1 : selected;
+    // The last bar is the week in progress, so lead with the last complete
+    // week. A first week of training has nothing complete yet.
+    final current = weeks.length - 1;
+    final index = selected >= 0 ? selected : math.max(0, current - 1);
     final week = weeks[index];
     final maximum = _niceMaximum(
       weeks.fold<double>(
@@ -47,11 +50,19 @@ class _WeeklyVolumeChartState extends State<WeeklyVolumeChart> {
       children: [
         ChartReadout(
           value: formatExactVolume(week.volumeLoad, widget.weightUnit),
-          label:
-              index == weeks.length - 1
-                  ? 'This week · In progress'
-                  : '${formatIsoWeek(week.weekStart)} · ${isoWeek(week.weekStart).year}',
+          label: switch (current - index) {
+            0 => 'This week · In progress',
+            1 => 'Last week',
+            _ =>
+              '${formatIsoWeek(week.weekStart)} · ${isoWeek(week.weekStart).year}',
+          },
           detail: formatWeekRange(week.weekStart),
+          // A week in progress would always read as a drop, so only complete
+          // weeks are compared.
+          note:
+              index == current || index == 0
+                  ? null
+                  : _weekChange(week.volumeLoad, weeks[index - 1].volumeLoad),
         ),
         const SizedBox(height: 20),
         _ScrollablePlot(
@@ -371,6 +382,18 @@ class _ExerciseTrendChartState extends State<ExerciseTrendChart> {
 
 const double _plotHeight = 180;
 
+/// A week's volume against the week before, in words.
+String _weekChange(double volume, double previous) {
+  if (previous <= 0) {
+    return volume <= 0
+        ? 'No training this week or the week before'
+        : 'No training the week before';
+  }
+  final percent = ((volume - previous) / previous * 100).round();
+  if (percent == 0) return 'About the same as the week before';
+  return '${percent.abs()}% ${percent > 0 ? 'more' : 'less'} than the week before';
+}
+
 double _niceMaximum(double value) {
   if (value <= 0) return 1;
   return _niceStep(value * 1.25 / 4) * 4;
@@ -413,6 +436,9 @@ class ChartReadout extends StatelessWidget {
   final String value;
   final String label;
   final String detail;
+
+  /// An optional last line, such as the change from the week before.
+  final String? note;
   final bool compact;
 
   const ChartReadout({
@@ -420,6 +446,7 @@ class ChartReadout extends StatelessWidget {
     required this.value,
     required this.label,
     required this.detail,
+    this.note,
     this.compact = false,
   });
 
@@ -451,6 +478,15 @@ class ChartReadout extends StatelessWidget {
             context,
           ).textTheme.bodySmall?.copyWith(color: textSecondaryColor(context)),
         ),
+        if (note != null) ...[
+          const SizedBox(height: 2),
+          Text(
+            note!,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: textPrimaryColor(context)),
+          ),
+        ],
       ],
     ),
   );

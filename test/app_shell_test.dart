@@ -180,6 +180,45 @@ void main() {
     },
   );
 
+  testWidgets('the Stats tab reopens at the top after another tab', (
+    tester,
+  ) async {
+    await tester.runAsync(seedHomeTraining);
+    await tester.pumpWidget(shellHost(390));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    Future<void> openTab(String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    await openTab('Stats');
+    final statsScroll =
+        tester
+            .widget<SingleChildScrollView>(
+              find.byKey(const ValueKey('statistics-scroll')),
+            )
+            .controller!;
+    statsScroll.jumpTo(300);
+    await tester.pump();
+    expect(statsScroll.offset, greaterThan(0));
+
+    // A second tap on the tab that is showing leaves the position alone.
+    await openTab('Stats');
+    expect(statsScroll.offset, greaterThan(0));
+
+    await openTab('History');
+    await openTab('Stats');
+    expect(statsScroll.offset, 0);
+  });
+
   testWidgets(
     'a trained weekday opens its latest History detail and returns to History',
     (tester) async {

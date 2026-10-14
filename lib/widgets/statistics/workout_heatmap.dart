@@ -7,23 +7,46 @@ import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 
-/// A year of training days, one column per week and one square per day.
+/// Recent training days, one column per week and one square per day.
+///
+/// The grid fits the width it is given: as many 16px weeks as fit, between
+/// [minWeeks] and [maxWeeks], with no scrolling. The caption and the summary
+/// read off the same window, so they always describe what is drawn.
 ///
 /// Each day is either a workout day or not: most people train once a day, so
 /// a per-day count would be a ramp almost nobody climbs. The count still
 /// appears in each day's tooltip and semantics label.
-class WorkoutHeatmap extends StatefulWidget {
+class WorkoutHeatmap extends StatelessWidget {
   final List<WorkoutSession> sessions;
   final DateTime? now;
+
+  static const minWeeks = 12;
+  static const maxWeeks = 52;
 
   const WorkoutHeatmap({super.key, required this.sessions, this.now});
 
   @override
-  State<WorkoutHeatmap> createState() => _WorkoutHeatmapState();
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder:
+        (context, constraints) => _HeatmapGrid(
+          sessions: sessions,
+          now: now,
+          width: constraints.maxWidth,
+        ),
+  );
 }
 
-class _WorkoutHeatmapState extends State<WorkoutHeatmap> {
-  static const _weeks = 52;
+class _HeatmapGrid extends StatelessWidget {
+  final List<WorkoutSession> sessions;
+  final DateTime? now;
+  final double width;
+
+  const _HeatmapGrid({
+    required this.sessions,
+    required this.now,
+    required this.width,
+  });
+
   static const _dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   static const _months = [
     'Jan',
@@ -39,7 +62,6 @@ class _WorkoutHeatmapState extends State<WorkoutHeatmap> {
     'Nov',
     'Dec',
   ];
-  final ScrollController _scrollController = ScrollController();
 
   // UTC is only a calendar key for the local date, as in statistics analytics.
   // Advancing keys by days cannot skip/repeat a row at a DST boundary.
@@ -49,38 +71,47 @@ class _WorkoutHeatmapState extends State<WorkoutHeatmap> {
   }
 
   @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final end = _calendarDate(widget.now ?? DateTime.now());
+    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
+      color: textSecondaryColor(context),
+      fontSize: 11,
+    );
+    final scale = MediaQuery.textScalerOf(context);
+    // Rows keep room for a day label; the weeks share the width that is left.
+    final step = math.max(16.0, scale.scale(11) * 1.5 + 4);
+    final labelWidth = scale.scale(12);
+    final gridWidth = math.max(0.0, width - labelWidth - 6);
+    final weeks = (gridWidth / step).floor().clamp(
+      WorkoutHeatmap.minWeeks,
+      WorkoutHeatmap.maxWeeks,
+    );
+    final column = gridWidth / weeks;
+    final cell = math.min(step, column) - 4;
+    final headerHeight = step + 4;
+
+    final end = _calendarDate(now ?? DateTime.now());
     final start = end.subtract(
-      Duration(days: (_weeks - 1) * 7 + end.weekday - DateTime.monday),
+      Duration(days: (weeks - 1) * 7 + end.weekday - DateTime.monday),
     );
     final counts = <DateTime, int>{};
-    for (final session in widget.sessions) {
+    for (final session in sessions) {
       if (!session.isCompleted || session.deletedAt != null) continue;
       final date = _calendarDate(session.date);
       if (date.isBefore(start) || date.isAfter(end)) continue;
       counts[date] = (counts[date] ?? 0) + 1;
     }
 
-    final style = Theme.of(context).textTheme.labelSmall?.copyWith(
-      color: textSecondaryColor(context),
-      fontSize: 11,
-    );
-    final scale = MediaQuery.textScalerOf(context);
-    final step = math.max(16.0, scale.scale(11) * 1.5 + 4);
-    final headerHeight = step + 4;
-    final gridWidth = _weeks * step;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Summary(counts: counts, start: start),
+        Text(
+          'Days you trained · Last $weeks weeks',
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: textSecondaryColor(context)),
+        ),
+        const SizedBox(height: 20),
+        _Summary(counts: counts, start: start, weeks: weeks),
         const SizedBox(height: 20),
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,60 +123,63 @@ class _WorkoutHeatmapState extends State<WorkoutHeatmap> {
                   for (final label in _dayLabels)
                     SizedBox(
                       height: step,
-                      width: scale.scale(12),
+                      width: labelWidth,
                       child: Center(child: Text(label, style: style)),
                     ),
                 ],
               ),
             ),
             const SizedBox(width: 6),
-            Expanded(
-              child: Scrollbar(
-                controller: _scrollController,
-                thumbVisibility: true,
-                child: SingleChildScrollView(
-                  controller: _scrollController,
-                  scrollDirection: Axis.horizontal,
-                  reverse: true,
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: SizedBox(
-                    width: gridWidth,
-                    child: Column(
-                      children: [
-                        _monthLabels(start, end, step, headerHeight, style),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+            SizedBox(
+              width: gridWidth,
+              child: Column(
+                children: [
+                  _monthLabels(
+                    context,
+                    start,
+                    end,
+                    weeks,
+                    column,
+                    headerHeight,
+                    style,
+                  ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (int week = 0; week < weeks; week++)
+                        Column(
                           children: [
-                            for (int week = 0; week < _weeks; week++)
-                              Column(
-                                children: [
-                                  for (int day = 0; day < 7; day++)
-                                    _dayCell(
-                                      start.add(Duration(days: week * 7 + day)),
-                                      end,
-                                      counts,
-                                      step,
-                                    ),
-                                ],
+                            for (int day = 0; day < 7; day++)
+                              _dayCell(
+                                context,
+                                start.add(Duration(days: week * 7 + day)),
+                                end,
+                                counts,
+                                width: column,
+                                height: step,
+                                size: cell,
                               ),
                           ],
                         ),
-                      ],
-                    ),
+                    ],
                   ),
-                ),
+                ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 16),
         Wrap(
           spacing: 16,
           runSpacing: 8,
           children: [
-            _legendItem(_square(worked: true, size: 12), 'Workout', style),
             _legendItem(
-              _square(worked: false, today: true, size: 12),
+              _square(context, worked: true, size: 12),
+              'Workout',
+              style,
+            ),
+            _legendItem(
+              _square(context, worked: false, today: true, size: 12),
               'Today',
               style,
             ),
@@ -161,15 +195,17 @@ class _WorkoutHeatmapState extends State<WorkoutHeatmap> {
   );
 
   Widget _monthLabels(
+    BuildContext context,
     DateTime start,
     DateTime end,
-    double step,
+    int weeks,
+    double column,
     double height,
     TextStyle? style,
   ) {
     final labelWidth = MediaQuery.textScalerOf(context).scale(36);
     final labels = <Widget>[];
-    double nextLeft = _weeks * step;
+    double nextLeft = weeks * column;
     // Place the newest label first so even a one-day current month is named.
     // Suppress a short partial month at the left edge if labels would overlap.
     for (
@@ -178,7 +214,7 @@ class _WorkoutHeatmapState extends State<WorkoutHeatmap> {
       month = DateTime.utc(month.year, month.month - 1)
     ) {
       final week = math.max(0, month.difference(start).inDays ~/ 7);
-      final left = math.min(week * step, _weeks * step - labelWidth);
+      final left = math.min(week * column, weeks * column - labelWidth);
       if (left + labelWidth > nextLeft) continue;
       labels.add(
         Positioned(
@@ -191,19 +227,22 @@ class _WorkoutHeatmapState extends State<WorkoutHeatmap> {
       nextLeft = left;
     }
     return SizedBox(
-      width: _weeks * step,
+      width: weeks * column,
       height: height,
       child: Stack(children: labels),
     );
   }
 
   Widget _dayCell(
+    BuildContext context,
     DateTime date,
     DateTime end,
-    Map<DateTime, int> counts,
-    double step,
-  ) {
-    if (date.isAfter(end)) return SizedBox(width: step, height: step);
+    Map<DateTime, int> counts, {
+    required double width,
+    required double height,
+    required double size,
+  }) {
+    if (date.isAfter(end)) return SizedBox(width: width, height: height);
     final count = counts[date] ?? 0;
     final label =
         '${MaterialLocalizations.of(context).formatFullDate(date)}: '
@@ -212,19 +251,23 @@ class _WorkoutHeatmapState extends State<WorkoutHeatmap> {
           1 => '1 workout',
           _ => '$count workouts',
         }}';
+    // Each day is its own node; without the old scroll viewport, sibling
+    // labels would otherwise merge into one long announcement.
     return Semantics(
+      container: true,
       label: label,
       child: Tooltip(
         message: label,
         excludeFromSemantics: true,
         child: SizedBox(
-          width: step,
-          height: step,
+          width: width,
+          height: height,
           child: Center(
             child: _square(
+              context,
               worked: count > 0,
               today: date == end,
-              size: step - 4,
+              size: size,
             ),
           ),
         ),
@@ -232,7 +275,8 @@ class _WorkoutHeatmapState extends State<WorkoutHeatmap> {
     );
   }
 
-  Widget _square({
+  Widget _square(
+    BuildContext context, {
     required bool worked,
     bool today = false,
     required double size,
@@ -240,7 +284,9 @@ class _WorkoutHeatmapState extends State<WorkoutHeatmap> {
     width: size,
     height: size,
     decoration: BoxDecoration(
-      color: worked ? accentFillColor(context) : borderColor(context),
+      // The page colour reads as a quiet hole in the card; borderColor was
+      // solved for hairlines and made a year of rest days look heavy.
+      color: worked ? accentFillColor(context) : backgroundColor(context),
       borderRadius: AppRadius.micro,
       border:
           today ? Border.all(color: accentColor(context), width: 1.5) : null,
@@ -253,12 +299,17 @@ class _WorkoutHeatmapState extends State<WorkoutHeatmap> {
 class _Summary extends StatelessWidget {
   final Map<DateTime, int> counts;
   final DateTime start;
+  final int weeks;
 
-  const _Summary({required this.counts, required this.start});
+  const _Summary({
+    required this.counts,
+    required this.start,
+    required this.weeks,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final activeWeeks = List.filled(_WorkoutHeatmapState._weeks, false);
+    final activeWeeks = List.filled(weeks, false);
     for (final date in counts.keys) {
       activeWeeks[date.difference(start).inDays ~/ 7] = true;
     }

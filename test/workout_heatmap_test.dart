@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/statistics/workout_heatmap.dart';
 
 import 'support/test_fonts.dart';
@@ -23,6 +24,7 @@ Future<void> pumpHeatmap(
   required DateTime now,
   List<WorkoutSession> sessions = const [],
   double scale = 1,
+  double width = 280,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -32,7 +34,7 @@ Future<void> pumpHeatmap(
           children: [
             Center(
               child: SizedBox(
-                width: 280,
+                width: width,
                 child: MediaQuery(
                   data: MediaQueryData(textScaler: TextScaler.linear(scale)),
                   child: WorkoutHeatmap(sessions: sessions, now: now),
@@ -47,17 +49,10 @@ Future<void> pumpHeatmap(
   await tester.pumpAndSettle();
 }
 
-List<Rect> dayLabelRects(WidgetTester tester) => [
-  for (final label in ['M', 'T', 'W', 'F', 'S'])
-    ...tester.widgetList(find.text(label)).map(
-      (widget) => tester.getRect(find.byWidget(widget)),
-    ),
-];
-
 void main() {
   setUpAll(loadTestFonts);
 
-  testWidgets('every weekday is labelled and stays put while scrolling', (
+  testWidgets('the grid fits the width and its label names the weeks shown', (
     tester,
   ) async {
     await pumpHeatmap(tester, now: DateTime(2026, 10, 6));
@@ -66,21 +61,73 @@ void main() {
     expect(find.text('W'), findsOneWidget);
     expect(find.text('F'), findsOneWidget);
     expect(find.text('S'), findsNWidgets(2));
-
-    final scroll = tester.widget<SingleChildScrollView>(
-      find.byType(SingleChildScrollView),
-    );
-    expect(scroll.controller!.offset, 0);
-    final before = dayLabelRects(tester);
-    final viewport = tester.getRect(find.byType(SingleChildScrollView));
-    final currentMonth = tester.getRect(find.text('Oct').first);
-    expect(currentMonth.left, greaterThanOrEqualTo(viewport.left));
-    expect(currentMonth.right, lessThanOrEqualTo(viewport.right));
-    scroll.controller!.jumpTo(scroll.controller!.position.maxScrollExtent);
-    await tester.pumpAndSettle();
-    expect(dayLabelRects(tester), before);
     expect(find.text('S').hitTestable(), findsNWidgets(2));
+
+    // No scrolling: every week is laid out inside the 280px panel.
+    expect(find.byType(Scrollable), findsOneWidget); // The host ListView.
+    expect(find.byType(Scrollbar), findsNothing);
+    final panel = tester.getRect(find.byType(WorkoutHeatmap));
+    final cells = find.byType(Tooltip);
+    for (final cell in [cells.first, cells.last]) {
+      final rect = tester.getRect(cell);
+      expect(rect.left, greaterThanOrEqualTo(panel.left - 0.01));
+      expect(rect.right, lessThanOrEqualTo(panel.right + 0.01));
+    }
+    final currentMonth = tester.getRect(find.text('Oct').first);
+    expect(currentMonth.right, lessThanOrEqualTo(panel.right));
+
+    // The caption counts the columns that are drawn: whole weeks plus the
+    // current one up to today (a Tuesday).
+    final label = tester.widget<Text>(find.textContaining('Last ')).data!;
+    final weeks = int.parse(RegExp(r'Last (\d+) weeks').firstMatch(label)![1]!);
+    expect(weeks, inInclusiveRange(12, 52));
+    expect(cells, findsNWidgets((weeks - 1) * 7 + 2));
+    expect(label, 'Days you trained · Last $weeks weeks');
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the window grows with the width, between 12 and 52 weeks', (
+    tester,
+  ) async {
+    int shown() {
+      final label = tester.widget<Text>(find.textContaining('Last ')).data!;
+      return int.parse(RegExp(r'Last (\d+) weeks').firstMatch(label)![1]!);
+    }
+
+    await pumpHeatmap(tester, now: DateTime(2026, 10, 6), width: 120);
+    expect(shown(), 12);
+    await pumpHeatmap(tester, now: DateTime(2026, 10, 6), width: 400);
+    expect(shown(), greaterThan(12));
+    tester.view.physicalSize = const Size(2400, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await pumpHeatmap(tester, now: DateTime(2026, 10, 6), width: 2000);
+    expect(shown(), 52);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('empty days use the page colour, not the border colour', (
+    tester,
+  ) async {
+    final now = DateTime(2026, 10, 6);
+    await pumpHeatmap(
+      tester,
+      now: now,
+      sessions: [session(DateTime(2026, 10, 5))],
+    );
+    final context = tester.element(find.byType(WorkoutHeatmap));
+    final colours =
+        tester
+            .widgetList<Container>(
+              find.descendant(
+                of: find.byType(Tooltip),
+                matching: find.byType(Container),
+              ),
+            )
+            .map((box) => (box.decoration! as BoxDecoration).color)
+            .toSet();
+    expect(colours, {backgroundColor(context), accentFillColor(context)});
+    expect(colours, isNot(contains(borderColor(context))));
   });
 
   testWidgets('days are marked trained or not, without a per-day count key', (
@@ -111,8 +158,12 @@ void main() {
       find.bySemanticsLabel('Thursday, January 1, 2026: 3 workouts'),
       findsOneWidget,
     );
-    expect(tooltips, contains('Monday, January 6, 2025: No workout'));
-    expect(tooltips, hasLength(51 * 7 + 4));
+    final weeks = int.parse(
+      RegExp(r'Last (\d+) weeks').firstMatch(
+        tester.widget<Text>(find.textContaining('Last ')).data!,
+      )![1]!,
+    );
+    expect(tooltips, hasLength((weeks - 1) * 7 + 4));
     expect(tooltips.any((label) => label.contains('January 2, 2026')), isFalse);
     expect(find.text('Jan').first.hitTestable(), findsOneWidget);
     expect(find.text('Workouts per day'), findsNothing);
