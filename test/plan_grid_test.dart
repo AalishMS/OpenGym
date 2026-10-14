@@ -222,6 +222,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the grip leads the card and Plan actions trails it', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(values: plans().take(2).toList(), onMove: (_, _) {}),
+    );
+    final grip = tester.getRect(find.byTooltip('Drag to reorder Push'));
+    final badge = tester.getRect(
+      find.descendant(of: card('Push'), matching: find.text('01')),
+    );
+    final actions = tester.getRect(
+      find.descendant(
+        of: card('Push'),
+        matching: find.byTooltip('Plan actions'),
+      ),
+    );
+    expect(grip.right, lessThanOrEqualTo(badge.left));
+    // Nothing tappable sits between Plan actions and the card's trailing edge.
+    final controls = find.descendant(
+      of: card('Push'),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is IconButton || widget is Tooltip,
+      ),
+    );
+    for (final element in controls.evaluate()) {
+      final rect = tester.getRect(find.byWidget(element.widget));
+      expect(rect.right, lessThanOrEqualTo(actions.right));
+    }
+    expect(actions.left, greaterThan(badge.right));
+  });
+
   testWidgets('reduced motion places reordered cards immediately', (
     tester,
   ) async {

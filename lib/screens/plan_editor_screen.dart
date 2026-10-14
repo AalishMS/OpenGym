@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../data/plan_colors.dart';
 import '../models/exercise_set_data.dart';
 import '../models/exercise_template.dart';
+import '../models/set.dart' as gym;
 import '../models/set_template.dart';
 import '../models/workout_plan.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/split_provider.dart';
 import '../services/hive_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_typography.dart';
 import '../theme/breakpoints.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
-import '../utils/format.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
@@ -716,58 +716,64 @@ class _ExerciseEditorCard extends StatelessWidget {
   /// under its index badge.
   static const double _nameIndent = 20 + AppSpacing.sm;
 
-  /// What this exercise prescribes, in one line, so a collapsed card reads as a
-  /// plan instead of just a title.
+  /// What this exercise prescribes, so a collapsed card reads as a plan
+  /// instead of just a title: *3 × 12 · 70 kg* when every set is the same,
+  /// otherwise the sets themselves (*70 × 12, 70 × 10, 65 × 8*), up to four
+  /// and then *+N*.
   ///
   /// Spans rather than a plain string because the numbers carry the line and the
   /// units step back out of the way — the same hierarchy as the entry table, so a collapsed card
   /// previews its own contents in the voice they are written in.
-  List<TextSpan> _prescriptionGroups(TextStyle number, TextStyle unit) {
+  List<InlineSpan> _targetSpans(TextStyle number, TextStyle unit) {
     final sets = exercise.sets;
     if (sets.isEmpty) return [TextSpan(text: 'No sets', style: unit)];
-    final reps = sets.map((set) => set.reps);
-    final weights = sets.map((set) => set.weight);
-    final minReps = reps.reduce((a, b) => a < b ? a : b);
-    final maxReps = reps.reduce((a, b) => a > b ? a : b);
-    final minWeight = weights.reduce((a, b) => a < b ? a : b);
-    final maxWeight = weights.reduce((a, b) => a > b ? a : b);
+    final first = sets.first;
+    final uniform = sets.every(
+      (set) => set.reps == first.reps && set.weight == first.weight,
+    );
+    if (uniform) {
+      return [
+        TextSpan(text: '${sets.length}', style: number),
+        TextSpan(text: ' × ', style: unit),
+        TextSpan(text: '${first.reps}', style: number),
+        if (first.weight > 0) ...[
+          TextSpan(text: '  ·  ', style: unit),
+          TextSpan(text: entryWeight(first.weight), style: number),
+          TextSpan(text: ' kg', style: unit),
+        ],
+      ];
+    }
+    const shown = 4;
+    final weighted = sets.any((set) => set.weight > 0);
     return [
-      if (minReps == maxReps)
-        TextSpan(
-          children: [
-            TextSpan(text: '${sets.length}', style: number),
-            TextSpan(text: ' × ', style: unit),
-            TextSpan(text: '$maxReps', style: number),
-          ],
-        )
-      else ...[
-        TextSpan(
-          children: [
-            TextSpan(text: '${sets.length}', style: number),
-            TextSpan(text: ' sets', style: unit),
-          ],
-        ),
-        TextSpan(
-          children: [
-            TextSpan(text: '$minReps–$maxReps', style: number),
-            TextSpan(text: ' reps', style: unit),
-          ],
-        ),
+      for (var i = 0; i < sets.length && i < shown; i++) ...[
+        if (i > 0) TextSpan(text: ', ', style: unit),
+        if (weighted) ...[
+          TextSpan(text: entryWeight(sets[i].weight), style: number),
+          TextSpan(text: ' × ', style: unit),
+        ],
+        TextSpan(text: '${sets[i].reps}', style: number),
       ],
-      if (maxWeight > 0)
-        TextSpan(
-          children: [
-            TextSpan(
-              text:
-                  minWeight == maxWeight
-                      ? formatWeight(maxWeight)
-                      : '${formatWeight(minWeight)}–${formatWeight(maxWeight)}',
-              style: number,
-            ),
-            TextSpan(text: ' kg', style: unit),
-          ],
-        ),
+      if (!weighted) TextSpan(text: ' reps', style: unit),
+      if (sets.length > shown)
+        TextSpan(text: '  +${sets.length - shown}', style: unit),
     ];
+  }
+
+  /// The best set from the last time this exercise was trained in this split,
+  /// or null when it never was — so a new exercise doesn't get an empty line.
+  String? _lastLine(List<gym.Set> previous) {
+    final done = previous.where((set) => set.reps > 0);
+    if (done.isEmpty) return null;
+    final top = done.reduce(
+      (a, b) =>
+          b.weight > a.weight || (b.weight == a.weight && b.reps > a.reps)
+              ? b
+              : a,
+    );
+    return top.weight > 0
+        ? 'Last: ${entryWeight(top.weight)} kg × ${top.reps}'
+        : 'Last: ${top.reps} reps';
   }
 
   @override
@@ -789,7 +795,7 @@ class _ExerciseEditorCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildHeader(context, expanded),
+          _buildHeader(context, expanded, previous),
           if (expanded) ...[
             Container(
               // Narrower side padding than the header: the set table is the
@@ -832,27 +838,40 @@ class _ExerciseEditorCard extends StatelessWidget {
     );
   }
 
-  Widget _prescriptionSummary(BuildContext context) => Wrap(
-    spacing: AppSpacing.md,
-    runSpacing: AppSpacing.xs,
-    children: [
-      for (final group in _prescriptionGroups(
-        GoogleFonts.jetBrainsMono(
-          fontSize: 13,
-          fontWeight: FontWeight.bold,
-          height: 1.4,
-          color: textPrimaryColor(context),
+  Widget _prescriptionSummary(BuildContext context, List<gym.Set> previous) {
+    final textSecondary = textSecondaryColor(context);
+    final unit = AppTypography.figures(
+      fontSize: 13,
+      height: 1.4,
+      color: textSecondary,
+    );
+    final last = _lastLine(previous);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text.rich(
+          TextSpan(
+            children: _targetSpans(
+              AppTypography.figures(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                height: 1.4,
+                color: textPrimaryColor(context),
+              ),
+              unit,
+            ),
+          ),
         ),
-        GoogleFonts.jetBrainsMono(
-          fontSize: 12,
-          height: 1.4,
-          color: textSecondaryColor(context),
-        ),
-      ))
-        Text.rich(group),
-    ],
-  );
-  Widget _buildHeader(BuildContext context, bool expanded) {
+        if (last != null) Text(last, style: unit),
+      ],
+    );
+  }
+
+  Widget _buildHeader(
+    BuildContext context,
+    bool expanded,
+    List<gym.Set> previous,
+  ) {
     final textSecondary = textSecondaryColor(context);
     return InkWell(
       onTap: onToggle,
@@ -862,9 +881,9 @@ class _ExerciseEditorCard extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(
           0,
+          AppSpacing.xxs,
           AppSpacing.xs,
-          AppSpacing.xs,
-          AppSpacing.xs,
+          AppSpacing.xxs,
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
@@ -916,19 +935,19 @@ class _ExerciseEditorCard extends StatelessWidget {
                     Expanded(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.sm,
+                          vertical: AppSpacing.xs,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             title,
                             if (!reflow) ...[
-                              const SizedBox(height: AppSpacing.xs),
+                              const SizedBox(height: AppSpacing.xxs),
                               Padding(
                                 padding: const EdgeInsets.only(
                                   left: _nameIndent,
                                 ),
-                                child: _prescriptionSummary(context),
+                                child: _prescriptionSummary(context, previous),
                               ),
                             ],
                           ],
@@ -958,7 +977,7 @@ class _ExerciseEditorCard extends StatelessWidget {
                       AppSpacing.md,
                       AppSpacing.sm,
                     ),
-                    child: _prescriptionSummary(context),
+                    child: _prescriptionSummary(context, previous),
                   ),
               ],
             );
@@ -1032,9 +1051,9 @@ class _IndexBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: GoogleFonts.jetBrainsMono(
+        style: AppTypography.figures(
           fontSize: fontSize,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w700,
           color: textTint,
         ),
       ),

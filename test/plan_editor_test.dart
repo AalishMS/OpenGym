@@ -7,7 +7,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:gymapp/data/plan_colors.dart';
+import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
+import 'package:gymapp/models/set.dart' as gym;
 import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
@@ -467,6 +469,78 @@ void main() {
     );
   });
 
+  testWidgets('collapsed rows show the target and last time in figures', (
+    tester,
+  ) async {
+    // Real I/O: Hive writes don't complete under the widget test's fake time.
+    await tester.runAsync(
+      () => Hive.box<WorkoutSession>(HiveService.sessionsBox).add(
+        WorkoutSession(
+          date: DateTime(2026, 10, 1),
+          planName: 'Push',
+          exercises: [
+            Exercise(
+              name: 'Bench Press',
+              sets: [
+                gym.Set(weight: 70, reps: 12),
+                gym.Set(weight: 70, reps: 10),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+    final plan = WorkoutPlan(
+      name: 'Push',
+      exercises: [
+        ExerciseTemplate(
+          name: 'Bench Press',
+          sets: 3,
+          setTargets: [
+            for (var i = 0; i < 3; i++) SetTemplate(reps: 12, weight: 70),
+          ],
+        ),
+        ExerciseTemplate(
+          name: 'Incline Press',
+          sets: 6,
+          setTargets: [
+            for (final reps in [12, 10, 8, 8, 6, 6])
+              SetTemplate(reps: reps, weight: 60),
+          ],
+        ),
+      ],
+    );
+    await pumpEditorWithPlan(tester, plan);
+
+    final target = find.textContaining('3 × 12  ·  70 kg', findRichText: true);
+    expect(target, findsOneWidget);
+    final spans = <TextSpan>[];
+    tester.widget<RichText>(target).text.visitChildren((span) {
+      if (span is TextSpan && span.text != null) spans.add(span);
+      return true;
+    });
+    expect(spans, isNotEmpty);
+    for (final span in spans) {
+      // google_fonts suffixes the family with its weight: Manrope_700.
+      expect(span.style?.fontFamily, startsWith('Manrope'));
+      expect(
+        span.style?.fontFeatures,
+        contains(const FontFeature.tabularFigures()),
+      );
+    }
+    expect(find.text('Last: 70 kg × 12'), findsOneWidget);
+
+    // Mixed sets are listed up to four, then counted; never trained, no line.
+    expect(
+      find.textContaining(
+        '60 × 12, 60 × 10, 60 × 8, 60 × 8  +2',
+        findRichText: true,
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Last:'), findsOneWidget);
+  });
+
   testWidgets('editor controls expose 48 pixel targets and set semantics', (
     tester,
   ) async {
@@ -480,6 +554,7 @@ void main() {
       title.style?.fontFamily,
       isNot(GoogleFonts.jetBrainsMono().fontFamily),
     );
+
     expect(find.bySemanticsLabel('Set 1 Kg'), findsOneWidget);
     expect(
       tester.getSize(find.bySemanticsLabel('Set 1 Kg').first).height,

@@ -456,191 +456,187 @@ class _HomeScreenState extends State<HomeScreen> {
     final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
 
-    showDialog(
+    // A sheet rather than a dialog: it rises from where the thumb already is,
+    // and the theme gives it the surface colour and the sheet radius.
+    showModalBottomSheet<void>(
       context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
       builder:
-          (ctx) => Dialog(
-            backgroundColor: surfaceColor(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: border, width: 1),
-            ),
-            // Without a cap the dialog takes Material's share of a desktop window
-            // and the four rows end up a hand-span apart.
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 360),
-              child: Padding(
-                // Vertical inset only — the header and rows carry their own
-                // horizontal padding, so the two rules run full-bleed.
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // The header names what you long-pressed and echoes the card's
-                    // colour bar, so there's no doubt which plan is about to change.
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.lg,
-                        AppSpacing.xs,
-                        AppSpacing.lg,
-                        AppSpacing.md,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 3,
-                            height: 28,
-                            decoration: BoxDecoration(
-                              color: planColor,
-                              borderRadius: AppRadius.micro,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.md),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  titleCase(plan.name),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(color: textPrimary),
-                                ),
-                                const SizedBox(height: AppSpacing.xxs),
-                                Text(
-                                  _planSummary(plan, stat),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall
-                                      ?.copyWith(color: textSecondary),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+          (ctx) => SingleChildScrollView(
+            child: Padding(
+              // Bottom inset only — the drag handle spaces the top, and the
+              // header and rows carry their own horizontal padding, so the two
+              // rules run full-bleed.
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // The header names what you long-pressed and echoes the card's
+                  // colour bar, so there's no doubt which plan is about to change.
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      0,
+                      AppSpacing.lg,
+                      AppSpacing.md,
                     ),
-                    Divider(height: 1, thickness: 1, color: border),
-                    _PlanActionRow(
-                      icon: LucideIcons.paintbrush,
-                      label: 'Change color',
-                      color: textPrimary,
-                      // Shows the current value without opening the picker.
-                      trailing: Container(
-                        width: 12,
-                        height: 12,
-                        decoration: BoxDecoration(
-                          color: planColor,
-                          borderRadius: AppRadius.badge,
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 3,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: planColor,
+                            borderRadius: AppRadius.micro,
+                          ),
                         ),
-                      ),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _showColorPickerDialog(context, plan, index, accent);
-                      },
-                    ),
-                    _PlanActionRow(
-                      icon: LucideIcons.copy,
-                      label: 'Duplicate plan',
-                      color: textPrimary,
-                      onTap: () {
-                        if (_mutatingPlan) return;
-                        Navigator.pop(ctx);
-                        final copyPlan = WorkoutPlan(
-                          name: '${plan.name} (Copy)',
-                          exercises:
-                              plan.exercises
-                                  .map(
-                                    (e) => ExerciseTemplate(
-                                      name: e.name,
-                                      sets: e.sets,
-                                      setTargets:
-                                          e.setTargets
-                                              ?.map(
-                                                (t) => SetTemplate(
-                                                  reps: t.reps,
-                                                  weight: t.weight,
-                                                ),
-                                              )
-                                              .toList(),
-                                    ),
-                                  )
-                                  .toList(),
-                          planColor: plan.planColor,
-                        );
-                        final provider = context.read<WorkoutPlanProvider>();
-                        _persistPlanAction(
-                          title: 'Copy plan',
-                          action: 'Duplicate',
-                          progress: 'Copying plan',
-                          message: 'Creating a copy of “${plan.name}”.',
-                          success: 'Plan copied',
-                          startImmediately: true,
-                          persist: () => provider.addPlan(copyPlan),
-                        );
-                      },
-                    ),
-                    _PlanActionRow(
-                      icon: LucideIcons.pencil,
-                      label: 'Edit plan',
-                      color: textPrimary,
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PlanEditorScreen.edit(plan),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                titleCase(plan.name),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(color: textPrimary),
+                              ),
+                              const SizedBox(height: AppSpacing.xxs),
+                              Text(
+                                _planSummary(plan, stat),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(color: textSecondary),
+                              ),
+                            ],
                           ),
-                        );
-                      },
+                        ),
+                      ],
                     ),
-                    if (index > 0)
-                      _PlanActionRow(
-                        icon: LucideIcons.arrowUp,
-                        label: 'Move earlier',
-                        color: textPrimary,
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          _movePlanOneStep(context, plan.id!, -1);
-                        },
+                  ),
+                  Divider(height: 1, thickness: 1, color: border),
+                  _PlanActionRow(
+                    icon: LucideIcons.paintbrush,
+                    label: 'Change color',
+                    color: textPrimary,
+                    // Shows the current value without opening the picker.
+                    trailing: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: planColor,
+                        borderRadius: AppRadius.badge,
                       ),
-                    if (index < planCount - 1)
-                      _PlanActionRow(
-                        icon: LucideIcons.arrowDown,
-                        label: 'Move later',
-                        color: textPrimary,
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          _movePlanOneStep(context, plan.id!, 1);
-                        },
-                      ),
-                    // A rule and the error colour set the one irreversible action
-                    // apart; deleting also asks first, which it never used to.
-                    Divider(height: 1, thickness: 1, color: border),
+                    ),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      _showColorPickerDialog(context, plan, index, accent);
+                    },
+                  ),
+                  _PlanActionRow(
+                    icon: LucideIcons.copy,
+                    label: 'Duplicate plan',
+                    color: textPrimary,
+                    onTap: () {
+                      if (_mutatingPlan) return;
+                      Navigator.pop(ctx);
+                      final copyPlan = WorkoutPlan(
+                        name: '${plan.name} (Copy)',
+                        exercises:
+                            plan.exercises
+                                .map(
+                                  (e) => ExerciseTemplate(
+                                    name: e.name,
+                                    sets: e.sets,
+                                    setTargets:
+                                        e.setTargets
+                                            ?.map(
+                                              (t) => SetTemplate(
+                                                reps: t.reps,
+                                                weight: t.weight,
+                                              ),
+                                            )
+                                            .toList(),
+                                  ),
+                                )
+                                .toList(),
+                        planColor: plan.planColor,
+                      );
+                      final provider = context.read<WorkoutPlanProvider>();
+                      _persistPlanAction(
+                        title: 'Copy plan',
+                        action: 'Duplicate',
+                        progress: 'Copying plan',
+                        message: 'Creating a copy of “${plan.name}”.',
+                        success: 'Plan copied',
+                        startImmediately: true,
+                        persist: () => provider.addPlan(copyPlan),
+                      );
+                    },
+                  ),
+                  _PlanActionRow(
+                    icon: LucideIcons.pencil,
+                    label: 'Edit plan',
+                    color: textPrimary,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PlanEditorScreen.edit(plan),
+                        ),
+                      );
+                    },
+                  ),
+                  if (index > 0)
                     _PlanActionRow(
-                      icon: LucideIcons.trash2,
-                      label: 'Delete plan',
-                      color: errorColor(context),
-                      onTap: () async {
-                        if (_mutatingPlan) return;
+                      icon: LucideIcons.arrowUp,
+                      label: 'Move earlier',
+                      color: textPrimary,
+                      onTap: () {
                         Navigator.pop(ctx);
-                        final provider = context.read<WorkoutPlanProvider>();
-                        await _persistPlanAction(
-                          title: 'Delete plan?',
-                          action: 'Delete',
-                          progress: 'Deleting plan',
-                          message:
-                              'Delete “${plan.name}”? Workout history will be kept.',
-                          success: 'Plan deleted',
-                          persist: () => provider.deletePlan(plan.id!),
-                          destructive: true,
-                        );
+                        _movePlanOneStep(context, plan.id!, -1);
                       },
                     ),
-                  ],
-                ),
+                  if (index < planCount - 1)
+                    _PlanActionRow(
+                      icon: LucideIcons.arrowDown,
+                      label: 'Move later',
+                      color: textPrimary,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _movePlanOneStep(context, plan.id!, 1);
+                      },
+                    ),
+                  // A rule and the error colour set the one irreversible action
+                  // apart; deleting also asks first, which it never used to.
+                  Divider(height: 1, thickness: 1, color: border),
+                  _PlanActionRow(
+                    icon: LucideIcons.trash2,
+                    label: 'Delete plan',
+                    color: errorColor(context),
+                    onTap: () async {
+                      if (_mutatingPlan) return;
+                      Navigator.pop(ctx);
+                      final provider = context.read<WorkoutPlanProvider>();
+                      await _persistPlanAction(
+                        title: 'Delete plan?',
+                        action: 'Delete',
+                        progress: 'Deleting plan',
+                        message:
+                            'Delete “${plan.name}”? Workout history will be kept.',
+                        success: 'Plan deleted',
+                        persist: () => provider.deletePlan(plan.id!),
+                        destructive: true,
+                      );
+                    },
+                  ),
+                ],
               ),
             ),
           ),

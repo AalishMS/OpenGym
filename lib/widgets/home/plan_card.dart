@@ -69,14 +69,19 @@ class PlanCard extends StatelessWidget {
           onLongPress: onShowActions,
           borderRadius: AppRadius.card,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.md,
+            // The grip's 48px target carries its own inset, so the card's
+            // leading padding gives way to it in Manage mode.
+            padding: EdgeInsets.fromLTRB(
+              reorderHandle == null ? AppSpacing.md : 0,
               AppSpacing.md,
               AppSpacing.xs,
               AppSpacing.md,
             ),
             child: Row(
               children: [
+                // The grip leads and the … menu trails, so the two targets sit
+                // at opposite ends of the card instead of side by side.
+                if (reorderHandle != null) reorderHandle!,
                 _PlanBadge(plan: plan, number: index + 1),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
@@ -126,7 +131,6 @@ class PlanCard extends StatelessWidget {
                     color: textSecondary,
                   ),
                 ),
-                if (reorderHandle != null) reorderHandle!,
               ],
             ),
           ),

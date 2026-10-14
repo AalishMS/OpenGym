@@ -256,6 +256,15 @@ signature:
   (`knownDurationSeconds`), so History and Workout details never show "0m".
 - Don't nest a ground inside a card. The History row's date sits directly on
   the card, which is the tap target.
+- A plan's menu (long press, or *Plan actions* in Manage) is a modal bottom
+  sheet with a drag handle, not a dialog. *Delete plan* is always the last
+  row, set apart by a rule and the error colour. In Manage, the drag grip
+  leads each card and *Plan actions* trails it, so the two targets sit at
+  opposite ends.
+- A collapsed plan-editor row previews its sets in `figures`: the target
+  (*3 × 12 · 70 kg*, or up to four mixed sets and then *+N*) and, only when
+  the exercise has been trained in this split, *Last:* with the best set from
+  that session.
 - Familiar labels and icons make actions understandable outside a technical
   audience.
 - Pressed, focused, disabled, loading, empty, and error states should feel like
@@ -264,7 +273,7 @@ signature:
 Broad monospaced typography, square-bracket labels, and all-uppercase copy are
 not part of the product identity. Figures that need to line up or hold their
 width (Stats numbers and chart axes, record rows, the update status, the app
-version) use `AppTypography.figures`: Manrope with tabular figures, so digits
+version, plan-editor rows) use `AppTypography.figures`: Manrope with tabular figures, so digits
 align without a change of typeface. JetBrains Mono (`trainingData`) remains
 only in a few compact training-data spots outside Stats and Settings. The `>` symbol is reserved for the OpenGym wordmark rather
 than used as a general interface decoration.

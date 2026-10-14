@@ -281,6 +281,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Plan actions'));
     await tester.pumpAndSettle();
+    // A bottom sheet, not a dialog, with the one destructive row last.
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.byType(Dialog), findsNothing);
+    for (final label in ['Change color', 'Duplicate plan', 'Edit plan']) {
+      expect(
+        tester.getTopLeft(find.text(label)).dy,
+        lessThan(tester.getTopLeft(find.text('Delete plan')).dy),
+        reason: label,
+      );
+    }
     for (final label in [
       'Change color',
       'Duplicate plan',
@@ -317,6 +327,7 @@ void main() {
     await tester.longPress(find.text('Push Day').last);
     await tester.pumpAndSettle();
     expect(find.text('Change color'), findsOneWidget);
+    expect(find.byType(BottomSheet), findsOneWidget);
   });
 
   testWidgets('plan color is limited to identity markers', (tester) async {

@@ -332,7 +332,7 @@ void main() {
           final summary = find.byWidgetPredicate(
             (widget) =>
                 widget is Text &&
-                widget.textSpan?.toPlainText().contains('8–12') == true,
+                widget.textSpan?.toPlainText().contains('100.25 × 8') == true,
           );
           expect(summary, findsOneWidget);
           await tester.ensureVisible(summary);
