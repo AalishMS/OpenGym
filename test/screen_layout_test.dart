@@ -421,9 +421,9 @@ void main() {
         'Appearance',
         'Workout',
         'Data',
-        'Danger zone',
         'Updates',
         'About',
+        'Danger zone',
       ]) {
         expect(find.text(name), findsOneWidget);
       }
@@ -444,23 +444,53 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      host(const SettingsScreen(), size: const Size(390, 4000)),
+      host(SettingsScreen(onSignOut: () async {}), size: const Size(390, 4000)),
     );
     await tester.pump();
     final names = [
       'Appearance',
       'Workout',
       'Data',
-      'Danger zone',
+      'Account',
+      'Sign out',
       'Updates',
       'About',
+      'Danger zone',
+      'Clear current split data',
     ];
     final tops = [
       for (final name in names) tester.getTopLeft(find.text(name)).dy,
     ];
     for (var i = 1; i < tops.length; i++) {
-      expect(tops[i], greaterThan(tops[i - 1]));
+      expect(tops[i], greaterThan(tops[i - 1]), reason: names[i]);
     }
+    // Danger zone closes the page: nothing that isn't destructive follows it.
+    expect(
+      tester.getTopLeft(find.text('Made by Aalish')).dy,
+      lessThan(tops[names.indexOf('Danger zone')]),
+    );
+  });
+
+  testWidgets('sample data only shows when the build allows it', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(const SettingsScreen(), size: const Size(390, 4000)),
+    );
+    await tester.pump();
+    // Tests run in debug mode, so the default keeps the row.
+    expect(find.text('Load sample data'), findsOneWidget);
+
+    await tester.pumpWidget(
+      host(
+        const SettingsScreen(showSampleData: false),
+        size: const Size(390, 4000),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Load sample data'), findsNothing);
+    expect(find.text('Export data'), findsOneWidget);
+    expect(find.text('Import data'), findsOneWidget);
   });
 
   testWidgets(
@@ -662,6 +692,8 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Load'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Clear current split data'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Clear current split data'));
     await tester.pump();
     await tester.tap(
@@ -670,6 +702,8 @@ void main() {
         matching: find.text('Clear split data'),
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Sign out'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Sign out'));
     await tester.pump();

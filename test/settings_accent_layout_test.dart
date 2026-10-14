@@ -61,6 +61,22 @@ void main() {
       ];
       final rects = [for (final swatch in swatches) tester.getRect(swatch)];
 
+      // Every name reads as primary text; weight alone marks the selection.
+      final context = tester.element(find.byType(SettingsScreen));
+      for (var i = 0; i < swatches.length; i++) {
+        final label = tester.widget<Text>(
+          find.descendant(
+            of: swatches[i],
+            matching: find.text(SettingsProvider.accents[i].name),
+          ),
+        );
+        expect(label.style?.color, textPrimaryColor(context));
+        expect(
+          label.style?.fontWeight,
+          i == settings.accentIndex ? FontWeight.w700 : FontWeight.w500,
+        );
+      }
+
       void expectSteady() {
         expect(scroll.position.pixels, offset);
         expect(tester.getRect(find.byType(SingleChildScrollView)), viewport);

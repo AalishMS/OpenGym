@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io' show File;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -33,12 +34,17 @@ class SettingsScreen extends StatefulWidget {
     this.onLoadSampleData,
     this.onSignOut,
     this.onReplayTutorial,
+    this.showSampleData = kDebugMode,
   });
 
   final Future<void> Function(String splitId)? onClearData;
   final Future<void> Function()? onLoadSampleData;
   final Future<void> Function()? onSignOut;
   final Future<void> Function()? onReplayTutorial;
+
+  /// Shows *Load sample data*. It replaces the active split's workouts, so it
+  /// is a development tool and stays out of release builds.
+  final bool showSampleData;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -260,8 +266,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             context: context,
                             icon: LucideIcons.messageSquareText,
                             title: 'Coach',
+                            // Off, the switch alone doesn't say what turning
+                            // it on adds or where to find it.
                             subtitle:
-                                'Ask the AI Coach to build or change your plans',
+                                settings.coachEnabled
+                                    ? 'Ask the AI Coach to build or change your plans'
+                                    : 'An AI assistant that builds and edits your '
+                                        'plans in a chat. Turn it on to add a '
+                                        'Coach button to the top of Home.',
                             value: settings.coachEnabled,
                             onChanged:
                                 (value) => _runSettingsAction(
@@ -271,12 +283,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ),
                         ],
                         const _SectionHeader(title: 'Data'),
-                        _buildSettingsTile(
-                          icon: LucideIcons.flaskConical,
-                          title: 'Load sample data',
-                          subtitle: 'Add sample plans and workouts for testing',
-                          onTap: () => _loadSampleData(context),
-                        ),
+                        if (widget.showSampleData)
+                          _buildSettingsTile(
+                            icon: LucideIcons.flaskConical,
+                            title: 'Load sample data',
+                            subtitle:
+                                'Add sample plans and workouts for testing',
+                            onTap: () => _loadSampleData(context),
+                          ),
                         _buildSettingsTile(
                           icon: LucideIcons.upload,
                           title: 'Export data',
@@ -290,7 +304,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               'Restore from a backup file (replaces all data)',
                           onTap: () => _importData(context),
                         ),
-                        if (_signedInEmail() != null) ...[
+                        if (widget.onSignOut != null ||
+                            _signedInEmail() != null) ...[
                           const _SectionHeader(title: 'Account'),
                           StreamBuilder<void>(
                             stream: SyncService.instance.statusChanges,
@@ -347,18 +362,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               );
                             },
                           ),
-                        ],
-                        const _SectionHeader(title: 'Danger zone'),
-                        _buildSettingsTile(
-                          icon: LucideIcons.trash2,
-                          title: 'Clear current split data',
-                          subtitle:
-                              'Delete plans and history in the current split',
-                          onTap: () => _confirmClearData(context),
-                          isDestructive: true,
-                        ),
-                        if (widget.onSignOut != null ||
-                            _signedInEmail() != null)
                           _buildSettingsTile(
                             icon: LucideIcons.logOut,
                             title: 'Sign out',
@@ -375,6 +378,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               // AuthGate reacts and shows LoginScreen automatically.
                             },
                           ),
+                        ],
                         const _SectionHeader(title: 'Updates'),
                         _buildSettingsTile(
                           icon: LucideIcons.download,
@@ -418,6 +422,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Text(
                           'Made by Aalish',
                           style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const _SectionHeader(title: 'Danger zone'),
+                        _buildSettingsTile(
+                          icon: LucideIcons.trash2,
+                          title: 'Clear current split data',
+                          subtitle:
+                              'Delete plans and history in the current split',
+                          onTap: () => _confirmClearData(context),
+                          isDestructive: true,
                         ),
                       ],
                     ),
@@ -614,11 +627,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color:
-                      isSelected
-                          ? textPrimaryColor(context)
-                          : textSecondaryColor(context),
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  color: textPrimaryColor(context),
+                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
             ],

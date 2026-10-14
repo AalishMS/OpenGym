@@ -22,6 +22,7 @@ import 'package:gymapp/providers/update_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/coach_screen.dart';
+import 'package:gymapp/screens/settings_screen.dart';
 import 'package:gymapp/services/coach/coach_applier.dart';
 import 'package:gymapp/services/coach/coach_client.dart';
 import 'package:gymapp/services/coach/coach_disclosure.dart';
@@ -302,6 +303,40 @@ void main() {
       fixture.coach.enabled = true;
       await pumpWithStorage(tester);
       expect(find.byKey(const ValueKey('coach-button')), findsOneWidget);
+    });
+
+    testWidgets('the Settings toggle explains the Coach while it is off', (
+      tester,
+    ) async {
+      const offCopy =
+          'An AI assistant that builds and edits your plans in a chat. '
+          'Turn it on to add a Coach button to the top of Home.';
+      const onCopy = 'Ask the AI Coach to build or change your plans';
+      final settings = SettingsProvider();
+      final updates = _InstalledVersion();
+      addTearDown(settings.dispose);
+      addTearDown(updates.dispose);
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<SettingsProvider>.value(value: settings),
+            ChangeNotifierProvider<UpdateProvider>.value(value: updates),
+          ],
+          child: MaterialApp(
+            theme: buildTheme(const Color(0xFF00A2FF), Brightness.light),
+            home: const SettingsScreen(),
+          ),
+        ),
+      );
+      await pumpWithStorage(tester);
+      expect(settings.coachEnabled, isFalse);
+      expect(find.text(offCopy), findsOneWidget);
+      expect(find.text(onCopy), findsNothing);
+
+      await tester.runAsync(() => settings.setCoachEnabled(true));
+      await pumpWithStorage(tester);
+      expect(find.text(onCopy), findsOneWidget);
+      expect(find.text(offCopy), findsNothing);
     });
 
     test(
@@ -1001,4 +1036,9 @@ void main() {
       expect(find.text('Hello.'), findsNothing);
     });
   });
+}
+
+class _InstalledVersion extends UpdateProvider {
+  @override
+  Future<void> loadInstalledVersion() async {}
 }

@@ -265,6 +265,12 @@ signature:
   (*3 × 12 · 70 kg*, or up to four mixed sets and then *+N*) and, only when
   the exercise has been trained in this split, *Last:* with the best set from
   that session.
+- Settings runs Appearance, Workout, Artificial intelligence, Data, Account,
+  Updates, About, and Danger zone, in that order. Account holds the sync
+  status, then *Sign out* as an ordinary row. It shows when a user is signed
+  in. Danger zone is always last. *Load sample data* replaces the active
+  split's workouts, so it is a development tool. It only appears in debug
+  builds (`SettingsScreen.showSampleData`, which defaults to `kDebugMode`).
 - Familiar labels and icons make actions understandable outside a technical
   audience.
 - Pressed, focused, disabled, loading, empty, and error states should feel like
