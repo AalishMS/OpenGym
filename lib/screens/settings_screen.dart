@@ -21,6 +21,7 @@ import '../services/update_service.dart';
 import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
+import '../widgets/app_header.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/persistence_dialog.dart';
@@ -218,15 +219,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: AppBar(
-        backgroundColor: surface,
-        title: Text(
-          'Settings',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(color: textPrimaryColor(context)),
-        ),
+      appBar: const AppHeader(
         automaticallyImplyLeading: false,
+        title: Text('Settings'),
       ),
       body: Stack(
         children: [

@@ -239,6 +239,13 @@ signature:
   tone of the selected color; ordinary controls retain the softer accent.
 - The `> OpenGym` wordmark serves as the main brand signature. Keep it consistent
   and give it room instead of repeating the prompt symbol elsewhere.
+- Every screen except Home shares one header (`AppHeader`): flat on the page
+  colour, with a permanent hairline underneath and no tint on scroll, so in
+  dark mode it reads as black. Home keeps its `> OpenGym` brand header.
+- Back is always the same neutral arrow (`AppBackButton`) with a *Back*
+  tooltip, including the steps back inside the exercise picker and preset
+  browser. Header actions keep the accent. Plan colours stay on Home, so the
+  plan editor's Save and Add exercise use the accent too.
 - Familiar labels and icons make actions understandable outside a technical
   audience.
 - Pressed, focused, disabled, loading, empty, and error states should feel like

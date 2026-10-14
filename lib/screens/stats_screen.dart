@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../theme/radii.dart';
 import '../utils/statistics_format.dart';
+import '../widgets/app_header.dart';
 import '../widgets/statistics/statistics_widgets.dart';
 import '../widgets/statistics/training_charts.dart';
 import '../widgets/statistics/workout_heatmap.dart';
@@ -85,14 +86,9 @@ class _StatsScreenState extends State<StatsScreen> {
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
-      appBar: AppBar(
-        title: Text(
-          'Statistics',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(color: textPrimaryColor(context)),
-        ),
+      appBar: const AppHeader(
         automaticallyImplyLeading: false,
+        title: Text('Statistics'),
       ),
       body:
           sessions.isEmpty

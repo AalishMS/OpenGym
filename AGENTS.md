@@ -132,6 +132,18 @@ import '../services/hive_service.dart';
 - Keep personality restrained: use plan markers, accent details, and data
   emphasis instead of decorative themes
 
+### Headers and back
+- Every screen except Home uses `AppHeader` (`lib/widgets/app_header.dart`), a
+  thin `AppBar` wrapper. The look lives in `AppBarTheme`: page-colour ground,
+  permanent bottom hairline, no tint on scroll, neutral icons, accent actions.
+  Don't set `backgroundColor`, `surfaceTintColor` or a title colour per screen
+- Every back control is `AppBackButton`: `LucideIcons.arrowLeft` in
+  `textPrimaryColor`, tooltip *Back*. Pass `onPressed` for a custom leave flow
+  (unsaved changes, an in-sheet step back) and `enabled: false` while saving.
+  Implied back buttons get the same arrow from `backButtonIconBuilder`
+- Plan colours stay on Home. Header actions use the accent, never the plan's
+  colour
+
 ### Interface Copy
 Action labels should say what happens in familiar, concise language:
 

@@ -17,6 +17,7 @@ import '../theme/spacing.dart';
 import '../utils/set_history.dart';
 import '../utils/statistics_format.dart';
 import '../widgets/app_button.dart';
+import '../widgets/app_header.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/history/history_journal_data.dart';
 import '../widgets/history/history_journal_widgets.dart';
@@ -84,15 +85,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
-      appBar: AppBar(
-        backgroundColor: surfaceColor(context),
+      appBar: const AppHeader(
         automaticallyImplyLeading: false,
-        title: Text(
-          'History',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(color: textPrimaryColor(context)),
-        ),
+        title: Text('History'),
       ),
       body: Align(
         alignment: Alignment.topCenter,
@@ -314,17 +309,8 @@ class WorkoutDetailsScreen extends StatelessWidget {
     final weightUnit = context.watch<SettingsProvider>().weightUnit;
     return Scaffold(
       backgroundColor: backgroundColor(context),
-      appBar: AppBar(
-        backgroundColor: backgroundColor(context),
-        elevation: 0,
-        scrolledUnderElevation: 0,
-        surfaceTintColor: Colors.transparent,
-        shadowColor: Colors.transparent,
-        leading: IconButton(
-          tooltip: 'Back',
-          icon: Icon(LucideIcons.arrowLeft, color: textSecondaryColor(context)),
-          onPressed: () => Navigator.pop(context),
-        ),
+      appBar: AppHeader(
+        leading: AppBackButton(onPressed: () => Navigator.pop(context)),
         title: const Text('Workout details'),
         actions: [
           if (session != null)
@@ -601,14 +587,9 @@ class _EditSessionScreenState extends State<EditSessionScreen> {
       },
       child: Scaffold(
         backgroundColor: backgroundColor(context),
-        appBar: AppBar(
-          backgroundColor: surfaceColor(context),
+        appBar: AppHeader(
           title: const Text('Edit workout'),
-          leading: AppIconButton(
-            label: 'Back',
-            icon: LucideIcons.arrowLeft,
-            onPressed: _isSaving ? null : _handleBack,
-          ),
+          leading: AppBackButton(enabled: !_isSaving, onPressed: _handleBack),
           actions: [
             TextButton(
               onPressed: _isSaving ? null : _save,

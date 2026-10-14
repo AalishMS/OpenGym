@@ -19,6 +19,7 @@ import '../widgets/dashboard/progression_sparkline.dart';
 import '../widgets/dashboard/recent_prs_tile.dart';
 import '../widgets/dashboard/stat_tile.dart';
 import '../widgets/app_button.dart';
+import '../widgets/app_header.dart';
 import '../widgets/history/history_journal_data.dart';
 import 'history_screen.dart';
 import 'plan_editor_screen.dart';
@@ -43,15 +44,9 @@ class DashboardScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
-      appBar: AppBar(
-        backgroundColor: surfaceColor(context),
-        title: Text(
-          'Dashboard',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(color: textPrimaryColor(context)),
-        ),
+      appBar: const AppHeader(
         automaticallyImplyLeading: false,
+        title: Text('Dashboard'),
       ),
       body:
           plans.isEmpty && sessions.isEmpty

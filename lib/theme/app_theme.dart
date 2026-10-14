@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'app_typography.dart';
 import 'radii.dart';
@@ -570,13 +571,24 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
     extensions: [c],
     fontFamily: GoogleFonts.manrope().fontFamily,
     textTheme: textTheme,
+    // One header everywhere: flat on the page colour with a permanent hairline,
+    // so scrolling content never tints it. Back is neutral; actions keep the
+    // accent.
     appBarTheme: AppBarTheme(
-      backgroundColor: surface,
+      backgroundColor: background,
       foregroundColor: textPrimary,
       elevation: 0,
+      scrolledUnderElevation: 0,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.transparent,
+      shape: Border(bottom: BorderSide(color: border)),
       centerTitle: false,
       titleTextStyle: textTheme.titleLarge,
-      iconTheme: IconThemeData(color: accent),
+      iconTheme: IconThemeData(color: textPrimary),
+      actionsIconTheme: IconThemeData(color: accent),
+    ),
+    actionIconTheme: ActionIconThemeData(
+      backButtonIconBuilder: (context) => const Icon(LucideIcons.arrowLeft),
     ),
     cardTheme: CardThemeData(
       color: surface,

@@ -14,6 +14,7 @@ import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/theme/app_theme.dart';
 
 import 'support/hive_test_harness.dart';
 
@@ -323,20 +324,49 @@ void main() {
     expect(tester.getCenter(saveText), tester.getCenter(button));
   });
 
-  testWidgets('save control uses the selected plan color', (tester) async {
+  testWidgets('save and add exercise use the accent, not the plan color', (
+    tester,
+  ) async {
     await pumpEditor(tester);
     await tester.enterText(find.byType(TextField).first, 'Push Day');
-    await tester.pump();
+    // The label's colour animates in once Save enables.
+    await tester.pumpAndSettle();
 
-    final saveText = find.text('Save');
-    final button = find.ancestor(of: saveText, matching: find.byType(InkWell));
-    final container = tester.widget<Container>(
-      find.descendant(of: button, matching: find.byType(Container)).first,
-    );
-    final decoration = container.decoration! as BoxDecoration;
     final context = tester.element(find.byType(PlanEditorScreen));
+    Color? painted(String text) =>
+        tester
+            .widget<RichText>(
+              find.descendant(
+                of: find.text(text),
+                matching: find.byType(RichText),
+              ),
+            )
+            .text
+            .style
+            ?.color;
 
-    expect(decoration.color, planColorOf(kPlanColors[0], context));
+    final save = find.ancestor(
+      of: find.text('Save'),
+      matching: find.byType(ElevatedButton),
+    );
+    final ground = tester.widget<Material>(
+      find.descendant(of: save, matching: find.byType(Material)).first,
+    );
+    expect(ground.color, accentFillColor(context));
+    expect(painted('Save'), onAccentColor(context));
+    expect(ground.color, isNot(planColorOf(kPlanColors[0], context)));
+    // The header stretches actions; Save must stay a 48px button inside it.
+    expect(tester.getSize(save).height, 48);
+
+    final add = find.ancestor(
+      of: find.text('Add exercise'),
+      matching: find.byType(OutlinedButton),
+    );
+    expect(painted('Add exercise'), accentColor(context));
+    final outline = tester.widget<Material>(
+      find.descendant(of: add, matching: find.byType(Material)).first,
+    );
+    expect((outline.shape! as OutlinedBorder).side.color, accentColor(context));
   });
 
   testWidgets('editor save and add exercise actions have 48 pixel targets', (

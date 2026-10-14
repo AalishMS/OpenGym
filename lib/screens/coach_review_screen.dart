@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
 import '../theme/spacing.dart';
 import '../widgets/action_progress.dart';
+import '../widgets/app_header.dart';
 import '../widgets/coach/coach_diff_card.dart';
 
 /// The diff for one proposal. Every change has a checkbox, so the user can
@@ -74,7 +75,7 @@ class _CoachReviewScreenState extends State<CoachReviewScreen> {
       canPop: !applying,
       child: Scaffold(
         backgroundColor: backgroundColor(context),
-        appBar: AppBar(title: const Text('Review changes')),
+        appBar: const AppHeader(title: Text('Review changes')),
         bottomNavigationBar: _ReviewBar(
           applying: applying,
           applyLabel:

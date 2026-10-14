@@ -17,7 +17,7 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../widgets/action_progress.dart';
-import '../widgets/app_button.dart';
+import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../utils/set_history.dart';
@@ -326,25 +326,27 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
       },
       child: Scaffold(
         backgroundColor: backgroundColor(context),
+        appBar: AppHeader(
+          leading: AppBackButton(enabled: !_isSaving, onPressed: _handleBack),
+          title: Text(widget.isEdit ? 'Edit plan' : 'New plan'),
+          actions: [
+            _SaveButton(
+              canSave: _canSave && !_isSaving && !_saved,
+              isSaving: _isSaving,
+              onSave: _savePlan,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
+        ),
         // Pinned rather than trailing the list, so adding the fifth exercise
         // does not mean scrolling past the first four first.
         bottomNavigationBar: _AddExerciseBar(
-          accent: planColor,
           onTap: _isSaving || _saved ? null : _showAddExerciseSheet,
         ),
         body: SafeArea(
           bottom: false,
           child: Column(
             children: [
-              _EditorHeader(
-                title: widget.isEdit ? 'Edit plan' : 'New plan',
-                color: planColor,
-                canSave: _canSave && !_isSaving && !_saved,
-                isSaving: _isSaving,
-                onBack: _handleBack,
-                onSave: _savePlan,
-              ),
-              Container(height: 2, color: planColor),
               Expanded(
                 child: AbsorbPointer(
                   absorbing: _isSaving,
@@ -461,89 +463,33 @@ class _EditorExercise {
   });
 }
 
-class _EditorHeader extends StatelessWidget {
-  final String title;
-  final Color color;
+/// Save on the accent ground. Disabled falls back to the theme's quiet
+/// surface style, so a blank plan doesn't advertise an action it can't take.
+class _SaveButton extends StatelessWidget {
   final bool canSave;
   final bool isSaving;
-  final VoidCallback onBack;
   final VoidCallback onSave;
 
-  const _EditorHeader({
-    required this.title,
-    required this.color,
+  const _SaveButton({
     required this.canSave,
     required this.isSaving,
-    required this.onBack,
     required this.onSave,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.sm,
-      ),
-      decoration: BoxDecoration(
-        color: backgroundColor(context),
-        border: Border(bottom: BorderSide(color: borderColor(context))),
-      ),
-      child: Row(
-        children: [
-          AppIconButton(
-            label: 'Back',
-            icon: LucideIcons.chevronLeft,
-            color: color,
-            onPressed: isSaving ? null : onBack,
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          Expanded(
-            child: Semantics(
-              header: true,
-              child: Text(
-                title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: textPrimaryColor(context),
-                ),
-              ),
-            ),
-          ),
-          InkWell(
-            onTap: canSave ? onSave : null,
-            borderRadius: AppRadius.button,
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 48, minWidth: 72),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.lg,
-                vertical: AppSpacing.sm,
-              ),
-              decoration: BoxDecoration(
-                color: canSave ? color : color.withAlpha(32),
-                borderRadius: AppRadius.button,
-              ),
-              child: Center(
-                child:
-                    isSaving
-                        ? const ActionProgress('Saving plan')
-                        : Text(
-                          'Save',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.labelLarge?.copyWith(
-                            color:
-                                canSave
-                                    ? onColor(color)
-                                    : textSecondaryColor(context),
-                          ),
-                        ),
-              ),
-            ),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-        ],
+    // AppBar stretches its actions to the toolbar height; keep a 48px button.
+    return Center(
+      child: ElevatedButton(
+        onPressed: canSave ? onSave : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: accentFillColor(context),
+          foregroundColor: onAccentColor(context),
+          minimumSize: const Size(72, 48),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        ),
+        child:
+            isSaving ? const ActionProgress('Saving plan') : const Text('Save'),
       ),
     );
   }
@@ -1205,13 +1151,13 @@ class _EmptyExercises extends StatelessWidget {
 
 /// The editor's pinned footer: the one action the screen is mostly for.
 class _AddExerciseBar extends StatelessWidget {
-  final Color accent;
   final VoidCallback? onTap;
 
-  const _AddExerciseBar({required this.accent, required this.onTap});
+  const _AddExerciseBar({required this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    final accent = accentColor(context);
     return Container(
       decoration: BoxDecoration(
         color: backgroundColor(context),

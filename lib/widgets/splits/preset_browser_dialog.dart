@@ -10,6 +10,7 @@ import '../../theme/breakpoints.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../app_button.dart';
+import '../app_header.dart';
 
 class PresetBrowserDialog extends StatefulWidget {
   final BuildContext hostContext;
@@ -191,9 +192,8 @@ class _BrowserHeader extends StatelessWidget {
         child: Row(
           children: [
             if (onBack != null)
-              AppIconButton(
-                label: 'Back to workout presets',
-                icon: LucideIcons.chevronLeft,
+              AppBackButton(
+                tooltip: 'Back to workout presets',
                 onPressed: onBack,
               )
             else

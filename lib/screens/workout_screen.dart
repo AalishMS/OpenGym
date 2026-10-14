@@ -21,6 +21,7 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../utils/set_history.dart';
+import '../widgets/app_header.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/action_progress.dart';
@@ -348,17 +349,19 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         curve: Curves.easeOutCubic,
       );
     }
-    final duration = MediaQuery.disableAnimationsOf(context)
-        ? Duration.zero
-        : const Duration(milliseconds: 190);
+    final duration =
+        MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 190);
     await _saveBeforeNavigation(
       () => Navigator.pushReplacement(
         context,
         PageRouteBuilder<void>(
           transitionDuration: duration,
           reverseTransitionDuration: duration,
-          pageBuilder: (context, animation, secondaryAnimation) =>
-              WorkoutScreen(plan: plan, planIndex: index),
+          pageBuilder:
+              (context, animation, secondaryAnimation) =>
+                  WorkoutScreen(plan: plan, planIndex: index),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
               opacity: animation.drive(
@@ -387,10 +390,11 @@ class _WorkoutScreenState extends State<WorkoutScreen>
 
   Widget _animatedPlanContent(Widget child) => AnimatedBuilder(
     animation: _planSwipeOffset,
-    builder: (context, child) => Transform.translate(
-      offset: Offset(_planSwipeOffset.value, 0),
-      child: child,
-    ),
+    builder:
+        (context, child) => Transform.translate(
+          offset: Offset(_planSwipeOffset.value, 0),
+          child: child,
+        ),
     child: child,
   );
 
@@ -1071,22 +1075,10 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         absorbing: _isNavigating || _timerAction != null,
         child: Scaffold(
           backgroundColor: backgroundColor(context),
-          appBar: AppBar(
-            backgroundColor: backgroundColor(context),
-            elevation: 0,
-            scrolledUnderElevation: 0,
-            surfaceTintColor: Colors.transparent,
-            shadowColor: Colors.transparent,
+          appBar: AppHeader(
             toolbarHeight: toolbarHeight,
             titleSpacing: AppSpacing.sm,
-            leading: IconButton(
-              tooltip: 'Back',
-              icon: Icon(
-                LucideIcons.arrowLeft,
-                color: textSecondaryColor(context),
-              ),
-              onPressed: _handleBack,
-            ),
+            leading: AppBackButton(onPressed: _handleBack),
             title: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1253,109 +1245,120 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                   onPreviousPlan: onPreviousPlan,
                   onDragProgress: _updatePlanSwipe,
                   onDragCancel: _settlePlanSwipe,
-                  child: _animatedPlanContent(CustomScrollView(
-                    key: ValueKey(_currentWeek),
-                    physics: const BouncingScrollPhysics(
-                      parent: AlwaysScrollableScrollPhysics(),
-                    ),
-                    slivers: [
-                      // One gutter keeps the exercise tables aligned as a log.
-                      SliverPadding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.lg,
-                          vertical: AppSpacing.sm,
-                        ),
-                        sliver: SliverReorderableList(
-                          itemCount:
-                              session.exercises.length +
-                              (session.isCompleted ? 0 : 1),
-                          onReorderItem: _reorderExercises,
-                          proxyDecorator: (child, index, animation) {
-                            return Material(
-                              color: surfaceColor(context),
-                              borderRadius: AppRadius.card,
-                              child: child,
-                            );
-                          },
-                          itemBuilder: (context, index) {
-                            if (index == session.exercises.length) {
-                              return TextButton.icon(
-                                key: const ValueKey('add_exercise_button'),
-                                onPressed: _addEmptyExercise,
-                                icon: const Icon(LucideIcons.plus, size: 18),
-                                label: const Text('Add exercise'),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: accent,
-                                  minimumSize: const Size.fromHeight(48),
-                                  shape: const RoundedRectangleBorder(
-                                    borderRadius: AppRadius.button,
+                  child: _animatedPlanContent(
+                    CustomScrollView(
+                      key: ValueKey(_currentWeek),
+                      physics: const BouncingScrollPhysics(
+                        parent: AlwaysScrollableScrollPhysics(),
+                      ),
+                      slivers: [
+                        // One gutter keeps the exercise tables aligned as a log.
+                        SliverPadding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg,
+                            vertical: AppSpacing.sm,
+                          ),
+                          sliver: SliverReorderableList(
+                            itemCount:
+                                session.exercises.length +
+                                (session.isCompleted ? 0 : 1),
+                            onReorderItem: _reorderExercises,
+                            proxyDecorator: (child, index, animation) {
+                              return Material(
+                                color: surfaceColor(context),
+                                borderRadius: AppRadius.card,
+                                child: child,
+                              );
+                            },
+                            itemBuilder: (context, index) {
+                              if (index == session.exercises.length) {
+                                return TextButton.icon(
+                                  key: const ValueKey('add_exercise_button'),
+                                  onPressed: _addEmptyExercise,
+                                  icon: const Icon(LucideIcons.plus, size: 18),
+                                  label: const Text('Add exercise'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: accent,
+                                    minimumSize: const Size.fromHeight(48),
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: AppRadius.button,
+                                    ),
                                   ),
+                                );
+                              }
+
+                              final exercise = session.exercises[index];
+
+                              return Container(
+                                // Numeric edits replace the exercise snapshot;
+                                // retain the row and its active keypad across them.
+                                key: ValueKey((
+                                  _currentWeek,
+                                  index,
+                                  exercise.name,
+                                )),
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    bottom: BorderSide(
+                                      color: borderColor(context),
+                                    ),
+                                  ),
+                                ),
+                                child: ExerciseCard(
+                                  exercise: exercise,
+                                  exerciseIndex: index,
+                                  reorderable: !session.isCompleted,
+                                  readOnly: session.isCompleted,
+                                  onMoveUp:
+                                      index > 0
+                                          ? () => _reorderExercises(
+                                            index,
+                                            index - 1,
+                                          )
+                                          : null,
+                                  onMoveDown:
+                                      index < session.exercises.length - 1
+                                          ? () => _reorderExercises(
+                                            index,
+                                            index + 1,
+                                          )
+                                          : null,
+                                  accent: accent,
+                                  previousSets: previousExerciseSets(
+                                    _sessionsWithDrafts(),
+                                    exercise.name,
+                                    splitId: widget.plan.splitId,
+                                    planId: widget.plan.id,
+                                    planName: widget.plan.name,
+                                    beforeWeek: _currentWeek,
+                                    includeDrafts: true,
+                                  ),
+                                  onSetChanged: _changeSetValues,
+                                  onSetRpeChanged: _changeSetRpe,
+                                  onEntryFinished: () {
+                                    if (mounted) _autoSave();
+                                  },
+                                  onAddSet: (i) => _addSet(i),
+                                  onDeleteSet:
+                                      (i, setIndex) => _deleteSet(i, setIndex),
+                                  onAddNote: _addExerciseNote,
+                                  onRename: _showExerciseRenameDialog,
+                                  onDeleteExercise: _deleteExercise,
                                 ),
                               );
-                            }
-
-                            final exercise = session.exercises[index];
-
-                            return Container(
-                              // Numeric edits replace the exercise snapshot;
-                              // retain the row and its active keypad across them.
-                              key: ValueKey((_currentWeek, index, exercise.name)),
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  bottom: BorderSide(
-                                    color: borderColor(context),
-                                  ),
-                                ),
-                              ),
-                              child: ExerciseCard(
-                                exercise: exercise,
-                                exerciseIndex: index,
-                                reorderable: !session.isCompleted,
-                                readOnly: session.isCompleted,
-                                onMoveUp:
-                                    index > 0
-                                        ? () =>
-                                            _reorderExercises(index, index - 1)
-                                        : null,
-                                onMoveDown:
-                                    index < session.exercises.length - 1
-                                        ? () =>
-                                            _reorderExercises(index, index + 1)
-                                        : null,
-                                accent: accent,
-                                previousSets: previousExerciseSets(
-                                  _sessionsWithDrafts(),
-                                  exercise.name,
-                                  splitId: widget.plan.splitId,
-                                  planId: widget.plan.id,
-                                  planName: widget.plan.name,
-                                  beforeWeek: _currentWeek,
-                                  includeDrafts: true,
-                                ),
-                                onSetChanged: _changeSetValues,
-                                onSetRpeChanged: _changeSetRpe,
-                                onEntryFinished: () {
-                                  if (mounted) _autoSave();
-                                },
-                                onAddSet: (i) => _addSet(i),
-                                onDeleteSet:
-                                    (i, setIndex) => _deleteSet(i, setIndex),
-                                onAddNote: _addExerciseNote,
-                                onRename: _showExerciseRenameDialog,
-                                onDeleteExercise: _deleteExercise,
-                              ),
-                            );
-                          },
+                            },
+                          ),
                         ),
-                      ),
-                      ValueListenableBuilder<double>(
-                        valueListenable: SetEntryTable.keyboardHeight,
-                        builder: (context, height, _) => SliverToBoxAdapter(
-                          child: SizedBox(height: height),
+                        ValueListenableBuilder<double>(
+                          valueListenable: SetEntryTable.keyboardHeight,
+                          builder:
+                              (context, height, _) => SliverToBoxAdapter(
+                                child: SizedBox(height: height),
+                              ),
                         ),
-                      ),
-                    ],
-                  )),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               _buildWeekNavBar(accent),

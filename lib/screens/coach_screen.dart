@@ -10,6 +10,7 @@ import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
+import '../widgets/app_header.dart';
 import '../widgets/coach/coach_chat_entry.dart';
 import '../widgets/coach/coach_status_bar.dart';
 import '../widgets/update_dialog.dart';
@@ -157,9 +158,8 @@ class _CoachScreenState extends State<CoachScreen> {
       backgroundColor: backgroundColor(context),
       // Inside the shell, its Scaffold already makes room for the keyboard.
       resizeToAvoidBottomInset: widget.onClose == null,
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft),
+      appBar: AppHeader(
+        leading: AppBackButton(
           tooltip: widget.onClose == null ? 'Back' : 'Back to plans',
           onPressed: _close,
         ),

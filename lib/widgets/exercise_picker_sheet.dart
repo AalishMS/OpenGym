@@ -5,6 +5,7 @@ import '../data/exercise_library.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
+import 'app_header.dart';
 import 'muscle_group_illustration.dart';
 
 void showExercisePickerSheet(
@@ -670,12 +671,7 @@ class _ContextBar extends StatelessWidget {
         child: Row(
           children: [
             if (onBack != null)
-              IconButton(
-                tooltip: backTooltip,
-                onPressed: onBack,
-                color: textPrimaryColor(context),
-                icon: const Icon(LucideIcons.chevronLeft, size: 22),
-              ),
+              AppBackButton(tooltip: backTooltip ?? 'Back', onPressed: onBack),
             Expanded(
               child: Semantics(
                 header: true,

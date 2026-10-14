@@ -43,7 +43,11 @@ void main() {
     );
     await hiveHarness.open(includeSplits: true);
     await HiveService.putSplitRaw(
-      gym.Split(id: 'current', name: 'Current split', createdAt: DateTime(2026)),
+      gym.Split(
+        id: 'current',
+        name: 'Current split',
+        createdAt: DateTime(2026),
+      ),
     );
   });
 
@@ -236,6 +240,19 @@ void main() {
     },
   );
 
+  // The title takes its colour from the AppBar theme, so read what is painted.
+  Color? renderedColor(WidgetTester tester, String text) =>
+      tester
+          .widget<RichText>(
+            find.descendant(
+              of: find.text(text),
+              matching: find.byType(RichText),
+            ),
+          )
+          .text
+          .style
+          ?.color;
+
   testWidgets('ordinary review headers use the neutral text role', (
     tester,
   ) async {
@@ -248,7 +265,7 @@ void main() {
       );
       await tester.pump();
       expect(
-        tester.widget<Text>(find.text('History')).style?.color,
+        renderedColor(tester, 'History'),
         textPrimaryColor(tester.element(find.text('History'))),
       );
 
@@ -260,7 +277,7 @@ void main() {
       );
       await tester.pump();
       expect(
-        tester.widget<Text>(find.text('Statistics')).style?.color,
+        renderedColor(tester, 'Statistics'),
         textPrimaryColor(tester.element(find.text('Statistics'))),
       );
 
@@ -272,7 +289,7 @@ void main() {
       );
       await tester.pump();
       expect(
-        tester.widget<Text>(find.text('Dashboard')).style?.color,
+        renderedColor(tester, 'Dashboard'),
         textPrimaryColor(tester.element(find.text('Dashboard'))),
       );
     }
@@ -446,60 +463,62 @@ void main() {
     }
   });
 
-  testWidgets('theme selector keeps its geometry and color roles across modes', (
-    tester,
-  ) async {
-    final settings = SettingsProvider();
-    Size segmentSize(String label) => tester.getSize(
-      find.ancestor(of: find.text(label), matching: find.byType(TextButton)),
-    );
+  testWidgets(
+    'theme selector keeps its geometry and color roles across modes',
+    (tester) async {
+      final settings = SettingsProvider();
+      Size segmentSize(String label) => tester.getSize(
+        find.ancestor(of: find.text(label), matching: find.byType(TextButton)),
+      );
 
-    await tester.pumpWidget(
-      host(
-        const SettingsScreen(),
-        size: const Size(390, 4000),
-        brightness: Brightness.light,
-        settingsProvider: settings,
-      ),
-    );
-    await tester.pump();
-    final before = [for (final label in ['Dark', 'Light', 'System']) segmentSize(label)];
+      await tester.pumpWidget(
+        host(
+          const SettingsScreen(),
+          size: const Size(390, 4000),
+          brightness: Brightness.light,
+          settingsProvider: settings,
+        ),
+      );
+      await tester.pump();
+      final before = [
+        for (final label in ['Dark', 'Light', 'System']) segmentSize(label),
+      ];
 
-    await tester.tap(find.text('Dark'));
-    await tester.pumpAndSettle();
-    await tester.pumpWidget(
-      host(
-        const SettingsScreen(),
-        size: const Size(390, 4000),
-        brightness: Brightness.dark,
-        settingsProvider: settings,
-      ),
-    );
-    await tester.pump();
+      await tester.tap(find.text('Dark'));
+      await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        host(
+          const SettingsScreen(),
+          size: const Size(390, 4000),
+          brightness: Brightness.dark,
+          settingsProvider: settings,
+        ),
+      );
+      await tester.pump();
 
-    final selector = tester.widget<SegmentedButton<ThemeMode>>(
-      find.byType(SegmentedButton<ThemeMode>),
-    );
-    final context = tester.element(find.byType(SegmentedButton<ThemeMode>));
-    expect(selector.showSelectedIcon, isFalse);
-    expect(selector.selected, {ThemeMode.dark});
-    expect(
-      selector.style!.backgroundColor!.resolve({WidgetState.selected}),
-      accentFillColor(context),
-    );
-    expect(
-      selector.style!.foregroundColor!.resolve({WidgetState.selected}),
-      onAccentColor(context),
-    );
-    expect(
-      selector.style!.backgroundColor!.resolve({}),
-      surfaceColor(context),
-    );
-    expect(
-      [for (final label in ['Dark', 'Light', 'System']) segmentSize(label)],
-      before,
-    );
-  });
+      final selector = tester.widget<SegmentedButton<ThemeMode>>(
+        find.byType(SegmentedButton<ThemeMode>),
+      );
+      final context = tester.element(find.byType(SegmentedButton<ThemeMode>));
+      expect(selector.showSelectedIcon, isFalse);
+      expect(selector.selected, {ThemeMode.dark});
+      expect(
+        selector.style!.backgroundColor!.resolve({WidgetState.selected}),
+        accentFillColor(context),
+      );
+      expect(
+        selector.style!.foregroundColor!.resolve({WidgetState.selected}),
+        onAccentColor(context),
+      );
+      expect(
+        selector.style!.backgroundColor!.resolve({}),
+        surfaceColor(context),
+      );
+      expect([
+        for (final label in ['Dark', 'Light', 'System']) segmentSize(label),
+      ], before);
+    },
+  );
 
   testWidgets('workout switches use the page background', (tester) async {
     await tester.pumpWidget(
@@ -659,12 +678,18 @@ void main() {
     expect(signOutCalls, 1);
   });
 
-  testWidgets('clearing settings data preserves the other split', (tester) async {
+  testWidgets('clearing settings data preserves the other split', (
+    tester,
+  ) async {
     await tester.runAsync(() async {
       await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
       await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
       await HiveService.putSplitRaw(
-        gym.Split(id: 'other', name: 'Other split', createdAt: DateTime(2026, 2)),
+        gym.Split(
+          id: 'other',
+          name: 'Other split',
+          createdAt: DateTime(2026, 2),
+        ),
       );
       for (final splitId in ['current', 'other']) {
         await HiveService.putPlanRaw(
@@ -743,7 +768,10 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Load'));
     await tester.pumpAndSettle();
-    expect(find.text('Could not complete this action. Try again or cancel.'), findsOneWidget);
+    expect(
+      find.text('Could not complete this action. Try again or cancel.'),
+      findsOneWidget,
+    );
     expect(find.text('Load sample data?'), findsOneWidget);
   });
 
