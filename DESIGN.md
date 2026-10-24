@@ -221,9 +221,12 @@ Saving, deleting, or installing blocks dismissal until success or failure.
 states register their normal asynchronous leave flows with it. Timer intents
 reuse the route displaying the exact session, rather than stacking another
 copy. Returning through an editor honors save/discard prompts. A cancelled
-leave or busy modal keeps the current screen in place; a pending notification
-finish confirmation is delivered when the user returns to that workout. The
-observer is replaced along with the Navigator when the account changes.
+leave keeps the current screen in place. Dialogs and sheets retain their input
+and confirmations; both new workout pushes and route reuse wait until those
+layers close. A pending notification finish confirmation waits for an autosave
+or timer action to finish, even when no route changes. Deferred opens recheck
+that the session is still live. The observer is replaced along with the
+Navigator when the account changes.
 
 ## Bundled Workout Presets
 

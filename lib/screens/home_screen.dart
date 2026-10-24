@@ -58,6 +58,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _managing = false;
+  bool _splitMenuOpen = false;
+  bool _splitMenuBackGesture = false;
   bool _mutatingPlan = false;
 
   Future<void> _persistPlanAction({
@@ -106,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
         widget.resetRequest != oldWidget.resetRequest ||
         (widget.tutorialActive && !oldWidget.tutorialActive)) {
       _managing = false;
+      _splitMenuBackGesture = false;
     }
   }
 
@@ -113,32 +116,54 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final accent = accentColor(context);
     final bg = backgroundColor(context);
+    // Capture the layer for this pop: closing the menu synchronously must not
+    // let another callback from the same Back also leave Manage.
+    final splitMenuInView = _splitMenuOpen;
 
     return PopScope(
-      canPop: !widget.active || !_managing,
+      canPop: !widget.active || (!_managing && !_splitMenuBackGesture),
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && widget.active && _managing) {
+        if (!didPop && widget.active && _splitMenuBackGesture) {
+          setState(() => _splitMenuBackGesture = false);
+          return;
+        }
+        if (!didPop && widget.active && _managing && !splitMenuInView) {
           setState(() => _managing = false);
         }
       },
-      child: Scaffold(
-        backgroundColor: bg,
-        body: SafeArea(
-          top: false,
-          child: Column(
-            children: [
-              _buildHeader(context),
-              Expanded(
-                child: Consumer<WorkoutPlanProvider>(
-                  builder: (context, provider, child) {
-                    if (provider.plans.isEmpty) {
-                      return _buildEmptyState(context, provider);
-                    }
-                    return _buildPlanSection(context, provider, accent);
-                  },
+      child: Listener(
+        onPointerDown: (_) {
+          if (_splitMenuBackGesture != _splitMenuOpen) {
+            setState(() => _splitMenuBackGesture = _splitMenuOpen);
+          }
+        },
+        onPointerUp: (_) {
+          if (_splitMenuBackGesture) {
+            setState(() => _splitMenuBackGesture = false);
+          }
+        },
+        // Android cancels this pointer when it recognizes an edge Back. Keep
+        // the menu's ownership until that Back arrives, even though MenuAnchor
+        // already closed itself on the outside pointer-down.
+        child: Scaffold(
+          backgroundColor: bg,
+          body: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                _buildHeader(context),
+                Expanded(
+                  child: Consumer<WorkoutPlanProvider>(
+                    builder: (context, provider, child) {
+                      if (provider.plans.isEmpty) {
+                        return _buildEmptyState(context, provider);
+                      }
+                      return _buildPlanSection(context, provider, accent);
+                    },
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -186,10 +211,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       const SizedBox(width: AppSpacing.xs),
-                      const Expanded(
+                      Expanded(
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: SplitSwitcher(),
+                          child: SplitSwitcher(
+                            onMenuChanged: (open) {
+                              if (mounted) {
+                                setState(() => _splitMenuOpen = open);
+                              }
+                            },
+                          ),
                         ),
                       ),
                     ] else

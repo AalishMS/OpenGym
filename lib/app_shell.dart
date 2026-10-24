@@ -369,6 +369,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   Future<void> _openTimerWorkout(WorkoutTimerNotificationEvent event) async {
+    if (!mounted) return;
     final session = await _reconcileTimer(event.snapshot);
     if (!mounted || session == null || !event.openWorkout) return;
     if (_handledTimerIntentRevision == event.snapshot.actionRevision) return;
@@ -376,17 +377,36 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _handledTimerIntentRevision = event.snapshot.actionRevision;
 
     final navigation = AppNavigationObserver.maybeOf(context);
-    if (session.id != null &&
-        navigation != null &&
-        await navigation.returnToWorkout(
-          session.id!,
-          requestLogConfirmation: event.requestLogConfirmation,
-        )) {
+    if (session.id != null && navigation != null) {
+      await navigation.openWorkout(
+        session.id!,
+        requestLogConfirmation: event.requestLogConfirmation,
+        openIfMissing:
+            (confirm) =>
+                _pushTimerWorkout(session, requestLogConfirmation: confirm),
+      );
+    } else {
+      await _pushTimerWorkout(
+        session,
+        requestLogConfirmation: event.requestLogConfirmation,
+      );
+    }
+  }
+
+  Future<void> _pushTimerWorkout(
+    WorkoutSession session, {
+    required bool requestLogConfirmation,
+  }) async {
+    if (!mounted) return;
+    // A deferred intent may outlive a delete/completion in the blocking flow.
+    final current =
+        session.id == null ? null : HiveService.getSessionById(session.id!);
+    if (current == null || current.isCompleted || current.deletedAt != null) {
+      await WorkoutTimerNotificationService.instance.dismiss();
       return;
     }
-    if (!mounted) return;
 
-    final planId = session.planId;
+    final planId = current.planId;
     final plan = planId == null ? null : HiveService.getPlanById(planId);
     if (plan == null || plan.deletedAt != null) {
       await WorkoutTimerNotificationService.instance.dismiss();
@@ -412,9 +432,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               (_) => WorkoutScreen(
                 plan: plan,
                 planIndex: planIndex < 0 ? 0 : planIndex,
-                initialWeekNumber: session.weekNumber,
-                initialSession: session,
-                showLogConfirmationOnOpen: event.requestLogConfirmation,
+                initialWeekNumber: current.weekNumber,
+                initialSession: current,
+                showLogConfirmationOnOpen: requestLogConfirmation,
               ),
         ),
       ),

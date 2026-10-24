@@ -105,6 +105,64 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('split menu consumes Back before leaving Manage', (tester) async {
+    final harness = (await tester.runAsync(_createHarness))!;
+    addTearDown(harness.dispose);
+    await tester.pumpWidget(harness.host(const HomeScreen()));
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('split-menu')), findsNothing);
+    expect(find.text('Done'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Manage'), findsOneWidget);
+  });
+
+  for (final managing in [false, true]) {
+    testWidgets(
+      'edge Back keeps menu ownership after Android cancels the pointer (Manage: $managing)',
+      (tester) async {
+        final harness = (await tester.runAsync(_createHarness))!;
+        addTearDown(harness.dispose);
+        await tester.pumpWidget(harness.host(const HomeScreen()));
+        var exitRequests = 0;
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'SystemNavigator.pop') exitRequests++;
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
+          ),
+        );
+        if (managing) {
+          await tester.tap(find.text('Manage'));
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
+        await tester.pumpAndSettle();
+        // MenuAnchor closes on outside pointer-down, before Android recognizes an
+        // edge gesture and sends its Back. That gesture must still own one layer.
+        final gesture = await tester.startGesture(const Offset(2, 450));
+        await gesture.cancel();
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('split-menu')), findsNothing);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.text(managing ? 'Done' : 'Manage'), findsOneWidget);
+        expect(exitRequests, 0);
+      },
+    );
+  }
+
   testWidgets('history and stats follow the selected split', (tester) async {
     final harness = (await tester.runAsync(_createHarness))!;
     addTearDown(harness.dispose);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +11,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:gymapp/app_shell.dart';
 import 'package:gymapp/navigation/app_navigation_observer.dart';
 import 'package:gymapp/models/exercise_template.dart';
+import 'package:gymapp/models/exercise.dart';
+import 'package:gymapp/models/set.dart' as gym;
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/settings_provider.dart';
@@ -64,7 +68,10 @@ void main() {
     await HiveService.putSessionRaw(session);
   });
 
-  Future<void> openShell(WidgetTester tester) async {
+  Future<void> openShell(
+    WidgetTester tester, {
+    WorkoutSessionProvider? sessions,
+  }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);
     addTearDown(tester.view.reset);
@@ -85,7 +92,9 @@ void main() {
             create: (_) => SplitProvider(userIdProvider: () => null),
           ),
           ChangeNotifierProvider(create: (_) => WorkoutPlanProvider()),
-          ChangeNotifierProvider(create: (_) => WorkoutSessionProvider()),
+          ChangeNotifierProvider<WorkoutSessionProvider>(
+            create: (_) => sessions ?? WorkoutSessionProvider(),
+          ),
           ChangeNotifierProvider(create: (_) => SettingsProvider()),
           ChangeNotifierProvider(create: (_) => UpdateProvider()),
         ],
@@ -129,6 +138,100 @@ void main() {
   }
 
   Finder allWorkouts() => find.byType(WorkoutScreen, skipOffstage: false);
+
+  for (final deletedWhileWaiting in [false, true]) {
+    testWidgets(
+      'new notification workout waits behind a busy modal (deleted: $deletedWhileWaiting)',
+      (tester) async {
+        await openShell(tester);
+        showDialog<void>(
+          context: tester.element(find.byType(AppShell)),
+          barrierDismissible: false,
+          builder:
+              (dialogContext) => PopScope(
+                canPop: false,
+                child: AlertDialog(
+                  title: const Text('Saving split'),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(dialogContext),
+                      child: const Text('Complete'),
+                    ),
+                  ],
+                ),
+              ),
+        );
+        await tester.pumpAndSettle();
+        await notify(tester, 1);
+        expect(find.text('Saving split'), findsOneWidget);
+        expect(allWorkouts(), findsNothing);
+        if (deletedWhileWaiting) {
+          await tester.runAsync(() => HiveService.softDeleteSession('draft'));
+        }
+        await tester.tap(find.text('Complete'));
+        await tester.pumpAndSettle();
+        expect(
+          allWorkouts(),
+          deletedWhileWaiting ? findsNothing : findsOneWidget,
+        );
+      },
+    );
+  }
+
+  testWidgets('stop confirmation waits for the visible workout autosave', (
+    tester,
+  ) async {
+    session = session.copyWith(
+      exercises: [
+        Exercise(name: 'Bench Press', sets: [gym.Set(reps: 8, weight: 50)]),
+      ],
+    );
+    await tester.runAsync(() => HiveService.putSessionRaw(session));
+    final sessions = _PendingSessions();
+    await openShell(tester, sessions: sessions);
+    await tester.tap(find.text('Start workout'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Add set'));
+    await tester.pump();
+    await notify(tester, 1, stop: true, settle: false);
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Log workout?'), findsNothing);
+    sessions.pending.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Log workout?'), findsOneWidget);
+    expect(allWorkouts(), findsOneWidget);
+  });
+
+  testWidgets('notification body does not cancel an open finish confirmation', (
+    tester,
+  ) async {
+    await openShell(tester);
+    await tester.tap(find.text('Start workout'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Finish workout'));
+    await tester.pumpAndSettle();
+    expect(find.text('Log workout?'), findsOneWidget);
+    await notify(tester, 1);
+    expect(find.text('Log workout?'), findsOneWidget);
+    expect(allWorkouts(), findsOneWidget);
+  });
+
+  testWidgets('notification preserves a populated custom exercise dialog', (
+    tester,
+  ) async {
+    await openShell(tester);
+    await tester.tap(find.text('Start workout'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add exercise'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Create custom exercise'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextFormField), 'Uncommitted curl');
+    await notify(tester, 1);
+    expect(find.byType(TextFormField), findsOneWidget);
+    expect(find.text('Uncommitted curl'), findsOneWidget);
+    expect(allWorkouts(), findsOneWidget);
+  });
 
   testWidgets('repeated notification opens leave one workout route', (
     tester,
@@ -201,6 +304,7 @@ void main() {
       expect(allWorkouts(), findsOneWidget);
       await tester.tap(find.text('Keep editing'));
       await tester.pumpAndSettle();
+      expect(find.text('Discard changes?'), findsNothing);
       expect(find.text('Unsaved name'), findsOneWidget);
       await tester.tap(find.byTooltip('Back'));
       await tester.pumpAndSettle();
@@ -251,8 +355,9 @@ void main() {
     await tester.tap(find.text('Start workout'));
     await tester.pumpAndSettle();
     await notify(tester, 1);
-    // Same plan/week is not the same session: keep the existing draft underneath.
-    expect(allWorkouts(), findsNWidgets(2));
+    // Same plan/week is not the same session: leave the other draft safely and
+    // initialize the requested one rather than reusing the wrong workout.
+    expect(allWorkouts(), findsOneWidget);
     expect(
       tester
           .widget<WorkoutScreen>(find.byType(WorkoutScreen))
@@ -261,4 +366,11 @@ void main() {
       'draft',
     );
   });
+}
+
+class _PendingSessions extends WorkoutSessionProvider {
+  final Completer<void> pending = Completer<void>();
+
+  @override
+  Future<void> upsertSession(WorkoutSession session) => pending.future;
 }

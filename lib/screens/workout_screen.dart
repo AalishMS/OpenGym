@@ -66,10 +66,16 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       _savedSessionForWeek(_currentWeek)?.id == sessionId;
 
   @override
-  Future<void> handleNotification({
+  bool get canHandleNotification =>
+      mounted && !_isSaving && !_isNavigating && _timerAction == null;
+
+  @override
+  Future<bool> handleNotification({
     required bool requestLogConfirmation,
   }) async {
-    if (mounted && requestLogConfirmation) await _stopWorkout();
+    if (!canHandleNotification) return false;
+    if (requestLogConfirmation) await _stopWorkout();
+    return true;
   }
 
   List<int> _weeks = [1];
@@ -1053,6 +1059,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
 
   @override
   Widget build(BuildContext context) {
+    navigationStateChanged();
     final session = _getOrCreateSession();
     final accent = accentColor(context);
 
