@@ -5,6 +5,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import 'models/workout_session.dart';
+import 'navigation/app_navigation_observer.dart';
 import 'providers/coach_provider.dart';
 import 'providers/split_provider.dart';
 import 'providers/update_provider.dart';
@@ -61,6 +62,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   bool _updatePromptShown = false;
   StreamSubscription<WorkoutTimerNotificationEvent>? _timerSubscription;
   int? _handledTimerIntentRevision;
+  Future<void> _timerEvents = Future<void>.value();
 
   List<Widget> _screens({required bool coachShown, required int showing}) => [
     const DashboardScreen(),
@@ -233,6 +235,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         } else if (coachInView) {
           _closeCoach();
         } else if (showing >= 2) {
+          _coachOpen = false;
           _selectTab(1, showing: showing);
         }
       },
@@ -349,12 +352,39 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     return reconciled;
   }
 
-  Future<void> _handleTimerEvent(WorkoutTimerNotificationEvent event) async {
+  Future<void> _handleTimerEvent(WorkoutTimerNotificationEvent event) {
+    // Do not let two intents both decide to push before the first route builds.
+    _timerEvents = _timerEvents
+        .then((_) => _openTimerWorkout(event))
+        .catchError((Object error) {
+          debugPrint('Could not open the timer workout: $error');
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not open your workout. Try again.'),
+            ),
+          );
+        });
+    return _timerEvents;
+  }
+
+  Future<void> _openTimerWorkout(WorkoutTimerNotificationEvent event) async {
     final session = await _reconcileTimer(event.snapshot);
     if (!mounted || session == null || !event.openWorkout) return;
     if (_handledTimerIntentRevision == event.snapshot.actionRevision) return;
     if (_tourActive) _closeTutorial();
     _handledTimerIntentRevision = event.snapshot.actionRevision;
+
+    final navigation = AppNavigationObserver.maybeOf(context);
+    if (session.id != null &&
+        navigation != null &&
+        await navigation.returnToWorkout(
+          session.id!,
+          requestLogConfirmation: event.requestLogConfirmation,
+        )) {
+      return;
+    }
+    if (!mounted) return;
 
     final planId = session.planId;
     final plan = planId == null ? null : HiveService.getPlanById(planId);
@@ -375,17 +405,21 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (!mounted) return;
     final plans = HiveService.getPlans(splitId: splitId);
     final planIndex = plans.indexWhere((candidate) => candidate.id == plan.id);
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder:
-            (_) => WorkoutScreen(
-              plan: plan,
-              planIndex: planIndex < 0 ? 0 : planIndex,
-              initialWeekNumber: session.weekNumber,
-              showLogConfirmationOnOpen: event.requestLogConfirmation,
-            ),
+    unawaited(
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder:
+              (_) => WorkoutScreen(
+                plan: plan,
+                planIndex: planIndex < 0 ? 0 : planIndex,
+                initialWeekNumber: session.weekNumber,
+                initialSession: session,
+                showLogConfirmationOnOpen: event.requestLogConfirmation,
+              ),
+        ),
       ),
     );
+    await WidgetsBinding.instance.endOfFrame;
   }
 
   Future<void> _checkForUpdate() async {

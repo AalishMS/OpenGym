@@ -203,6 +203,28 @@ Workout plan creation, editing, and active workout logging are separate screens
 opened from the main flow. The Coach is the exception: it opens over Home
 inside the Home tab, so the tab bar or rail stays visible (see `docs/coach.md`).
 
+Back dismisses the nearest active layer before leaving its parent. Manage is a
+Home mode: Back restores normal Home, and leaving or reselecting Home clears
+Manage. Back from the History, Stats, or Settings root selects normal Home;
+Back from normal Home retains the platform's exit behavior. Pushed details
+return to their entry point, including details opened from Home's trained-day
+shortcut. The weekly-training shortcut selects Stats, whose Back returns Home.
+
+The exercise picker and preset browser have internal pages. System Back steps
+from a category or selected-exercises list to muscle groups, or from preset
+details to the catalog; another Back closes the flow. Picker Done intentionally
+steps back in the same way, while Close, outside taps, and dragging the picker
+down close it directly. Preset browsing retains the goal and catalog position.
+Saving, deleting, or installing blocks dismissal until success or failure.
+
+`AppNavigationObserver` owns account-scoped route tracking. Workout and editor
+states register their normal asynchronous leave flows with it. Timer intents
+reuse the route displaying the exact session, rather than stacking another
+copy. Returning through an editor honors save/discard prompts. A cancelled
+leave or busy modal keeps the current screen in place; a pending notification
+finish confirmation is delivered when the user returns to that workout. The
+observer is replaced along with the Navigator when the account changes.
+
 ## Bundled Workout Presets
 
 The app compiles a read-only catalog of workout programs from the reviewed

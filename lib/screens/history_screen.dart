@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../navigation/app_navigation_observer.dart';
+
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
 import '../models/workout_session.dart';
@@ -429,7 +431,11 @@ class EditSessionScreen extends StatefulWidget {
   State<EditSessionScreen> createState() => _EditSessionScreenState();
 }
 
-class _EditSessionScreenState extends State<EditSessionScreen> {
+class _EditSessionScreenState extends State<EditSessionScreen>
+    with AppRouteParticipant<EditSessionScreen> {
+  @override
+  Future<void> leaveRoute() => _handleBack();
+
   late WorkoutSession _session;
   late TextEditingController _planNameController;
   late final String _initialSignature;

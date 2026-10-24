@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
+
+import '../navigation/app_navigation_observer.dart';
 import '../data/plan_colors.dart';
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
@@ -51,7 +53,25 @@ class WorkoutScreen extends StatefulWidget {
 }
 
 class _WorkoutScreenState extends State<WorkoutScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, AppRouteParticipant<WorkoutScreen>
+    implements WorkoutNavigationTarget {
+  @override
+  Future<void> leaveRoute() => _handleBack();
+
+  @override
+  WorkoutNavigationTarget get workoutTarget => this;
+
+  @override
+  bool displaysSession(String sessionId) =>
+      _savedSessionForWeek(_currentWeek)?.id == sessionId;
+
+  @override
+  Future<void> handleNotification({
+    required bool requestLogConfirmation,
+  }) async {
+    if (mounted && requestLogConfirmation) await _stopWorkout();
+  }
+
   List<int> _weeks = [1];
   int _currentWeekIndex = 0;
   final Map<int, WorkoutSession> _weekSessions = {};

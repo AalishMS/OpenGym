@@ -8,6 +8,7 @@ import '../models/exercise_template.dart';
 import '../models/set.dart' as gym;
 import '../models/set_template.dart';
 import '../models/workout_plan.dart';
+import '../navigation/app_navigation_observer.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/split_provider.dart';
 import '../services/hive_service.dart';
@@ -36,7 +37,11 @@ class PlanEditorScreen extends StatefulWidget {
   State<PlanEditorScreen> createState() => _PlanEditorScreenState();
 }
 
-class _PlanEditorScreenState extends State<PlanEditorScreen> {
+class _PlanEditorScreenState extends State<PlanEditorScreen>
+    with AppRouteParticipant<PlanEditorScreen> {
+  @override
+  Future<void> leaveRoute() => _handleBack();
+
   final _nameController = TextEditingController();
   final List<_EditorExercise> _exercises = [];
   int _nextExerciseId = 0;
