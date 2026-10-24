@@ -250,27 +250,43 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
     final keyboardInset = media.viewInsets.bottom;
     final availableHeight = media.size.height - keyboardInset;
 
-    return AnimatedPadding(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.only(bottom: keyboardInset),
-      child: SafeArea(
-        top: false,
-        child: SizedBox(
-          height: availableHeight * 0.92,
-          child: Column(
-            children: [
-              _buildHeader(),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                child: _SearchField(
-                  controller: _searchController,
-                  onChanged: (value) => setState(() => _query = value),
+    return PopScope(
+      canPop: _view == _PickerView.groups && _query.isEmpty,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_query.isNotEmpty) {
+          setState(() {
+            _searchController.clear();
+            _query = '';
+          });
+        } else {
+          _showGroups();
+        }
+      },
+      child: AnimatedPadding(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        padding: EdgeInsets.only(bottom: keyboardInset),
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: availableHeight * 0.92,
+            child: Column(
+              children: [
+                _buildHeader(),
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                  ),
+                  child: _SearchField(
+                    controller: _searchController,
+                    onChanged: (value) => setState(() => _query = value),
+                  ),
                 ),
-              ),
-              Expanded(child: _buildContent()),
-              _buildFooter(),
-            ],
+                Expanded(child: _buildContent()),
+                _buildFooter(),
+              ],
+            ),
           ),
         ),
       ),
