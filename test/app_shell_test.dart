@@ -129,6 +129,33 @@ void main() {
     expect(find.text('Manage'), findsOneWidget);
   });
 
+  for (final label in ['History', 'Stats', 'Settings']) {
+    testWidgets('system Back from $label returns to normal Home', (
+      tester,
+    ) async {
+      await tester.runAsync(seedHomeTraining);
+      await tester.pumpWidget(shellHost(390));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Manage'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
+        0,
+      );
+      expect(find.text('Manage'), findsOneWidget);
+      expect(find.text('Start workout'), findsOneWidget);
+    });
+  }
+
   testWidgets('compact shell exposes four phone destinations', (tester) async {
     await tester.pumpWidget(shellHost(Breakpoints.medium - 1));
     await tester.pumpAndSettle();
@@ -244,35 +271,35 @@ void main() {
     expect(statsScroll.offset, 0);
   });
 
-  testWidgets(
-    'a trained weekday opens its latest History detail and returns to History',
-    (tester) async {
-      await tester.runAsync(seedHomeTraining);
-      await tester.pumpWidget(shellHost(390));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
+  testWidgets('a trained weekday opens its latest detail and returns to Home', (
+    tester,
+  ) async {
+    await tester.runAsync(seedHomeTraining);
+    await tester.pumpWidget(shellHost(390));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
-      await tester.tap(
-        find.descendant(
-          of: find.byType(TrainingSnapshot),
-          matching: find.byKey(
-            ValueKey('training-day-${DateTime.now().weekday - 1}'),
-          ),
+    await tester.tap(
+      find.descendant(
+        of: find.byType(TrainingSnapshot),
+        matching: find.byKey(
+          ValueKey('training-day-${DateTime.now().weekday - 1}'),
         ),
-      );
-      await tester.pumpAndSettle();
-      expect(find.byType(WorkoutDetailsScreen), findsOneWidget);
-      expect(find.text('Bench Press'), findsWidgets);
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(WorkoutDetailsScreen), findsOneWidget);
+    expect(find.text('Bench Press'), findsWidgets);
 
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      expect(find.byType(HistoryScreen), findsOneWidget);
-      expect(
-        tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
-        1,
-      );
-    },
-  );
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(HistoryScreen), findsNothing);
+    expect(find.byType(TrainingSnapshot), findsOneWidget);
+    expect(
+      tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
+      0,
+    );
+  });
 
   testWidgets('medium shell exposes the desktop rail and dashboard', (
     tester,

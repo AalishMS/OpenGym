@@ -219,15 +219,21 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     });
   }
 
-  Widget _withTutorial(Widget shell, {required bool coachInView}) {
+  Widget _withTutorial(
+    Widget shell, {
+    required bool coachInView,
+    required int showing,
+  }) {
     return PopScope(
-      canPop: !_tourActive && !coachInView,
+      canPop: !_tourActive && !coachInView && showing < 2,
       onPopInvokedWithResult: (didPop, result) {
         if (didPop) return;
         if (_tourActive) {
           _closeTutorial();
         } else if (coachInView) {
           _closeCoach();
+        } else if (showing >= 2) {
+          _selectTab(1, showing: showing);
         }
       },
       child: Stack(
@@ -261,7 +267,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void _openLastWorkout(WorkoutSession session) {
     if (_openingHistoryWorkout) return;
     _openingHistoryWorkout = true;
-    setState(() => _currentIndex = 2);
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       await Navigator.of(context).push(
@@ -438,6 +443,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           ),
         ),
         coachInView: coachInView,
+        showing: effectiveIndex,
       );
     }
 
@@ -456,6 +462,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         ),
       ),
       coachInView: coachInView,
+      showing: effectiveIndex,
     );
   }
 }
