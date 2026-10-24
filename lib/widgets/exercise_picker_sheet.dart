@@ -16,19 +16,50 @@ void showExercisePickerSheet(
   required void Function(String name) onRemove,
   String selectionOwner = 'workout',
 }) {
-  showModalBottomSheet<void>(
-    context: context,
-    backgroundColor: surfaceColor(context),
-    shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
-    isScrollControlled: true,
-    builder:
-        (sheetContext) => _ExercisePickerSheet(
-          selectedExerciseNames: selectedExerciseNames,
-          alreadyAddedExerciseNames: alreadyAddedExerciseNames,
-          onAdd: onAdd,
-          onRemove: onRemove,
-          selectionOwner: selectionOwner,
-        ),
+  final navigator = Navigator.of(context);
+  navigator.push(
+    _ExercisePickerRoute(
+      capturedThemes: InheritedTheme.capture(
+        from: context,
+        to: navigator.context,
+      ),
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      backgroundColor: surfaceColor(context),
+      builder:
+          (sheetContext) => _ExercisePickerSheet(
+            selectedExerciseNames: selectedExerciseNames,
+            alreadyAddedExerciseNames: alreadyAddedExerciseNames,
+            onAdd: onAdd,
+            onRemove: onRemove,
+            selectionOwner: selectionOwner,
+          ),
+    ),
+  );
+}
+
+/// Outside taps explicitly close the picker, like Close and dragging it down.
+/// Only system Back follows the internal muscle-group navigation.
+class _ExercisePickerRoute extends ModalBottomSheetRoute<void> {
+  _ExercisePickerRoute({
+    required super.builder,
+    required super.capturedThemes,
+    required super.barrierLabel,
+    required super.backgroundColor,
+  }) : super(
+         isScrollControlled: true,
+         shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+       );
+
+  @override
+  Widget buildModalBarrier() => Semantics(
+    label: barrierLabel,
+    onDismiss: () => navigator?.pop(),
+    child: GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      excludeFromSemantics: true,
+      onTap: () => navigator?.pop(),
+      child: IgnorePointer(child: super.buildModalBarrier()),
+    ),
   );
 }
 
