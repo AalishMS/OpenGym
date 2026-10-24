@@ -35,6 +35,13 @@ class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
   bool _installing = false;
   String? _error;
 
+  void _backToCatalog() {
+    setState(() {
+      _selected = null;
+      _error = null;
+    });
+  }
+
   Future<void> _install(WorkoutPreset preset) async {
     setState(() {
       _installing = true;
@@ -72,24 +79,26 @@ class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
-    final content = _BrowserFrame(
-      goal: _goal,
-      selected: _selected,
-      installing: _installing,
-      error: _error,
-      onClose: () => Navigator.pop(context),
-      onBack:
-          () => setState(() {
-            _selected = null;
-            _error = null;
-          }),
-      onGoalChanged: (goal) => setState(() => _goal = goal),
-      onSelect:
-          (preset) => setState(() {
-            _selected = preset;
-            _error = null;
-          }),
-      onInstall: _install,
+    final content = PopScope(
+      canPop: _selected == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _backToCatalog();
+      },
+      child: _BrowserFrame(
+        goal: _goal,
+        selected: _selected,
+        installing: _installing,
+        error: _error,
+        onClose: () => Navigator.pop(context),
+        onBack: _backToCatalog,
+        onGoalChanged: (goal) => setState(() => _goal = goal),
+        onSelect:
+            (preset) => setState(() {
+              _selected = preset;
+              _error = null;
+            }),
+        onInstall: _install,
+      ),
     );
     if (compact) {
       return Dialog.fullscreen(
@@ -145,14 +154,20 @@ class _BrowserFrame extends StatelessWidget {
           onClose: onClose,
         ),
         Expanded(
-          child:
-              selected == null
-                  ? _CatalogOverview(
-                    goal: goal,
-                    onGoalChanged: onGoalChanged,
-                    onSelect: onSelect,
-                  )
-                  : _PresetDetails(preset: selected!),
+          child: IndexedStack(
+            index: selected == null ? 0 : 1,
+            children: [
+              _CatalogOverview(
+                goal: goal,
+                onGoalChanged: onGoalChanged,
+                onSelect: onSelect,
+              ),
+              if (selected != null)
+                _PresetDetails(preset: selected!)
+              else
+                const SizedBox.shrink(),
+            ],
+          ),
         ),
         if (selected != null)
           _InstallBar(
