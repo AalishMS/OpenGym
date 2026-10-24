@@ -63,7 +63,7 @@ void main() {
     expect(find.text('[PPL]'), findsNothing);
     final switcherText = tester.widget<Text>(find.text('PPL'));
     final wordmarkText = tester.widget<Text>(find.text('> OpenGym'));
-    expect(switcherText.style?.fontSize, 13);
+    expect(switcherText.style?.fontSize, 14);
     expect(
       switcherText.style!.fontSize,
       lessThan(wordmarkText.style!.fontSize!),
@@ -72,17 +72,7 @@ void main() {
       find.byKey(const ValueKey('split-switcher-content')),
     );
     expect(switcherContent.color, isNull);
-    final switcherDecoration = switcherContent.decoration! as BoxDecoration;
-    expect(
-      switcherDecoration.color,
-      raisedSurfaceColor(tester.element(find.text('PPL'))),
-    );
-    expect(
-      tester
-          .getSize(find.byKey(const ValueKey('split-switcher-content')))
-          .height,
-      36,
-    );
+    expect(switcherContent.decoration, isNull);
     // Up next and the plan row both name the active split's plan.
     expect(find.text('Ppl Plan'), findsWidgets);
     expect(find.text('Ul Plan'), findsNothing);
@@ -334,6 +324,85 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('header orders wordmark slash split and Coach', (tester) async {
+    final harness = (await tester.runAsync(_createHarness))!;
+    addTearDown(harness.dispose);
+    final coach = CoachProvider(
+      splitProvider: harness.splits,
+      userIdProvider: () => 'user-1',
+      isConfigured: () => true,
+    );
+    addTearDown(coach.dispose);
+    await tester.pumpWidget(harness.host(const HomeScreen(), coach: coach));
+    final wordmark = find.text('> OpenGym');
+    final slash = find.text('/');
+    final split = find.byKey(const ValueKey('split-switcher-content'));
+    final button = find.byKey(const ValueKey('coach-button'));
+    expect(tester.widget<Text>(wordmark).style?.fontSize, 17);
+    expect(tester.widget<Text>(find.text('PPL')).style?.fontSize, 14);
+    expect(
+      tester.getRect(wordmark).right,
+      lessThan(tester.getRect(slash).left),
+    );
+    expect(tester.getRect(slash).right, lessThan(tester.getRect(split).left));
+    expect(
+      tester.getRect(split).right,
+      lessThanOrEqualTo(tester.getRect(button).left),
+    );
+    expect(
+      tester.getCenter(wordmark).dy,
+      closeTo(tester.getCenter(slash).dy, 1),
+    );
+    expect(tester.getCenter(split).dy, closeTo(tester.getCenter(button).dy, 1));
+  });
+
+  testWidgets('header omits separator without an active split or provider', (
+    tester,
+  ) async {
+    final splits = SplitProvider(
+      repository: _FakeSplitRepository([], ''),
+      userIdProvider: () => 'user-1',
+    );
+    final harness = _Harness(
+      splits,
+      WorkoutPlanProvider(splits),
+      WorkoutSessionProvider(splits),
+    );
+    addTearDown(harness.dispose);
+    for (final includeSplits in [true, false]) {
+      await tester.pumpWidget(
+        harness.host(const HomeScreen(), includeSplits: includeSplits),
+      );
+      expect(find.text('> OpenGym'), findsOneWidget);
+      expect(find.text('/'), findsNothing);
+      expect(find.byKey(const ValueKey('split-switcher-button')), findsNothing);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
+  testWidgets('hiding Coach returns its width to the split', (tester) async {
+    final harness =
+        (await tester.runAsync(
+          () => _createHarness(
+            splitNames: ['A Very Long Training Split Name', 'UL'],
+          ),
+        ))!;
+    addTearDown(harness.dispose);
+    final coach = CoachProvider(
+      splitProvider: harness.splits,
+      userIdProvider: () => 'user-1',
+      isConfigured: () => true,
+    );
+    addTearDown(coach.dispose);
+    await tester.pumpWidget(harness.host(const HomeScreen(), coach: coach));
+    final trigger = find.byKey(const ValueKey('split-switcher-button'));
+    final withCoach = tester.getSize(trigger).width;
+    coach.enabled = false;
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('coach-button')), findsNothing);
+    expect(tester.getSize(trigger).width, greaterThan(withCoach));
+  });
+
   testWidgets('switcher remains readable across themes, widths, and scaling', (
     tester,
   ) async {
@@ -344,18 +413,47 @@ void main() {
           ),
         ))!;
     addTearDown(harness.dispose);
+    final coach = CoachProvider(
+      splitProvider: harness.splits,
+      userIdProvider: () => 'user-1',
+      isConfigured: () => true,
+    );
+    addTearDown(coach.dispose);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     for (final brightness in Brightness.values) {
-      for (final size in [const Size(320, 640), const Size(1100, 800)]) {
-        await tester.pumpWidget(
-          harness.host(
-            const HomeScreen(),
-            brightness: brightness,
-            size: size,
-            textScale: 1.6,
-          ),
-        );
-        await tester.pump();
-        expect(tester.takeException(), isNull, reason: '$brightness $size');
+      for (final size in [
+        const Size(320, 640),
+        const Size(390, 800),
+        const Size(412, 800),
+        const Size(1100, 800),
+      ]) {
+        tester.view.physicalSize = size;
+        for (final textScale in [1.0, 1.6]) {
+          for (final withCoach in [false, true]) {
+            await tester.pumpWidget(
+              harness.host(
+                const HomeScreen(),
+                brightness: brightness,
+                size: size,
+                textScale: textScale,
+                coach: withCoach ? coach : null,
+              ),
+            );
+            await tester.pump();
+            expect(tester.takeException(), isNull, reason: '$brightness $size');
+            if (withCoach) {
+              final split = tester.getRect(
+                find.byKey(const ValueKey('split-switcher-content')),
+              );
+              final button = tester.getRect(
+                find.byKey(const ValueKey('coach-button')),
+              );
+              expect(split.right, lessThanOrEqualTo(button.left));
+              expect(button.right, lessThanOrEqualTo(size.width));
+            }
+          }
+        }
       }
     }
   });
@@ -392,9 +490,8 @@ void main() {
       ['PPL (2)', 'PPL'],
       ['Powerbuilding PPLUL (2)', 'Powerbuilding PPLUL'],
     ]) {
-      final harness = (await tester.runAsync(
-        () => _createHarness(splitNames: names),
-      ))!;
+      final harness =
+          (await tester.runAsync(() => _createHarness(splitNames: names)))!;
       addTearDown(harness.dispose);
       final coach = CoachProvider(
         splitProvider: harness.splits,
@@ -605,11 +702,14 @@ class _Harness {
     Size size = const Size(390, 800),
     double textScale = 1,
     bool disableAnimations = false,
+    bool includeSplits = true,
     CoachProvider? coach,
   }) => MultiProvider(
     providers: [
-      if (coach != null) ChangeNotifierProvider<CoachProvider>.value(value: coach),
-      ChangeNotifierProvider<SplitProvider>.value(value: splits),
+      if (coach != null)
+        ChangeNotifierProvider<CoachProvider>.value(value: coach),
+      if (includeSplits)
+        ChangeNotifierProvider<SplitProvider>.value(value: splits),
       ChangeNotifierProvider<WorkoutPlanProvider>.value(value: plans),
       ChangeNotifierProvider<WorkoutSessionProvider>.value(value: sessions),
       ChangeNotifierProvider<SettingsProvider>(

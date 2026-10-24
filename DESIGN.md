@@ -241,7 +241,9 @@ signature:
   and give it room instead of repeating the prompt symbol elsewhere.
 - Every screen except Home shares one header (`AppHeader`): flat on the page
   colour, with a permanent hairline underneath and no tint on scroll, so in
-  dark mode it reads as black. Home keeps its `> OpenGym` brand header.
+  dark mode it reads as black. Home keeps its `> OpenGym` brand header, followed
+  by a slash and a borderless active-split selector. An icon-only Coach action
+  sits at the trailing edge on a quiet accent circle when available.
 - Back is always the same neutral arrow (`AppBackButton`) with a *Back*
   tooltip, including the steps back inside the exercise picker and preset
   browser. Header actions keep the accent. Plan colours stay on Home, so the

@@ -6,8 +6,6 @@ import '../../providers/coach_provider.dart';
 import '../../screens/coach_screen.dart';
 import '../../services/coach/coach_disclosure.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/radii.dart';
-import '../../theme/spacing.dart';
 import 'coach_disclosure_sheet.dart';
 
 /// Lets the app shell show the Coach inside the Home tab, so the navigation
@@ -53,42 +51,33 @@ class CoachButton extends StatelessWidget {
     if (coach == null || !coach.available) return const SizedBox.shrink();
     final accent = accentColor(context);
 
-    return Tooltip(
-      message: 'Ask the Coach to build or change your plans',
-      child: InkWell(
-        key: const ValueKey('coach-button'),
-        onTap: () => openCoach(context),
-        borderRadius: AppRadius.control,
-        splashColor: accent.withAlpha(36),
-        highlightColor: accent.withAlpha(18),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Center(
-            heightFactor: 1,
-            child: Container(
-              constraints: const BoxConstraints(minHeight: 36),
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.sm,
-                vertical: AppSpacing.xs,
-              ),
-              decoration: BoxDecoration(
-                color: raisedSurfaceColor(context),
-                border: Border.all(color: borderColor(context)),
-                borderRadius: AppRadius.control,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(LucideIcons.messageSquareText, size: 16, color: accent),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    'Coach',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: textPrimaryColor(context),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+    return Semantics(
+      label: 'Coach',
+      button: true,
+      child: Tooltip(
+        message: 'Coach',
+        excludeFromSemantics: true,
+        child: InkWell(
+          key: const ValueKey('coach-button'),
+          onTap: () => openCoach(context),
+          customBorder: const CircleBorder(),
+          splashColor: accent.withAlpha(36),
+          highlightColor: accent.withAlpha(18),
+          child: SizedBox.square(
+            dimension: 48,
+            child: Center(
+              child: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: accentMutedColor(context),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  LucideIcons.messageSquareText,
+                  size: 19,
+                  color: accent,
+                ),
               ),
             ),
           ),

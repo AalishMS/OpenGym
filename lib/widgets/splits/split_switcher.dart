@@ -105,7 +105,7 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
                 borderRadius: AppRadius.control,
                 splashColor: accent.withAlpha(36),
                 highlightColor: accent.withAlpha(18),
-                // Keep the tap area roomy around a more compact visible button.
+                // Keep a full-height tap target around the inline name.
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(minHeight: 48),
                   child: Center(
@@ -113,16 +113,6 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
                     heightFactor: 1,
                     child: Container(
                       key: const ValueKey('split-switcher-content'),
-                      constraints: const BoxConstraints(minHeight: 36),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: AppSpacing.sm,
-                        vertical: AppSpacing.xs,
-                      ),
-                      decoration: BoxDecoration(
-                        color: raisedSurfaceColor(context),
-                        border: Border.all(color: borderColor(context)),
-                        borderRadius: AppRadius.control,
-                      ),
                       // No alignment: it would stretch the box across all the
                       // width the header gives it instead of fitting the name.
                       child: Row(
@@ -152,6 +142,7 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
                                   context,
                                 ).textTheme.titleSmall?.copyWith(
                                   color: textPrimaryColor(context),
+                                  fontSize: 14,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -166,8 +157,8 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
                                     : const Duration(milliseconds: 150),
                             child: Icon(
                               LucideIcons.chevronDown,
-                              size: 16,
-                              color: accent,
+                              size: 12,
+                              color: textSecondaryColor(context),
                             ),
                           ),
                         ],

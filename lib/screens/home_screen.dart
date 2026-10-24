@@ -140,9 +140,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         child: _CappedWidth(
           child: LayoutBuilder(
-            // The wordmark keeps its natural width and the switcher takes the
-            // rest, so a split name only shortens once the row is truly full.
-            // The cap only matters at large text on a narrow phone.
+            // The title reads as a path; only the split name yields to the
+            // trailing Coach action. Cap the brand at large text on a phone.
             builder:
                 (context, constraints) => Row(
                   children: [
@@ -151,27 +150,33 @@ class _HomeScreenState extends State<HomeScreen> {
                         maxWidth: constraints.maxWidth * 0.4,
                       ),
                       child: const AppWordmark(
-                        fontSize: 20,
+                        fontSize: 17,
                         maxLines: 1,
                         overflow: TextOverflow.clip,
                       ),
                     ),
-                    if (splitProvider != null) ...[
-                      const SizedBox(width: AppSpacing.sm),
-                      const Expanded(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CoachButton(),
-                              SizedBox(width: AppSpacing.xs),
-                              Flexible(child: SplitSwitcher()),
-                            ],
+                    if (splitProvider?.activeSplit != null) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      ExcludeSemantics(
+                        child: Text(
+                          '/',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: textSecondaryColor(context),
+                            fontSize: 19,
+                            fontWeight: FontWeight.w400,
                           ),
                         ),
                       ),
-                    ],
+                      const SizedBox(width: AppSpacing.xs),
+                      const Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: SplitSwitcher(),
+                        ),
+                      ),
+                    ] else
+                      const Spacer(),
+                    const CoachButton(),
                   ],
                 ),
           ),

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart' hide Split;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -29,6 +30,7 @@ import 'package:gymapp/services/coach/coach_disclosure.dart';
 import 'package:gymapp/services/coach/coach_status_store.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/theme/tones.dart';
 import 'package:gymapp/widgets/app_bottom_nav.dart';
 import 'package:gymapp/widgets/coach/coach_button.dart';
 
@@ -182,15 +184,16 @@ class _Fixture {
     );
   }
 
-  Widget app(Widget home) => MultiProvider(
+  Widget app(
+    Widget home, {
+    Brightness brightness = Brightness.light,
+    Color seed = const Color(0xFF00A2FF),
+  }) => MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: splits),
       ChangeNotifierProvider.value(value: coach),
     ],
-    child: MaterialApp(
-      theme: buildTheme(const Color(0xFF00A2FF), Brightness.light),
-      home: home,
-    ),
+    child: MaterialApp(theme: buildTheme(seed, brightness), home: home),
   );
 
   void dispose() {
@@ -254,6 +257,91 @@ void main() {
   });
 
   group('availability and disclosure', () {
+    testWidgets('Coach icon contrasts with its circle for every accent', (
+      tester,
+    ) async {
+      final fixture = _Fixture();
+      addTearDown(fixture.dispose);
+      for (final brightness in Brightness.values) {
+        for (final accent in SettingsProvider.accents) {
+          await tester.pumpWidget(
+            fixture.app(
+              const _Home(),
+              brightness: brightness,
+              seed: accent.seed,
+            ),
+          );
+          final icon = tester.widget<Icon>(
+            find.byIcon(LucideIcons.messageSquareText),
+          );
+          final context = tester.element(
+            find.byKey(const ValueKey('coach-button')),
+          );
+          expect(
+            contrastRatio(icon.color!, accentMutedColor(context)),
+            greaterThanOrEqualTo(2.98),
+            reason:
+                '${accent.name}, ${brightness.name}: icon needs 3:1 contrast',
+          );
+        }
+      }
+    });
+
+    testWidgets('Coach entry is an accessible icon-only circle', (
+      tester,
+    ) async {
+      final fixture = _Fixture();
+      addTearDown(fixture.dispose);
+      final semantics = tester.ensureSemantics();
+      for (final brightness in Brightness.values) {
+        await tester.pumpWidget(
+          fixture.app(const _Home(), brightness: brightness),
+        );
+        await pumpWithStorage(tester);
+        final button = find.byKey(const ValueKey('coach-button'));
+        final icon = find.descendant(
+          of: button,
+          matching: find.byIcon(LucideIcons.messageSquareText),
+        );
+        expect(icon, findsOneWidget);
+        expect(tester.widget<Icon>(icon).size, 19);
+        expect(
+          find.descendant(of: button, matching: find.text('Coach')),
+          findsNothing,
+        );
+        expect(find.byTooltip('Coach'), findsOneWidget);
+        expect(tester.getSize(button).width, greaterThanOrEqualTo(48));
+        expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
+        expect(find.bySemanticsLabel('Coach'), findsOneWidget);
+        expect(
+          tester.getSemantics(button),
+          matchesSemantics(
+            label: 'Coach',
+            isButton: true,
+            hasTapAction: true,
+            isFocusable: true,
+            hasFocusAction: true,
+          ),
+        );
+        final circle = find.descendant(
+          of: button,
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Container &&
+                widget.decoration is BoxDecoration &&
+                (widget.decoration! as BoxDecoration).shape == BoxShape.circle,
+          ),
+        );
+        expect(circle, findsOneWidget);
+        expect(tester.getSize(circle), const Size(40, 40));
+        final decoration =
+            tester.widget<Container>(circle).decoration! as BoxDecoration;
+        expect(decoration.border, isNull);
+        expect(decoration.color, accentMutedColor(tester.element(circle)));
+      }
+      semantics.dispose();
+    });
+
     testWidgets('the button is hidden while signed out', (tester) async {
       final fixture = _Fixture()..userId = null;
       addTearDown(fixture.dispose);
