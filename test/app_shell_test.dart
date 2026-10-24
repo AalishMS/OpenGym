@@ -104,6 +104,31 @@ void main() {
     );
   }
 
+  testWidgets('leaving or reselecting Home clears Manage', (tester) async {
+    await tester.runAsync(seedHomeTraining);
+    await tester.pumpWidget(shellHost(390));
+    await tester.pumpAndSettle();
+    Future<void> tab(String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
+    await tab('Home');
+    expect(find.text('Manage'), findsOneWidget);
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
+    await tab('History');
+    await tab('Home');
+    expect(find.text('Manage'), findsOneWidget);
+  });
+
   testWidgets('compact shell exposes four phone destinations', (tester) async {
     await tester.pumpWidget(shellHost(Breakpoints.medium - 1));
     await tester.pumpAndSettle();

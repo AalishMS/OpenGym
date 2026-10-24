@@ -37,6 +37,8 @@ class HomeScreen extends StatefulWidget {
   final GlobalKey? tutorialStartKey;
   final ScrollController? tutorialScrollController;
   final bool tutorialActive;
+  final bool active;
+  final int resetRequest;
 
   const HomeScreen({
     this.onOpenWeeklyTraining,
@@ -45,6 +47,8 @@ class HomeScreen extends StatefulWidget {
     this.tutorialStartKey,
     this.tutorialScrollController,
     this.tutorialActive = false,
+    this.active = true,
+    this.resetRequest = 0,
     super.key,
   });
 
@@ -98,7 +102,11 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void didUpdateWidget(HomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.tutorialActive && !oldWidget.tutorialActive) _managing = false;
+    if (!widget.active ||
+        widget.resetRequest != oldWidget.resetRequest ||
+        (widget.tutorialActive && !oldWidget.tutorialActive)) {
+      _managing = false;
+    }
   }
 
   @override
@@ -106,24 +114,32 @@ class _HomeScreenState extends State<HomeScreen> {
     final accent = accentColor(context);
     final bg = backgroundColor(context);
 
-    return Scaffold(
-      backgroundColor: bg,
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            _buildHeader(context),
-            Expanded(
-              child: Consumer<WorkoutPlanProvider>(
-                builder: (context, provider, child) {
-                  if (provider.plans.isEmpty) {
-                    return _buildEmptyState(context, provider);
-                  }
-                  return _buildPlanSection(context, provider, accent);
-                },
+    return PopScope(
+      canPop: !widget.active || !_managing,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && widget.active && _managing) {
+          setState(() => _managing = false);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: bg,
+        body: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              _buildHeader(context),
+              Expanded(
+                child: Consumer<WorkoutPlanProvider>(
+                  builder: (context, provider, child) {
+                    if (provider.plans.isEmpty) {
+                      return _buildEmptyState(context, provider);
+                    }
+                    return _buildPlanSection(context, provider, accent);
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -160,7 +176,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ExcludeSemantics(
                         child: Text(
                           '/',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleSmall?.copyWith(
                             color: textSecondaryColor(context),
                             fontSize: 19,
                             fontWeight: FontWeight.w400,

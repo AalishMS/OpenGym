@@ -42,6 +42,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _currentIndex = 0;
   int _weeklyTrainingRequest = 0;
   int _statsVisit = 0;
+  int _homeResetRequest = 0;
   bool _openingHistoryWorkout = false;
   final ScrollController _homeScrollController = ScrollController();
   final GlobalKey _planTourKey = GlobalKey(debugLabel: 'tutorial-plan');
@@ -61,7 +62,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   StreamSubscription<WorkoutTimerNotificationEvent>? _timerSubscription;
   int? _handledTimerIntentRevision;
 
-  List<Widget> _screens({required bool coachShown}) => [
+  List<Widget> _screens({required bool coachShown, required int showing}) => [
     const DashboardScreen(),
     CoachHost(
       open: _openCoach,
@@ -69,6 +70,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         index: coachShown ? 1 : 0,
         children: [
           HomeScreen(
+            active: showing == 1 && !coachShown,
+            resetRequest: _homeResetRequest,
             tutorialPlanKey: _planTourKey,
             tutorialStartKey: _startTourKey,
             tutorialScrollController: _homeScrollController,
@@ -208,6 +211,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   /// A tap on the tab that is already showing closes the Coach over Home.
   void _selectTab(int index, {required int showing}) {
     setState(() {
+      if (index == 1) _homeResetRequest++;
       if (index == showing && index == 1) _coachOpen = false;
       // Stats reopens at the top whenever it is entered from another tab.
       if (index == 3 && showing != 3) _statsVisit++;
@@ -412,7 +416,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     final stack = IndexedStack(
       index: effectiveIndex,
-      children: _screens(coachShown: coachShown),
+      children: _screens(coachShown: coachShown, showing: effectiveIndex),
     );
 
     if (isWide) {
