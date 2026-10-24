@@ -36,6 +36,7 @@ class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
   String? _error;
 
   void _backToCatalog() {
+    if (_installing) return;
     setState(() {
       _selected = null;
       _error = null;
@@ -43,6 +44,7 @@ class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
   }
 
   Future<void> _install(WorkoutPreset preset) async {
+    if (_installing) return;
     setState(() {
       _installing = true;
       _error = null;
@@ -80,7 +82,7 @@ class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
     final content = PopScope(
-      canPop: _selected == null,
+      canPop: !_installing && _selected == null,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _backToCatalog();
       },
@@ -89,7 +91,7 @@ class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
         selected: _selected,
         installing: _installing,
         error: _error,
-        onClose: () => Navigator.pop(context),
+        onClose: _installing ? null : () => Navigator.pop(context),
         onBack: _backToCatalog,
         onGoalChanged: (goal) => setState(() => _goal = goal),
         onSelect:
@@ -126,7 +128,7 @@ class _BrowserFrame extends StatelessWidget {
   final WorkoutPreset? selected;
   final bool installing;
   final String? error;
-  final VoidCallback onClose;
+  final VoidCallback? onClose;
   final VoidCallback onBack;
   final ValueChanged<WorkoutPresetGoal> onGoalChanged;
   final ValueChanged<WorkoutPreset> onSelect;
@@ -152,6 +154,7 @@ class _BrowserFrame extends StatelessWidget {
           preset: selected,
           onBack: selected == null ? null : onBack,
           onClose: onClose,
+          installing: installing,
         ),
         Expanded(
           child: IndexedStack(
@@ -184,12 +187,14 @@ class _BrowserFrame extends StatelessWidget {
 class _BrowserHeader extends StatelessWidget {
   final WorkoutPreset? preset;
   final VoidCallback? onBack;
-  final VoidCallback onClose;
+  final VoidCallback? onClose;
+  final bool installing;
 
   const _BrowserHeader({
     required this.preset,
     required this.onBack,
     required this.onClose,
+    required this.installing,
   });
 
   @override
@@ -210,6 +215,7 @@ class _BrowserHeader extends StatelessWidget {
               AppBackButton(
                 tooltip: 'Back to workout presets',
                 onPressed: onBack,
+                enabled: !installing,
               )
             else
               const SizedBox(width: 48),

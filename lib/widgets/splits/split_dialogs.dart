@@ -48,6 +48,7 @@ class _SplitNameDialogState extends State<_SplitNameDialog> {
   }
 
   Future<void> _save() async {
+    if (_saving) return;
     final hostContext = widget.hostContext;
     final provider = hostContext.read<SplitProvider>();
     final error = provider.nameError(
@@ -87,83 +88,86 @@ class _SplitNameDialogState extends State<_SplitNameDialog> {
   Widget build(BuildContext context) {
     final accent = accentColor(context);
     final textSecondary = textSecondaryColor(context);
-    return Dialog(
-      backgroundColor: surfaceColor(context),
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.card,
-        side: BorderSide(color: borderColor(context)),
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 400),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _isRename ? 'Rename split' : 'New split',
-                style: Theme.of(
-                  context,
-                ).textTheme.headlineSmall?.copyWith(color: accent),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                _isRename
-                    ? 'Change this workspace name. Its plans and history stay together.'
-                    : 'Start an empty training workspace with its own plans, history, and records.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: textSecondary,
-                  height: 1.45,
+    return PopScope(
+      canPop: !_saving,
+      child: Dialog(
+        backgroundColor: surfaceColor(context),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.card,
+          side: BorderSide(color: borderColor(context)),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _isRename ? 'Rename split' : 'New split',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.headlineSmall?.copyWith(color: accent),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              TextField(
-                key: const ValueKey('split-name-field'),
-                controller: _controller,
-                autofocus: true,
-                enabled: !_saving,
-                maxLength: 24,
-                textInputAction: TextInputAction.done,
-                onChanged: (_) {
-                  if (_error != null) setState(() => _error = null);
-                },
-                onSubmitted: (_) => _save(),
-                style: Theme.of(context).textTheme.bodyMedium,
-                decoration: InputDecoration(
-                  labelText: 'Split name',
-                  helperText: '1–24 characters',
-                  errorText: _error,
-                  counterText: '',
-                  border: const OutlineInputBorder(
-                    borderRadius: AppRadius.field,
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  _isRename
+                      ? 'Change this workspace name. Its plans and history stay together.'
+                      : 'Start an empty training workspace with its own plans, history, and records.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: textSecondary,
+                    height: 1.45,
                   ),
                 ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _saving ? null : () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  ElevatedButton(
-                    onPressed: _saving ? null : _save,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: accentFillColor(context),
-                      foregroundColor: onAccentColor(context),
-                      elevation: 0,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: AppRadius.button,
-                      ),
+                const SizedBox(height: AppSpacing.lg),
+                TextField(
+                  key: const ValueKey('split-name-field'),
+                  controller: _controller,
+                  autofocus: true,
+                  enabled: !_saving,
+                  maxLength: 24,
+                  textInputAction: TextInputAction.done,
+                  onChanged: (_) {
+                    if (_error != null) setState(() => _error = null);
+                  },
+                  onSubmitted: (_) => _save(),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  decoration: InputDecoration(
+                    labelText: 'Split name',
+                    helperText: '1–24 characters',
+                    errorText: _error,
+                    counterText: '',
+                    border: const OutlineInputBorder(
+                      borderRadius: AppRadius.field,
                     ),
-                    child: Text(_isRename ? 'Save' : 'Create'),
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: _saving ? null : () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    ElevatedButton(
+                      onPressed: _saving ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: accentFillColor(context),
+                        foregroundColor: onAccentColor(context),
+                        elevation: 0,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: AppRadius.button,
+                        ),
+                      ),
+                      child: Text(_isRename ? 'Save' : 'Create'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -367,6 +371,7 @@ class _DeleteSplitDialogState extends State<_DeleteSplitDialog> {
   bool _deleting = false;
 
   Future<void> _delete(SplitProvider provider, bool isActive) async {
+    if (_deleting) return;
     final hostContext = widget.hostContext;
     final replacement = isActive ? _replacementId : provider.activeSplitId;
     if (replacement == null) {
@@ -401,96 +406,100 @@ class _DeleteSplitDialogState extends State<_DeleteSplitDialog> {
     final error = errorColor(context);
     final textSecondary = textSecondaryColor(context);
 
-    return Dialog(
-      backgroundColor: surfaceColor(context),
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.card,
-        side: BorderSide(color: borderColor(context)),
-      ),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Delete split?',
-                style: Theme.of(
-                  context,
-                ).textTheme.headlineSmall?.copyWith(color: error),
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Text(
-                'Deleting ${widget.split.name} removes ${usage.plans} '
-                '${usage.plans == 1 ? 'plan' : 'plans'} and ${usage.sessions} '
-                '${usage.sessions == 1 ? 'session' : 'sessions'}. '
-                'This cannot be undone.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  height: 1.5,
-                  color: textSecondary,
-                ),
-              ),
-              if (isActive) ...[
-                const SizedBox(height: AppSpacing.lg),
+    return PopScope(
+      canPop: !_deleting,
+      child: Dialog(
+        backgroundColor: surfaceColor(context),
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.card,
+          side: BorderSide(color: borderColor(context)),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  'Select replacement',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: textPrimaryColor(context),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                for (final split in replacements) ...[
-                  _ReplacementRow(
-                    split: split,
-                    selected: split.id == _replacementId,
-                    onTap:
-                        () => setState(() {
-                          _replacementId = split.id;
-                          _error = null;
-                        }),
-                  ),
-                  if (split != replacements.last)
-                    const SizedBox(height: AppSpacing.sm),
-                ],
-              ],
-              if (_error != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  _error!,
+                  'Delete split?',
                   style: Theme.of(
                     context,
-                  ).textTheme.bodySmall?.copyWith(color: error),
+                  ).textTheme.headlineSmall?.copyWith(color: error),
                 ),
-              ],
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _deleting ? null : () => Navigator.pop(context),
-                    child: const Text('Cancel'),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Deleting ${widget.split.name} removes ${usage.plans} '
+                  '${usage.plans == 1 ? 'plan' : 'plans'} and ${usage.sessions} '
+                  '${usage.sessions == 1 ? 'session' : 'sessions'}. '
+                  'This cannot be undone.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    height: 1.5,
+                    color: textSecondary,
                   ),
-                  const SizedBox(width: AppSpacing.sm),
-                  ElevatedButton(
-                    onPressed:
-                        _deleting || (isActive && _replacementId == null)
-                            ? null
-                            : () => _delete(provider, isActive),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: error,
-                      foregroundColor: onColor(error),
-                      elevation: 0,
-                      shape: const RoundedRectangleBorder(
-                        borderRadius: AppRadius.button,
-                      ),
+                ),
+                if (isActive) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    'Select replacement',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: textPrimaryColor(context),
                     ),
-                    child: const Text('Delete'),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (final split in replacements) ...[
+                    _ReplacementRow(
+                      split: split,
+                      selected: split.id == _replacementId,
+                      onTap:
+                          () => setState(() {
+                            _replacementId = split.id;
+                            _error = null;
+                          }),
+                    ),
+                    if (split != replacements.last)
+                      const SizedBox(height: AppSpacing.sm),
+                  ],
+                ],
+                if (_error != null) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    _error!,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodySmall?.copyWith(color: error),
                   ),
                 ],
-              ),
-            ],
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed:
+                          _deleting ? null : () => Navigator.pop(context),
+                      child: const Text('Cancel'),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    ElevatedButton(
+                      onPressed:
+                          _deleting || (isActive && _replacementId == null)
+                              ? null
+                              : () => _delete(provider, isActive),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: error,
+                        foregroundColor: onColor(error),
+                        elevation: 0,
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: AppRadius.button,
+                        ),
+                      ),
+                      child: const Text('Delete'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),
