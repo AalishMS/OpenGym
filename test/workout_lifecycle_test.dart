@@ -207,7 +207,7 @@ void main() {
     expect(candidate.durationSeconds, 0);
   });
 
-  group('Delete week', () {
+  group('Workout screen', () {
     final hive = HiveTestHarness();
     final plan = WorkoutPlan(
       id: 'strength',
@@ -256,13 +256,18 @@ void main() {
           ),
         );
 
-    Future<void> open(WidgetTester tester) async {
+    Future<void> open(
+      WidgetTester tester, {
+      Future<Object?> Function(MethodCall)? notificationHandler,
+      WorkoutSessionProvider? provider,
+      bool pushed = false,
+    }) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(420, 900);
       addTearDown(tester.view.reset);
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
         notifications,
-        (_) async => null,
+        notificationHandler ?? (_) async => null,
       );
       addTearDown(
         () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
@@ -270,7 +275,7 @@ void main() {
           null,
         ),
       );
-      sessions = WorkoutSessionProvider();
+      sessions = provider ?? WorkoutSessionProvider();
       await tester.pumpWidget(
         MultiProvider(
           providers: [
@@ -279,10 +284,33 @@ void main() {
           ],
           child: MaterialApp(
             theme: buildTheme(const Color(0xFF008D8D), Brightness.light),
-            home: WorkoutScreen(plan: plan, planIndex: 0),
+            home:
+                pushed
+                    ? Builder(
+                      builder:
+                          (context) => Scaffold(
+                            body: TextButton(
+                              onPressed:
+                                  () => Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder:
+                                          (_) => WorkoutScreen(
+                                            plan: plan,
+                                            planIndex: 0,
+                                          ),
+                                    ),
+                                  ),
+                              child: const Text('Open workout'),
+                            ),
+                          ),
+                    )
+                    : WorkoutScreen(plan: plan, planIndex: 0),
           ),
         ),
       );
+      if (pushed) {
+        await tester.tap(find.text('Open workout'));
+      }
       await pumpWithStorage(tester);
     }
 
@@ -322,6 +350,251 @@ void main() {
       await tester.tap(find.widgetWithText(ElevatedButton, 'Delete'));
       await pumpWithStorage(tester);
       expect(find.text('Delete week?'), findsNothing);
+    }
+
+    WorkoutSession oldRunning() {
+      final start = DateTime.now().subtract(const Duration(minutes: 20));
+      return WorkoutSession(
+        id: 'old-running',
+        planId: 'push',
+        planName: 'Push Day',
+        splitId: 'another-split',
+        weekNumber: 6,
+        date: start,
+        startedAt: start,
+        timerStartedAt: start,
+        durationSeconds: 120,
+        isCompleted: false,
+        exercises: [
+          Exercise(name: 'Bench Press', sets: [gym.Set(reps: 8, weight: 60)]),
+        ],
+      );
+    }
+
+    Future<void> waitForTimerConflict(
+      WidgetTester tester, {
+      String? planLabel,
+    }) async {
+      // Starting remains busy behind the confirmation, so its progress
+      // indicator intentionally keeps scheduling frames until we answer.
+      for (var attempt = 0; attempt < 100; attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+        final confirmation =
+            planLabel == null
+                ? find.text('Pause and start')
+                : find.textContaining(planLabel);
+        if (confirmation.evaluate().isNotEmpty) {
+          await tester.pump(const Duration(milliseconds: 300));
+          return;
+        }
+      }
+      fail('The timer conflict confirmation did not open.');
+    }
+
+    testWidgets('a failed first draft write retries with its assigned ID', (
+      tester,
+    ) async {
+      await open(tester, provider: _FailFirstWriteProvider());
+      await tester.tap(find.text('Start'));
+      await pumpWithStorage(tester);
+      expect(find.text('Retry'), findsOneWidget);
+      expect(HiveService.getSessionById('first-write-draft'), isNull);
+      await tester.tap(find.text('Retry'));
+      await pumpWithStorage(tester);
+      final saved = HiveService.getSessionById('first-write-draft')!;
+      expect(saved.exercises.single.name, 'Squat');
+      expect(find.text('Retry'), findsNothing);
+      await tester.tap(find.text('Start'));
+      await pumpWithStorage(tester);
+      expect(HiveService.getRunningSession()!.id, saved.id);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await releaseSessions(tester);
+    });
+
+    testWidgets(
+      'Start applies a notification pause before checking conflicts',
+      (tester) async {
+        await tester.runAsync(() => HiveService.putSessionRaw(oldRunning()));
+        await open(
+          tester,
+          notificationHandler: (call) async {
+            if (call.method == 'requestPermission') return true;
+            if (call.method != 'snapshot') return null;
+            return {
+              'sessionId': 'old-running',
+              'planName': 'Push Day',
+              'weekNumber': 6,
+              'accumulatedSeconds': 600,
+              'running': false,
+              'actionRevision': DateTime.now().millisecondsSinceEpoch,
+            };
+          },
+        );
+        await tester.tap(find.text('Start'));
+        await pumpWithStorage(tester);
+
+        expect(find.text('Pause and start'), findsNothing);
+        expect(find.text('Pause'), findsOneWidget);
+        final old = HiveService.getSessionById('old-running')!;
+        expect(old.isTimerRunning, isFalse);
+        expect(old.durationSeconds, 600);
+        expect(old.exercises.single.sets.single.weight, 60);
+        expect(HiveService.getRunningSession()!.planName, plan.name);
+        await tester.pumpWidget(const SizedBox.shrink());
+        await releaseSessions(tester);
+      },
+    );
+
+    testWidgets('an old running flag can be paused without losing its sets', (
+      tester,
+    ) async {
+      await tester.runAsync(() => HiveService.putSessionRaw(oldRunning()));
+      final calls = <String>[];
+      await open(
+        tester,
+        notificationHandler: (call) async {
+          calls.add(call.method);
+          return call.method == 'requestPermission' ? true : null;
+        },
+      );
+      await tester.tap(find.text('Start'));
+      await waitForTimerConflict(tester);
+      expect(find.textContaining('Push Day, Week 6'), findsOneWidget);
+      await tester.tap(find.text('Cancel'));
+      await pumpWithStorage(tester);
+      expect(HiveService.getSessionById('old-running')!.isTimerRunning, isTrue);
+      expect(find.text('Start'), findsOneWidget);
+
+      await tester.tap(find.text('Start'));
+      await waitForTimerConflict(tester);
+      // Preserve any newer sets that arrive while the confirmation is open.
+      await tester.runAsync(
+        () => HiveService.putSessionRaw(
+          oldRunning().copyWith(
+            exercises: [
+              Exercise(
+                name: 'Bench Press',
+                sets: [gym.Set(reps: 9, weight: 65)],
+              ),
+            ],
+          ),
+        ),
+      );
+      await tester.tap(find.text('Pause and start'));
+      await pumpWithStorage(tester);
+      final old = HiveService.getSessionById('old-running')!;
+      expect(old.isTimerRunning, isFalse);
+      expect(old.isCompleted, isFalse);
+      expect(old.durationSeconds, greaterThanOrEqualTo(1320));
+      expect(old.exercises.single.sets.single.weight, 65);
+      expect(old.exercises.single.sets.single.reps, 9);
+      expect(
+        HiveService.getSessions().where((s) => s.isTimerRunning),
+        hasLength(1),
+      );
+      expect(HiveService.getRunningSession()!.planName, plan.name);
+      expect(calls, containsAllInOrder(['pause', 'show']));
+      expect(find.text('Pause'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await releaseSessions(tester);
+    });
+
+    testWidgets('a failed pause cannot start a second running timer', (
+      tester,
+    ) async {
+      await tester.runAsync(() => HiveService.putSessionRaw(oldRunning()));
+      await open(tester, provider: _FailingPauseProvider());
+      await tester.tap(find.text('Start'));
+      await waitForTimerConflict(tester);
+      await tester.tap(find.text('Pause and start'));
+      await pumpWithStorage(tester);
+      expect(find.textContaining('Could not change the timer'), findsOneWidget);
+      expect(HiveService.getRunningSession()!.id, 'old-running');
+      expect(
+        HiveService.getSessions().where((s) => s.isTimerRunning),
+        hasLength(1),
+      );
+      expect(find.text('Start'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await releaseSessions(tester);
+    });
+
+    testWidgets('Start resolves every saved running timer before starting', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        await HiveService.putSessionRaw(oldRunning());
+        await HiveService.putSessionRaw(
+          oldRunning().copyWith(
+            id: 'second-running',
+            planName: 'Pull Day',
+            date: DateTime.now(),
+          ),
+        );
+      });
+      await open(tester);
+      await tester.tap(find.text('Start'));
+      await waitForTimerConflict(tester, planLabel: 'Pull Day, Week 6');
+      await tester.tap(find.text('Pause and start'));
+      await waitForTimerConflict(tester, planLabel: 'Push Day, Week 6');
+      await tester.tap(find.text('Pause and start'));
+      await pumpWithStorage(tester);
+      expect(
+        HiveService.getSessions().where((s) => s.isTimerRunning),
+        hasLength(1),
+      );
+      expect(HiveService.getRunningSession()!.planName, plan.name);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await releaseSessions(tester);
+    });
+
+    for (final change in ['sets', 'completed', 'deleted']) {
+      testWidgets(
+        'Start respects current draft $change changed during confirmation',
+        (tester) async {
+          await tester.runAsync(() => HiveService.putSessionRaw(oldRunning()));
+          await open(tester, pushed: change == 'deleted');
+          await tester.tap(find.text('Start'));
+          await waitForTimerConflict(tester);
+          final current =
+              HiveService.getSessionForPlanAndWeek(plan.name, 1, null)!;
+          await tester.runAsync(
+            () => HiveService.putSessionRaw(
+              current.copyWith(
+                isCompleted: change == 'completed',
+                deletedAt: change == 'deleted' ? DateTime.now() : null,
+                exercises: [
+                  Exercise(
+                    name: 'Squat',
+                    sets: [gym.Set(reps: 7, weight: 110)],
+                  ),
+                ],
+              ),
+            ),
+          );
+          await tester.tap(find.text('Pause and start'));
+          await pumpWithStorage(tester);
+          final saved = HiveService.getSessionById(current.id!)!;
+          expect(saved.exercises.single.sets.single.weight, 110);
+          expect(saved.isCompleted, change == 'completed');
+          expect(saved.deletedAt != null, change == 'deleted');
+          expect(saved.isTimerRunning, change == 'sets');
+          if (change == 'deleted') {
+            await tester.tap(find.byTooltip('Back'));
+            await pumpWithStorage(tester);
+            expect(find.text('Open workout'), findsOneWidget);
+            expect(
+              HiveService.getSessionById(current.id!)!.deletedAt,
+              isNotNull,
+            );
+          }
+          await tester.pumpWidget(const SizedBox.shrink());
+          await releaseSessions(tester);
+        },
+      );
     }
 
     testWidgets('the current empty week is removed without a dialog', (
@@ -391,4 +664,29 @@ void main() {
       expect(weekTab(1), findsOneWidget);
     });
   });
+}
+
+class _FailingPauseProvider extends WorkoutSessionProvider {
+  @override
+  Future<void> upsertSession(WorkoutSession session) async {
+    if (session.id == 'old-running' && !session.isTimerRunning) {
+      throw StateError('disk full');
+    }
+    await super.upsertSession(session);
+  }
+}
+
+class _FailFirstWriteProvider extends WorkoutSessionProvider {
+  bool _failed = false;
+
+  @override
+  Future<void> upsertSession(WorkoutSession session) async {
+    if (!_failed) {
+      _failed = true;
+      // Hive assigns identity before its first put can fail.
+      session.id ??= 'first-write-draft';
+      throw StateError('disk full');
+    }
+    await super.upsertSession(session);
+  }
 }

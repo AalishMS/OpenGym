@@ -258,6 +258,14 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     try {
       while (mounted) {
         var session = _getOrCreateSession();
+        final saved =
+            session.id == null ? null : HiveService.getSessionById(session.id!);
+        if (saved != null && (saved.deletedAt != null || saved.isCompleted)) {
+          // A synced deletion/completion must also survive Back's autosave.
+          _weekSessions[_currentWeek] = saved;
+          _hasUnsavedChanges = false;
+          return true;
+        }
         if (session.isCompleted) return true;
         final hasSets = session.exercises.any((e) => e.sets.isNotEmpty);
         if (!hasSets && !_hasUnsavedChanges) return true;
@@ -515,13 +523,13 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     // Save entered sets first. Timer state is published only after its write.
     if (!await _autoSave() || !mounted) return;
     current = _getOrCreateSession();
+    if (current.isCompleted || current.deletedAt != null) return;
     final week = _currentWeek;
-    final now = DateTime.now();
 
     if (current.isTimerRunning) {
       final paused = current.copyWith(
         timerStartedAt: null,
-        durationSeconds: current.elapsedSeconds(now),
+        durationSeconds: current.elapsedSeconds(),
       );
       await context.read<WorkoutSessionProvider>().upsertSession(paused);
       _weekSessions[week] = paused;
@@ -534,28 +542,73 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       return;
     }
 
-    final other = HiveService.getRunningSession(excludingId: current.id);
-    if (other != null) {
-      await showDialog<void>(
+    var other = await _otherRunningSession(current.id);
+    if (!mounted) return;
+    while (other != null) {
+      final conflict = other;
+      final switchWorkout = await showDialog<bool>(
         context: context,
         builder:
             (dialogContext) => AlertDialog(
-              title: const Text('Another workout is running'),
+              title: const Text('Start this workout?'),
               content: Text(
-                '${other.planName}, Week ${other.weekNumber} has an active timer. '
-                'Pause or stop it before starting this workout.',
+                '${conflict.planName}, Week ${conflict.weekNumber} still has a saved '
+                'running timer. Pause it and start this workout? '
+                'Its sets will be kept.',
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('OK'),
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, true),
+                  child: const Text('Pause and start'),
                 ),
               ],
             ),
       );
-      return;
+      if (switchWorkout != true || !mounted) return;
+      // Read again after the dialog so a notification action or sync cannot
+      // make us write an older copy of the other workout's sets.
+      final latest = HiveService.getSessionById(conflict.id!);
+      if (latest != null && latest.deletedAt == null && latest.isTimerRunning) {
+        final paused = latest.copyWith(
+          timerStartedAt: null,
+          durationSeconds: latest.elapsedSeconds(),
+        );
+        await context.read<WorkoutSessionProvider>().upsertSession(paused);
+        await _updateTimerNotification(
+          () => WorkoutTimerNotificationService.instance.pause(paused),
+        );
+      }
+      if (!mounted) return;
+      other = await _otherRunningSession(current.id);
+      if (!mounted) return;
     }
 
+    // The current draft can also change through sync while confirmation is
+    // open. Never overwrite newer sets or restart a finished/deleted session.
+    if (current.id != null) {
+      final latest = HiveService.getSessionById(current.id!);
+      if (latest == null || latest.deletedAt != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This workout was deleted. Reopen it from Home.'),
+          ),
+        );
+        return;
+      }
+      current = latest;
+      _weekSessions[week] = latest;
+      _syncTicker(latest);
+      if (latest.isCompleted || latest.isTimerRunning) {
+        setState(() {});
+        return;
+      }
+    }
+
+    final now = DateTime.now();
     final started = current.copyWith(
       date: current.startedAt == null ? now : current.date,
       startedAt: current.startedAt ?? now,
@@ -584,6 +637,33 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       }
     });
     if (mounted) setState(() {});
+  }
+
+  Future<WorkoutSession?> _otherRunningSession(String? currentId) async {
+    final other = HiveService.getRunningSession(excludingId: currentId);
+    if (other == null) return null;
+    WorkoutTimerNotificationSnapshot? snapshot;
+    try {
+      snapshot = await WorkoutTimerNotificationService.instance.snapshot();
+    } catch (error) {
+      // Hive still supports timers when notification controls are unavailable.
+      debugPrint('Could not read workout timer notification: $error');
+    }
+    if (!mounted) return null;
+    if (snapshot?.sessionId == other.id && !snapshot!.isRunning) {
+      // Pause/Stop can run in Android while Flutter is suspended. Apply that
+      // state before deciding whether an old Hive flag should block Start.
+      final latest = HiveService.getSessionById(other.id!);
+      if (latest != null && latest.deletedAt == null && latest.isTimerRunning) {
+        await context.read<WorkoutSessionProvider>().upsertSession(
+          latest.copyWith(
+            timerStartedAt: null,
+            durationSeconds: snapshot.accumulatedSeconds,
+          ),
+        );
+      }
+    }
+    return HiveService.getRunningSession(excludingId: currentId);
   }
 
   Future<void> _updateTimerNotification(Future<void> Function() update) async {
