@@ -332,6 +332,33 @@ void main() {
     }
   });
 
+  testWidgets('plan actions stay above Android navigation buttons', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(bottom: 48);
+    addTearDown(tester.view.reset);
+    for (final height in [800.0, 420.0]) {
+      tester.view.physicalSize = Size(390, height);
+      await tester.pumpWidget(
+        homeHost(size: Size(390, height), plans: [populatedPlan()]),
+      );
+      await tester.tap(find.text('Manage'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Plan actions'));
+      await tester.pumpAndSettle();
+      final delete = find.ancestor(
+        of: find.text('Delete plan'),
+        matching: find.byType(InkWell),
+      );
+      await tester.ensureVisible(delete);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(delete).bottom, lessThanOrEqualTo(height - 48));
+      expect(delete.hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('card tap opens Workout and long press opens plan actions', (
     tester,
   ) async {

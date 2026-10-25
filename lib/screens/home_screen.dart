@@ -523,7 +523,9 @@ class _HomeScreenState extends State<HomeScreen> {
               // Bottom inset only — the drag handle spaces the top, and the
               // header and rows carry their own horizontal padding, so the two
               // rules run full-bleed.
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.paddingOf(ctx).bottom + AppSpacing.md,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
