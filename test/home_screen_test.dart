@@ -908,7 +908,7 @@ void main() {
     }
   });
 
-  testWidgets('up next starts the plan after the last one trained', (
+  testWidgets('up next card and button open the plan after the last trained', (
     tester,
   ) async {
     final yesterday = DateTime.now().subtract(const Duration(days: 1));
@@ -919,11 +919,18 @@ void main() {
     expect(find.text('Next up'), findsOneWidget);
     expect(find.textContaining('Day 3 of 3'), findsOneWidget);
 
-    await tester.tap(find.text('Start workout'));
-    await tester.pumpAndSettle();
-    final workout = tester.widget<WorkoutScreen>(find.byType(WorkoutScreen));
-    expect(workout.plan.name, 'Leg Day');
-    expect(workout.planIndex, 2);
+    for (final label in ['Next up', 'Leg Day', 'Start workout']) {
+      await tester.tap(find.text(label).first);
+      await tester.pumpAndSettle();
+      final workout = tester.widget<WorkoutScreen>(find.byType(WorkoutScreen));
+      expect(workout.plan.name, 'Leg Day');
+      expect(workout.planIndex, 2);
+      Navigator.of(tester.element(find.byType(WorkoutScreen))).pop();
+      await tester.pumpAndSettle();
+      // Each tap opens exactly one screen, including the nested button.
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(WorkoutScreen), findsNothing);
+    }
   });
 
   testWidgets(

@@ -61,92 +61,101 @@ class UpNextCard extends StatelessWidget {
       if (durationMinutes != null) '~$durationMinutes min',
     ].join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: raisedSurfaceColor(context),
-        // This edge groups content; the start button owns the tap target.
-        border: Border.all(color: borderColor(context).withAlpha(96)),
+    return Material(
+      color: raisedSurfaceColor(context),
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: borderColor(context).withAlpha(96)),
         borderRadius: AppRadius.card,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.xs,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onStart,
+        borderRadius: AppRadius.card,
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Next up',
-                style: textTheme.labelLarge?.copyWith(color: nextColor),
-              ),
-              if (last != null)
-                Text(
-                  'Last: ${formatDaysAgo(last).toLowerCase()}',
-                  style: textTheme.bodySmall?.copyWith(color: secondary),
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Semantics(
-            label:
-                'Day $day of $dayCount. ${trainedDays.length} plans trained this week',
-            child: ExcludeSemantics(
-              child: Row(
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.xs,
                 children: [
-                  for (var index = 0; index < dayCount; index++) ...[
-                    if (index > 0) const SizedBox(width: AppSpacing.xs),
-                    Expanded(
-                      child: Container(
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color:
-                              index == day - 1
-                                  ? nextColor
-                                  : trainedDays.contains(index)
-                                  ? accentFillColor(context)
-                                  : borderColor(context),
-                          borderRadius: AppRadius.micro,
+                  Text(
+                    'Next up',
+                    style: textTheme.labelLarge?.copyWith(color: nextColor),
+                  ),
+                  if (last != null)
+                    Text(
+                      'Last: ${formatDaysAgo(last).toLowerCase()}',
+                      style: textTheme.bodySmall?.copyWith(color: secondary),
+                    ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Semantics(
+                label:
+                    'Day $day of $dayCount. ${trainedDays.length} plans trained this week',
+                child: ExcludeSemantics(
+                  child: Row(
+                    children: [
+                      for (var index = 0; index < dayCount; index++) ...[
+                        if (index > 0) const SizedBox(width: AppSpacing.xs),
+                        Expanded(
+                          child: Container(
+                            height: 6,
+                            decoration: BoxDecoration(
+                              color:
+                                  index == day - 1
+                                      ? nextColor
+                                      : trainedDays.contains(index)
+                                      ? accentFillColor(context)
+                                      : borderColor(context),
+                              borderRadius: AppRadius.micro,
+                            ),
+                          ),
                         ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                titleCase(plan.name),
+                style: textTheme.headlineLarge?.copyWith(
+                  color: textPrimaryColor(context),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                meta,
+                style: textTheme.bodySmall?.copyWith(color: secondary),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              AppButton.primary(
+                key: tutorialStartKey,
+                label: 'Start workout',
+                onPressed: onStart,
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(LucideIcons.play, size: 18),
+                    SizedBox(width: AppSpacing.sm),
+                    Flexible(
+                      child: Text(
+                        'Start workout',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            titleCase(plan.name),
-            style: textTheme.headlineLarge?.copyWith(
-              color: textPrimaryColor(context),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(meta, style: textTheme.bodySmall?.copyWith(color: secondary)),
-          const SizedBox(height: AppSpacing.lg),
-          AppButton.primary(
-            key: tutorialStartKey,
-            label: 'Start workout',
-            onPressed: onStart,
-            child: const Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(LucideIcons.play, size: 18),
-                SizedBox(width: AppSpacing.sm),
-                Flexible(
-                  child: Text(
-                    'Start workout',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
