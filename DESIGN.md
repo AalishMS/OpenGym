@@ -104,7 +104,7 @@ The core model is intentionally small.
 | --- | --- |
 | `Set` | One performed set: reps, weight, optional RPE, optional note |
 | `Exercise` | One logged exercise with a list of sets |
-| `SetTemplate` | One target set in a plan: reps and weight (display-only) |
+| `SetTemplate` | One target set in a plan: reps, weight, and optional RPE |
 | `ExerciseTemplate` | Exercise entry with targets and optional workout guidance |
 | `WorkoutPlan` | Named plan with exercises, optional color, explicit order, and `splitId` |
 | `WorkoutSession` | Logged workout for a plan, date, week, exercises, and `splitId` |
@@ -123,6 +123,10 @@ only `updatedAt` and `dirty`: it is keyed by `userId` and is never deleted.
 | `dirty` | Marks local changes that still need to be pushed |
 
 Hive adapters are generated in `*.g.dart`; those files are not edited by hand.
+Plan targets initialize the first workout week, including optional RPE. Later
+weeks copy the previous session, with empty sets when no previous data exists.
+Older plans without RPE remain valid. Targets use the plan's existing JSON
+payload for backup and sync, and survive duplication and Coach preservation.
 
 ## Local Persistence
 
@@ -288,10 +292,18 @@ signature:
   row, set apart by a rule and the error colour. In Manage, the drag grip
   leads each card and *Plan actions* trails it, so the two targets sit at
   opposite ends.
+- Create and Edit plan share the workout log's open exercise sections, hairline
+  dividers, filled weight/rep cells, and optional RPE controls. Exercises start
+  expanded and can be collapsed or reordered using the trailing grip. Add set
+  uses the app accent; Delete exercise stays separate in the error role. Holding
+  a set opens its delete action, as in the workout. The shared keypad validates
+  RPE from 1 to 10 and supports clearing it. Wide editor tables scroll at large
+  text sizes. The plan colour palette opens from Change color to leave more room
+  for training targets; Add exercise stays pinned at the bottom.
 - A collapsed plan-editor row previews its sets in `figures`: the target
   (*3 × 12 · 70 kg*, or up to four mixed sets and then *+N*) and, only when
   the exercise has been trained in this split, *Last:* with the best set from
-  that session.
+  that session. Optional RPE is included in the target preview.
 - Settings runs Appearance, Workout, Artificial intelligence, Data, Account,
   Updates, About, and Danger zone, in that order. Account holds the sync
   status, then *Sign out* as an ordinary row. It shows when a user is signed

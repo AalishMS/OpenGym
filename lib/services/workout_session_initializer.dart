@@ -67,6 +67,7 @@ class WorkoutSessionInitializer {
                     return gym.Set(
                       reps: target?.reps ?? 0,
                       weight: target?.weight ?? 0,
+                      rpe: target?.rpe,
                     );
                   }),
                 ),

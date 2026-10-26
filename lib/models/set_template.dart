@@ -2,12 +2,8 @@ import 'package:hive/hive.dart';
 
 part 'set_template.g.dart';
 
-/// A *prescribed* set on a plan — the reps and weight you intend to lift.
-///
-/// Distinct from [Set], which records what was actually lifted in a session.
-/// Targets never enter a [WorkoutSession]: seeding them would make
-/// `PRTrackingService` declare PRs for weights that were only ever planned.
-/// They surface as a dim hint next to the live value instead.
+/// A prescribed set on a plan, used to initialize the first workout week.
+/// Later weeks copy the previous session rather than the prescription.
 @HiveType(typeId: 5)
 class SetTemplate extends HiveObject {
   @HiveField(0)
@@ -16,15 +12,17 @@ class SetTemplate extends HiveObject {
   @HiveField(1)
   final double weight;
 
-  SetTemplate({required this.reps, required this.weight});
+  /// Optional effort target. Null for older plans or unprescribed effort.
+  @HiveField(2)
+  final int? rpe;
 
-  Map<String, dynamic> toJson() => {
-        'reps': reps,
-        'weight': weight,
-      };
+  SetTemplate({required this.reps, required this.weight, this.rpe});
+
+  Map<String, dynamic> toJson() => {'reps': reps, 'weight': weight, 'rpe': rpe};
 
   factory SetTemplate.fromJson(Map<String, dynamic> json) => SetTemplate(
-        reps: json['reps'] as int,
-        weight: (json['weight'] as num).toDouble(),
-      );
+    reps: json['reps'] as int,
+    weight: (json['weight'] as num).toDouble(),
+    rpe: json['rpe'] as int?,
+  );
 }

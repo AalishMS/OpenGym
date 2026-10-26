@@ -17,7 +17,7 @@ void main() {
         sets: 2,
         note: 'Reduce the load between sets.',
         setTargets: [
-          SetTemplate(reps: 5, weight: 100.5),
+          SetTemplate(reps: 5, weight: 100.5, rpe: 8),
           SetTemplate(reps: 6, weight: 102.25),
         ],
       ),
@@ -46,6 +46,8 @@ void main() {
       (6, 102.25),
     ]);
     expect(session.exercises[1].sets.single.weight, 42.5);
+    expect(session.exercises[0].sets.first.rpe, 8);
+    expect(session.exercises[0].sets.last.rpe, isNull);
   });
 
   test('existing Week 1 data is returned without being overwritten', () {
@@ -129,6 +131,7 @@ void main() {
 
     expect(session.exercises[0].sets.first.reps, 0);
     expect(session.exercises[0].sets.first.weight, 0);
+    expect(session.exercises[0].sets.first.rpe, isNull);
     expect(session.exercises[0].note, 'Reduce the load between sets.');
   });
 }

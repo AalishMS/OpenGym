@@ -329,6 +329,11 @@ void main() {
             ),
           );
           await tester.pumpAndSettle();
+          // Editors open with their tables visible; collapse to inspect the
+          // prescription preview before reopening it for target-size checks.
+          await tester.ensureVisible(find.text('Bench press'));
+          await tester.tap(find.text('Bench press'));
+          await tester.pumpAndSettle();
           final summary = find.byWidgetPredicate(
             (widget) =>
                 widget is Text &&

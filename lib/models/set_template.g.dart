@@ -19,17 +19,20 @@ class SetTemplateAdapter extends TypeAdapter<SetTemplate> {
     return SetTemplate(
       reps: fields[0] as int,
       weight: fields[1] as double,
+      rpe: fields[2] as int?,
     );
   }
 
   @override
   void write(BinaryWriter writer, SetTemplate obj) {
     writer
-      ..writeByte(2)
+      ..writeByte(3)
       ..writeByte(0)
       ..write(obj.reps)
       ..writeByte(1)
-      ..write(obj.weight);
+      ..write(obj.weight)
+      ..writeByte(2)
+      ..write(obj.rpe);
   }
 
   @override

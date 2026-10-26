@@ -609,12 +609,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                   (e) => ExerciseTemplate(
                                     name: e.name,
                                     sets: e.sets,
+                                    note: e.note,
                                     setTargets:
                                         e.setTargets
                                             ?.map(
                                               (t) => SetTemplate(
                                                 reps: t.reps,
                                                 weight: t.weight,
+                                                rpe: t.rpe,
                                               ),
                                             )
                                             .toList(),

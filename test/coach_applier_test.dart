@@ -7,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/models/coach_proposal.dart';
+import 'package:gymapp/models/exercise_template.dart';
+import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/split.dart';
 import 'package:gymapp/models/split_preference.dart';
 import 'package:gymapp/models/workout_plan.dart';
@@ -47,6 +49,51 @@ void main() {
   });
 
   group('active split', () {
+    test('note-only Coach changes retain user effort targets', () async {
+      await _seedSplit([
+        _owned(
+          plan('a', 'Push', [
+            ExerciseTemplate(
+              name: 'Bench Press',
+              sets: 2,
+              setTargets: [
+                SetTemplate(reps: 8, weight: 60, rpe: 7),
+                SetTemplate(reps: 8, weight: 60, rpe: 9),
+              ],
+            ),
+          ], position: 0),
+          color: 0,
+        ),
+      ]);
+      final snap = _snapshot();
+      final outcome = await const CoachApplier().apply(
+        _proposal(
+          snap,
+          plans: [
+            CoachPlan(
+              existing: snap.plans.single,
+              name: 'Push',
+              exercises: [
+                CoachExercise(
+                  name: 'Bench Press',
+                  sets: const [
+                    CoachSet(reps: 8, kg: 60),
+                    CoachSet(reps: 8, kg: 60),
+                  ],
+                  note: 'Pause at the bottom.',
+                ),
+              ],
+            ),
+          ],
+        ),
+        userId: _userId,
+      );
+      expect(outcome, isA<CoachApplied>());
+      final exercise = HiveService.getPlanById('a')!.exercises.single;
+      expect(exercise.note, 'Pause at the bottom.');
+      expect(exercise.setTargets!.map((set) => set.rpe), [7, 9]);
+    });
+
     test('an edit changes only the name and exercises', () async {
       await _seedSplit([
         _owned(plan('a', 'Push', [_bench], position: 0), color: 3),

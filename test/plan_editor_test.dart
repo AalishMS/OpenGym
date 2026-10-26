@@ -49,14 +49,22 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  Future<void> pumpEditorWithProvider(WidgetTester tester) async {
+  Future<void> pumpEditorWithProvider(
+    WidgetTester tester, {
+    WorkoutPlan? plan,
+  }) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = const Size(400, 880);
     addTearDown(tester.view.reset);
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => WorkoutPlanProvider(),
-        child: const MaterialApp(home: PlanEditorScreen.create()),
+        child: MaterialApp(
+          home:
+              plan == null
+                  ? const PlanEditorScreen.create()
+                  : PlanEditorScreen.edit(plan),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -156,6 +164,8 @@ void main() {
     tester,
   ) async {
     await pumpEditor(tester);
+    await tester.tap(find.text('Change color'));
+    await tester.pumpAndSettle();
     final swatch = find.bySemanticsLabel('Plan color 1');
     expect(swatch, findsOneWidget);
     expect(
@@ -426,10 +436,9 @@ void main() {
       ],
     );
     await pumpEditorWithPlan(tester, plan);
-    await tester.tap(find.text('Bench Press'));
+    await tester.longPress(find.byKey(const ValueKey('set_entry_row_0')));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byTooltip('Delete set'));
-    await tester.tap(find.byTooltip('Delete set'));
+    await tester.tap(find.text('Delete set'));
     await tester.pumpAndSettle();
     expect(find.text('Each exercise needs at least one set'), findsOneWidget);
     expect(find.bySemanticsLabel('Set 1 Kg'), findsOneWidget);
@@ -455,12 +464,12 @@ void main() {
       ],
     );
     await pumpEditorWithPlan(tester, plan);
-    await tester.tap(find.text('Bench Press'));
-    await tester.pumpAndSettle();
     expect(find.text('80'), findsOneWidget);
-    await tester.drag(
-      find.byType(ReorderableDragStartListener).first,
-      const Offset(0, 400),
+    await tester.ensureVisible(find.byType(ReorderableDragStartListener).last);
+    await tester.timedDrag(
+      find.byType(ReorderableDragStartListener).last,
+      const Offset(0, -300),
+      const Duration(seconds: 1),
     );
     await tester.pumpAndSettle();
     expect(
@@ -511,6 +520,10 @@ void main() {
       ],
     );
     await pumpEditorWithPlan(tester, plan);
+    await tester.tap(find.text('Bench Press'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Incline Press'));
+    await tester.pumpAndSettle();
 
     final target = find.textContaining('3 × 12  ·  70 kg', findRichText: true);
     expect(target, findsOneWidget);
@@ -617,7 +630,19 @@ void main() {
     await closeExercisePicker(tester);
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
-    for (final key in ['5', '0', '.', '2', '5', 'Next', '1', '2', 'Done']) {
+    for (final key in [
+      '5',
+      '0',
+      '.',
+      '2',
+      '5',
+      'Next',
+      '1',
+      '2',
+      'RPE',
+      '8',
+      'Done',
+    ]) {
       await tester.tap(find.text(key).last);
       await tester.pumpAndSettle();
     }
@@ -632,6 +657,73 @@ void main() {
     expect(saved.single.exercises.single.name, 'Bench Press');
     expect(saved.single.exercises.single.targetAt(0)!.weight, 50.25);
     expect(saved.single.exercises.single.targetAt(0)!.reps, 12);
+    expect(saved.single.exercises.single.targetAt(0)!.rpe, 8);
     expect(HiveService.getSessions(), isEmpty);
+  });
+  testWidgets(
+    'edit retains RPE when weight changes and copies it to new sets',
+    (tester) async {
+      final plan = WorkoutPlan(
+        name: 'Effort',
+        exercises: [
+          ExerciseTemplate(
+            name: 'Squat',
+            sets: 1,
+            setTargets: [SetTemplate(reps: 5, weight: 80, rpe: 8)],
+          ),
+        ],
+      );
+      await pumpEditorWithProvider(tester, plan: plan);
+      expect(find.bySemanticsLabel('Set 1 RPE value 8'), findsOneWidget);
+      await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+      await tester.pumpAndSettle();
+      for (final key in ['9', '0']) {
+        await tester.tap(find.text(key).last);
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.bySemanticsLabel('Hide keypad'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add set'));
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Set 2 RPE value 8'), findsOneWidget);
+      await tester.runAsync(() async {
+        await tester.tap(find.text('Save'));
+        await Hive.box<WorkoutPlan>(HiveService.plansBox).flush();
+      });
+      await tester.pumpAndSettle();
+      final targets =
+          HiveService.getPlans().single.exercises.single.setTargets!;
+      expect(targets.map((set) => (set.weight, set.reps, set.rpe)), [
+        (90.0, 5, 8),
+        (90.0, 5, 8),
+      ]);
+    },
+  );
+
+  testWidgets('RPE-only edits count as unsaved and can be cleared', (
+    tester,
+  ) async {
+    final plan = WorkoutPlan(
+      name: 'Effort',
+      exercises: [
+        ExerciseTemplate(
+          name: 'Squat',
+          sets: 1,
+          setTargets: [SetTemplate(reps: 5, weight: 80, rpe: 8)],
+        ),
+      ],
+    );
+    await pumpEditorWithPlan(tester, plan);
+    await tester.ensureVisible(find.bySemanticsLabel('Set 1 RPE value 8'));
+    await tester.tap(find.bySemanticsLabel('Set 1 RPE value 8'));
+    await tester.pumpAndSettle();
+    await tester.longPress(find.bySemanticsLabel('Delete digit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done').last);
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('Set 1 RPE value, not set'), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsOneWidget);
   });
 }
