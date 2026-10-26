@@ -331,13 +331,22 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
       animation: animation,
       builder:
           (context, child) => Material(
-            color: surfaceColor(context),
+            color: backgroundColor(context),
             elevation: 0,
+            clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
               side: BorderSide(color: borderColor(context)),
               borderRadius: AppRadius.card,
             ),
-            child: child,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.lg,
+                AppSpacing.sm,
+              ),
+              child: child,
+            ),
           ),
       child: child,
     );
@@ -453,7 +462,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                                   bottom: AppSpacing.md,
                                 ),
                                 child: Text(
-                                  'Target weight, reps and optional RPE (1–10). Hold a set to delete it.',
+                                  'Weight, Reps, and RPE. Hold a set to delete it.',
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
                               ),
