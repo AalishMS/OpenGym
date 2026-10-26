@@ -811,8 +811,8 @@ void main() {
     );
     await tester.pumpWidget(homeHost(plans: plans, sessions: [draft]));
 
-    expect(find.textContaining('Day 1 of 3'), findsOneWidget);
-    expect(find.text('0 of 3 this week'), findsOneWidget);
+    expect(find.textContaining('Workout 1 of 3'), findsOneWidget);
+    expect(find.text('0 workouts'), findsOneWidget);
     expect(find.byIcon(LucideIcons.check), findsNothing);
   });
 
@@ -839,7 +839,7 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('0 of 5 this week'), findsOneWidget);
+      expect(find.text('0 workouts'), findsOneWidget);
       expect(find.byKey(const ValueKey('weekly-training-link')), findsOneWidget);
       expect(find.byKey(const ValueKey('training-day-0')), findsNothing);
       final fourth = find.byWidgetPredicate(
@@ -863,7 +863,7 @@ void main() {
     );
 
     expect(find.text('Next up'), findsOneWidget);
-    expect(find.textContaining('Day 3 of 3'), findsOneWidget);
+    expect(find.textContaining('Workout 3 of 3'), findsOneWidget);
 
     await tester.tap(find.text('Start workout'));
     await tester.pumpAndSettle();

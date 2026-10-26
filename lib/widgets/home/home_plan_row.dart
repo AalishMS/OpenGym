@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../data/plan_colors.dart';
 import '../../models/workout_plan.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
@@ -12,12 +13,14 @@ import '../app_button.dart';
 /// A quiet plan entry, with a distinct outline for the next workout.
 class HomePlanRow extends StatelessWidget {
   final WorkoutPlan plan;
+  final int workoutNumber;
   final bool isNext;
   final VoidCallback onOpen;
   final VoidCallback onShowActions;
 
   const HomePlanRow({
     required this.plan,
+    required this.workoutNumber,
     required this.isNext,
     required this.onOpen,
     required this.onShowActions,
@@ -28,12 +31,6 @@ class HomePlanRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final name = titleCase(plan.name);
-    final words = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((word) => word.isNotEmpty);
-    final initials =
-        words.take(2).map((word) => word.characters.first).join().toUpperCase();
     final markerGround = Color.alphaBlend(
       planColorOf(plan.planColor, context).withAlpha(32),
       raisedSurfaceColor(context),
@@ -71,6 +68,7 @@ class HomePlanRow extends StatelessWidget {
               children: [
                 Semantics(
                   label: '$name plan marker',
+                  value: 'Workout $workoutNumber',
                   child: Container(
                     width: 44,
                     height: 44,
@@ -81,8 +79,10 @@ class HomePlanRow extends StatelessWidget {
                     ),
                     child: ExcludeSemantics(
                       child: Text(
-                        initials.isEmpty ? 'P' : initials,
-                        style: textTheme.labelMedium?.copyWith(
+                        '$workoutNumber',
+                        style: AppTypography.figures(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
                           color: onColor(markerGround),
                         ),
                       ),

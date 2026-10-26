@@ -330,14 +330,14 @@ class _HomeScreenState extends State<HomeScreen> {
               durationMinutes: durationMinutes,
               onStart: () => _openWorkout(context, plans[nextIndex], nextIndex),
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.sm),
             TrainingSnapshot(
               plans: plans,
               sessions: sessions,
               onOpenWeeklyTraining: widget.onOpenWeeklyTraining,
               onOpenLastWorkout: widget.onOpenLastWorkout,
             ),
-            const SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.sm),
           ],
           Row(
             children: [
@@ -367,6 +367,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Divider(height: 1, color: borderColor(context)),
             for (var index = 0; index < plans.length; index++) ...[
               HomePlanRow(
+                workoutNumber: index + 1,
                 key: ValueKey(plans[index].id),
                 plan: plans[index],
                 isNext: index == nextIndex,

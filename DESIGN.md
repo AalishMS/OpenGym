@@ -273,6 +273,11 @@ signature:
   in. Danger zone is always last. *Load sample data* replaces the active
   split's workouts, so it is a development tool. It only appears in debug
   builds (`SettingsScreen.showSampleData`, which defaults to `kDebugMode`).
+- Home labels the rotation bar with “Workout N of M”. The same workout
+  numbers appear in the plan list's coloured markers. Muscle groups sit on
+  their own line in the launcher; exercise, set, and duration values wrap as
+  whole phrases. The weekly summary keeps its “This week” label and Stats
+  navigation affordance even before the first workout is logged.
 - Familiar labels and icons make actions understandable outside a technical
   audience.
 - Pressed, focused, disabled, loading, empty, and error states should feel like
