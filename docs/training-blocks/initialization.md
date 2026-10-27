@@ -29,6 +29,10 @@ the scope of this session.
   more weeks later. A block's initial length is not necessarily a permanent cap.
 - The bottom navigation contains expandable/collapsible blocks. Tapping a
   block reveals its weeks; selecting a week opens that workout's session.
+- Weeks expand **inline beside their block** in the horizontal bottom bar.
+- Opening the workout screen automatically expands the block containing that
+  workout's active week.
+- Opening and closing blocks uses a **simple animation**.
 
 A split could contain Block 1 with Weeks 1–4 and Block 2 with Weeks 1–3.
 Push and Pull both use those same seven training-week slots. Their sessions
@@ -43,14 +47,24 @@ The current bottom strip is a flat list of weeks plus an Add week action.
 Replace that mental model with named block groups that reveal their weeks.
 Keep this navigation compact enough to leave the set logger usable.
 
+Confirmed layout and opening behavior:
+
+- Each block reveals its weeks inline beside its label in the same horizontal
+  bar. The next block follows the revealed weeks.
+- On opening the workout screen, resolve the workout's active week and expand
+  its containing block. Make that active week visible in the scrollable strip.
+- Animate expansion and collapse simply, revealing or hiding the weeks while
+  adjacent items move smoothly. Exact timing and easing remain design details;
+  respect the platform's reduced-motion preference.
+
 Suggested interaction rules, still open to discussion:
 
 - Tapping a block toggles its expansion. Tapping a week changes the selected
   block/week and loads the corresponding session for the current workout.
 - Expanding or collapsing alone does not change the loaded session. Collapsing
   the selected block must still leave its selection recognizable.
-- Start with the selected block expanded. Consider allowing only one expanded
-  block at a time if several expanded groups make the bar hard to navigate.
+- Consider allowing only one expanded block at a time if several expanded
+  groups make the bar hard to navigate. This has not been decided.
 - Keep block and week visually distinguishable. Repeated labels such as
   Week 1 need their block context in the workout heading and accessibility labels.
 - Put Add week within a particular block and provide a separate New block
@@ -60,9 +74,9 @@ Suggested interaction rules, still open to discussion:
 - Support many blocks, long names, small phones, large text, and a visible
   selection after scrolling. Follow existing theme, radius, and typography tokens.
 
-The exact layout is undecided: weeks could expand inline inside the horizontal
-strip or appear in a second row associated with the expanded block. No mockup
-or final layout has been approved.
+The inline arrangement is confirmed. Detailed styling and animation have not
+been mocked up or approved. The rule for determining a workout's active week
+is still open; opening a block for browsing must not implicitly advance training.
 
 ## What the app stores today
 
@@ -200,14 +214,16 @@ been used independently and may not represent the same training period.
 
 ## Questions still open
 
-1. Do weeks expand inline in the bottom strip or in a separate row? Can several
-   blocks stay expanded at once?
+1. Can several blocks stay expanded at once, or does opening one collapse the
+   previously expanded block?
 2. How are block names, ordering, duplication, and archiving managed? Where does
    New block live, and does it open immediately or remain planned for later?
 3. Are training weeks freely selected, manually advanced, or advanced after a
    completion rule? What happens when a workout is skipped or a plan is added?
-4. Does switching workouts retain the viewed week even when another week has an
-   unfinished session? How should browsing differ from the active training slot?
+4. How is a workout's active week determined: an unfinished session, an explicit
+   selection, or progression after completion? Does switching workouts retain
+   the viewed week even when another week has an unfinished session? How should
+   browsing differ from the active training slot?
 5. At a block boundary, should Week 1 use plan targets, the previous block's
    final workout, or a user choice? This need not introduce block-specific targets.
 6. What happens when deleting a shared week containing logs from several workouts?
@@ -227,7 +243,8 @@ storage/compatibility, shared state, navigation, and secondary surfaces.
 
 Future verification should cover empty planned weeks surviving restart and sync;
 identical block/week structure across all plans; distinct sessions for repeated
-Week 1s; safe autosave/timer navigation; previous-set behavior at block boundaries;
+Week 1s; automatic expansion of the active week's block on screen entry; inline
+expand/collapse animation; safe autosave/timer navigation; previous-set behavior at block boundaries;
 old-backup upgrades; interrupted and multi-device migration; account isolation;
 and archive/delete behavior without accidental history loss.
 
