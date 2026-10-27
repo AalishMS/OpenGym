@@ -172,6 +172,12 @@ void main() {
             );
             await tester.pumpAndSettle();
             expect(tester.takeException(), isNull);
+            final toolbar = tester.widget<AppBar>(find.byType(AppBar));
+            if (scale == 1) {
+              expect(toolbar.toolbarHeight, kToolbarHeight);
+            } else {
+              expect(toolbar.toolbarHeight, greaterThan(kToolbarHeight));
+            }
             expect(find.text('Bench press'), findsOneWidget);
             final title =
                 find
