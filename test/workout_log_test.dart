@@ -174,9 +174,9 @@ void main() {
             expect(tester.takeException(), isNull);
             final toolbar = tester.widget<AppBar>(find.byType(AppBar));
             if (scale == 1) {
-              expect(toolbar.toolbarHeight, kToolbarHeight);
+              expect(toolbar.toolbarHeight, 64);
             } else {
-              expect(toolbar.toolbarHeight, greaterThan(kToolbarHeight));
+              expect(toolbar.toolbarHeight, greaterThan(64));
             }
             expect(find.text('Bench press'), findsOneWidget);
             final title =

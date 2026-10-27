@@ -1166,14 +1166,14 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     );
     final titleStyle = Theme.of(context).textTheme.headlineSmall!;
     final textScaler = MediaQuery.textScalerOf(context);
-    // Fit the two-line title into a standard toolbar at normal text sizes,
-    // growing with accessibility text instead of reserving empty space.
+    // Give the two-line title breathing room without returning to the tall
+    // header. Grow with accessibility text while keeping the same padding.
     final toolbarHeight = (textScaler.scale(titleStyle.fontSize!) *
                 (titleStyle.height ?? 1) +
             textScaler.scale(timerStyle.fontSize!) * (timerStyle.height ?? 1) +
             AppSpacing.xs +
-            AppSpacing.xs * 2)
-        .clamp(kToolbarHeight, double.infinity);
+            AppSpacing.sm * 2)
+        .clamp(kToolbarHeight + AppSpacing.sm, double.infinity);
 
     return PopScope(
       canPop: session.isCompleted && !_isNavigating,
