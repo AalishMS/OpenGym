@@ -700,6 +700,34 @@ void main() {
     },
   );
 
+  testWidgets('header Back closes a dirty keypad before asking to discard', (
+    tester,
+  ) async {
+    final plan = WorkoutPlan(
+      name: 'Effort',
+      exercises: [
+        ExerciseTemplate(
+          name: 'Squat',
+          sets: 1,
+          setTargets: [SetTemplate(reps: 5, weight: 80, rpe: 8)],
+        ),
+      ],
+    );
+    await pumpEditorWithPlan(tester, plan);
+    await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('9').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('Hide keypad'), findsNothing);
+    expect(find.text('Discard changes?'), findsNothing);
+    expect(find.byType(PlanEditorScreen), findsOneWidget);
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsOneWidget);
+  });
+
   testWidgets('RPE-only edits count as unsaved and can be cleared', (
     tester,
   ) async {

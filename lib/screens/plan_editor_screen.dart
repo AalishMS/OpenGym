@@ -116,6 +116,12 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
 
   Future<void> _handleBack() async {
     if (_isSaving) return;
+    // The keypad is the nearest Back layer, including when a notification
+    // asks this editor to leave through its registered route participant.
+    if (ModalRoute.of(context)?.willHandlePopInternally ?? false) {
+      Navigator.pop(context);
+      return;
+    }
     if (!_isDirty) {
       Navigator.pop(context);
       return;
