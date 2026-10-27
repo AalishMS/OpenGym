@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../models/workout_plan.dart';
 import '../../models/workout_session.dart';
@@ -67,36 +68,58 @@ class TrainingSnapshot extends StatelessWidget {
       'Sunday',
     ];
 
-    // Seven empty bars say nothing an empty count doesn't, and they push the
-    // plan list off the first screen. The bars come back with the first log.
-    if (workouts == 0) {
-      final summary = '0 of ${plans.length} this week';
-      return Material(
-        type: MaterialType.transparency,
-        child: Semantics(
-          button: onOpenWeeklyTraining != null,
-          label: '$summary. View weekly training statistics',
-          excludeSemantics: true,
-          child: InkWell(
-            key: const ValueKey('weekly-training-link'),
-            onTap: onOpenWeeklyTraining,
-            borderRadius: AppRadius.control,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 48),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  child: Text(
-                    summary,
-                    style: textTheme.bodyMedium?.copyWith(color: secondary),
+    // Keep the same summary and navigation affordance before the first log.
+    final summary =
+        workouts == 0
+            ? '0 workouts'
+            : '$workouts ${workouts == 1 ? 'workout' : 'workouts'} · '
+                '$sets ${sets == 1 ? 'set' : 'sets'}';
+    final summaryLink = Semantics(
+      button: onOpenWeeklyTraining != null,
+      label: 'This week: $summary. View weekly training statistics',
+      excludeSemantics: true,
+      child: InkWell(
+        key: const ValueKey('weekly-training-link'),
+        onTap: onOpenWeeklyTraining,
+        borderRadius: AppRadius.control,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Wrap(
+                    alignment: WrapAlignment.spaceBetween,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: AppSpacing.md,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      Text(
+                        'This week',
+                        style: textTheme.labelLarge?.copyWith(
+                          color: textPrimaryColor(context),
+                        ),
+                      ),
+                      Text(
+                        summary,
+                        style: textTheme.bodySmall?.copyWith(color: secondary),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+                if (onOpenWeeklyTraining != null) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  Icon(LucideIcons.chevronRight, size: 16, color: secondary),
+                ],
+              ],
             ),
           ),
         ),
-      );
+      ),
+    );
+    if (workouts == 0) {
+      return Material(type: MaterialType.transparency, child: summaryLink);
     }
 
     return Material(
@@ -104,39 +127,7 @@ class TrainingSnapshot extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Semantics(
-            button: onOpenWeeklyTraining != null,
-            label: 'View weekly training statistics',
-            child: InkWell(
-              key: const ValueKey('weekly-training-link'),
-              onTap: onOpenWeeklyTraining,
-              borderRadius: AppRadius.control,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 48),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  child: Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    spacing: AppSpacing.md,
-                    runSpacing: AppSpacing.xs,
-                    children: [
-                      Text(
-                        'This week',
-                        style: textTheme.bodyMedium?.copyWith(color: secondary),
-                      ),
-                      Text(
-                        '$workouts ${workouts == 1 ? 'workout' : 'workouts'} · '
-                        '$sets ${sets == 1 ? 'set' : 'sets'}',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: textPrimaryColor(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+          summaryLink,
           const SizedBox(height: AppSpacing.md),
           Semantics(
             label: 'Completed sets by day. The outlined day is today.',

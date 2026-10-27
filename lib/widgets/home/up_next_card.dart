@@ -51,15 +51,11 @@ class UpNextCard extends StatelessWidget {
             .toList();
     final sets = plan.exercises.fold<int>(0, (sum, e) => sum + e.sets);
     final count = plan.exercises.length;
-    // One meta line instead of a chip row keeps the card short enough for the
-    // plan list to show below it on a phone.
     final meta = [
-      if (groups.isNotEmpty) groups.join(', '),
-      'Day $day of $dayCount',
       '$count ${count == 1 ? 'exercise' : 'exercises'}',
       '$sets ${sets == 1 ? 'set' : 'sets'}',
       if (durationMinutes != null) '~$durationMinutes min',
-    ].join(' · ');
+    ];
 
     return Material(
       color: raisedSurfaceColor(context),
@@ -92,10 +88,15 @@ class UpNextCard extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Workout $day of $dayCount',
+                style: textTheme.bodySmall?.copyWith(color: secondary),
+              ),
+              const SizedBox(height: AppSpacing.sm),
               Semantics(
                 label:
-                    'Day $day of $dayCount. ${trainedDays.length} plans trained this week',
+                    'Workout $day of $dayCount. ${trainedDays.length} plans trained this week',
                 child: ExcludeSemantics(
                   child: Row(
                     children: [
@@ -120,7 +121,7 @@ class UpNextCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: AppSpacing.md),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 titleCase(plan.name),
                 style: textTheme.headlineLarge?.copyWith(
@@ -128,12 +129,26 @@ class UpNextCard extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                 ),
               ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                meta,
-                style: textTheme.bodySmall?.copyWith(color: secondary),
+              if (groups.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  groups.join(', '),
+                  style: textTheme.bodySmall?.copyWith(color: secondary),
+                ),
+              ],
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.xs,
+                children: [
+                  for (final detail in meta)
+                    Text(
+                      detail,
+                      style: textTheme.bodySmall?.copyWith(color: secondary),
+                    ),
+                ],
               ),
-              const SizedBox(height: AppSpacing.lg),
+              const SizedBox(height: AppSpacing.md),
               AppButton.primary(
                 key: tutorialStartKey,
                 label: 'Start workout',

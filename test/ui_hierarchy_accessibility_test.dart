@@ -123,6 +123,7 @@ void main() {
         tester,
         Scaffold(
           body: HomePlanRow(
+            workoutNumber: 1,
             plan: plan(),
             isNext: true,
             onOpen: () => opened++,
