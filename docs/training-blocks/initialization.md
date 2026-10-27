@@ -52,9 +52,9 @@ the scope of this session.
   their week numbers and data.
 - Expose block management through **long-pressing a block** in the workout
   screen's bottom navigation.
-- A missed week means it was **opened and left unlogged**. If Week 2 is opened
-  and left unlogged, the next workout visit opens **Week 3 with the same Week 2
-  values**. No date-based or scheduled-workout detection is required.
+- A missed or unlogged workout **stays on the same week with its values intact**.
+  If Week 2 is missed, the next workout visit still opens Week 2, even if another
+  calendar week has passed. Advance only when the workout is logged/completed.
 - When a workout is added midway through training, let the user **choose its
   starting block and week**.
 - Do **not** add a Skip week action or a dedicated skipping feature.
@@ -64,10 +64,9 @@ Push and Pull both use those same seven training-week slots. Their sessions
 remain separate: Push in Block 2, Week 1 is different from Pull in that slot.
 
 These are training-week labels. Within-block progression follows the provided
-weeks independently for each workout, while crossing a block boundary requires
-a user choice for that workout. Missed-week advancement is driven by opening
-and leaving a workout week unlogged, not by calendar time or a workout schedule.
-Unopened future weeks are not missed merely because they have no completed log.
+weeks independently for each workout and advances on logging/completion.
+Crossing a block boundary requires a user choice for that workout. Calendar
+time, opening the screen, and leaving it unlogged do not advance a week.
 
 ## Initial UI direction
 
@@ -110,7 +109,7 @@ Suggested interaction rules, still open to discussion:
 The inline arrangement is confirmed. Detailed styling and animation have not
 been mocked up or approved. Opening a block for browsing must not implicitly
 advance training. The progression behavior below guides active-week selection;
-draft priority and manual browsing behavior still need to be settled.
+manual browsing behavior during workout switches still needs to be settled.
 
 ## Week progression and the end of a block
 
@@ -121,12 +120,12 @@ Confirmed behavior:
 - Completion and advancement are tracked for each workout independently.
   Finishing Push Week 1 can advance Push to Week 2 while Pull and Legs remain
   on Week 1. No workout has to wait for the others to catch up.
-- An opened week left unlogged advances on the next workout visit: Week 2
-  opened and left unlogged means the next visit opens Week 3 with Week 2's
-  values. No calendar interval or scheduled day needs to pass. Do not create
-  a completed Week 2 history entry merely to represent advancement.
-- There is no separate Skip week button or skipping workflow. The app should
-  handle the agreed missed-workout behavior through its progression rules.
+- A missed or unlogged workout stays on its current week. Week 2 left unlogged
+  opens as Week 2 again on the next visit, preserving its saved values and draft.
+  This also applies to the final provided week: keep it active until completed,
+  then offer the boundary choices on the following visit.
+- There is no separate Skip week button or skipping workflow. Missing a day or
+  leaving the screen does not advance progress or require missed-visit tracking.
 - Adding a new workout lets the user choose its starting block and week within
   the shared structure, rather than forcing it to match another workout's place.
 - Finishing the final provided week does not silently append another week or
@@ -153,16 +152,14 @@ Suggested edge-case behavior, not yet approved: extending an earlier block
 should not automatically pull workouts that already moved on back into it.
 Likewise, viewing or editing an old log should not rewind training progress.
 
-Still to decide: how partially edited or running drafts interact with the next
-visit, what happens when the final provided week is left unlogged, and what
-dismissing the boundary prompt does. The confirmed missed-week rule depends on
-whether that week was opened and left unlogged; an absent completed session
-alone must not mark all unvisited future weeks as missed.
+Still to decide: what dismissing the boundary prompt does and how manually
+browsing a different week interacts with workout switching. Unfinished workouts
+remain on the same active week with their saved values; existing timer and
+draft-restoration behavior should be preserved.
 The storage design must distinguish the shared block/week structure, training
-progress, and the block/week currently being browsed. It must also retain the
-opened/left-unlogged state even if no workout session was persisted, including
-across app restarts. Whether progress is derived from logs plus visit metadata
-or persisted explicitly has not been chosen.
+progress, and the block/week currently being browsed. No opened/left-unlogged
+visit metadata is needed for progression. Whether progress is derived from
+completed logs or persisted explicitly has not been chosen.
 
 ## Starting values in later blocks
 
@@ -177,11 +174,8 @@ not be overwritten by reapplying inheritance. The destination remains a fresh
 workout with its own identity, completion, date, and timer lifecycle; copying
 training values does not copy a historical workout's completed status.
 
-Missed-week carry-forward is a separate confirmed case: when Week 2 is missed
-and the next workout opens Week 3, use the same Week 2 values. This must work
-even if Week 2 has no completed log; its starting values and a performed workout
-are different concepts. Resolve the carried values from the week that was opened
-and left unlogged, while preserving any already saved destination edits.
+Missing a workout does not copy values into a different week. Resume the same
+week and preserve its saved values and draft instead.
 
 Still to decide: the fallback when the previous block has no matching week or
 no saved session for that workout, how changed exercises are matched, and when
@@ -332,12 +326,10 @@ the same calendar period; independent workout progression remains intact.
 1. What are the details of the long-press management menu: naming, reordering,
    optional duplication, and whether a newly created block remains planned or
    becomes active immediately? A dedicated Skip week action is excluded.
-2. What should the next visit show if the final provided week was opened and
-   left unlogged? If a week is added to a block after some workouts have moved
-   on, should those workouts simply retain their current progress as suggested
-   above?
-3. How do unfinished sessions and manually viewed weeks interact with the
-   progression-selected active week? Does switching workouts resume that
+2. If a week is added to a block after some workouts have moved on, should those
+   workouts simply retain their current progress as suggested above?
+3. How do manually viewed weeks interact with the progression-selected active
+   week? Does switching workouts resume that
    workout's active week or retain the week being browsed? At the boundary
    prompt, what happens if the user dismisses it?
 4. What initializes the first block or a week with no matching previous-block
@@ -364,10 +356,9 @@ navigation; independent progression through only the supplied weeks without
 requiring other workouts to finish; an end-of-block choice on the next visit
 without automatically adding a week or changing blocks; a Create block option
 when no next block exists; matching-week value inheritance across blocks;
-advancing past an opened week left unlogged on the next visit, carrying its
-values without fabricating a completed session or requiring a date interval;
-retaining that visit state across restart; unopened future weeks remaining
-available; user-selected starting block/week for a newly added workout;
+keeping missed/unlogged workouts on the same week with their saved values and
+drafts intact across visits and restarts; advancing only on logging/completion;
+user-selected starting block/week for a newly added workout;
 no dedicated skipping feature;
 previous-set behavior at block boundaries;
 old-backup upgrades into one initial block per split; interrupted and multi-device
