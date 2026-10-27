@@ -35,7 +35,16 @@ class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
   bool _installing = false;
   String? _error;
 
+  void _backToCatalog() {
+    if (_installing) return;
+    setState(() {
+      _selected = null;
+      _error = null;
+    });
+  }
+
   Future<void> _install(WorkoutPreset preset) async {
+    if (_installing) return;
     setState(() {
       _installing = true;
       _error = null;
@@ -72,24 +81,26 @@ class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
   @override
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < Breakpoints.compact;
-    final content = _BrowserFrame(
-      goal: _goal,
-      selected: _selected,
-      installing: _installing,
-      error: _error,
-      onClose: () => Navigator.pop(context),
-      onBack:
-          () => setState(() {
-            _selected = null;
-            _error = null;
-          }),
-      onGoalChanged: (goal) => setState(() => _goal = goal),
-      onSelect:
-          (preset) => setState(() {
-            _selected = preset;
-            _error = null;
-          }),
-      onInstall: _install,
+    final content = PopScope(
+      canPop: !_installing && _selected == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _backToCatalog();
+      },
+      child: _BrowserFrame(
+        goal: _goal,
+        selected: _selected,
+        installing: _installing,
+        error: _error,
+        onClose: _installing ? null : () => Navigator.pop(context),
+        onBack: _backToCatalog,
+        onGoalChanged: (goal) => setState(() => _goal = goal),
+        onSelect:
+            (preset) => setState(() {
+              _selected = preset;
+              _error = null;
+            }),
+        onInstall: _install,
+      ),
     );
     if (compact) {
       return Dialog.fullscreen(
@@ -117,7 +128,7 @@ class _BrowserFrame extends StatelessWidget {
   final WorkoutPreset? selected;
   final bool installing;
   final String? error;
-  final VoidCallback onClose;
+  final VoidCallback? onClose;
   final VoidCallback onBack;
   final ValueChanged<WorkoutPresetGoal> onGoalChanged;
   final ValueChanged<WorkoutPreset> onSelect;
@@ -143,16 +154,23 @@ class _BrowserFrame extends StatelessWidget {
           preset: selected,
           onBack: selected == null ? null : onBack,
           onClose: onClose,
+          installing: installing,
         ),
         Expanded(
-          child:
-              selected == null
-                  ? _CatalogOverview(
-                    goal: goal,
-                    onGoalChanged: onGoalChanged,
-                    onSelect: onSelect,
-                  )
-                  : _PresetDetails(preset: selected!),
+          child: IndexedStack(
+            index: selected == null ? 0 : 1,
+            children: [
+              _CatalogOverview(
+                goal: goal,
+                onGoalChanged: onGoalChanged,
+                onSelect: onSelect,
+              ),
+              if (selected != null)
+                _PresetDetails(preset: selected!)
+              else
+                const SizedBox.shrink(),
+            ],
+          ),
         ),
         if (selected != null)
           _InstallBar(
@@ -169,12 +187,14 @@ class _BrowserFrame extends StatelessWidget {
 class _BrowserHeader extends StatelessWidget {
   final WorkoutPreset? preset;
   final VoidCallback? onBack;
-  final VoidCallback onClose;
+  final VoidCallback? onClose;
+  final bool installing;
 
   const _BrowserHeader({
     required this.preset,
     required this.onBack,
     required this.onClose,
+    required this.installing,
   });
 
   @override
@@ -195,6 +215,7 @@ class _BrowserHeader extends StatelessWidget {
               AppBackButton(
                 tooltip: 'Back to workout presets',
                 onPressed: onBack,
+                enabled: !installing,
               )
             else
               const SizedBox(width: 48),

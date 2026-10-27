@@ -104,7 +104,7 @@ The core model is intentionally small.
 | --- | --- |
 | `Set` | One performed set: reps, weight, optional RPE, optional note |
 | `Exercise` | One logged exercise with a list of sets |
-| `SetTemplate` | One target set in a plan: reps and weight (display-only) |
+| `SetTemplate` | One target set in a plan: reps, weight, and optional RPE |
 | `ExerciseTemplate` | Exercise entry with targets and optional workout guidance |
 | `WorkoutPlan` | Named plan with exercises, optional color, explicit order, and `splitId` |
 | `WorkoutSession` | Logged workout for a plan, date, week, exercises, and `splitId` |
@@ -123,6 +123,10 @@ only `updatedAt` and `dirty`: it is keyed by `userId` and is never deleted.
 | `dirty` | Marks local changes that still need to be pushed |
 
 Hive adapters are generated in `*.g.dart`; those files are not edited by hand.
+Plan targets initialize the first workout week, including optional RPE. Later
+weeks copy the previous session, with empty sets when no previous data exists.
+Older plans without RPE remain valid. Targets use the plan's existing JSON
+payload for backup and sync, and survive duplication and Coach preservation.
 
 ## Local Persistence
 
@@ -203,6 +207,31 @@ Workout plan creation, editing, and active workout logging are separate screens
 opened from the main flow. The Coach is the exception: it opens over Home
 inside the Home tab, so the tab bar or rail stays visible (see `docs/coach.md`).
 
+Back dismisses the nearest active layer before leaving its parent. Manage is a
+Home mode: Back restores normal Home, and leaving or reselecting Home clears
+Manage. Back from the History, Stats, or Settings root selects normal Home;
+Back from normal Home retains the platform's exit behavior. Pushed details
+return to their entry point, including details opened from Home's trained-day
+shortcut. The weekly-training shortcut selects Stats, whose Back returns Home.
+
+The exercise picker and preset browser have internal pages. System Back steps
+from a category or selected-exercises list to muscle groups, or from preset
+details to the catalog; another Back closes the flow. Picker Done intentionally
+steps back in the same way, while Close, outside taps, and dragging the picker
+down close it directly. Preset browsing retains the goal and catalog position.
+Saving, deleting, or installing blocks dismissal until success or failure.
+
+`AppNavigationObserver` owns account-scoped route tracking. Workout and editor
+states register their normal asynchronous leave flows with it. Timer intents
+reuse the route displaying the exact session, rather than stacking another
+copy. Returning through an editor honors save/discard prompts. A cancelled
+leave keeps the current screen in place. Dialogs and sheets retain their input
+and confirmations; both new workout pushes and route reuse wait until those
+layers close. A pending notification finish confirmation waits for an autosave
+or timer action to finish, even when no route changes. Deferred opens recheck
+that the session is still live. The observer is replaced along with the
+Navigator when the account changes.
+
 ## Bundled Workout Presets
 
 The app compiles a read-only catalog of workout programs from the reviewed
@@ -263,10 +292,18 @@ signature:
   row, set apart by a rule and the error colour. In Manage, the drag grip
   leads each card and *Plan actions* trails it, so the two targets sit at
   opposite ends.
+- Create and Edit plan share the workout log's open exercise sections, hairline
+  dividers, filled weight/rep cells, and optional RPE controls. Exercises start
+  expanded and can be collapsed or reordered using the trailing grip. Add set
+  uses the app accent; Delete exercise stays separate in the error role. Holding
+  a set opens its delete action, as in the workout. The shared keypad validates
+  RPE from 1 to 10 and supports clearing it. Wide editor tables scroll at large
+  text sizes. The plan colour palette opens from Change color to leave more room
+  for training targets; Add exercise stays pinned at the bottom.
 - A collapsed plan-editor row previews its sets in `figures`: the target
   (*3 × 12 · 70 kg*, or up to four mixed sets and then *+N*) and, only when
   the exercise has been trained in this split, *Last:* with the best set from
-  that session.
+  that session. Optional RPE is included in the target preview.
 - Settings runs Appearance, Workout, Artificial intelligence, Data, Account,
   Updates, About, and Danger zone, in that order. Account holds the sync
   status, then *Sign out* as an ordinary row. It shows when a user is signed

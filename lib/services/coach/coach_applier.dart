@@ -2,6 +2,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../data/plan_colors.dart';
 import '../../models/coach_proposal.dart';
+import '../../models/exercise_template.dart';
 import '../../models/workout_plan.dart';
 import '../hive_service.dart';
 import '../split_install_target.dart';
@@ -128,8 +129,15 @@ class CoachApplier {
 
     for (final coachPlan in proposal.plans) {
       final existing = coachPlan.existing;
+      final effortSources = {
+        for (final exercise in existing?.exercises ?? <ExerciseTemplate>[])
+          exercise.name.trim().toLowerCase(): exercise,
+      };
       final exercises = [
-        for (final exercise in coachPlan.exercises) exercise.toTemplate(),
+        for (final exercise in coachPlan.exercises)
+          exercise.toTemplate(
+            effortSource: effortSources[exercise.name.trim().toLowerCase()],
+          ),
       ];
       if (existing != null) {
         final current = HiveService.getPlanById(existing.id!)!;

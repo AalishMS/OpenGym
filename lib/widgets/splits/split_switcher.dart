@@ -14,7 +14,9 @@ import 'split_dialogs.dart';
 import 'preset_browser_dialog.dart';
 
 class SplitSwitcher extends StatefulWidget {
-  const SplitSwitcher({super.key});
+  final ValueChanged<bool>? onMenuChanged;
+
+  const SplitSwitcher({this.onMenuChanged, super.key});
 
   @override
   State<SplitSwitcher> createState() => _SplitSwitcherState();
@@ -66,8 +68,14 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
         elevation: WidgetStatePropertyAll(0),
         shadowColor: WidgetStatePropertyAll(Colors.transparent),
       ),
-      onOpen: () => setState(() {}),
-      onClose: () => setState(() {}),
+      onOpen: () {
+        setState(() {});
+        widget.onMenuChanged?.call(true);
+      },
+      onClose: () {
+        setState(() {});
+        widget.onMenuChanged?.call(false);
+      },
       menuChildren: [
         _SplitMenu(
           width: menuWidth,
@@ -383,8 +391,9 @@ class _SplitMenu extends StatelessWidget {
                     Expanded(
                       child: Text(
                         'Your splits',
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(color: textSecondary),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.labelMedium?.copyWith(color: textSecondary),
                       ),
                     ),
                     Text(
@@ -515,14 +524,14 @@ class _SplitMenuAction extends StatelessWidget {
     final secondary = textSecondaryColor(context);
     final foreground =
         enabled ? textPrimaryColor(context) : secondary.withAlpha(120);
-    final iconColor =
-        enabled ? accentColor(context) : secondary.withAlpha(120);
+    final iconColor = enabled ? accentColor(context) : secondary.withAlpha(120);
     return Semantics(
       button: true,
       enabled: enabled,
-      label: caption == null
-          ? (semanticLabel ?? label)
-          : '${semanticLabel ?? label}, $caption',
+      label:
+          caption == null
+              ? (semanticLabel ?? label)
+              : '${semanticLabel ?? label}, $caption',
       excludeSemantics: true,
       child: InkWell(
         onTap: enabled ? onTap : null,

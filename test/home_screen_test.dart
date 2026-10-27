@@ -109,6 +109,32 @@ void main() {
     return (plan: plan, session: session);
   }
 
+  testWidgets('system Back leaves Manage before leaving Home', (tester) async {
+    await tester.pumpWidget(homeHost(plans: [populatedPlan()]));
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
+    expect(find.text('Start workout'), findsNothing);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Start workout'), findsOneWidget);
+    expect(find.text('Manage'), findsOneWidget);
+  });
+
+  testWidgets('plan actions close before Back leaves Manage', (tester) async {
+    await tester.pumpWidget(homeHost(plans: [populatedPlan()]));
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Plan actions'));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Edit plan'), findsNothing);
+    expect(find.text('Done'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Manage'), findsOneWidget);
+  });
+
   testWidgets('plan card exposes only its overflow action', (tester) async {
     final data = populatedData();
     await tester.pumpWidget(
@@ -303,6 +329,33 @@ void main() {
       );
       expect(target, findsOneWidget, reason: label);
       expect(tester.getSize(target).height, greaterThanOrEqualTo(48));
+    }
+  });
+
+  testWidgets('plan actions stay above Android navigation buttons', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(bottom: 48);
+    addTearDown(tester.view.reset);
+    for (final height in [800.0, 420.0]) {
+      tester.view.physicalSize = Size(390, height);
+      await tester.pumpWidget(
+        homeHost(size: Size(390, height), plans: [populatedPlan()]),
+      );
+      await tester.tap(find.text('Manage'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Plan actions'));
+      await tester.pumpAndSettle();
+      final delete = find.ancestor(
+        of: find.text('Delete plan'),
+        matching: find.byType(InkWell),
+      );
+      await tester.ensureVisible(delete);
+      await tester.pumpAndSettle();
+      expect(tester.getRect(delete).bottom, lessThanOrEqualTo(height - 48));
+      expect(delete.hitTestable(), findsOneWidget);
+      expect(tester.takeException(), isNull);
     }
   });
 
@@ -524,82 +577,80 @@ void main() {
     );
   });
 
-  testWidgets('a single plan ignores swipes and weeks change only through tabs', (
-    tester,
-  ) async {
-    final plan = populatedPlan();
-    final sessions = [
-      for (var week = 1; week <= 3; week++)
-        WorkoutSession(
-          id: 'session-$week',
-          planId: plan.id,
-          planName: plan.name,
-          date: DateTime(2026, 9, week),
-          exercises: const [],
-          weekNumber: week,
-          isCompleted: week < 3,
-        ),
-    ];
-    await tester.runAsync(() async {
-      for (final session in sessions) {
-        await Hive.box<WorkoutSession>(
-          HiveService.sessionsBox,
-        ).put(session.id, session);
-      }
-    });
-
-    await tester.pumpWidget(
-      MultiProvider(
-        providers: [
-          ChangeNotifierProvider<WorkoutPlanProvider>.value(
-            value: _PlanProvider([plan]),
+  testWidgets(
+    'a single plan ignores swipes and weeks change only through tabs',
+    (tester) async {
+      final plan = populatedPlan();
+      final sessions = [
+        for (var week = 1; week <= 3; week++)
+          WorkoutSession(
+            id: 'session-$week',
+            planId: plan.id,
+            planName: plan.name,
+            date: DateTime(2026, 9, week),
+            exercises: const [],
+            weekNumber: week,
+            isCompleted: week < 3,
           ),
-          ChangeNotifierProvider<WorkoutSessionProvider>(
-            create: (_) => _SessionProvider(sessions),
+      ];
+      await tester.runAsync(() async {
+        for (final session in sessions) {
+          await Hive.box<WorkoutSession>(
+            HiveService.sessionsBox,
+          ).put(session.id, session);
+        }
+      });
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<WorkoutPlanProvider>.value(
+              value: _PlanProvider([plan]),
+            ),
+            ChangeNotifierProvider<WorkoutSessionProvider>(
+              create: (_) => _SessionProvider(sessions),
+            ),
+          ],
+          child: MaterialApp(
+            theme: buildTheme(const Color(0xFF00A8FF), Brightness.dark),
+            home: WorkoutScreen(plan: plan, planIndex: 0),
           ),
-        ],
-        child: MaterialApp(
-          theme: buildTheme(const Color(0xFF00A8FF), Brightness.dark),
-          home: WorkoutScreen(plan: plan, planIndex: 0),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    int selectedWeek() =>
-        tester
-            .widget<UnderlineTabStrip>(
-              find.byWidgetPredicate(
-                (widget) =>
-                    widget is UnderlineTabStrip && widget.rule == StripRule.top,
-              ),
-            )
-            .selectedIndex;
-
-    expect(selectedWeek(), 2);
-    for (final delta in [100.0, -100.0]) {
-      await tester.flingFrom(
-        const Offset(200, 330),
-        Offset(delta, 0),
-        1000,
       );
       await tester.pumpAndSettle();
+
+      int selectedWeek() =>
+          tester
+              .widget<UnderlineTabStrip>(
+                find.byWidgetPredicate(
+                  (widget) =>
+                      widget is UnderlineTabStrip &&
+                      widget.rule == StripRule.top,
+                ),
+              )
+              .selectedIndex;
+
       expect(selectedWeek(), 2);
-    }
-    for (final expected in [1, 0, 1, 2]) {
-      await tester.tap(find.text('Week ${expected + 1}').last);
-      await tester.pumpAndSettle();
-      expect(selectedWeek(), expected);
-    }
-    expect(
-      find.descendant(
-        of: find.byType(WorkoutScreen),
-        matching: find.byType(AnimatedSwitcher),
-      ),
-      findsNothing,
-    );
-    expect(tester.takeException(), isNull);
-  });
+      for (final delta in [100.0, -100.0]) {
+        await tester.flingFrom(const Offset(200, 330), Offset(delta, 0), 1000);
+        await tester.pumpAndSettle();
+        expect(selectedWeek(), 2);
+      }
+      for (final expected in [1, 0, 1, 2]) {
+        await tester.tap(find.text('Week ${expected + 1}').last);
+        await tester.pumpAndSettle();
+        expect(selectedWeek(), expected);
+      }
+      expect(
+        find.descendant(
+          of: find.byType(WorkoutScreen),
+          matching: find.byType(AnimatedSwitcher),
+        ),
+        findsNothing,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('notification navigation opens the requested workout week', (
     tester,
@@ -840,7 +891,10 @@ void main() {
       await tester.pump();
 
       expect(find.text('0 workouts'), findsOneWidget);
-      expect(find.byKey(const ValueKey('weekly-training-link')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('weekly-training-link')),
+        findsOneWidget,
+      );
       expect(find.byKey(const ValueKey('training-day-0')), findsNothing);
       final fourth = find.byWidgetPredicate(
         (widget) => widget is HomePlanRow && widget.plan.id == 'plan-4',
@@ -854,7 +908,7 @@ void main() {
     }
   });
 
-  testWidgets('up next starts the plan after the last one trained', (
+  testWidgets('up next card and button open the plan after the last trained', (
     tester,
   ) async {
     final yesterday = DateTime.now().subtract(const Duration(days: 1));
@@ -865,11 +919,18 @@ void main() {
     expect(find.text('Next up'), findsOneWidget);
     expect(find.textContaining('Workout 3 of 3'), findsOneWidget);
 
-    await tester.tap(find.text('Start workout'));
-    await tester.pumpAndSettle();
-    final workout = tester.widget<WorkoutScreen>(find.byType(WorkoutScreen));
-    expect(workout.plan.name, 'Leg Day');
-    expect(workout.planIndex, 2);
+    for (final label in ['Next up', 'Leg Day', 'Start workout']) {
+      await tester.tap(find.text(label).first);
+      await tester.pumpAndSettle();
+      final workout = tester.widget<WorkoutScreen>(find.byType(WorkoutScreen));
+      expect(workout.plan.name, 'Leg Day');
+      expect(workout.planIndex, 2);
+      Navigator.of(tester.element(find.byType(WorkoutScreen))).pop();
+      await tester.pumpAndSettle();
+      // Each tap opens exactly one screen, including the nested button.
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(WorkoutScreen), findsNothing);
+    }
   });
 
   testWidgets(

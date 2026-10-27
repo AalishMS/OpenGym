@@ -8,6 +8,7 @@ import '../models/exercise_template.dart';
 import '../models/set.dart' as gym;
 import '../models/set_template.dart';
 import '../models/workout_plan.dart';
+import '../navigation/app_navigation_observer.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/split_provider.dart';
 import '../services/hive_service.dart';
@@ -36,7 +37,11 @@ class PlanEditorScreen extends StatefulWidget {
   State<PlanEditorScreen> createState() => _PlanEditorScreenState();
 }
 
-class _PlanEditorScreenState extends State<PlanEditorScreen> {
+class _PlanEditorScreenState extends State<PlanEditorScreen>
+    with AppRouteParticipant<PlanEditorScreen> {
+  @override
+  Future<void> leaveRoute() => _handleBack();
+
   final _nameController = TextEditingController();
   final List<_EditorExercise> _exercises = [];
   int _nextExerciseId = 0;
@@ -45,6 +50,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
   String? _splitId;
   bool _isSaving = false;
   bool _saved = false;
+  bool _showColors = false;
   String? _draftId;
 
   bool get _canSave => _nameController.text.trim().isNotEmpty;
@@ -77,9 +83,10 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
               return ExerciseSetData(
                 reps: target?.reps ?? 8,
                 weight: target?.weight ?? 0,
+                rpe: target?.rpe,
               );
             }),
-            expanded: false,
+            expanded: true,
           ),
         );
       }
@@ -99,7 +106,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
     final exerciseParts = _exercises
         .map((exercise) {
           final sets = exercise.sets
-              .map((set) => '${set.reps}x${set.weight}')
+              .map((set) => '${set.reps}x${set.weight}@${set.rpe}')
               .join(',');
           return '${exercise.name}:${exercise.note ?? ''}:$sets';
         })
@@ -109,6 +116,12 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
 
   Future<void> _handleBack() async {
     if (_isSaving) return;
+    // The keypad is the nearest Back layer, including when a notification
+    // asks this editor to leave through its registered route participant.
+    if (ModalRoute.of(context)?.willHandlePopInternally ?? false) {
+      Navigator.pop(context);
+      return;
+    }
     if (!_isDirty) {
       Navigator.pop(context);
       return;
@@ -138,8 +151,11 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                 setTargets:
                     exercise.sets
                         .map(
-                          (set) =>
-                              SetTemplate(reps: set.reps, weight: set.weight),
+                          (set) => SetTemplate(
+                            reps: set.reps,
+                            weight: set.weight,
+                            rpe: set.rpe,
+                          ),
                         )
                         .toList(),
               ),
@@ -210,6 +226,18 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
       _exercises[exerciseIndex].sets[setIndex] = ExerciseSetData(
         reps: reps,
         weight: weight,
+        rpe: _exercises[exerciseIndex].sets[setIndex].rpe,
+      );
+    });
+  }
+
+  void _updateRpe(int exerciseIndex, int setIndex, int? rpe) {
+    setState(() {
+      final current = _exercises[exerciseIndex].sets[setIndex];
+      _exercises[exerciseIndex].sets[setIndex] = ExerciseSetData(
+        reps: current.reps,
+        weight: current.weight,
+        rpe: rpe,
       );
     });
   }
@@ -219,7 +247,13 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
       final sets = _exercises[exerciseIndex].sets;
       final lastSet =
           sets.isNotEmpty ? sets.last : ExerciseSetData(reps: 8, weight: 0);
-      sets.add(ExerciseSetData(reps: lastSet.reps, weight: lastSet.weight));
+      sets.add(
+        ExerciseSetData(
+          reps: lastSet.reps,
+          weight: lastSet.weight,
+          rpe: lastSet.rpe,
+        ),
+      );
     });
   }
 
@@ -284,6 +318,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
   }
 
   void _showAddExerciseSheet() {
+    FocusScope.of(context).unfocus();
     showExercisePickerSheet(
       context,
       selectedExerciseNames: _exercises.map((exercise) => exercise.name),
@@ -302,13 +337,22 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
       animation: animation,
       builder:
           (context, child) => Material(
-            color: surfaceColor(context),
+            color: backgroundColor(context),
             elevation: 0,
+            clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
               side: BorderSide(color: borderColor(context)),
               borderRadius: AppRadius.card,
             ),
-            child: child,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.sm,
+                AppSpacing.lg,
+                AppSpacing.sm,
+              ),
+              child: child,
+            ),
           ),
       child: child,
     );
@@ -371,13 +415,44 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                               marker: planColor,
                             ),
                             const SizedBox(height: AppSpacing.xl),
-                            const _SectionHeading(title: 'Color'),
-                            _ColorPicker(
-                              selectedColor: _selectedColor,
-                              onChanged:
-                                  (value) =>
-                                      setState(() => _selectedColor = value),
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: AppSpacing.md,
+                              runSpacing: AppSpacing.xs,
+                              children: [
+                                Text(
+                                  'Plan color',
+                                  style: Theme.of(context).textTheme.bodyMedium,
+                                ),
+                                TextButton.icon(
+                                  onPressed:
+                                      () => setState(
+                                        () => _showColors = !_showColors,
+                                      ),
+                                  icon: Container(
+                                    width: 16,
+                                    height: 16,
+                                    decoration: BoxDecoration(
+                                      color: planColor,
+                                      borderRadius: AppRadius.badge,
+                                    ),
+                                  ),
+                                  label: Text(
+                                    _showColors ? 'Done' : 'Change color',
+                                  ),
+                                ),
+                              ],
                             ),
+                            if (_showColors) ...[
+                              const SizedBox(height: AppSpacing.sm),
+                              _ColorPicker(
+                                selectedColor: _selectedColor,
+                                onChanged:
+                                    (value) =>
+                                        setState(() => _selectedColor = value),
+                              ),
+                            ],
                             const SizedBox(height: AppSpacing.xl),
                             _SectionHeading(
                               title: 'Exercises',
@@ -387,10 +462,20 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
                                       ? 'Drag to reorder'
                                       : null,
                             ),
+                            if (_exercises.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  bottom: AppSpacing.md,
+                                ),
+                                child: Text(
+                                  'Weight, Reps, and RPE. Hold a set to delete it.',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
                             if (_exercises.isEmpty)
                               const _EmptyExercises()
                             else
-                              _buildExerciseList(planColor),
+                              _buildExerciseList(),
                             // Room for the keypad below the last card, so
                             // the card itself keeps its natural height.
                             ValueListenableBuilder<double>(
@@ -412,7 +497,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
     );
   }
 
-  Widget _buildExerciseList(Color planColor) {
+  Widget _buildExerciseList() {
     return ReorderableListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -423,20 +508,19 @@ class _PlanEditorScreenState extends State<PlanEditorScreen> {
         final exercise = _exercises[index];
         return Padding(
           key: ValueKey(exercise.id),
-          padding: EdgeInsets.only(
-            bottom: index == _exercises.length - 1 ? 0 : AppSpacing.sm,
-          ),
-          child: _ExerciseEditorCard(
+          padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+          child: _ExerciseEditorSection(
             exercise: exercise,
             splitId: _splitId,
             index: index,
-            accent: planColor,
+            accent: accentColor(context),
             onToggle:
                 () => setState(() => exercise.expanded = !exercise.expanded),
             onDelete: () => _deleteExercise(exercise.id, exercise.name),
             onSetChanged:
                 (setIndex, reps, weight) =>
                     _updateSet(index, setIndex, reps, weight),
+            onRpeChanged: (setIndex, rpe) => _updateRpe(index, setIndex, rpe),
             onSetDeleted: (setIndex) => _deleteSet(index, setIndex),
             onSetAdded: () => _addSetToExercise(index),
           ),
@@ -689,7 +773,7 @@ class _ColorPicker extends StatelessWidget {
   }
 }
 
-class _ExerciseEditorCard extends StatelessWidget {
+class _ExerciseEditorSection extends StatelessWidget {
   final _EditorExercise exercise;
   final int index;
   final String? splitId;
@@ -697,10 +781,11 @@ class _ExerciseEditorCard extends StatelessWidget {
   final VoidCallback onToggle;
   final VoidCallback onDelete;
   final void Function(int setIndex, int reps, double weight) onSetChanged;
+  final void Function(int setIndex, int? rpe) onRpeChanged;
   final ValueChanged<int> onSetDeleted;
   final VoidCallback onSetAdded;
 
-  const _ExerciseEditorCard({
+  const _ExerciseEditorSection({
     required this.exercise,
     this.splitId,
     required this.index,
@@ -708,13 +793,10 @@ class _ExerciseEditorCard extends StatelessWidget {
     required this.onToggle,
     required this.onDelete,
     required this.onSetChanged,
+    required this.onRpeChanged,
     required this.onSetDeleted,
     required this.onSetAdded,
   });
-
-  /// Indent that lines the prescription up under the exercise name rather than
-  /// under its index badge.
-  static const double _nameIndent = 20 + AppSpacing.sm;
 
   /// What this exercise prescribes, so a collapsed card reads as a plan
   /// instead of just a title: *3 × 12 · 70 kg* when every set is the same,
@@ -729,7 +811,10 @@ class _ExerciseEditorCard extends StatelessWidget {
     if (sets.isEmpty) return [TextSpan(text: 'No sets', style: unit)];
     final first = sets.first;
     final uniform = sets.every(
-      (set) => set.reps == first.reps && set.weight == first.weight,
+      (set) =>
+          set.reps == first.reps &&
+          set.weight == first.weight &&
+          set.rpe == first.rpe,
     );
     if (uniform) {
       return [
@@ -741,6 +826,8 @@ class _ExerciseEditorCard extends StatelessWidget {
           TextSpan(text: entryWeight(first.weight), style: number),
           TextSpan(text: ' kg', style: unit),
         ],
+        if (first.rpe != null)
+          TextSpan(text: '  ·  RPE ${first.rpe}', style: unit),
       ];
     }
     const shown = 4;
@@ -753,6 +840,8 @@ class _ExerciseEditorCard extends StatelessWidget {
           TextSpan(text: ' × ', style: unit),
         ],
         TextSpan(text: '${sets[i].reps}', style: number),
+        if (sets[i].rpe != null)
+          TextSpan(text: ' @${sets[i].rpe}', style: unit),
       ],
       if (!weighted) TextSpan(text: ' reps', style: unit),
       if (sets.length > shown)
@@ -788,50 +877,36 @@ class _ExerciseEditorCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border.all(color: border),
-        borderRadius: AppRadius.card,
+        border: Border(bottom: BorderSide(color: border)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _buildHeader(context, expanded, previous),
           if (expanded) ...[
-            Container(
-              // Narrower side padding than the header: the set table is the
-              // widest thing on the screen and every pixel here keeps it from
-              // scrolling sideways on a phone.
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.sm,
-                AppSpacing.md,
-                AppSpacing.sm,
-                AppSpacing.xs,
+            if (exercise.note?.trim().isNotEmpty ?? false)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: Text(
+                  exercise.note!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
-              // A hairline rule, not a filled band: the sets are the card's
-              // content, not a separate region of it.
-              decoration: BoxDecoration(
-                border: Border(top: BorderSide(color: border)),
-              ),
-              child: SetEntryTable(
-                hostReservesSpace: true,
-                showPrevious: false,
-                sets: [
-                  for (var i = 0; i < exercise.sets.length; i++)
-                    SetEntry(
-                      weight: exercise.sets[i].weight,
-                      reps: exercise.sets[i].reps,
-                      previous:
-                          i < previous.length && previous[i].reps > 0
-                              ? '${entryWeight(previous[i].weight)} × ${previous[i].reps}'
-                              : null,
-                    ),
-                ],
-                onChanged:
-                    (index, weight, reps) => onSetChanged(index, reps, weight),
-                onDelete: onSetDeleted,
-              ),
+            SetEntryTable(
+              continuousLog: true,
+              scrollWideTable: true,
+              hostReservesSpace: true,
+              showPrevious: false,
+              sets: [
+                for (final set in exercise.sets)
+                  SetEntry(weight: set.weight, reps: set.reps, rpe: set.rpe),
+              ],
+              onChanged:
+                  (index, weight, reps) => onSetChanged(index, reps, weight),
+              onRpeChanged: onRpeChanged,
+              onDelete: onSetDeleted,
             ),
-            _buildFooter(context, border),
+            _buildFooter(context),
           ],
         ],
       ),
@@ -872,125 +947,74 @@ class _ExerciseEditorCard extends StatelessWidget {
     bool expanded,
     List<gym.Set> previous,
   ) {
-    final textSecondary = textSecondaryColor(context);
-    return InkWell(
-      onTap: onToggle,
-      borderRadius: expanded ? AppRadius.cardTop : AppRadius.card,
-      splashColor: accent.withValues(alpha: 0.2),
-      highlightColor: accent.withValues(alpha: 0.1),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(
-          0,
-          AppSpacing.xxs,
-          AppSpacing.xs,
-          AppSpacing.xxs,
-        ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // Only a very narrow card (or very large text) gives the summary
-            // the full width; otherwise it sits under the name it describes.
-            final reflow =
-                constraints.maxWidth <
-                300 * MediaQuery.textScalerOf(context).scale(1);
-            final title = Row(
-              children: [
-                _IndexBadge(
-                  label: '${index + 1}',
-                  borderTint: accent,
-                  textTint: accent,
-                  fontSize: 10,
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                Expanded(
-                  child: Text(
-                    exercise.name,
-                    style: Theme.of(context).textTheme.titleMedium,
-                    maxLines: reflow ? null : 2,
-                    overflow:
-                        reflow ? TextOverflow.visible : TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            );
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    ReorderableDragStartListener(
-                      index: index,
-                      child: Tooltip(
-                        message: 'Drag to reorder',
-                        child: SizedBox(
-                          width: 44,
-                          height: 48,
-                          child: Icon(
-                            LucideIcons.gripVertical,
-                            size: 18,
-                            color: textSecondary,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Semantics(
+              button: true,
+              expanded: expanded,
+              child: InkWell(
+                onTap: onToggle,
+                borderRadius: AppRadius.button,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              exercise.name,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
                           ),
-                        ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Icon(
+                            expanded
+                                ? LucideIcons.chevronUp
+                                : LucideIcons.chevronDown,
+                            size: 16,
+                            color: textSecondaryColor(context),
+                          ),
+                        ],
                       ),
-                    ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.xs,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            title,
-                            if (!reflow) ...[
-                              const SizedBox(height: AppSpacing.xxs),
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  left: _nameIndent,
-                                ),
-                                child: _prescriptionSummary(context, previous),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 40,
-                      height: 48,
-                      child: AnimatedRotation(
-                        turns: expanded ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 180),
-                        child: Icon(
-                          LucideIcons.chevronDown,
-                          size: 18,
-                          color: textSecondary,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (reflow)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.md,
-                      0,
-                      AppSpacing.md,
-                      AppSpacing.sm,
-                    ),
-                    child: _prescriptionSummary(context, previous),
+                      if (!expanded) ...[
+                        const SizedBox(height: AppSpacing.xs),
+                        _prescriptionSummary(context, previous),
+                      ],
+                    ],
                   ),
-              ],
-            );
-          },
-        ),
+                ),
+              ),
+            ),
+          ),
+          ReorderableDragStartListener(
+            index: index,
+            child: Tooltip(
+              message: 'Drag to reorder',
+              child: SizedBox(
+                width: 48,
+                height: 48,
+                child: Icon(
+                  LucideIcons.gripVertical,
+                  size: 18,
+                  color: textSecondaryColor(context),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildFooter(BuildContext context, Color border) {
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xs),
-      decoration: BoxDecoration(border: Border(top: BorderSide(color: border))),
+  Widget _buildFooter(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Row(
         children: [
           Expanded(
@@ -1005,10 +1029,6 @@ class _ExerciseEditorCard extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: AppSpacing.sm),
-          // Destructive, so it is drawn in the error role and kept at the far
-          // end of the footer, away from Add set and from the header chevron,
-          // where a mis-tap used to cost an exercise and all its sets.
           _FooterAction(
             semanticLabel: 'Delete exercise',
             icon: LucideIcons.trash2,
@@ -1016,46 +1036,6 @@ class _ExerciseEditorCard extends StatelessWidget {
             onTap: onDelete,
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// The `1` / `2` pill on an exercise header or a set row.
-///
-/// Fixed width so names and values stay left-aligned once the count passes 9,
-/// and tinted by its caller: accent on an exercise, hairline-and-muted on a set,
-/// which is what marks the exercise index as the landmark you scan by.
-class _IndexBadge extends StatelessWidget {
-  final String label;
-  final Color borderTint;
-  final Color textTint;
-  final double fontSize;
-
-  const _IndexBadge({
-    required this.label,
-    required this.borderTint,
-    required this.textTint,
-    this.fontSize = 9,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 20,
-      height: 24,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        border: Border.all(color: borderTint),
-        borderRadius: AppRadius.badge,
-      ),
-      child: Text(
-        label,
-        style: AppTypography.figures(
-          fontSize: fontSize,
-          fontWeight: FontWeight.w700,
-          color: textTint,
-        ),
       ),
     );
   }
@@ -1158,7 +1138,7 @@ class _EmptyExercises extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Pick from the exercise library or create your own, then set '
-            'a target weight and reps for each set.',
+            'target weights, reps and optional RPE for each set.',
             textAlign: TextAlign.center,
             style: textTheme.bodyMedium?.copyWith(color: secondary),
           ),

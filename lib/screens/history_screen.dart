@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../navigation/app_navigation_observer.dart';
+
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
 import '../models/workout_session.dart';
@@ -221,82 +223,87 @@ class WorkoutDetailsScreen extends StatelessWidget {
       builder:
           (dialogContext) => StatefulBuilder(
             builder:
-                (context, setDialogState) => AlertDialog(
-                  title: const Text('Delete workout?'),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Delete “${session.planName}” from '
-                        '${formatStatisticsDate(session.date)}?',
-                      ),
-                      if (error != null) ...[
-                        const SizedBox(height: AppSpacing.md),
+                (context, setDialogState) => PopScope(
+                  canPop: !deleting,
+                  child: AlertDialog(
+                    title: const Text('Delete workout?'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                          error!,
-                          key: const ValueKey('delete-workout-error'),
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: errorColor(context)),
+                          'Delete “${session.planName}” from '
+                          '${formatStatisticsDate(session.date)}?',
                         ),
+                        if (error != null) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            error!,
+                            key: const ValueKey('delete-workout-error'),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: errorColor(context)),
+                          ),
+                        ],
                       ],
+                    ),
+                    actions: [
+                      AppButton.text(
+                        label: 'Cancel',
+                        onPressed:
+                            deleting
+                                ? null
+                                : () => Navigator.pop(dialogContext),
+                      ),
+                      AppButton.destructive(
+                        label: 'Delete',
+                        onPressed:
+                            deleting
+                                ? null
+                                : () async {
+                                  final id = session.id;
+                                  if (id == null) {
+                                    setDialogState(
+                                      () =>
+                                          error =
+                                              'This workout cannot be deleted because its identity is missing.',
+                                    );
+                                    return;
+                                  }
+                                  setDialogState(() {
+                                    deleting = true;
+                                    error = null;
+                                  });
+                                  try {
+                                    await dialogContext
+                                        .read<WorkoutSessionProvider>()
+                                        .deleteSession(id);
+                                    if (!dialogContext.mounted) return;
+                                    Navigator.pop(dialogContext);
+                                    if (context.mounted) Navigator.pop(context);
+                                  } catch (exception) {
+                                    debugPrint(
+                                      'Failed to delete workout: $exception',
+                                    );
+                                    if (!dialogContext.mounted) return;
+                                    setDialogState(() {
+                                      deleting = false;
+                                      error =
+                                          'Could not delete the workout. Check your data and try again.';
+                                    });
+                                  }
+                                },
+                        child:
+                            deleting
+                                ? const SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : null,
+                      ),
                     ],
                   ),
-                  actions: [
-                    AppButton.text(
-                      label: 'Cancel',
-                      onPressed:
-                          deleting ? null : () => Navigator.pop(dialogContext),
-                    ),
-                    AppButton.destructive(
-                      label: 'Delete',
-                      onPressed:
-                          deleting
-                              ? null
-                              : () async {
-                                final id = session.id;
-                                if (id == null) {
-                                  setDialogState(
-                                    () =>
-                                        error =
-                                            'This workout cannot be deleted because its identity is missing.',
-                                  );
-                                  return;
-                                }
-                                setDialogState(() {
-                                  deleting = true;
-                                  error = null;
-                                });
-                                try {
-                                  await dialogContext
-                                      .read<WorkoutSessionProvider>()
-                                      .deleteSession(id);
-                                  if (!dialogContext.mounted) return;
-                                  Navigator.pop(dialogContext);
-                                  if (context.mounted) Navigator.pop(context);
-                                } catch (exception) {
-                                  debugPrint(
-                                    'Failed to delete workout: $exception',
-                                  );
-                                  if (!dialogContext.mounted) return;
-                                  setDialogState(() {
-                                    deleting = false;
-                                    error =
-                                        'Could not delete the workout. Check your data and try again.';
-                                  });
-                                }
-                              },
-                      child:
-                          deleting
-                              ? const SizedBox.square(
-                                dimension: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                              : null,
-                    ),
-                  ],
                 ),
           ),
     );
@@ -424,7 +431,11 @@ class EditSessionScreen extends StatefulWidget {
   State<EditSessionScreen> createState() => _EditSessionScreenState();
 }
 
-class _EditSessionScreenState extends State<EditSessionScreen> {
+class _EditSessionScreenState extends State<EditSessionScreen>
+    with AppRouteParticipant<EditSessionScreen> {
+  @override
+  Future<void> leaveRoute() => _handleBack();
+
   late WorkoutSession _session;
   late TextEditingController _planNameController;
   late final String _initialSignature;

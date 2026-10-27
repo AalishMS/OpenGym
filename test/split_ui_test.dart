@@ -105,6 +105,64 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('split menu consumes Back before leaving Manage', (tester) async {
+    final harness = (await tester.runAsync(_createHarness))!;
+    addTearDown(harness.dispose);
+    await tester.pumpWidget(harness.host(const HomeScreen()));
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('split-menu')), findsNothing);
+    expect(find.text('Done'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Manage'), findsOneWidget);
+  });
+
+  for (final managing in [false, true]) {
+    testWidgets(
+      'edge Back keeps menu ownership after Android cancels the pointer (Manage: $managing)',
+      (tester) async {
+        final harness = (await tester.runAsync(_createHarness))!;
+        addTearDown(harness.dispose);
+        await tester.pumpWidget(harness.host(const HomeScreen()));
+        var exitRequests = 0;
+        tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          SystemChannels.platform,
+          (call) async {
+            if (call.method == 'SystemNavigator.pop') exitRequests++;
+            return null;
+          },
+        );
+        addTearDown(
+          () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+            SystemChannels.platform,
+            null,
+          ),
+        );
+        if (managing) {
+          await tester.tap(find.text('Manage'));
+          await tester.pumpAndSettle();
+        }
+        await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
+        await tester.pumpAndSettle();
+        // MenuAnchor closes on outside pointer-down, before Android recognizes an
+        // edge gesture and sends its Back. That gesture must still own one layer.
+        final gesture = await tester.startGesture(const Offset(2, 450));
+        await gesture.cancel();
+        await tester.pumpAndSettle();
+        expect(find.byKey(const ValueKey('split-menu')), findsNothing);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.text(managing ? 'Done' : 'Manage'), findsOneWidget);
+        expect(exitRequests, 0);
+      },
+    );
+  }
+
   testWidgets('history and stats follow the selected split', (tester) async {
     final harness = (await tester.runAsync(_createHarness))!;
     addTearDown(harness.dispose);
@@ -185,6 +243,42 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('preset-catalog')), findsOneWidget);
   });
+
+  for (final size in [const Size(390, 400), const Size(1000, 400)]) {
+    testWidgets('preset system Back preserves the catalog at $size', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = size;
+      addTearDown(tester.view.reset);
+      final harness = (await tester.runAsync(_createHarness))!;
+      addTearDown(harness.dispose);
+      await tester.pumpWidget(harness.host(const HomeScreen(), size: size));
+      await tester.tap(find.byKey(const ValueKey('split-switcher-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Browse'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Strength'));
+      await tester.pumpAndSettle();
+      final catalog = find.byKey(const ValueKey('preset-catalog'));
+      final scroll = tester.state<ScrollableState>(
+        find.descendant(of: catalog, matching: find.byType(Scrollable)).first,
+      );
+      scroll.position.jumpTo(50);
+      await tester.pumpAndSettle();
+      expect(scroll.position.pixels, 50);
+      await tester.tap(find.text('Full-body strength'));
+      await tester.pumpAndSettle();
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(catalog, findsOneWidget);
+      expect(find.text('Full-body strength'), findsOneWidget);
+      expect(scroll.position.pixels, 50);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      expect(find.text('Workout presets'), findsNothing);
+    });
+  }
 
   testWidgets('new split dialog validates names and selects the result', (
     tester,

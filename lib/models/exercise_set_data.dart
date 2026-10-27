@@ -6,6 +6,7 @@
 class ExerciseSetData {
   final int reps;
   final double weight;
+  final int? rpe;
 
-  ExerciseSetData({required this.reps, required this.weight});
+  ExerciseSetData({required this.reps, required this.weight, this.rpe});
 }

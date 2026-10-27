@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'auth/auth_gate.dart';
+import 'navigation/app_navigation_observer.dart';
 import 'providers/coach_provider.dart';
 import 'providers/workout_plan_provider.dart';
 import 'providers/workout_session_provider.dart';
@@ -46,6 +47,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  AppNavigationObserver _navigationObserver = AppNavigationObserver();
   late WorkoutPlanProvider _workoutPlanProvider;
   late WorkoutSessionProvider _workoutSessionProvider;
   late SettingsProvider _settingsProvider;
@@ -99,6 +101,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     setState(() {
       _navigatorUserId = userId;
       _accountNavigatorKey = GlobalKey<NavigatorState>();
+      _navigationObserver = AppNavigationObserver();
     });
     _coachProvider.resetForAccount();
   }
@@ -126,6 +129,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
           return MaterialApp(
             navigatorKey: _accountNavigatorKey,
+            navigatorObservers: [_navigationObserver],
             title: 'OpenGym',
             debugShowCheckedModeBanner: false,
             theme: buildTheme(seed, Brightness.light),

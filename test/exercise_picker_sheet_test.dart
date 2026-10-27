@@ -78,6 +78,45 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('system Back steps out of categories and selected exercises', (
+    tester,
+  ) async {
+    await pumpPicker(tester, initialNames: const ['Bench Press']);
+    await tester.tap(find.text('Chest'));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Muscle groups'), findsOneWidget);
+    expect(find.text('Selected (1)'), findsOneWidget);
+    await tester.tap(find.text('Selected (1)'));
+    await tester.pumpAndSettle();
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Muscle groups'), findsOneWidget);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Add exercises'), findsNothing);
+  });
+
+  testWidgets('Done still steps back before closing from muscle groups', (
+    tester,
+  ) async {
+    await pumpPicker(tester, initialNames: const ['Bench Press']);
+    await tester.tap(find.text('Chest'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Muscle groups'), findsOneWidget);
+    await tester.tap(find.text('Selected (1)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Muscle groups'), findsOneWidget);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Add exercises'), findsNothing);
+  });
+
   testWidgets('adapts to narrow width, large text, and keyboard insets', (
     tester,
   ) async {

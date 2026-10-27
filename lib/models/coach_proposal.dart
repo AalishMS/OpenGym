@@ -127,7 +127,9 @@ class CoachExercise {
       custom = false,
       stored = template;
 
-  ExerciseTemplate toTemplate() {
+  /// The Coach does not prescribe RPE. Retain the user's effort targets on
+  /// existing set positions when applying its weight, rep, or note changes.
+  ExerciseTemplate toTemplate({ExerciseTemplate? effortSource}) {
     final stored = this.stored;
     if (stored != null) {
       return ExerciseTemplate(
@@ -138,7 +140,11 @@ class CoachExercise {
                 ? null
                 : [
                   for (final target in stored.setTargets!)
-                    SetTemplate(reps: target.reps, weight: target.weight),
+                    SetTemplate(
+                      reps: target.reps,
+                      weight: target.weight,
+                      rpe: target.rpe,
+                    ),
                 ],
         note: stored.note,
       );
@@ -146,7 +152,14 @@ class CoachExercise {
     return ExerciseTemplate(
       name: name,
       sets: sets.length,
-      setTargets: [for (final set in sets) set.toTemplate()],
+      setTargets: [
+        for (var index = 0; index < sets.length; index++)
+          SetTemplate(
+            reps: sets[index].reps,
+            weight: sets[index].kg,
+            rpe: effortSource?.targetAt(index)?.rpe,
+          ),
+      ],
       note: note,
     );
   }

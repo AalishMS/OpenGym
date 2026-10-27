@@ -198,6 +198,10 @@ class SetEntryTable extends StatefulWidget {
   final bool showPrevious;
   final bool continuousLog;
 
+  /// Plan editors have no horizontal plan-swipe gesture and can scroll wide
+  /// tables to preserve readable values at large accessibility text sizes.
+  final bool scrollWideTable;
+
   /// The host list adds [keyboardHeight] below its content, so the table does
   /// not pad itself. Without it the padding sits inside the table's card.
   final bool hostReservesSpace;
@@ -213,6 +217,7 @@ class SetEntryTable extends StatefulWidget {
     this.showHistoryColumns = true,
     this.showPrevious = true,
     this.continuousLog = false,
+    this.scrollWideTable = false,
     this.hostReservesSpace = false,
   });
 
@@ -685,7 +690,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
       // Workout rows use the card's existing column geometry. A horizontal
       // viewport would widen them and compete with plan navigation swipes.
       final bottom = _overlay == null || _hostReserves ? 0.0 : _keyboardSpace;
-      if (continuousLog) {
+      if (continuousLog && !widget.scrollWideTable) {
         return table;
       }
       return Padding(

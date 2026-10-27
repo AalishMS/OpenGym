@@ -37,6 +37,8 @@ class HomeScreen extends StatefulWidget {
   final GlobalKey? tutorialStartKey;
   final ScrollController? tutorialScrollController;
   final bool tutorialActive;
+  final bool active;
+  final int resetRequest;
 
   const HomeScreen({
     this.onOpenWeeklyTraining,
@@ -45,6 +47,8 @@ class HomeScreen extends StatefulWidget {
     this.tutorialStartKey,
     this.tutorialScrollController,
     this.tutorialActive = false,
+    this.active = true,
+    this.resetRequest = 0,
     super.key,
   });
 
@@ -54,6 +58,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _managing = false;
+  bool _splitMenuOpen = false;
+  bool _splitMenuBackGesture = false;
   bool _mutatingPlan = false;
 
   Future<void> _persistPlanAction({
@@ -98,32 +104,67 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void didUpdateWidget(HomeScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.tutorialActive && !oldWidget.tutorialActive) _managing = false;
+    if (!widget.active ||
+        widget.resetRequest != oldWidget.resetRequest ||
+        (widget.tutorialActive && !oldWidget.tutorialActive)) {
+      _managing = false;
+      _splitMenuBackGesture = false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final accent = accentColor(context);
     final bg = backgroundColor(context);
+    // Capture the layer for this pop: closing the menu synchronously must not
+    // let another callback from the same Back also leave Manage.
+    final splitMenuInView = _splitMenuOpen;
 
-    return Scaffold(
-      backgroundColor: bg,
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            _buildHeader(context),
-            Expanded(
-              child: Consumer<WorkoutPlanProvider>(
-                builder: (context, provider, child) {
-                  if (provider.plans.isEmpty) {
-                    return _buildEmptyState(context, provider);
-                  }
-                  return _buildPlanSection(context, provider, accent);
-                },
-              ),
+    return PopScope(
+      canPop: !widget.active || (!_managing && !_splitMenuBackGesture),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && widget.active && _splitMenuBackGesture) {
+          setState(() => _splitMenuBackGesture = false);
+          return;
+        }
+        if (!didPop && widget.active && _managing && !splitMenuInView) {
+          setState(() => _managing = false);
+        }
+      },
+      child: Listener(
+        onPointerDown: (_) {
+          if (_splitMenuBackGesture != _splitMenuOpen) {
+            setState(() => _splitMenuBackGesture = _splitMenuOpen);
+          }
+        },
+        onPointerUp: (_) {
+          if (_splitMenuBackGesture) {
+            setState(() => _splitMenuBackGesture = false);
+          }
+        },
+        // Android cancels this pointer when it recognizes an edge Back. Keep
+        // the menu's ownership until that Back arrives, even though MenuAnchor
+        // already closed itself on the outside pointer-down.
+        child: Scaffold(
+          backgroundColor: bg,
+          body: SafeArea(
+            top: false,
+            child: Column(
+              children: [
+                _buildHeader(context),
+                Expanded(
+                  child: Consumer<WorkoutPlanProvider>(
+                    builder: (context, provider, child) {
+                      if (provider.plans.isEmpty) {
+                        return _buildEmptyState(context, provider);
+                      }
+                      return _buildPlanSection(context, provider, accent);
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -160,7 +201,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       ExcludeSemantics(
                         child: Text(
                           '/',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          style: Theme.of(
+                            context,
+                          ).textTheme.titleSmall?.copyWith(
                             color: textSecondaryColor(context),
                             fontSize: 19,
                             fontWeight: FontWeight.w400,
@@ -168,10 +211,16 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       const SizedBox(width: AppSpacing.xs),
-                      const Expanded(
+                      Expanded(
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: SplitSwitcher(),
+                          child: SplitSwitcher(
+                            onMenuChanged: (open) {
+                              if (mounted) {
+                                setState(() => _splitMenuOpen = open);
+                              }
+                            },
+                          ),
                         ),
                       ),
                     ] else
@@ -475,7 +524,9 @@ class _HomeScreenState extends State<HomeScreen> {
               // Bottom inset only — the drag handle spaces the top, and the
               // header and rows carry their own horizontal padding, so the two
               // rules run full-bleed.
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.paddingOf(ctx).bottom + AppSpacing.md,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -559,12 +610,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                   (e) => ExerciseTemplate(
                                     name: e.name,
                                     sets: e.sets,
+                                    note: e.note,
                                     setTargets:
                                         e.setTargets
                                             ?.map(
                                               (t) => SetTemplate(
                                                 reps: t.reps,
                                                 weight: t.weight,
+                                                rpe: t.rpe,
                                               ),
                                             )
                                             .toList(),
