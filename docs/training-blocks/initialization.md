@@ -52,6 +52,12 @@ the scope of this session.
   their week numbers and data.
 - Expose block management through **long-pressing a block** in the workout
   screen's bottom navigation.
+- If a workout's Week 2 is missed, its next workout opens **Week 3 with the
+  same Week 2 values**. Missing a workout does not require remaining on that
+  week. The rule for detecting a missed occurrence still needs clarification.
+- When a workout is added midway through training, let the user **choose its
+  starting block and week**.
+- Do **not** add a Skip week action or a dedicated skipping feature.
 
 A split could contain Block 1 with Weeks 1–4 and Block 2 with Weeks 1–3.
 Push and Pull both use those same seven training-week slots. Their sessions
@@ -59,9 +65,9 @@ remain separate: Push in Block 2, Week 1 is different from Pull in that slot.
 
 These are training-week labels. Within-block progression follows the provided
 weeks independently for each workout, while crossing a block boundary requires
-a user choice for that workout. Training-week labels do not require every
-workout to be completed in the same calendar week. Calendar scheduling remains
-undecided.
+a user choice for that workout. Missed-week advancement is also required, but
+whether it is driven by calendar weeks, a workout schedule, or another event
+has not been decided. No scheduling system is approved by this document.
 
 ## Initial UI direction
 
@@ -115,6 +121,14 @@ Confirmed behavior:
 - Completion and advancement are tracked for each workout independently.
   Finishing Push Week 1 can advance Push to Week 2 while Pull and Legs remain
   on Week 1. No workout has to wait for the others to catch up.
+- A missed workout can advance without completion: in the user's example,
+  missing Week 2 means the next workout opens Week 3 with Week 2's values.
+  Do not create a completed Week 2 history entry merely to represent advancement.
+  Exactly how the app detects the missed occurrence remains unresolved.
+- There is no separate Skip week button or skipping workflow. The app should
+  handle the agreed missed-workout behavior through its progression rules.
+- Adding a new workout lets the user choose its starting block and week within
+  the shared structure, rather than forcing it to match another workout's place.
 - Finishing the final provided week does not silently append another week or
   enter another block. On the next opening of the workout, ask the user to
   choose **Add week** or **Move to next block** if a next block exists. If none
@@ -139,8 +153,10 @@ Suggested edge-case behavior, not yet approved: extending an earlier block
 should not automatically pull workouts that already moved on back into it.
 Likewise, viewing or editing an old log should not rewind training progress.
 
-Still to decide: how explicit skipping and drafts affect progress, where a new
-workout starts, and what dismissing the boundary prompt does.
+Still to decide: what identifies a missed workout, how drafts affect advancement,
+what happens when the final provided week is missed, and what dismissing the
+boundary prompt does. Merely knowing that no completed session exists does not
+distinguish a workout that is still upcoming from one that was missed.
 The storage design must distinguish the shared block/week structure, training
 progress, and the block/week currently being browsed. Whether progress is
 derived from logs or persisted explicitly has not been chosen.
@@ -157,6 +173,12 @@ block-specific prescription system. Existing saved destination sessions must
 not be overwritten by reapplying inheritance. The destination remains a fresh
 workout with its own identity, completion, date, and timer lifecycle; copying
 training values does not copy a historical workout's completed status.
+
+Missed-week carry-forward is a separate confirmed case: when Week 2 is missed
+and the next workout opens Week 3, use the same Week 2 values. This must work
+even if Week 2 has no completed log; its starting values and a performed workout
+are different concepts. Define source resolution alongside missed-occurrence
+detection, while preserving any already saved destination edits.
 
 Still to decide: the fallback when the previous block has no matching week or
 no saved session for that workout, how changed exercises are matched, and when
@@ -306,12 +328,11 @@ the same calendar period; independent workout progression remains intact.
 
 1. What are the details of the long-press management menu: naming, reordering,
    optional duplication, and whether a newly created block remains planned or
-   becomes active immediately? How is manual active-week selection exposed?
-2. How should missed days differ from deliberately skipping a training week,
-   and where does a newly added workout begin? These cases need plain-language
-   clarification before choosing behavior. Suggested defaults, not approved:
-   a missed day leaves the workout's active week unchanged, and a newly added
-   workout lets the user choose its starting block/week.
+   becomes active immediately? A dedicated Skip week action is excluded.
+2. What event tells the app that a workout was missed: a scheduled workout day
+   passing, a calendar week passing, opening a week without logging it, or
+   something else? How should multiple missed occurrences and a missed final
+   week behave? The missed-week result is confirmed; its detection rule is not.
    If a week is added to a block after some workouts have moved on, should those
    workouts simply retain their current progress as suggested above?
 3. How do unfinished sessions and manually viewed weeks interact with the
@@ -342,6 +363,9 @@ navigation; independent progression through only the supplied weeks without
 requiring other workouts to finish; an end-of-block choice on the next visit
 without automatically adding a week or changing blocks; a Create block option
 when no next block exists; matching-week value inheritance across blocks;
+advancing past a missed week while carrying its values without fabricating a
+completed session; user-selected starting block/week for a newly added workout;
+no dedicated skipping feature;
 previous-set behavior at block boundaries;
 old-backup upgrades into one initial block per split; interrupted and multi-device
 migration; account isolation; long-press block management; and archive/delete
