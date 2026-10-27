@@ -39,15 +39,19 @@ the scope of this session.
   completing the last provided week, **on the next opening** ask the user to
   add a week to the current block or move to the next block. Do not automatically
   create an extra week or move across the block boundary.
+- Progression is **independent per workout**. Missing one workout must not stop
+  another from advancing through its provided weeks. Blocks and weeks remain
+  shared structure; workouts can have different active weeks or active blocks.
 
 A split could contain Block 1 with Weeks 1–4 and Block 2 with Weeks 1–3.
 Push and Pull both use those same seven training-week slots. Their sessions
 remain separate: Push in Block 2, Week 1 is different from Pull in that slot.
 
 These are training-week labels. Within-block progression follows the provided
-weeks, while crossing a block boundary requires a user choice. Calendar dates
-and whether completion/advancement is tracked per workout or across the whole
-split remain undecided.
+weeks independently for each workout, while crossing a block boundary requires
+a user choice for that workout. Training-week labels do not require every
+workout to be completed in the same calendar week. Calendar scheduling remains
+undecided.
 
 ## Initial UI direction
 
@@ -77,8 +81,9 @@ Suggested interaction rules, still open to discussion:
   Week 1 need their block context in the workout heading and accessibility labels.
 - Put Add week within a particular block and provide a separate New block
   action. Both affect the shared split structure, which their copy should explain.
-- Changing workouts should retain the selected block/week where possible.
-  Preserve the current save-before-navigation and timer behavior.
+- Changing workouts must respect their independent progress. The treatment of
+  a manually browsed week during a workout switch remains open. Preserve the
+  current save-before-navigation and timer behavior.
 - Support many blocks, long names, small phones, large text, and a visible
   selection after scrolling. Follow existing theme, radius, and typography tokens.
 
@@ -93,12 +98,16 @@ Confirmed behavior:
 
 - Use the weeks the user has already supplied, in order. Finishing a week
   advances to the next provided week while one remains in the current block.
+- Completion and advancement are tracked for each workout independently.
+  Finishing Push Week 1 can advance Push to Week 2 while Pull and Legs remain
+  on Week 1. No workout has to wait for the others to catch up.
 - Finishing the final provided week does not silently append another week or
   enter another block. On the next opening of the workout, ask the user to
   choose **Add week** or **Move to next block**.
 - Add week extends the current block's shared week structure. Move to next
-  block is an explicit progression choice, rather than merely expanding a
-  different block to browse its weeks.
+  block advances only the workout making that choice; other workouts keep their
+  own place. This is an explicit progression choice, rather than merely
+  expanding a different block to browse its weeks.
 - The boundary prompt is for the next visit; completing the final workout
   should not force an immediate decision about what comes next.
 
@@ -106,9 +115,17 @@ For a block configured with Weeks 1–4, progression uses those four weeks. Afte
 Week 4 is finished, the next visit offers adding Week 5 to that block or moving
 to the next block. It does not generate Week 5 merely because the screen opens.
 
-Still to decide: whether each workout progresses independently or waits for all
-workouts in the shared week, how skipped workouts and drafts affect progress,
-what to offer when there is no next block, and what dismissing the prompt does.
+The reason for independent progression is to accommodate missed workouts without
+blocking the rest of the split. An unperformed workout must not be treated as
+completed merely because another workout advanced. Block completion is therefore
+relative to the workout, rather than one global completion flag for the split.
+
+Suggested edge-case behavior, not yet approved: extending an earlier block
+should not automatically pull workouts that already moved on back into it.
+Likewise, viewing or editing an old log should not rewind training progress.
+
+Still to decide: how explicit skipping and drafts affect progress, what to offer
+when there is no next block, and what dismissing the boundary prompt does.
 The storage design must distinguish the shared block/week structure, training
 progress, and the block/week currently being browsed. Whether progress is
 derived from logs or persisted explicitly has not been chosen.
@@ -252,9 +269,9 @@ been used independently and may not represent the same training period.
 
 1. How are block names, ordering, duplication, and archiving managed? Where does
    New block live, and does it open immediately or remain planned for later?
-2. Does each workout advance through the provided weeks independently, or must
-   all workouts in a shared week finish before progression? What happens when
-   a workout is skipped or a plan is added?
+2. How should explicit skipping work, and where does a newly added workout begin?
+   If a week is added to a block after some workouts have moved on, should those
+   workouts simply retain their current progress as suggested above?
 3. How do unfinished sessions and manually viewed weeks interact with the
    progression-selected active week? Does switching workouts resume that
    workout's active week or retain the week being browsed? At the boundary
@@ -280,8 +297,9 @@ Future verification should cover empty planned weeks surviving restart and sync;
 identical block/week structure across all plans; distinct sessions for repeated
 Week 1s; automatic expansion of the active week's block on screen entry; inline
 expand/collapse animation with at most one block expanded; safe autosave/timer
-navigation; progression through only the supplied weeks; an end-of-block choice
-on the next visit without automatically adding a week or changing blocks;
+navigation; independent progression through only the supplied weeks without
+requiring other workouts to finish; an end-of-block choice on the next visit
+without automatically adding a week or changing blocks;
 previous-set behavior at block boundaries;
 old-backup upgrades; interrupted and multi-device migration; account isolation;
 and archive/delete behavior without accidental history loss.
