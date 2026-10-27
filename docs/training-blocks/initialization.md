@@ -42,6 +42,16 @@ the scope of this session.
 - Progression is **independent per workout**. Missing one workout must not stop
   another from advancing through its provided weeks. Blocks and weeks remain
   shared structure; workouts can have different active weeks or active blocks.
+- New blocks inherit workout values from the **matching week of the previous
+  block**: Week 1 from Week 1, Week 2 from Week 2, and so on, for the same workout.
+- At the block boundary, offer **Add week** and **Move to next block** when a
+  next block exists, or **Add week** and **Create block** when none exists.
+- Archive completed blocks to preserve their logs in History, records, and
+  statistics. Detailed deletion and archive eligibility rules remain open.
+- Migrate all existing weeks/logs into **one initial block per split**, preserving
+  their week numbers and data.
+- Expose block management through **long-pressing a block** in the workout
+  screen's bottom navigation.
 
 A split could contain Block 1 with Weeks 1–4 and Block 2 with Weeks 1–3.
 Push and Pull both use those same seven training-week slots. Their sessions
@@ -70,6 +80,9 @@ Confirmed layout and opening behavior:
 - Animate expansion and collapse simply, revealing or hiding the weeks while
   adjacent items move smoothly. Exact timing and easing remain design details;
   respect the platform's reduced-motion preference.
+- Long-pressing a block opens its management actions, including access to
+  creating, renaming, reordering, and archiving blocks. Exact labels and the
+  presentation of these actions are still to be designed.
 
 Suggested interaction rules, still open to discussion:
 
@@ -79,8 +92,9 @@ Suggested interaction rules, still open to discussion:
   the selected block must still leave its selection recognizable.
 - Keep block and week visually distinguishable. Repeated labels such as
   Week 1 need their block context in the workout heading and accessibility labels.
-- Put Add week within a particular block and provide a separate New block
-  action. Both affect the shared split structure, which their copy should explain.
+- Put Add week within a particular block. Block management is reached through
+  the confirmed long-press menu; the boundary prompt also exposes Create block
+  when appropriate. Explain that structural changes affect the shared split.
 - Changing workouts must respect their independent progress. The treatment of
   a manually browsed week during a workout switch remains open. Preserve the
   current save-before-navigation and timer behavior.
@@ -103,7 +117,8 @@ Confirmed behavior:
   on Week 1. No workout has to wait for the others to catch up.
 - Finishing the final provided week does not silently append another week or
   enter another block. On the next opening of the workout, ask the user to
-  choose **Add week** or **Move to next block**.
+  choose **Add week** or **Move to next block** if a next block exists. If none
+  exists, offer **Add week** or **Create block** instead.
 - Add week extends the current block's shared week structure. Move to next
   block advances only the workout making that choice; other workouts keep their
   own place. This is an explicit progression choice, rather than merely
@@ -124,11 +139,29 @@ Suggested edge-case behavior, not yet approved: extending an earlier block
 should not automatically pull workouts that already moved on back into it.
 Likewise, viewing or editing an old log should not rewind training progress.
 
-Still to decide: how explicit skipping and drafts affect progress, what to offer
-when there is no next block, and what dismissing the boundary prompt does.
+Still to decide: how explicit skipping and drafts affect progress, where a new
+workout starts, and what dismissing the boundary prompt does.
 The storage design must distinguish the shared block/week structure, training
 progress, and the block/week currently being browsed. Whether progress is
 derived from logs or persisted explicitly has not been chosen.
+
+## Starting values in later blocks
+
+The confirmed source is the same workout's matching week in the previous block.
+For example, Push in Block 2 Week 1 starts with Push's Block 1 Week 1 values;
+Push in Block 2 Week 2 starts with Push's Block 1 Week 2 values. It does not use
+Block 1's final week as the source for every new week.
+
+This is initialization of editable workout values, rather than a separate
+block-specific prescription system. Existing saved destination sessions must
+not be overwritten by reapplying inheritance. The destination remains a fresh
+workout with its own identity, completion, date, and timer lifecycle; copying
+training values does not copy a historical workout's completed status.
+
+Still to decide: the fallback when the previous block has no matching week or
+no saved session for that workout, how changed exercises are matched, and when
+values are captured if the source log is later edited. The first block has no
+previous block and needs its own initialization rule.
 
 ## What the app stores today
 
@@ -214,10 +247,12 @@ approaches must preserve stable week identity, offline edits, and deletion rules
 - **Session lookup and edits:** use plan IDs and training-week identity for new
   paths. Keep deliberate legacy fallbacks for unresolved old records. Shared
   week rename/delete operations have a wider effect than today's per-plan actions.
-- **Initialization and previous sets:** define a new block's first-week source,
-  within-block previous-week lookup, skipped-week behavior, and whether references
-  may cross block boundaries. Do not let raw week-number sorting compare unrelated
-  Week 1s. Existing saved sessions must take priority over initialization rules.
+- **Initialization and previous sets:** initialize later-block workout values
+  from the previous block's matching week for the same workout. Define missing
+  source fallbacks, exercise matching, and first-block behavior. Distinguish
+  these starting values from any most-recent-set reference shown in the UI.
+  Do not let raw week-number sorting compare unrelated Week 1s. Existing saved
+  sessions must take priority over initialization rules.
 - **Cloud sync and Supabase:** extend the aggregate payloads or add tables as
   chosen; review promoted columns, owner/split consistency, foreign keys, RLS,
   indexes, update sequencing, and cursors. Push parents before dependent sessions;
@@ -241,11 +276,11 @@ template can affect future workouts in multiple blocks.
 
 ## Migration and compatibility principles
 
-Proposed default: put existing training weeks into one initial block per split,
+Confirmed migration: put existing training weeks into one initial block per split,
 preserving their numbers. Use the union of known session week numbers across
 that split; Push Week 3 and Pull Week 3 would map to the same shared week.
-This is a migration assumption to confirm: old per-plan week counters may have
-been used independently and may not represent the same training period.
+Old per-plan week counters may have been used independently and may not represent
+the same calendar period; independent workout progression remains intact.
 
 - Preserve every session's ID, date, exercise data, completion state, and timers.
   Keep orphaned history whose original plan no longer exists.
@@ -262,29 +297,35 @@ been used independently and may not represent the same training period.
   sync. Decide on version gating, a compatibility bridge, or a supported upgrade
   boundary before rollout; nullable fields alone are insufficient protection.
 - Keep historical logs reachable when a block/week is archived or removed.
-  Archiving is a suggested default for used blocks; exact deletion semantics
-  remain a product decision and must align locally and on the server.
+  Archiving completed blocks while preserving History, records, and statistics
+  is confirmed. Exact deletion semantics and archive eligibility remain product
+  decisions and must align locally and on the server. In particular, one workout
+  finishing a block does not mean every workout has finished that shared block.
 
 ## Questions still open
 
-1. How are block names, ordering, duplication, and archiving managed? Where does
-   New block live, and does it open immediately or remain planned for later?
-2. How should explicit skipping work, and where does a newly added workout begin?
+1. What are the details of the long-press management menu: naming, reordering,
+   optional duplication, and whether a newly created block remains planned or
+   becomes active immediately? How is manual active-week selection exposed?
+2. How should missed days differ from deliberately skipping a training week,
+   and where does a newly added workout begin? These cases need plain-language
+   clarification before choosing behavior. Suggested defaults, not approved:
+   a missed day leaves the workout's active week unchanged, and a newly added
+   workout lets the user choose its starting block/week.
    If a week is added to a block after some workouts have moved on, should those
    workouts simply retain their current progress as suggested above?
 3. How do unfinished sessions and manually viewed weeks interact with the
    progression-selected active week? Does switching workouts resume that
    workout's active week or retain the week being browsed? At the boundary
-   prompt, what happens if there is no next block or the user dismisses it?
-4. At a block boundary, should Week 1 use plan targets, the previous block's
-   final workout, or a user choice? This need not introduce block-specific targets.
+   prompt, what happens if the user dismisses it?
+4. What initializes the first block or a week with no matching previous-block
+   session? How are changed exercises matched, and when are source values copied?
 5. What happens when deleting a shared week containing logs from several workouts?
-   Can a block be archived without affecting History, records, or statistics?
+   When can a shared block be archived if some workouts still have active weeks
+   in it, and how can archived blocks be accessed or restored?
 6. Can the same workout be performed twice in one training week? Existing data
    can contain multiple sessions, while the workout screen normally selects one.
-7. Is the proposed mapping of existing per-plan weeks into one shared initial
-   block acceptable, or should users choose how to organize their old training?
-8. What should a brand-new split or newly installed preset start with, and how
+7. What should a brand-new split or newly installed preset start with, and how
    should its initial block be named?
 
 ## Suggested next steps and future acceptance criteria
@@ -299,10 +340,12 @@ Week 1s; automatic expansion of the active week's block on screen entry; inline
 expand/collapse animation with at most one block expanded; safe autosave/timer
 navigation; independent progression through only the supplied weeks without
 requiring other workouts to finish; an end-of-block choice on the next visit
-without automatically adding a week or changing blocks;
+without automatically adding a week or changing blocks; a Create block option
+when no next block exists; matching-week value inheritance across blocks;
 previous-set behavior at block boundaries;
-old-backup upgrades; interrupted and multi-device migration; account isolation;
-and archive/delete behavior without accidental history loss.
+old-backup upgrades into one initial block per split; interrupted and multi-device
+migration; account isolation; long-press block management; and archive/delete
+behavior without accidental history loss.
 
 When implementation begins, update [DESIGN.md](../../DESIGN.md) and
 [split documentation](../splits.md) to describe the resulting shipped behavior,
