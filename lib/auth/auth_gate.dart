@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
 import 'auth_error_message.dart';
+import 'data_preparation_failure.dart';
+import '../services/training_block_migration.dart';
 import '../services/adopt_local_data.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
@@ -212,27 +214,21 @@ class AuthenticatedHome extends StatefulWidget {
 }
 
 class _AuthenticatedHomeState extends State<AuthenticatedHome> {
-  late final bool _wasPrepared = AdoptLocalData.isPreparedForCurrentUser;
-  late final Future<void> _ready = AdoptLocalData.prepareLocal();
+  late Future<void> _ready = _prepare();
 
-  @override
-  void initState() {
-    super.initState();
-    _ready.then((_) {
-      if (!mounted) return;
-      context.read<SplitProvider>().loadSplits();
-      context.read<WorkoutPlanProvider>().loadPlans();
-      context.read<WorkoutSessionProvider>().loadSessions();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        unawaited(AdoptLocalData.syncInBackground());
-      });
+  Future<void> _prepare() async {
+    await AdoptLocalData.prepareLocal();
+    if (!mounted) return;
+    context.read<SplitProvider>().loadSplits();
+    context.read<WorkoutPlanProvider>().loadPlans();
+    context.read<WorkoutSessionProvider>().loadSessions();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(AdoptLocalData.syncInBackground());
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_wasPrepared) return const AppShell();
-
     return FutureBuilder<void>(
       future: _ready,
       builder: (context, snap) {
@@ -247,6 +243,20 @@ class _AuthenticatedHomeState extends State<AuthenticatedHome> {
                 child: const CircularProgressIndicator(),
               ),
             ),
+          );
+        }
+        if (snap.hasError) {
+          final error = snap.error;
+          return DataPreparationFailure(
+            onRetry: () async {
+              setState(() => _ready = _prepare());
+            },
+            onExport:
+                () => exportTrainingSafetyCopy(
+                  error is TrainingPreparationException
+                      ? error.safetySnapshotPath
+                      : null,
+                ),
           );
         }
         return const AppShell();

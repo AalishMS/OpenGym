@@ -3,6 +3,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/split.dart';
+import '../models/training_block.dart';
+import '../models/training_week.dart';
+import '../models/workout_progress.dart';
 import '../models/split_preference.dart';
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
@@ -13,6 +16,201 @@ import '../models/set_template.dart';
 import '../utils/split_identity.dart';
 
 class HiveService {
+  static const String trainingBlocksBox = 'training_blocks';
+  static const String trainingWeeksBox = 'training_weeks';
+  static const String workoutProgressBox = 'workout_progress';
+  static const String trainingOperationsBox = 'training_operations';
+
+  static Future<void> openTrainingBoxes() async {
+    if (!Hive.isAdapterRegistered(8)) {
+      Hive.registerAdapter(TrainingBlockAdapter());
+    }
+    if (!Hive.isAdapterRegistered(9)) {
+      Hive.registerAdapter(TrainingWeekAdapter());
+    }
+    if (!Hive.isAdapterRegistered(10)) {
+      Hive.registerAdapter(WorkoutProgressAdapter());
+    }
+    await Hive.openBox<TrainingBlock>(trainingBlocksBox);
+    await Hive.openBox<TrainingWeek>(trainingWeeksBox);
+    await Hive.openBox<WorkoutProgress>(workoutProgressBox);
+    await Hive.openBox<dynamic>(trainingOperationsBox);
+  }
+
+  static List<Split> getAllSplitsRaw() => _splitsBox.values.toList();
+
+  static List<TrainingBlock> getAllTrainingBlocksRaw() =>
+      Hive.isBoxOpen(trainingBlocksBox)
+          ? Hive.box<TrainingBlock>(trainingBlocksBox).values.toList()
+          : [];
+  static List<TrainingWeek> getAllTrainingWeeksRaw() =>
+      Hive.isBoxOpen(trainingWeeksBox)
+          ? Hive.box<TrainingWeek>(trainingWeeksBox).values.toList()
+          : [];
+  static List<WorkoutProgress> getAllWorkoutProgressRaw() =>
+      Hive.isBoxOpen(workoutProgressBox)
+          ? Hive.box<WorkoutProgress>(workoutProgressBox).values.toList()
+          : [];
+
+  static List<TrainingBlock> blocksForSplit(String splitId) =>
+      getAllTrainingBlocksRaw()
+          .where((b) => b.splitId == splitId && b.deletedAt == null)
+          .toList()
+        ..sort((a, b) {
+          final order = a.position.compareTo(b.position);
+          return order == 0 ? a.id.compareTo(b.id) : order;
+        });
+  static List<TrainingWeek> weeksForBlock(String splitId, String blockId) =>
+      getAllTrainingWeeksRaw()
+          .where(
+            (w) =>
+                w.splitId == splitId &&
+                w.blockId == blockId &&
+                w.deletedAt == null,
+          )
+          .toList()
+        ..sort((a, b) {
+          final order = a.number.compareTo(b.number);
+          return order == 0 ? a.id.compareTo(b.id) : order;
+        });
+  static WorkoutProgress? progressForPlan(String splitId, String planId) {
+    for (final p in getAllWorkoutProgressRaw()) {
+      if (p.splitId == splitId && p.planId == planId && p.deletedAt == null) {
+        return p;
+      }
+    }
+    return null;
+  }
+
+  static List<WorkoutSession> sessionsForPlanWeek(
+    String splitId,
+    String planId,
+    String weekId,
+  ) =>
+      getSessions(
+        splitId: splitId,
+      ).where((s) => s.planId == planId && s.trainingWeekId == weekId).toList();
+
+  static Future<void> putTrainingBlockRaw(TrainingBlock block) =>
+      Hive.box<TrainingBlock>(trainingBlocksBox).put(block.id, block);
+  static Future<void> putTrainingWeekRaw(TrainingWeek week) =>
+      Hive.box<TrainingWeek>(trainingWeeksBox).put(week.id, week);
+  static Future<void> putWorkoutProgressRaw(WorkoutProgress progress) =>
+      Hive.box<WorkoutProgress>(workoutProgressBox).put(progress.id, progress);
+
+  static String validateTrainingName(String value) {
+    final name = value.trim();
+    if (name.isEmpty || name.length > 40) {
+      throw ArgumentError('Use a block name of 1–40 characters.');
+    }
+    return name;
+  }
+
+  static Split validateTrainingSplit(String splitId, String? ownerId) {
+    final split = getSplitById(splitId);
+    if (split == null || split.deletedAt != null || split.userId != ownerId) {
+      throw StateError('The split is unavailable in this account.');
+    }
+    return split;
+  }
+
+  static TrainingBlock validateTrainingBlock(
+    String splitId,
+    String blockId,
+    String? ownerId,
+  ) {
+    validateTrainingSplit(splitId, ownerId);
+    final block = Hive.box<TrainingBlock>(trainingBlocksBox).get(blockId);
+    if (block == null ||
+        block.deletedAt != null ||
+        block.splitId != splitId ||
+        block.userId != ownerId) {
+      throw StateError('The training block is unavailable.');
+    }
+    return block;
+  }
+
+  /// A deliberately small roll-forward record: fixed IDs survive process death
+  /// between the block and week writes. The caller already owns the mutation gate.
+  static Future<void> persistTrainingCreation(
+    TrainingBlock block,
+    List<TrainingWeek> weeks,
+  ) async {
+    final box = Hive.box<dynamic>(trainingOperationsBox);
+    final pending = box.get('create');
+    if (pending != null) {
+      final map = Map<String, dynamic>.from(pending as Map);
+      if (map['ownerId'] != block.userId ||
+          (map['block'] as Map)['splitId'] != block.splitId) {
+        throw StateError('Finish the pending block creation first.');
+      }
+      await recoverTrainingOperation(ownerId: block.userId);
+      return;
+    }
+    await box.put('create', {
+      'ownerId': block.userId,
+      'block': block.toJson(),
+      'weeks': weeks.map((w) => w.toJson()).toList(),
+    });
+    await box.flush();
+    await recoverTrainingOperation(ownerId: block.userId);
+  }
+
+  static Future<TrainingBlock?> recoverTrainingOperation({
+    required String? ownerId,
+  }) async {
+    final operations = Hive.box<dynamic>(trainingOperationsBox);
+    final raw = operations.get('create');
+    if (raw == null) return null;
+    final map = Map<String, dynamic>.from(raw as Map);
+    if (map['ownerId'] != ownerId) {
+      throw StateError('Pending creation belongs to a different account.');
+    }
+    final block = TrainingBlock.fromJson(
+      Map<String, dynamic>.from(map['block'] as Map),
+    );
+    validateTrainingSplit(block.splitId, ownerId);
+    final existing = Hive.box<TrainingBlock>(trainingBlocksBox).get(block.id);
+    if (existing?.deletedAt != null) {
+      throw StateError('A deleted block cannot be restored.');
+    }
+    if (existing == null) {
+      await putTrainingBlockRaw(block.copyWith(dirty: true));
+    }
+    for (final rawWeek in map['weeks'] as List) {
+      final week = TrainingWeek.fromJson(
+        Map<String, dynamic>.from(rawWeek as Map),
+      );
+      final saved = Hive.box<TrainingWeek>(trainingWeeksBox).get(week.id);
+      if (saved?.deletedAt != null) {
+        throw StateError('A deleted week cannot be restored.');
+      }
+      if (saved == null) await putTrainingWeekRaw(week.copyWith(dirty: true));
+    }
+    await flushTrainingData();
+    await operations.delete('create');
+    await operations.flush();
+    return Hive.box<TrainingBlock>(trainingBlocksBox).get(block.id);
+  }
+
+  static Future<void> flushTrainingData() async {
+    await Hive.box<TrainingBlock>(trainingBlocksBox).flush();
+    await Hive.box<TrainingWeek>(trainingWeeksBox).flush();
+    await Hive.box<WorkoutProgress>(workoutProgressBox).flush();
+    await _sessionsBox.flush();
+  }
+
+  static Future<void> clearTrainingData() async {
+    for (final name in [
+      trainingBlocksBox,
+      trainingWeeksBox,
+      workoutProgressBox,
+      trainingOperationsBox,
+    ]) {
+      if (Hive.isBoxOpen(name)) await Hive.box(name).clear();
+    }
+  }
+
   static const String plansBox = 'workout_plans';
   static const String sessionsBox = 'workout_sessions';
   static const String splitsBox = 'splits';
@@ -21,22 +219,61 @@ class HiveService {
   static const String _migrationFlag = 'idkey_migration_v1_done';
 
   static Future<void> init() async {
+    if (Hive.isBoxOpen(plansBox) &&
+        Hive.isBoxOpen(sessionsBox) &&
+        Hive.isBoxOpen(splitsBox) &&
+        Hive.isBoxOpen(splitPreferencesBox) &&
+        Hive.isBoxOpen(trainingBlocksBox) &&
+        Hive.isBoxOpen(trainingWeeksBox) &&
+        Hive.isBoxOpen(workoutProgressBox) &&
+        Hive.isBoxOpen(trainingOperationsBox)) {
+      return;
+    }
     await Hive.initFlutter();
 
-    Hive.registerAdapter(SetAdapter());
-    Hive.registerAdapter(SetTemplateAdapter());
-    Hive.registerAdapter(ExerciseAdapter());
-    Hive.registerAdapter(ExerciseTemplateAdapter());
-    Hive.registerAdapter(WorkoutPlanAdapter());
-    Hive.registerAdapter(WorkoutSessionAdapter());
-    Hive.registerAdapter(SplitAdapter());
-    Hive.registerAdapter(SplitPreferenceAdapter());
+    if (!Hive.isAdapterRegistered(SetAdapter().typeId)) {
+      Hive.registerAdapter(SetAdapter());
+    }
+    if (!Hive.isAdapterRegistered(SetTemplateAdapter().typeId)) {
+      Hive.registerAdapter(SetTemplateAdapter());
+    }
+    if (!Hive.isAdapterRegistered(ExerciseAdapter().typeId)) {
+      Hive.registerAdapter(ExerciseAdapter());
+    }
+    if (!Hive.isAdapterRegistered(ExerciseTemplateAdapter().typeId)) {
+      Hive.registerAdapter(ExerciseTemplateAdapter());
+    }
+    if (!Hive.isAdapterRegistered(WorkoutPlanAdapter().typeId)) {
+      Hive.registerAdapter(WorkoutPlanAdapter());
+    }
+    if (!Hive.isAdapterRegistered(WorkoutSessionAdapter().typeId)) {
+      Hive.registerAdapter(WorkoutSessionAdapter());
+    }
+    if (!Hive.isAdapterRegistered(TrainingBlockAdapter().typeId)) {
+      Hive.registerAdapter(TrainingBlockAdapter());
+    }
+    if (!Hive.isAdapterRegistered(TrainingWeekAdapter().typeId)) {
+      Hive.registerAdapter(TrainingWeekAdapter());
+    }
+    if (!Hive.isAdapterRegistered(WorkoutProgressAdapter().typeId)) {
+      Hive.registerAdapter(WorkoutProgressAdapter());
+    }
+    if (!Hive.isAdapterRegistered(SplitAdapter().typeId)) {
+      Hive.registerAdapter(SplitAdapter());
+    }
+    if (!Hive.isAdapterRegistered(SplitPreferenceAdapter().typeId)) {
+      Hive.registerAdapter(SplitPreferenceAdapter());
+    }
 
     await Hive.openBox<WorkoutPlan>(plansBox);
     await Hive.openBox<WorkoutSession>(sessionsBox);
     await Hive.openBox<Split>(splitsBox);
     await Hive.openBox<SplitPreference>(splitPreferencesBox);
 
+    await Hive.openBox<TrainingBlock>(trainingBlocksBox);
+    await Hive.openBox<TrainingWeek>(trainingWeeksBox);
+    await Hive.openBox<WorkoutProgress>(workoutProgressBox);
+    await Hive.openBox<dynamic>(trainingOperationsBox);
     await _migrateToIdKeys();
   }
 
@@ -66,6 +303,35 @@ class HiveService {
     if (split != null && split.deletedAt == null) return split.id;
     final splits = getSplits();
     return splits.isEmpty ? null : splits.first.id;
+  }
+
+  static Future<void> ensureOfflineSplitWorkspace() async {
+    final splits = getSplits();
+    if (splits.isEmpty) {
+      final now = DateTime.now();
+      final id = _uuid.v4();
+      await putSplitRaw(
+        Split(
+          id: id,
+          name: 'My Split',
+          createdAt: now,
+          updatedAt: now,
+          dirty: true,
+        ),
+      );
+    }
+    final active = getSplits().first.id;
+    for (final plan in getAllPlansRaw().where((p) => p.splitId == null)) {
+      plan.splitId = active;
+      await putPlanRaw(plan);
+    }
+    for (final session in getAllSessionsRaw().where((s) => s.splitId == null)) {
+      session.splitId =
+          session.planId == null
+              ? active
+              : getPlanById(session.planId!)?.splitId ?? active;
+      await putSessionRaw(session);
+    }
   }
 
   static Future<void> ensureSplitWorkspace(

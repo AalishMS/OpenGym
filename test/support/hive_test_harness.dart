@@ -7,6 +7,9 @@ import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/split.dart';
+import 'package:gymapp/models/training_block.dart';
+import 'package:gymapp/models/training_week.dart';
+import 'package:gymapp/models/workout_progress.dart';
 import 'package:gymapp/models/split_preference.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
@@ -18,6 +21,13 @@ class HiveTestHarness {
   Future<void> open({bool includeSplits = false}) async {
     _directory = await Directory.systemTemp.createTemp('opengym_test_');
     Hive.init(_directory!.path);
+    _register(TrainingBlockAdapter());
+    _register(TrainingWeekAdapter());
+    _register(WorkoutProgressAdapter());
+    await Hive.openBox<TrainingBlock>(HiveService.trainingBlocksBox);
+    await Hive.openBox<TrainingWeek>(HiveService.trainingWeeksBox);
+    await Hive.openBox<WorkoutProgress>(HiveService.workoutProgressBox);
+    await Hive.openBox<dynamic>(HiveService.trainingOperationsBox);
     _register(SetAdapter());
     _register(SetTemplateAdapter());
     _register(ExerciseAdapter());

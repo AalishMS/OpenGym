@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'auth/auth_gate.dart';
+import 'auth/data_preparation_failure.dart';
+import 'services/training_block_migration.dart';
 import 'navigation/app_navigation_observer.dart';
 import 'providers/coach_provider.dart';
 import 'providers/workout_plan_provider.dart';
@@ -27,6 +29,24 @@ void main() async {
     await AdoptLocalData.prepareLocal();
   } catch (e) {
     debugPrint('Local startup error: $e');
+    runApp(
+      MaterialApp(
+        home: DataPreparationFailure(
+          onRetry:
+              e is TrainingPreparationException
+                  ? () async {
+                    await AdoptLocalData.prepareLocal();
+                    runApp(MyApp(showIntro: showIntro));
+                  }
+                  : () async => main(),
+          onExport:
+              () => exportTrainingSafetyCopy(
+                e is TrainingPreparationException ? e.safetySnapshotPath : null,
+              ),
+        ),
+      ),
+    );
+    return;
   }
 
   runApp(MyApp(showIntro: showIntro));

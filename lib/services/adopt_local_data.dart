@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/hive_service.dart';
 import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
+import 'training_block_migration.dart';
 
 /// One-time-per-user adoption of on-device data into the signed-in account,
 /// plus a shared-device guard.
@@ -26,10 +27,18 @@ class AdoptLocalData {
   /// cached data immediately, while a different user cannot see the previous
   /// account's cache during the handover.
   static Future<void> prepareLocal() async {
-    if (!SupabaseService.isConfigured) return;
+    if (!SupabaseService.isConfigured) {
+      await prepareOffline();
+      return;
+    }
     final userId = SupabaseService.currentUserId;
     if (userId == null) return;
     await prepareLocalForUser(userId);
+  }
+
+  static Future<void> prepareOffline() async {
+    await HiveService.ensureOfflineSplitWorkspace();
+    await TrainingBlockMigration().normalize(ownerId: null);
   }
 
   static Future<void> prepareLocalForUser(String userId) async {
@@ -66,6 +75,7 @@ class AdoptLocalData {
       await HiveService.clearAllPlans();
       await HiveService.clearAllSessions();
       await HiveService.clearSplitData();
+      await HiveService.clearTrainingData();
       await prefs.remove('splits_last_pulled');
       await prefs.remove('split_preferences_last_pulled');
       await prefs.remove('plans_last_pulled');
@@ -87,19 +97,57 @@ class AdoptLocalData {
       // an existing cloud workspace.
       final now = DateTime.now();
       for (final p in HiveService.getAllPlansRaw()) {
+        if (p.userId != null && p.userId != userId) {
+          throw StateError('Plan belongs to a different account.');
+        }
         p.userId = userId;
         p.updatedAt ??= now;
         p.dirty = true;
         await HiveService.putPlanRaw(p);
       }
       for (final s in HiveService.getAllSessionsRaw()) {
+        if (s.userId != null && s.userId != userId) {
+          throw StateError('Session belongs to a different account.');
+        }
         s.userId = userId;
         s.updatedAt ??= now;
         s.dirty = true;
         await HiveService.putSessionRaw(s);
       }
+      for (final split in HiveService.getAllSplitsRaw()) {
+        if (split.userId != null && split.userId != userId) {
+          throw StateError('Split belongs to a different account.');
+        }
+        split.userId = userId;
+        await HiveService.putSplitRaw(split);
+      }
+      for (final b in HiveService.getAllTrainingBlocksRaw()) {
+        if (b.userId != null && b.userId != userId) {
+          throw StateError('Block belongs to a different account.');
+        }
+        await HiveService.putTrainingBlockRaw(
+          b.copyWith(userId: userId, dirty: true),
+        );
+      }
+      for (final w in HiveService.getAllTrainingWeeksRaw()) {
+        if (w.userId != null && w.userId != userId) {
+          throw StateError('Week belongs to a different account.');
+        }
+        await HiveService.putTrainingWeekRaw(
+          w.copyWith(userId: userId, dirty: true),
+        );
+      }
+      for (final p in HiveService.getAllWorkoutProgressRaw()) {
+        if (p.userId != null && p.userId != userId) {
+          throw StateError('Progress belongs to a different account.');
+        }
+        await HiveService.putWorkoutProgressRaw(
+          p.copyWith(userId: userId, dirty: true),
+        );
+      }
       await prefs.setBool(adoptedKey, true);
     }
+    await TrainingBlockMigration().normalize(ownerId: userId);
   }
 
   /// Starts or joins the current user's network reconciliation.
