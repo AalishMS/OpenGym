@@ -7,6 +7,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 class SupabaseService {
   SupabaseService._();
 
+  static int _accountGeneration = 0;
+  static String? _observedAccount;
+  static int get accountGeneration {
+    final current = currentUserId;
+    if (current != _observedAccount) {
+      _observedAccount = current;
+      _accountGeneration++;
+    }
+    return _accountGeneration;
+  }
+
   static bool passwordRecoveryPending = false;
   static StreamSubscription<AuthState>? _recoverySubscription;
 
@@ -43,12 +54,18 @@ class SupabaseService {
       // dashboard calls the "anon public" key); supabase_flutter renamed the
       // parameter to publishableKey and accepts the legacy anon key here.
       publishableKey: supabaseAnonKey,
+      headers: const {'x-opengym-training-schema': '1'},
     );
     await _recoverySubscription?.cancel();
     // The SDK replays its last auth event. Subscribe before runApp so a
     // cold-start recovery link is retained through subsequent token refreshes.
     _recoverySubscription = auth.onAuthStateChange.listen(
       (state) {
+        final current = state.session?.user.id;
+        if (current != _observedAccount) {
+          _observedAccount = current;
+          _accountGeneration++;
+        }
         if (state.event == AuthChangeEvent.passwordRecovery) {
           passwordRecoveryPending = true;
         } else if (state.event == AuthChangeEvent.signedOut) {

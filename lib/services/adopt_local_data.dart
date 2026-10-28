@@ -50,7 +50,9 @@ class AdoptLocalData {
       if (_preparedUserId == userId) return;
     }
 
-    final preparation = _prepareLocalForUser(userId);
+    final preparation = SyncService.instance.runExclusiveLocalMutation(
+      () => _prepareLocalForUser(userId),
+    );
     _preparingUserId = userId;
     _preparation = preparation;
     try {
@@ -80,6 +82,9 @@ class AdoptLocalData {
       await prefs.remove('split_preferences_last_pulled');
       await prefs.remove('plans_last_pulled');
       await prefs.remove('sessions_last_pulled');
+      await prefs.remove('training_blocks_last_pulled');
+      await prefs.remove('training_weeks_last_pulled');
+      await prefs.remove('workout_progress_last_pulled');
     }
     await prefs.setString(_lastUserKey, userId);
 
@@ -147,7 +152,7 @@ class AdoptLocalData {
       }
       await prefs.setBool(adoptedKey, true);
     }
-    await TrainingBlockMigration().normalize(ownerId: userId);
+    await TrainingBlockMigration().normalizeUnderGate(ownerId: userId);
   }
 
   /// Starts or joins the current user's network reconciliation.

@@ -34,6 +34,31 @@ void main() {
     await hiveHarness.close();
   });
 
+  test('legacy split assignment preserves existing edit timestamps', () async {
+    final original = DateTime.utc(2025, 1, 1);
+    await HiveService.putPlanRaw(
+      WorkoutPlan(
+        id: 'legacy-plan',
+        name: 'Push',
+        exercises: [],
+        updatedAt: original,
+      ),
+    );
+    await HiveService.putSessionRaw(
+      WorkoutSession(
+        id: 'legacy-session',
+        date: original,
+        planName: 'Push',
+        planId: 'legacy-plan',
+        exercises: [],
+        updatedAt: original,
+      ),
+    );
+    await HiveService.ensureSplitWorkspace('user-1');
+    expect(HiveService.getPlanById('legacy-plan')!.updatedAt, original);
+    expect(HiveService.getSessionById('legacy-session')!.updatedAt, original);
+  });
+
   test('legacy rows are assigned to the deterministic My Split', () async {
     const userId = '00000000-0000-0000-0000-000000000001';
     final plan = WorkoutPlan(id: 'plan-1', name: 'Legacy', exercises: []);

@@ -318,6 +318,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 SyncStatus.savedOnDevice => 'Saved on device',
                                 SyncStatus.pending => 'Sync pending',
                                 SyncStatus.synced => 'Synced',
+                                SyncStatus.upgradeRequired => 'Update required',
+                                SyncStatus.retryableError => 'Sync needs retry',
                               };
                               final detail = switch (status) {
                                 SyncStatus.savedOnDevice =>
@@ -325,6 +327,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                 SyncStatus.pending =>
                                   'Waiting to finish syncing',
                                 SyncStatus.synced => 'Your data is up to date',
+                                SyncStatus.upgradeRequired =>
+                                  'Update OpenGym to sync this account',
+                                SyncStatus.retryableError =>
+                                  'Your data is saved on this device',
                               };
                               return Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -360,6 +366,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                         ],
                                       ),
                                     ),
+                                    if (status == SyncStatus.retryableError ||
+                                        status == SyncStatus.pending)
+                                      TextButton(
+                                        onPressed:
+                                            () => _runSettingsAction(
+                                              context,
+                                              () =>
+                                                  SyncService.instance.syncNow(
+                                                    fullReconciliation: true,
+                                                  ),
+                                              progressLabel: 'Syncing',
+                                            ),
+                                        child: const Text('Retry'),
+                                      ),
                                   ],
                                 ),
                               );

@@ -37,6 +37,13 @@ class HiveService {
     await Hive.openBox<dynamic>(trainingOperationsBox);
   }
 
+  static TrainingBlock? getTrainingBlockById(String id) =>
+      Hive.box<TrainingBlock>(trainingBlocksBox).get(id);
+  static TrainingWeek? getTrainingWeekById(String id) =>
+      Hive.box<TrainingWeek>(trainingWeeksBox).get(id);
+  static WorkoutProgress? getWorkoutProgressById(String id) =>
+      Hive.box<WorkoutProgress>(workoutProgressBox).get(id);
+
   static List<Split> getAllSplitsRaw() => _splitsBox.values.toList();
 
   static List<TrainingBlock> getAllTrainingBlocksRaw() =>
@@ -393,7 +400,7 @@ class HiveService {
     for (final plan in _plansBox.values.where((p) => p.splitId == null)) {
       plan.splitId = activeId;
       plan.userId ??= userId;
-      plan.updatedAt = now;
+      plan.updatedAt ??= now;
       plan.dirty = true;
       await _plansBox.put(plan.id, plan);
     }
@@ -401,7 +408,7 @@ class HiveService {
       final plan = session.planId == null ? null : getPlanById(session.planId!);
       session.splitId = plan?.splitId ?? activeId;
       session.userId ??= userId;
-      session.updatedAt = now;
+      session.updatedAt ??= now;
       session.dirty = true;
       await _sessionsBox.put(session.id, session);
     }
