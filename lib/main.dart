@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'auth/auth_gate.dart';
 import 'auth/data_preparation_failure.dart';
+import 'auth/training_data_gate.dart';
 import 'services/training_block_migration.dart';
 import 'navigation/app_navigation_observer.dart';
 import 'providers/coach_provider.dart';
@@ -161,7 +162,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                         ? navigator!
                         : AuthGate(
                           onAccountChanged: _onAccountChanged,
-                          child: navigator!,
+                          child: TrainingDataGate(child: navigator!),
                         ),
             home:
                 _showIntro

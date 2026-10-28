@@ -83,6 +83,8 @@ class SettingsProvider with ChangeNotifier {
     _loadSettings();
   }
 
+  Future<void> reload() => _loadSettings();
+
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
 

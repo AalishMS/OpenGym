@@ -10,6 +10,7 @@ import '../models/workout_progress.dart';
 import '../models/workout_session.dart';
 import '../utils/training_block_identity.dart';
 import 'hive_service.dart';
+import 'training_block_graph.dart';
 import 'sync_service.dart';
 
 class TrainingPreparationException implements Exception {
@@ -116,203 +117,53 @@ class TrainingBlockMigration {
       }
       await checkpoint(_ownerKey(ownerId), journal, 'snapshot');
       await HiveService.recoverTrainingWeekRebase(ownerId: ownerId);
-      final sessions = HiveService.getAllSessionsRaw();
-      final count = sessions.length;
-      // Validate all supplied links before any graph mutation.
-      _validateGraph(sessions, ownerId);
-      final splits = HiveService.getAllSplitsRaw();
-      final blocks = {
-        for (final b in HiveService.getAllTrainingBlocksRaw()) b.id: b,
-      };
-      final weeks = {
-        for (final w in HiveService.getAllTrainingWeeksRaw()) w.id: w,
-      };
-      for (final split in splits) {
-        final legacy =
-            sessions
-                .where((s) => s.splitId == split.id && s.trainingWeekId == null)
-                .toList();
-        final blockId = legacyTrainingBlockId(split.id);
-        final hasStructure = blocks.values.any(
-          (b) => b.splitId == split.id && b.deletedAt == null,
-        );
-        if (legacy.isEmpty && hasStructure) continue;
-        final deleted = split.deletedAt;
-        final existing = blocks[blockId];
-        if (existing?.deletedAt != null && deleted == null) {
-          throw StateError('Legacy data refers to a deleted block.');
-        }
-        final block =
-            existing ??
-            TrainingBlock(
-              id: blockId,
-              splitId: split.id,
-              name: 'Block 1',
-              position: 0,
-              createdAt: split.createdAt,
-              updatedAt: null,
-              deletedAt: deleted,
-              userId: ownerId,
-              dirty: true,
-            );
-        if (existing == null) {
+      final count = HiveService.getAllSessionsRaw().length;
+      final prepared = prepareGraph(_readGraph(ownerId));
+      for (final block in prepared.blocks) {
+        final old = HiveService.getTrainingBlockById(block.id);
+        if (old == null ||
+            jsonEncode(old.toJson()) != jsonEncode(block.toJson())) {
           await HiveService.putTrainingBlockRaw(block);
-          blocks[block.id] = block;
         }
-        final numbers = legacy.map((s) => s.weekNumber).toSet();
-        if (numbers.isEmpty && !weeks.values.any((w) => w.blockId == blockId)) {
-          numbers.add(1);
-        }
-        for (final number in numbers.toList()..sort()) {
-          final id = legacyTrainingWeekId(split.id, number);
-          final existingWeek = weeks[id];
-          if (existingWeek?.deletedAt != null && deleted == null) {
-            throw StateError('Legacy data refers to a deleted week.');
-          }
-          // Deterministic legacy labels take precedence over random additions.
-          // Preserve random IDs and all linked values while rebasing their label.
-          final conflicts =
-              weeks.values
-                  .where(
-                    (w) =>
-                        w.blockId == blockId &&
-                        w.number == number &&
-                        w.id != id &&
-                        w.deletedAt == null,
-                  )
-                  .toList()
-                ..sort((a, b) => a.id.compareTo(b.id));
-          for (final conflict in conflicts) {
-            var max = number;
-            for (final w in weeks.values.where(
-              (w) => w.blockId == blockId && w.deletedAt == null,
-            )) {
-              if (w.number > max) max = w.number;
-            }
-            for (final n in numbers) {
-              if (n > max) max = n;
-            }
-            final rebased = conflict.copyWith(number: max + 1, dirty: true);
-            await HiveService.persistTrainingWeekRebase(
-              rebased,
-              ownerId: ownerId,
-            );
-            weeks[rebased.id] = rebased;
-          }
-          if (existingWeek == null) {
-            final week = TrainingWeek(
-              id: id,
-              splitId: split.id,
-              blockId: blockId,
-              number: number,
-              createdAt: split.createdAt,
-              updatedAt: null,
-              deletedAt: deleted,
-              userId: ownerId,
-              dirty: true,
-            );
-            await HiveService.putTrainingWeekRaw(week);
-            weeks[id] = week;
-          }
+      }
+      for (final week in prepared.weeks) {
+        final old = HiveService.getTrainingWeekById(week.id);
+        if (old != null && old.number != week.number) {
+          await HiveService.persistTrainingWeekRebase(week, ownerId: ownerId);
+        } else if (old == null ||
+            jsonEncode(old.toJson()) != jsonEncode(week.toJson())) {
+          await HiveService.putTrainingWeekRaw(week);
         }
       }
       await HiveService.flushTrainingData();
       await checkpoint(_ownerKey(ownerId), journal, 'parents');
-      final plans = HiveService.getAllPlansRaw();
-      for (final old in HiveService.getAllSessionsRaw()) {
-        if (old.trainingWeekId != null) continue;
-        var planId = old.planId;
-        if (planId == null) {
-          final matches =
-              plans
-                  .where(
-                    (p) =>
-                        p.splitId == old.splitId &&
-                        p.userId == ownerId &&
-                        p.name == old.planName,
-                  )
-                  .toList();
-          if (matches.length == 1) planId = matches.single.id;
+      for (final plan in prepared.plans) {
+        final old = HiveService.getPlanById(plan.id!);
+        if (old == null ||
+            jsonEncode(old.toJson()) != jsonEncode(plan.toJson())) {
+          await HiveService.putPlanRaw(plan);
         }
-        await HiveService.putSessionRaw(
-          old.copyWith(
-            planId: planId,
-            trainingWeekId: legacyTrainingWeekId(old.splitId!, old.weekNumber),
-          ),
-        );
+      }
+      for (final session in prepared.sessions) {
+        final old = HiveService.getSessionById(session.id!);
+        if (old == null ||
+            jsonEncode(old.toJson()) != jsonEncode(session.toJson())) {
+          await HiveService.putSessionRaw(session);
+        }
       }
       await HiveService.flushTrainingData();
       await checkpoint(_ownerKey(ownerId), journal, 'links');
-      for (final plan in plans.where((p) => p.deletedAt == null)) {
-        final splitId = plan.splitId!;
-        if (HiveService.progressForPlan(splitId, plan.id!) != null) continue;
-        // Never resurrect a deleted progress record during late normalization.
-        final progressId = workoutProgressId(splitId, plan.id!);
-        if (HiveService.getAllWorkoutProgressRaw().any(
-          (p) => p.id == progressId,
-        )) {
-          continue;
+      for (final value in prepared.progress) {
+        final old = HiveService.getWorkoutProgressById(value.id);
+        if (old == null ||
+            jsonEncode(old.toJson()) != jsonEncode(value.toJson())) {
+          await HiveService.putWorkoutProgressRaw(value);
         }
-        final split = HiveService.getSplitById(splitId)!;
-        if (split.deletedAt != null) continue;
-        final suppliedBlocks = HiveService.blocksForSplit(splitId);
-        if (suppliedBlocks.isEmpty) throw StateError('No live training block.');
-        final available = HiveService.weeksForBlock(
-          splitId,
-          suppliedBlocks.first.id,
-        );
-        if (available.isEmpty) throw StateError('No supplied training weeks.');
-        final logs =
-            HiveService.getSessions(splitId: splitId)
-                .where(
-                  (s) =>
-                      s.planId == plan.id &&
-                      available.any((w) => w.id == s.trainingWeekId),
-                )
-                .toList();
-        final drafts =
-            logs.where((s) => !s.isCompleted).toList()..sort((a, b) {
-              if (a.isTimerRunning != b.isTimerRunning) {
-                return a.isTimerRunning ? -1 : 1;
-              }
-              return compareSessionRecency(b, a);
-            });
-        var active = available.first.id;
-        var state = WorkoutProgressState.ready;
-        if (drafts.isNotEmpty) {
-          active = drafts.first.trainingWeekId!;
-        } else {
-          final done = logs.where((s) => s.isCompleted).toList();
-          if (done.isNotEmpty) {
-            final highest = done
-                .map((s) => s.weekNumber)
-                .reduce((a, b) => a > b ? a : b);
-            final next = available.where((w) => w.number > highest).toList();
-            active = next.isEmpty ? available.last.id : next.first.id;
-            if (next.isEmpty) state = WorkoutProgressState.awaitingBoundary;
-          }
-        }
-        await HiveService.putWorkoutProgressRaw(
-          WorkoutProgress(
-            id: progressId,
-            splitId: splitId,
-            planId: plan.id!,
-            activeWeekId: active,
-            state: state,
-            revision: initialProgressRevision(splitId, plan.id!),
-            userId: ownerId,
-            updatedAt: null,
-            dirty: true,
-          ),
-        );
       }
       await HiveService.flushTrainingData();
       await checkpoint(_ownerKey(ownerId), journal, 'progress');
-      _validateGraph(HiveService.getAllSessionsRaw(), ownerId);
-      if (HiveService.getAllSessionsRaw().length != count ||
-          HiveService.getAllSessionsRaw().any(
-            (s) => s.trainingWeekId == null,
-          )) {
+      _readGraph(ownerId).validate();
+      if (HiveService.getAllSessionsRaw().length != count) {
         throw StateError('Training verification failed.');
       }
       await HiveService.flushTrainingData();
@@ -338,6 +189,266 @@ class TrainingBlockMigration {
     );
   }
 
+  static TrainingBlockGraph prepareGraph(TrainingBlockGraph input) {
+    input.validate(
+      allowLegacyLinks: true,
+      allowLiveChildrenOfDeletedParents: true,
+    );
+    final splits = {for (final s in input.splits) s.id: s};
+    final plans = {for (final p in input.plans) p.id!: p.copyWith()};
+    final blocks = {for (final b in input.blocks) b.id: b.copyWith()};
+    final weeks = {for (final w in input.weeks) w.id: w.copyWith()};
+    final sessions = {for (final s in input.sessions) s.id!: s.copyWith()};
+    final progress = {for (final p in input.progress) p.id: p.copyWith()};
+    DateTime stamp(DateTime? child, DateTime? parent, DateTime deletion) =>
+        child != null && child.isAfter(parent ?? deletion)
+            ? child
+            : parent ?? deletion;
+    // A parent tombstone is a durable outcome, including after interruption.
+    for (final p in plans.values.toList()) {
+      final parent = splits[p.splitId]!;
+      if (parent.deletedAt != null && p.deletedAt == null) {
+        plans[p.id!] = p.copyWith(
+          deletedAt: parent.deletedAt,
+          updatedAt: stamp(p.updatedAt, parent.updatedAt, parent.deletedAt!),
+          dirty: true,
+        );
+      }
+    }
+    for (final b in blocks.values.toList()) {
+      final parent = splits[b.splitId]!;
+      if (parent.deletedAt != null && b.deletedAt == null) {
+        blocks[b.id] = b.copyWith(
+          deletedAt: parent.deletedAt,
+          updatedAt: stamp(b.updatedAt, parent.updatedAt, parent.deletedAt!),
+          dirty: true,
+        );
+      }
+    }
+    for (final w in weeks.values.toList()) {
+      final parent = blocks[w.blockId]!;
+      if (parent.deletedAt != null && w.deletedAt == null) {
+        weeks[w.id] = w.copyWith(
+          deletedAt: parent.deletedAt,
+          updatedAt: stamp(w.updatedAt, parent.updatedAt, parent.deletedAt!),
+          dirty: true,
+        );
+      }
+    }
+    for (final s in sessions.values.toList()) {
+      final parent = splits[s.splitId]!;
+      final week = weeks[s.trainingWeekId];
+      final deleted = parent.deletedAt ?? week?.deletedAt;
+      if (deleted != null && s.deletedAt == null) {
+        sessions[s.id!] = s.copyWith(
+          deletedAt: deleted,
+          updatedAt: stamp(s.updatedAt, parent.updatedAt, deleted),
+          dirty: true,
+        );
+      }
+    }
+    for (final p in progress.values.toList()) {
+      final parent = plans[p.planId]!;
+      final week = weeks[p.activeWeekId]!;
+      final deleted = parent.deletedAt ?? week.deletedAt;
+      if (deleted != null && p.deletedAt == null) {
+        progress[p.id] = p.copyWith(
+          deletedAt: deleted,
+          updatedAt: stamp(p.updatedAt, parent.updatedAt, deleted),
+          dirty: true,
+        );
+      }
+    }
+    for (final split in splits.values) {
+      final legacy =
+          sessions.values
+              .where((s) => s.splitId == split.id && s.trainingWeekId == null)
+              .toList();
+      final existing =
+          blocks.values.where((b) => b.splitId == split.id).toList();
+      if (legacy.isEmpty && existing.isNotEmpty) continue;
+      final id = legacyTrainingBlockId(split.id);
+      if (blocks[id]?.deletedAt != null && split.deletedAt == null) {
+        throw const FormatException(
+          'A deleted legacy block cannot be restored.',
+        );
+      }
+      blocks.putIfAbsent(
+        id,
+        () => TrainingBlock(
+          id: id,
+          splitId: split.id,
+          name: 'Block 1',
+          position: 0,
+          createdAt: split.createdAt,
+          deletedAt: split.deletedAt,
+          userId: input.ownerId,
+          dirty: true,
+        ),
+      );
+      final numbers = legacy.map((s) => s.weekNumber).toSet();
+      if (numbers.isEmpty && !weeks.values.any((w) => w.blockId == id)) {
+        numbers.add(1);
+      }
+      for (final number in numbers.toList()..sort()) {
+        final weekId = legacyTrainingWeekId(split.id, number);
+        if (weeks[weekId]?.deletedAt != null && split.deletedAt == null) {
+          throw const FormatException(
+            'A deleted legacy week cannot be restored.',
+          );
+        }
+        final conflicts =
+            weeks.values
+                .where(
+                  (w) =>
+                      w.blockId == id &&
+                      w.number == number &&
+                      w.id != weekId &&
+                      w.deletedAt == null,
+                )
+                .toList()
+              ..sort((a, b) => a.id.compareTo(b.id));
+        for (final conflict in conflicts) {
+          var highest = number;
+          for (final w in weeks.values.where(
+            (w) => w.blockId == id && w.deletedAt == null,
+          )) {
+            if (w.number > highest) highest = w.number;
+          }
+          for (final n in numbers) {
+            if (n > highest) highest = n;
+          }
+          final rebased = conflict.copyWith(number: highest + 1, dirty: true);
+          weeks[rebased.id] = rebased;
+          for (final s
+              in sessions.values
+                  .where((s) => s.trainingWeekId == rebased.id)
+                  .toList()) {
+            sessions[s.id!] = s.copyWith(
+              weekNumber: rebased.number,
+              dirty: true,
+            );
+          }
+        }
+        weeks.putIfAbsent(
+          weekId,
+          () => TrainingWeek(
+            id: weekId,
+            splitId: split.id,
+            blockId: id,
+            number: number,
+            createdAt: split.createdAt,
+            deletedAt: split.deletedAt,
+            userId: input.ownerId,
+            dirty: true,
+          ),
+        );
+      }
+    }
+    for (final s in sessions.values.toList()) {
+      if (s.trainingWeekId != null) continue;
+      var planId = s.planId;
+      if (planId == null) {
+        final matches =
+            plans.values
+                .where((p) => p.splitId == s.splitId && p.name == s.planName)
+                .toList();
+        if (matches.length == 1) planId = matches.single.id;
+      }
+      sessions[s.id!] = s.copyWith(
+        planId: planId,
+        trainingWeekId: legacyTrainingWeekId(s.splitId!, s.weekNumber),
+      );
+    }
+    int blockOrder(TrainingBlock a, TrainingBlock b) {
+      final order = a.position.compareTo(b.position);
+      return order == 0 ? a.id.compareTo(b.id) : order;
+    }
+
+    int weekOrder(TrainingWeek a, TrainingWeek b) {
+      final order = a.number.compareTo(b.number);
+      return order == 0 ? a.id.compareTo(b.id) : order;
+    }
+
+    for (final plan in plans.values.where((p) => p.deletedAt == null)) {
+      if (progress.values.any((p) => p.planId == plan.id)) continue;
+      final split = splits[plan.splitId]!;
+      if (split.deletedAt != null) continue;
+      final suppliedBlocks =
+          blocks.values
+              .where((b) => b.splitId == plan.splitId && b.deletedAt == null)
+              .toList()
+            ..sort(blockOrder);
+      if (suppliedBlocks.isEmpty) {
+        throw const FormatException('No live training block.');
+      }
+      final available =
+          weeks.values
+              .where(
+                (w) =>
+                    w.blockId == suppliedBlocks.first.id && w.deletedAt == null,
+              )
+              .toList()
+            ..sort(weekOrder);
+      if (available.isEmpty) {
+        throw const FormatException('No supplied training week.');
+      }
+      final availableIds = available.map((w) => w.id).toSet();
+      final logs =
+          sessions.values
+              .where(
+                (s) =>
+                    s.planId == plan.id &&
+                    s.splitId == plan.splitId &&
+                    s.deletedAt == null &&
+                    availableIds.contains(s.trainingWeekId),
+              )
+              .toList();
+      final drafts =
+          logs.where((s) => !s.isCompleted).toList()..sort((a, b) {
+            if (a.isTimerRunning != b.isTimerRunning) {
+              return a.isTimerRunning ? -1 : 1;
+            }
+            return compareSessionRecency(b, a);
+          });
+      var active = available.first.id;
+      var state = WorkoutProgressState.ready;
+      if (drafts.isNotEmpty) {
+        active = drafts.first.trainingWeekId!;
+      } else {
+        final done = logs.where((s) => s.isCompleted).toList();
+        if (done.isNotEmpty) {
+          final highest = done
+              .map((s) => s.weekNumber)
+              .reduce((a, b) => a > b ? a : b);
+          final next = available.where((w) => w.number > highest).toList();
+          active = next.isEmpty ? available.last.id : next.first.id;
+          if (next.isEmpty) state = WorkoutProgressState.awaitingBoundary;
+        }
+      }
+      final id = workoutProgressId(plan.splitId!, plan.id!);
+      progress[id] = WorkoutProgress(
+        id: id,
+        splitId: plan.splitId!,
+        planId: plan.id!,
+        activeWeekId: active,
+        state: state,
+        revision: initialProgressRevision(plan.splitId!, plan.id!),
+        userId: input.ownerId,
+        dirty: true,
+      );
+    }
+    final graph = input.copyWith(
+      plans: plans.values.toList(),
+      sessions: sessions.values.toList(),
+      blocks: blocks.values.toList(),
+      weeks: weeks.values.toList(),
+      progress: progress.values.toList(),
+    );
+    graph.validate();
+    return graph;
+  }
+
   static int compareSessionRecency(WorkoutSession a, WorkoutSession b) {
     final update = (a.updatedAt ?? a.date).compareTo(b.updatedAt ?? b.date);
     if (update != 0) return update;
@@ -359,68 +470,13 @@ class TrainingBlockMigration {
     }
   }
 
-  void _validateGraph(List<WorkoutSession> sessions, String? ownerId) {
-    final splits = {for (final s in HiveService.getAllSplitsRaw()) s.id: s};
-    final blocks = {
-      for (final b in HiveService.getAllTrainingBlocksRaw()) b.id: b,
-    };
-    final weeks = {
-      for (final w in HiveService.getAllTrainingWeeksRaw()) w.id: w,
-    };
-    final plans = {for (final p in HiveService.getAllPlansRaw()) p.id: p};
-    for (final plan in plans.values) {
-      if (!splits.containsKey(plan.splitId)) {
-        throw StateError('Plan has no owning split.');
-      }
-    }
-    for (final b in blocks.values) {
-      final parent = splits[b.splitId];
-      if (parent == null ||
-          parent.userId != b.userId ||
-          (parent.deletedAt != null && b.deletedAt == null)) {
-        throw StateError('Conflicting block parent.');
-      }
-    }
-    for (final w in weeks.values) {
-      final parent = blocks[w.blockId];
-      if (w.number < 1 ||
-          parent == null ||
-          parent.splitId != w.splitId ||
-          parent.userId != w.userId ||
-          (parent.deletedAt != null && w.deletedAt == null)) {
-        throw StateError('Conflicting week parent.');
-      }
-    }
-    for (final s in sessions) {
-      if (s.id == null || !splits.containsKey(s.splitId) || s.weekNumber < 1) {
-        throw StateError('Invalid legacy session week or split.');
-      }
-      final plan = plans[s.planId];
-      if (plan != null &&
-          (plan.splitId != s.splitId || plan.userId != ownerId)) {
-        throw StateError('Conflicting session plan.');
-      }
-      if (s.trainingWeekId != null) {
-        final week = weeks[s.trainingWeekId];
-        if (week == null ||
-            week.splitId != s.splitId ||
-            week.number != s.weekNumber ||
-            (week.deletedAt != null && s.deletedAt == null)) {
-          throw StateError('Conflicting session week.');
-        }
-      }
-    }
-    for (final p in HiveService.getAllWorkoutProgressRaw()) {
-      final plan = plans[p.planId];
-      final week = weeks[p.activeWeekId];
-      if (plan == null ||
-          plan.splitId != p.splitId ||
-          week == null ||
-          week.splitId != p.splitId ||
-          (p.deletedAt == null &&
-              (week.deletedAt != null || plan.deletedAt != null))) {
-        throw StateError('Conflicting workout progress.');
-      }
-    }
-  }
+  static TrainingBlockGraph _readGraph(String? owner) => TrainingBlockGraph(
+    ownerId: owner,
+    splits: HiveService.getAllSplitsRaw(),
+    plans: HiveService.getAllPlansRaw(),
+    sessions: HiveService.getAllSessionsRaw(),
+    blocks: HiveService.getAllTrainingBlocksRaw(),
+    weeks: HiveService.getAllTrainingWeeksRaw(),
+    progress: HiveService.getAllWorkoutProgressRaw(),
+  );
 }

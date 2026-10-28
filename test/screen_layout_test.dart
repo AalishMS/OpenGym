@@ -24,6 +24,7 @@ import 'package:gymapp/screens/history_screen.dart';
 import 'package:gymapp/screens/stats_screen.dart';
 import 'package:gymapp/screens/settings_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/services/training_block_migration.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
@@ -747,6 +748,9 @@ void main() {
         );
       }
     });
+    await tester.runAsync(
+      () => TrainingBlockMigration().normalize(ownerId: null),
+    );
     final otherPlan = HiveService.getPlanById('other-plan')!.toJson();
     final otherSession = HiveService.getSessionById('other-session')!.toJson();
     await tester.pumpWidget(

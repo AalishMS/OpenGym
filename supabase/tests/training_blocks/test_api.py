@@ -159,6 +159,15 @@ class TrainingBlocksApiTest(unittest.TestCase):
                 canonical = str(uuid.uuid5(uuid.UUID(BLOCK),'2'))
                 self.assertEqual(api(f'training_weeks?id=eq.{canonical}')[1][0]['number'],2)
 
+    def test_existing_split_upsert_is_allowed_at_five_active_splits(self):
+        self.activate()
+        for number in range(3):
+            status, body = api('splits', 'POST', {'id': str(uuid.uuid4()), 'user_id': OWNER, 'name': f'Extra {number}', 'created_at': '2026-01-01T00:00:00Z', 'updated_at': '2026-01-01T00:00:00Z'})
+            self.assertLess(status, 300, body)
+        status, body = api('splits', 'POST', {'id': SPLIT, 'user_id': OWNER, 'name': 'Renamed', 'created_at': '2025-01-01T00:00:00Z', 'updated_at': '2026-01-02T00:00:00Z'})
+        self.assertLess(status, 300, body)
+        self.assertEqual(body[0]['name'], 'Renamed')
+
     def test_parent_tombstone_rejects_newer_live_children(self):
         self.activate()
         self.assertLess(api('split_preferences','POST',{'user_id':OWNER,'active_split_id':SECOND})[0],300)

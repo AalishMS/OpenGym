@@ -758,7 +758,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             await widget.onLoadSampleData!();
           } else {
             if (splitId == null) throw StateError('No active split available.');
-            await SampleDataSeeder.clearDataForSplit(splitId);
             await SampleDataSeeder.seedSampleData(splitId: splitId);
           }
         } finally {
@@ -785,10 +784,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           throw StateError('No active split available.');
         }
         final result = BackupService.exportData(
-          splits: HiveService.getSplits(),
+          sourceAccountId: SupabaseService.currentUserId,
+          splits: HiveService.getAllSplitsRaw(),
           activeSplitId: activeSplitId,
-          plans: HiveService.getPlans(),
-          sessions: HiveService.getSessions(),
+          plans: HiveService.getAllPlansRaw(),
+          sessions: HiveService.getAllSessionsRaw(),
+          blocks: HiveService.getAllTrainingBlocksRaw(),
+          weeks: HiveService.getAllTrainingWeeksRaw(),
+          progress: HiveService.getAllWorkoutProgressRaw(),
           settings: {
             'themeMode': settings.themeMode.index,
             'accentIndex': settings.accentIndex,
@@ -824,7 +827,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? utf8.decode(pickedFile.bytes!)
               : await File(pickedFile.path!).readAsString();
       if (!context.mounted) return;
-      final userId = SupabaseService.currentUserId ?? 'local';
+      final userId = SupabaseService.currentUserId;
       final imported = BackupService.importData(jsonString, userId: userId);
       if (!imported.success) {
         _showError(
@@ -861,14 +864,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               activeSplitId: imported.activeSplitId!,
               plans: imported.plans!,
               sessions: imported.sessions!,
+              blocks: imported.blocks!,
+              weeks: imported.weeks!,
+              progress: imported.progress!,
+              settings: imported.settings!,
+              operationId: imported.operationId,
             );
-            final values = imported.settings!;
-            await settings.setThemeMode(
-              ThemeMode.values[values['themeMode'] as int],
-            );
-            await settings.setAccentColor(values['accentIndex'] as int);
-            await settings.setWeightUnit(values['weightUnit'] as String);
-            await settings.setAutoFillLast(values['autoFillLast'] as bool);
+            await settings.reload();
             SyncService.instance.scheduleSync();
           } finally {
             // A settings write may fail after the workout data was replaced.

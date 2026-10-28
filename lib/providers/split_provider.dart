@@ -11,7 +11,7 @@ import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
 import '../services/workout_preset_installer.dart';
 import '../data/workout_presets.dart';
-import '../utils/split_identity.dart';
+import '../services/split_install_target.dart';
 
 class SplitProvider with ChangeNotifier {
   static const int maxSplits = 5;
@@ -56,12 +56,7 @@ class SplitProvider with ChangeNotifier {
     final userId = _userIdProvider();
     final active = activeSplit;
     final reusable =
-        userId != null &&
-        active != null &&
-        active.id == defaultSplitIdForUser(userId) &&
-        active.name == 'My Split' &&
-        usageFor(active.id).plans == 0 &&
-        usageFor(active.id).sessions == 0;
+        userId != null && SplitInstallTarget.isUntouchedDefault(active, userId);
     if (reusable || canCreate) return null;
     return 'You can have at most five splits. Delete one in Manage splits.';
   }

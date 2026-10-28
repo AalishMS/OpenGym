@@ -601,6 +601,69 @@ void main() {
     },
   );
 
+  test(
+    'replacement releases a deleted split before retrying a full-capacity insert',
+    () async {
+      for (var i = 0; i < 4; i++) {
+        await HiveService.putSplitRaw(
+          Split(
+            id: 'old-$i',
+            name: 'Old $i',
+            userId: owner,
+            createdAt: stamp,
+            updatedAt: stamp,
+            dirty: true,
+          ),
+        );
+      }
+      await SyncService.instance.syncNow();
+      final old = HiveService.getSplitById(splitId)!;
+      final replacement = old.copyWith(
+        id: 'replacement',
+        name: 'Imported',
+        dirty: true,
+        updatedAt: DateTime.now(),
+      );
+      await HiveService.putSplitRaw(replacement);
+      await HiveService.setActiveSplit(owner, replacement.id);
+      for (final value in HiveService.getSplits().where(
+        (s) => s.id != replacement.id,
+      )) {
+        await HiveService.putSplitRaw(
+          value.copyWith(deletedAt: DateTime.now(), dirty: true),
+        );
+      }
+      var rejected = false;
+      api.intercept = (request) async {
+        if (request.method == 'POST' &&
+            request.url.pathSegments.last == 'splits') {
+          final row = jsonDecode(request.body) as Map;
+          if (row['id'] == replacement.id &&
+              api.tables['splits']!
+                      .where((r) => r['deleted_at'] == null)
+                      .length >=
+                  5) {
+            rejected = true;
+            return http.Response(
+              '{"code":"23514","message":"A user can have at most 5 active splits"}',
+              400,
+            );
+          }
+        }
+        return null;
+      };
+      await SyncService.instance.syncNow();
+      expect(rejected, isTrue);
+      expect(HiveService.getSplitById(replacement.id)!.dirty, isFalse);
+      expect(
+        api.tables['splits']!.singleWhere(
+          (r) => r['id'] == splitId,
+        )['deleted_at'],
+        isNotNull,
+      );
+    },
+  );
+
   test('pulled split tombstones win over newer local structure', () async {
     await SyncService.instance.syncNow();
     final server = api.tables['splits']!.single;

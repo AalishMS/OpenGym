@@ -12,6 +12,8 @@ import 'package:gymapp/models/split_preference.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/services/training_block_migration.dart';
+import 'package:gymapp/repositories/training_block_repository.dart';
 
 import 'support/hive_test_harness.dart';
 import 'package:gymapp/services/workout_preset_installer.dart';
@@ -31,6 +33,8 @@ void main() {
   });
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    await HiveService.clearTrainingData();
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
     await Hive.box<Split>(HiveService.splitsBox).clear();
@@ -190,6 +194,27 @@ void main() {
     final plans = HiveService.getPlans(splitId: defaultId);
     expect(plans.map((plan) => plan.position), [0, 1, 2]);
     expect(plans.every((plan) => plan.dirty == true), isTrue);
+    expect(HiveService.getAllTrainingWeeksRaw(), hasLength(1));
+    expect(HiveService.getAllWorkoutProgressRaw(), hasLength(plans.length));
+    expect(
+      HiveService.getAllWorkoutProgressRaw().every((p) => p.userId == userId),
+      isTrue,
+    );
+  });
+
+  test('custom empty training structure prevents default reuse', () async {
+    final id = await _seedDefault(userId);
+    await TrainingBlockMigration().normalize(ownerId: userId);
+    final repo = TrainingBlockRepository(ownerId: () => userId);
+    final block = repo.blocksForSplit(id).single;
+    await repo.renameBlock(id, block.id, 'Recovery');
+    final result = await const WorkoutPresetInstaller().install(
+      preset: _preset('STR-FB-3'),
+      userId: userId,
+      maxSplits: 5,
+    );
+    expect(result.reusedDefaultSplit, isFalse);
+    expect(repo.blocksForSplit(id).single.name, 'Recovery');
   });
 
   test('an intentionally created empty split is preserved', () async {

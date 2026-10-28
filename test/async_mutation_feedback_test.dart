@@ -494,7 +494,7 @@ class _Plans extends WorkoutPlanProvider {
   @override
   List<WorkoutPlan> get plans => values;
   @override
-  Future<void> addPlan(WorkoutPlan plan) {
+  Future<void> addPlan(WorkoutPlan plan, {String? startingWeekId}) {
     writes.add(plan);
     return pending.future;
   }

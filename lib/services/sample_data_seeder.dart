@@ -1,4 +1,9 @@
+import 'package:uuid/uuid.dart';
+
 import '../models/workout_plan.dart';
+import '../models/training_week.dart';
+import 'training_block_migration.dart';
+import 'training_block_restore.dart';
 import '../models/workout_session.dart';
 import '../models/exercise_template.dart';
 import '../models/exercise.dart';
@@ -17,12 +22,74 @@ class SampleDataSeeder {
   }
 
   static Future<void> seedSampleData({String? splitId}) async {
-    final planIds = await _createSamplePlans(splitId);
-    await _createSampleSessions(splitId, planIds);
+    final plans = _createSamplePlans(splitId);
+    final planIds = {for (final p in plans) p.name.toLowerCase(): p.id!};
+    final sessions = _createSampleSessions(splitId, planIds);
+    if (splitId == null) {
+      for (final plan in plans) {
+        await HiveService.upsertPlan(plan);
+      }
+      for (final session in sessions) {
+        await HiveService.upsertSession(session);
+      }
+    } else {
+      await SyncService.instance.runExclusiveLocalMutation(() async {
+        final owner = HiveService.trainingCacheOwner();
+        final current = TrainingBlockMigration.prepareGraph(
+          HiveService.readTrainingGraph(ownerId: owner).ownedBy(owner),
+        );
+        final cleared = current.clearWorkouts(splitId: splitId);
+        final first = cleared.weeks.singleWhere(
+          (w) => w.splitId == splitId && w.deletedAt == null,
+        );
+        final now = DateTime.now();
+        final weeks = [
+          first,
+          for (var number = 2; number <= 5; number++)
+            TrainingWeek(
+              id: const Uuid().v4(),
+              splitId: splitId,
+              blockId: first.blockId,
+              number: number,
+              createdAt: now,
+              updatedAt: now,
+              userId: owner,
+              dirty: true,
+            ),
+        ];
+        final graph = TrainingBlockMigration.prepareGraph(
+          cleared.copyWith(
+            weeks: [...cleared.weeks, ...weeks.skip(1)],
+            plans: [
+              ...cleared.plans,
+              for (final plan in plans)
+                plan.copyWith(userId: owner, updatedAt: now, dirty: true),
+            ],
+            sessions: [
+              ...cleared.sessions,
+              for (final session in sessions)
+                session.copyWith(
+                  userId: owner,
+                  updatedAt: now,
+                  dirty: true,
+                  trainingWeekId:
+                      weeks
+                          .singleWhere((w) => w.number == session.weekNumber)
+                          .id,
+                ),
+            ],
+          ),
+        );
+        await TrainingBlockRestore().replaceUnderGate(
+          graph: graph.explicitPlanRevisions(plans.map((p) => p.id!).toSet()),
+          stampRecords: false,
+        );
+      });
+    }
     SyncService.instance.scheduleSync();
   }
 
-  static Future<Map<String, String>> _createSamplePlans(String? splitId) async {
+  static List<WorkoutPlan> _createSamplePlans(String? splitId) {
     final plans = [
       WorkoutPlan(
         name: 'Push Day',
@@ -90,12 +157,9 @@ class SampleDataSeeder {
 
     for (var plan in plans) {
       plan.splitId = splitId;
-      await HiveService.upsertPlan(plan);
+      plan.id = const Uuid().v4();
     }
-    return {
-      for (final plan in plans)
-        if (plan.id != null) plan.name.toLowerCase(): plan.id!,
-    };
+    return plans;
   }
 
   /// An [ExerciseTemplate] whose every set carries the same prescribed target.
@@ -115,10 +179,10 @@ class SampleDataSeeder {
     );
   }
 
-  static Future<void> _createSampleSessions(
+  static List<WorkoutSession> _createSampleSessions(
     String? splitId,
     Map<String, String> planIds,
-  ) async {
+  ) {
     final now = DateTime.now();
 
     final sessions = [
@@ -912,8 +976,9 @@ class SampleDataSeeder {
     for (var session in sessions) {
       session.splitId = splitId;
       session.planId = planIds[session.planName.toLowerCase()];
-      await HiveService.upsertSession(session);
+      session.id = const Uuid().v4();
     }
+    return sessions;
   }
 
   static Future<void> clearAllData() async {

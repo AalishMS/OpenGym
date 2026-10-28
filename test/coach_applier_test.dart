@@ -17,6 +17,8 @@ import 'package:gymapp/providers/split_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/services/coach/coach_applier.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/services/training_block_migration.dart';
+import 'package:gymapp/services/training_block_restore.dart';
 import 'package:gymapp/utils/split_identity.dart';
 
 import 'support/coach_fixtures.dart';
@@ -38,6 +40,8 @@ void main() {
   });
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    await HiveService.clearTrainingData();
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
     await Hive.box<Split>(HiveService.splitsBox).clear();
@@ -289,6 +293,12 @@ void main() {
         session(DateTime(2026, 9, 2), {
           'Bench Press': [(5, 80)],
         }),
+      );
+      await TrainingBlockRestore().replace(
+        graph: TrainingBlockMigration.prepareGraph(
+          HiveService.readTrainingGraph(ownerId: _userId).ownedBy(_userId),
+        ),
+        stampRecords: false,
       );
       final before = _sessionsFingerprint();
       final snap = _snapshot();

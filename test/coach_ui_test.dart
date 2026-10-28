@@ -244,6 +244,7 @@ void main() {
   });
 
   setUp(() async {
+    await HiveService.clearTrainingData();
     SharedPreferences.setMockInitialValues({});
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
@@ -862,7 +863,9 @@ void main() {
       // Back from another tab lands on normal Home, not a hidden Coach layer.
       await tester.tap(find.byKey(const ValueKey('coach-button')));
       await pumpWithStorage(tester);
-      await tester.tap(find.descendant(of: nav, matching: find.text('History')));
+      await tester.tap(
+        find.descendant(of: nav, matching: find.text('History')),
+      );
       await pumpWithStorage(tester);
       await tester.binding.handlePopRoute();
       await pumpWithStorage(tester);

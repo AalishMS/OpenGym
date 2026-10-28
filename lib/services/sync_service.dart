@@ -15,6 +15,7 @@ import '../utils/training_block_identity.dart';
 import 'hive_service.dart';
 import 'supabase_service.dart';
 import 'training_block_migration.dart';
+import 'training_block_restore.dart';
 
 enum SyncStatus {
   savedOnDevice,
@@ -139,6 +140,7 @@ class SyncService {
     if (user == null) return;
     final account = _SyncAccount(user);
     try {
+      await _checked(TrainingBlockRestore().recover(ownerId: user), account);
       _db.rest.headers['x-opengym-training-schema'] = '1';
       await _checked(
         HiveService.recoverTrainingWeekRebase(ownerId: user),
@@ -354,36 +356,106 @@ class SyncService {
   }
 
   Future<void> _pushSplit(Split split, _SyncAccount account) async {
-    try {
-      await _push('splits', _splitRow(split), account);
-    } on PostgrestException catch (error) {
-      if (error.code != '23505') rethrow;
-      final rows = await _checked(
-        _db
-            .from('splits')
-            .select('name')
-            .eq('user_id', account.id)
-            .isFilter('deleted_at', null),
-        account,
-      );
-      final names =
-          rows.map((r) => (r['name'] as String).toLowerCase()).toSet();
-      var index = 2;
-      String candidate;
-      do {
-        final suffix = ' ($index)';
-        candidate =
-            '${split.name.substring(0, split.name.length.clamp(0, 24 - suffix.length))}$suffix';
-        index++;
-      } while (names.contains(candidate.toLowerCase()));
-      final renamed = split.copyWith(
-        name: candidate,
-        updatedAt: DateTime.now(),
-        dirty: true,
-      );
-      await _checked(HiveService.putSplitRaw(renamed), account);
-      await _push('splits', _splitRow(renamed), account);
+    for (var attempt = 0; attempt <= 5; attempt++) {
+      try {
+        await _push('splits', _splitRow(split), account);
+        return;
+      } on PostgrestException catch (error) {
+        final capacity =
+            error.code == '23514' &&
+            error.message.contains('at most 5 active splits');
+        if ((capacity || error.code == '23505') &&
+            await _releaseDeletedSplit(
+              account,
+              name: capacity ? null : split.name,
+            )) {
+          continue;
+        }
+        if (error.code != '23505') rethrow;
+        final rows = await _checked(
+          _db
+              .from('splits')
+              .select('name')
+              .eq('user_id', account.id)
+              .isFilter('deleted_at', null),
+          account,
+        );
+        final names =
+            rows.map((r) => (r['name'] as String).toLowerCase()).toSet();
+        var index = 2;
+        String candidate;
+        do {
+          final suffix = ' ($index)';
+          candidate =
+              '${split.name.substring(0, split.name.length.clamp(0, 24 - suffix.length))}$suffix';
+          index++;
+        } while (names.contains(candidate.toLowerCase()));
+        final renamed = split.copyWith(
+          name: candidate,
+          updatedAt: DateTime.now(),
+          dirty: true,
+        );
+        await _checked(HiveService.putSplitRaw(renamed), account);
+        await _push('splits', _splitRow(renamed), account);
+        return;
+      }
     }
+    throw StateError('Split replacement could not free capacity.');
+  }
+
+  /// Restores may replace all five profile identities. Release one pending
+  /// tombstone only after the server rejects capacity/name reuse; ordinary
+  /// cycles retain parents-first / deleted-splits-last ordering.
+  Future<bool> _releaseDeletedSplit(
+    _SyncAccount account, {
+    String? name,
+  }) async {
+    final deleted =
+        HiveService.getDirtySplits(deleted: true)
+            .where(
+              (s) => name == null || s.name.toLowerCase() == name.toLowerCase(),
+            )
+            .toList();
+    if (deleted.isEmpty) return false;
+    final remote = await _checked(
+      _db
+          .from('splits')
+          .select()
+          .eq('user_id', account.id)
+          .isFilter('deleted_at', null),
+      account,
+    );
+    final prefs = await _checked(
+      _db.from('split_preferences').select().eq('user_id', account.id),
+      account,
+    );
+    final active = prefs.firstOrNull?['active_split_id'];
+    final candidates =
+        deleted.where((s) => remote.any((r) => r['id'] == s.id)).toList()..sort(
+          (a, b) => (a.id == active ? 1 : 0).compareTo(b.id == active ? 1 : 0),
+        );
+    if (candidates.isEmpty) return false;
+    final target = candidates.first;
+    if (target.id == active) {
+      final alternate =
+          remote
+              .where(
+                (r) =>
+                    r['id'] != active &&
+                    HiveService.getSplitById(r['id'] as String)?.deletedAt ==
+                        null &&
+                    HiveService.getSplitById(r['id'] as String) != null,
+              )
+              .firstOrNull;
+      final preference = HiveService.getSplitPreference(account.id);
+      if (alternate == null || preference == null) return false;
+      await _push('split_preferences', {
+        ..._preferenceRow(preference),
+        'active_split_id': alternate['id'],
+      }, account);
+    }
+    await _push('splits', _splitRow(target), account);
+    return true;
   }
 
   Future<void> _pushWeek(TrainingWeek original, _SyncAccount account) async {

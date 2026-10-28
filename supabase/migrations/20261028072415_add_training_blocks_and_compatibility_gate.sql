@@ -353,3 +353,20 @@ grant execute on function training_internal.legacy_block(uuid), training_interna
 alter role authenticator set pgrst.db_pre_request = 'training_internal.guard_training_schema';
 notify pgrst, 'reload config';
 notify pgrst, 'reload schema';
+
+-- INSERT triggers also run for ON CONFLICT UPDATE. Count other live IDs so a
+-- metadata upsert at the five-profile limit remains legal.
+create or replace function public.enforce_split_limit() returns trigger
+language plpgsql set search_path = '' as $$
+declare active_count integer;
+begin
+  if new.deleted_at is not null then return new; end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(new.user_id::text,0));
+  select count(*) into active_count from public.splits
+    where user_id=new.user_id and deleted_at is null and id<>new.id;
+  if active_count>=5 then
+    raise exception 'A user can have at most 5 active splits' using errcode='23514';
+  end if;
+  return new;
+end
+$$;

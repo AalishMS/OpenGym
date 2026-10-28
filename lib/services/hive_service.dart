@@ -14,6 +14,10 @@ import '../models/exercise.dart';
 import '../models/set.dart';
 import '../models/set_template.dart';
 import '../utils/split_identity.dart';
+import 'training_block_graph.dart';
+import 'training_block_restore.dart';
+import 'training_block_migration.dart';
+import 'sync_service.dart';
 
 class HiveService {
   static const String trainingBlocksBox = 'training_blocks';
@@ -192,6 +196,41 @@ class HiveService {
     await operations.delete('weekRebase');
     await operations.flush();
   }
+
+  static List<SplitPreference> getAllSplitPreferencesRaw() =>
+      _splitPreferencesBox.values.toList();
+
+  static TrainingBlockGraph readTrainingGraph({required String? ownerId}) =>
+      TrainingBlockGraph(
+        ownerId: ownerId,
+        activeSplitId: getActiveSplitId(ownerId ?? 'local'),
+        splits: getAllSplitsRaw(),
+        plans: getAllPlansRaw(),
+        sessions: getAllSessionsRaw(),
+        blocks: getAllTrainingBlocksRaw(),
+        weeks: getAllTrainingWeeksRaw(),
+        progress: getAllWorkoutProgressRaw(),
+      );
+
+  static Future<void> flushAllWorkoutData() async {
+    await flushTrainingData();
+    await _plansBox.flush();
+    await _splitsBox.flush();
+    await _splitPreferencesBox.flush();
+  }
+
+  static Future<void> setActiveSplitForRecovery(
+    String owner,
+    String id,
+    DateTime updatedAt,
+  ) => putSplitPreferenceRaw(
+    SplitPreference(
+      userId: owner,
+      activeSplitId: id,
+      updatedAt: updatedAt,
+      dirty: true,
+    ),
+  );
 
   static String validateTrainingName(String value) {
     final name = value.trim();
@@ -563,7 +602,7 @@ class HiveService {
     required String userId,
     required String splitId,
     required String replacementSplitId,
-  }) async {
+  }) => SyncService.instance.runExclusiveLocalMutation(() async {
     if (splitId == replacementSplitId) {
       throw StateError('Choose a different replacement split.');
     }
@@ -591,6 +630,27 @@ class HiveService {
       session.dirty = true;
       await _sessionsBox.put(session.id, session);
     }
+    for (final b in getAllTrainingBlocksRaw().where(
+      (b) => b.splitId == splitId && b.deletedAt == null,
+    )) {
+      await putTrainingBlockRaw(
+        b.copyWith(deletedAt: now, updatedAt: now, dirty: true),
+      );
+    }
+    for (final w in getAllTrainingWeeksRaw().where(
+      (w) => w.splitId == splitId && w.deletedAt == null,
+    )) {
+      await putTrainingWeekRaw(
+        w.copyWith(deletedAt: now, updatedAt: now, dirty: true),
+      );
+    }
+    for (final p in getAllWorkoutProgressRaw().where(
+      (p) => p.splitId == splitId && p.deletedAt == null,
+    )) {
+      await putWorkoutProgressRaw(
+        p.copyWith(deletedAt: now, updatedAt: now, dirty: true),
+      );
+    }
     final split = getSplitById(splitId);
     if (split != null) {
       split.deletedAt = now;
@@ -598,7 +658,7 @@ class HiveService {
       split.dirty = true;
       await _splitsBox.put(splitId, split);
     }
-  }
+  });
 
   // ---------------------------------------------------------------------------
   // ONE-SHOT MIGRATION: int-keyed (box.add) -> id-keyed (box.put(id)) records,
@@ -696,7 +756,74 @@ class HiveService {
   /// Returns a plan by id INCLUDING tombstones (get-by-key ignores deletedAt).
   static WorkoutPlan? getPlanById(String id) => _plansBox.get(id);
 
+  static Future<void> createPlan(
+    WorkoutPlan plan, {
+    String? startingWeekId,
+  }) => SyncService.instance.runExclusiveLocalMutation(() async {
+    if (plan.splitId == null || !Hive.isBoxOpen(splitsBox)) {
+      await upsertPlan(plan);
+      return;
+    }
+    final split = getSplitById(plan.splitId!);
+    if (split == null ||
+        split.deletedAt != null ||
+        (plan.userId != null && plan.userId != split.userId)) {
+      throw StateError('The plan split is unavailable.');
+    }
+    plan.id ??= _uuid.v4();
+    if (getPlanById(plan.id!) != null) {
+      throw StateError('The plan already exists.');
+    }
+    plan.userId = split.userId;
+    plan.updatedAt = DateTime.now();
+    plan.dirty = true;
+    var graph = TrainingBlockMigration.prepareGraph(
+      readTrainingGraph(ownerId: split.userId)
+          .ownedBy(split.userId)
+          .copyWith(plans: [...getAllPlansRaw(), plan])
+          .ensureNewStructure(split.id),
+    );
+    graph = graph.explicitPlanRevisions({plan.id!});
+    if (startingWeekId != null) {
+      final week =
+          graph.weeks
+              .where(
+                (w) =>
+                    w.id == startingWeekId &&
+                    w.splitId == split.id &&
+                    w.deletedAt == null,
+              )
+              .singleOrNull;
+      if (week == null) throw StateError('The starting week is unavailable.');
+      graph = graph.copyWith(
+        progress: [
+          for (final p in graph.progress)
+            if (p.planId == plan.id)
+              p.copyWith(
+                activeWeekId: week.id,
+                state: WorkoutProgressState.ready,
+              )
+            else
+              p,
+        ],
+      );
+    }
+    await TrainingBlockRestore().replaceUnderGate(
+      graph: graph,
+      stampRecords: false,
+    );
+  });
+
   static Future<void> upsertPlan(WorkoutPlan plan) async {
+    if (plan.splitId != null && Hive.isBoxOpen(splitsBox)) {
+      final split = getSplitById(plan.splitId!);
+      if (split == null ||
+          split.deletedAt != null ||
+          (plan.userId != null && plan.userId != split.userId)) {
+        throw StateError('The plan split is unavailable in this account.');
+      }
+      plan.userId = split.userId;
+    }
     plan.id ??= _uuid.v4();
     plan.updatedAt = DateTime.now();
     plan.dirty = true;
@@ -733,20 +860,29 @@ class HiveService {
   static Future<void> deleteSplitPreferenceRaw(String userId) =>
       _splitPreferencesBox.delete(userId);
 
-  static Future<void> softDeletePlan(String id) async {
-    final plan = _plansBox.get(id);
-    if (plan == null) return;
-    final now = DateTime.now();
-    plan.deletedAt = now;
-    plan.updatedAt = now;
-    plan.dirty = true;
-    await _plansBox.put(id, plan);
+  static Future<void> softDeletePlan(String id) =>
+      SyncService.instance.runExclusiveLocalMutation(() async {
+        final plan = getPlanById(id);
+        if (plan == null) return;
+        final now = plan.deletedAt ?? DateTime.now();
+        if (plan.deletedAt == null) {
+          await putPlanRaw(
+            plan.copyWith(deletedAt: now, updatedAt: now, dirty: true),
+          );
+        }
+        await tombstonePlanProgress(id, now);
+      });
+
+  static Future<void> tombstonePlanProgress(String planId, DateTime now) async {
+    for (final p in getAllWorkoutProgressRaw().where(
+      (p) => p.planId == planId && p.deletedAt == null,
+    )) {
+      await putWorkoutProgressRaw(
+        p.copyWith(deletedAt: now, updatedAt: now, dirty: true),
+      );
+    }
   }
 
-  // ---------------------------------------------------------------------------
-  // Session operations (id-based)
-  // ---------------------------------------------------------------------------
-  /// UI-facing list: tombstones hidden, sorted newest-first (unchanged order).
   static List<WorkoutSession> getSessions({String? splitId}) =>
       _sessionsBox.values
           .where(
@@ -775,6 +911,15 @@ class HiveService {
   static WorkoutSession? getSessionById(String id) => _sessionsBox.get(id);
 
   static Future<void> upsertSession(WorkoutSession session) async {
+    if (session.splitId != null && Hive.isBoxOpen(splitsBox)) {
+      final split = getSplitById(session.splitId!);
+      if (split == null ||
+          split.deletedAt != null ||
+          (session.userId != null && session.userId != split.userId)) {
+        throw StateError('The workout split is unavailable in this account.');
+      }
+      session.userId = split.userId;
+    }
     session.id ??= _uuid.v4();
     session.updatedAt = DateTime.now();
     session.dirty = true;
@@ -1034,109 +1179,64 @@ class HiveService {
     await _splitPreferencesBox.clear();
   }
 
-  static Future<void> softDeleteAllWorkoutData() async {
-    final now = DateTime.now();
-    for (final plan in _plansBox.values.where((p) => p.deletedAt == null)) {
-      plan.deletedAt = now;
-      plan.updatedAt = now;
-      plan.dirty = true;
-      await _plansBox.put(plan.id, plan);
+  static String? trainingCacheOwner() {
+    final owners =
+        [
+          ...getAllSplitsRaw().map((r) => r.userId),
+          ...getAllPlansRaw().map((r) => r.userId),
+          ...getAllSessionsRaw().map((r) => r.userId),
+          ...getAllTrainingBlocksRaw().map((r) => r.userId),
+          ...getAllTrainingWeeksRaw().map((r) => r.userId),
+          ...getAllWorkoutProgressRaw().map((r) => r.userId),
+        ].whereType<String>().toSet();
+    if (owners.length > 1) {
+      throw StateError('This cache contains different owners.');
     }
-    for (final session in _sessionsBox.values.where(
-      (s) => s.deletedAt == null,
-    )) {
-      session.deletedAt = now;
-      session.updatedAt = now;
-      session.dirty = true;
-      await _sessionsBox.put(session.id, session);
-    }
+    return owners.firstOrNull;
   }
 
-  static Future<void> softDeleteWorkoutDataForSplit(String splitId) async {
-    final now = DateTime.now();
-    for (final plan in _plansBox.values.where(
-      (p) => p.splitId == splitId && p.deletedAt == null,
-    )) {
-      plan.deletedAt = now;
-      plan.updatedAt = now;
-      plan.dirty = true;
-      await _plansBox.put(plan.id, plan);
-    }
-    for (final session in _sessionsBox.values.where(
-      (s) => s.splitId == splitId && s.deletedAt == null,
-    )) {
-      session.deletedAt = now;
-      session.updatedAt = now;
-      session.dirty = true;
-      await _sessionsBox.put(session.id, session);
-    }
+  static Future<void> softDeleteAllWorkoutData() => SyncService.instance
+      .runExclusiveLocalMutation(() => clearWorkoutGraphUnderGate());
+  static Future<void> softDeleteWorkoutDataForSplit(String splitId) =>
+      SyncService.instance.runExclusiveLocalMutation(
+        () => clearWorkoutGraphUnderGate(splitId: splitId),
+      );
+
+  static Future<void> clearWorkoutGraphUnderGate({String? splitId}) async {
+    final owner = trainingCacheOwner();
+    final graph = TrainingBlockMigration.prepareGraph(
+      readTrainingGraph(ownerId: owner).ownedBy(owner),
+    );
+    final cleared = graph.clearWorkouts(splitId: splitId);
+    await TrainingBlockRestore().replaceUnderGate(
+      graph: cleared,
+      stampRecords: false,
+    );
   }
 
   static Future<void> replaceAllWorkoutData({
-    required String userId,
+    required String? userId,
     required List<Split> splits,
     required String activeSplitId,
     required List<WorkoutPlan> plans,
     required List<WorkoutSession> sessions,
-  }) async {
-    final now = DateTime.now();
-    final importedSplitIds = splits.map((split) => split.id).toSet();
-    final importedPlanIds =
-        plans.map((plan) => plan.id).whereType<String>().toSet();
-    final importedSessionIds =
-        sessions.map((session) => session.id).whereType<String>().toSet();
-
-    for (final old in _plansBox.values.where(
-      (plan) => !importedPlanIds.contains(plan.id),
-    )) {
-      old.deletedAt = now;
-      old.updatedAt = now;
-      old.dirty = true;
-      await _plansBox.put(old.id, old);
-    }
-    for (final plan in plans) {
-      plan.id ??= _uuid.v4();
-      plan.userId = userId;
-      plan.updatedAt = now;
-      plan.deletedAt = null;
-      plan.dirty = true;
-      await _plansBox.put(plan.id, plan);
-    }
-
-    for (final old in _sessionsBox.values.where(
-      (session) => !importedSessionIds.contains(session.id),
-    )) {
-      old.deletedAt = now;
-      old.updatedAt = now;
-      old.dirty = true;
-      await _sessionsBox.put(old.id, old);
-    }
-    for (final session in sessions) {
-      session.id ??= _uuid.v4();
-      session.userId = userId;
-      session.updatedAt = now;
-      session.deletedAt = null;
-      session.dirty = true;
-      await _sessionsBox.put(session.id, session);
-    }
-
-    for (final split in splits) {
-      final imported = split.copyWith(
-        userId: userId,
-        updatedAt: now,
-        dirty: true,
-      );
-      await _splitsBox.put(imported.id, imported);
-    }
-    await setActiveSplit(userId, activeSplitId);
-    for (final old in _splitsBox.values.where(
-      (split) =>
-          !importedSplitIds.contains(split.id) && split.deletedAt == null,
-    )) {
-      old.deletedAt = now;
-      old.updatedAt = now;
-      old.dirty = true;
-      await _splitsBox.put(old.id, old);
-    }
-  }
+    List<TrainingBlock> blocks = const [],
+    List<TrainingWeek> weeks = const [],
+    List<WorkoutProgress> progress = const [],
+    String? operationId,
+    Map<String, dynamic> settings = const {},
+  }) => TrainingBlockRestore().replace(
+    graph: TrainingBlockGraph(
+      ownerId: userId,
+      activeSplitId: activeSplitId,
+      splits: splits,
+      plans: plans,
+      sessions: sessions,
+      blocks: blocks,
+      weeks: weeks,
+      progress: progress,
+    ),
+    settings: settings,
+    operationId: operationId,
+  );
 }

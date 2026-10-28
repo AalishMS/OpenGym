@@ -24,6 +24,8 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    await HiveService.clearTrainingData();
+    SharedPreferences.setMockInitialValues({});
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
     await Hive.box<Split>(HiveService.splitsBox).clear();
@@ -143,7 +145,7 @@ void main() {
     expect(HiveService.getSessionById('s2')?.deletedAt, isNull);
   });
 
-  test('v2 backups upgrade into one deterministic split', () {
+  test('v2 backups with unknown provenance copy into one new split', () {
     const userId = '00000000-0000-0000-0000-000000000002';
     final backup = jsonEncode({
       'version': 2,
@@ -166,39 +168,48 @@ void main() {
 
     expect(result.success, isTrue);
     expect(result.splits?.single.name, 'My Split');
-    expect(result.activeSplitId, defaultSplitIdForUser(userId));
+    expect(result.activeSplitId, isNot(defaultSplitIdForUser(userId)));
+    expect(result.sessions?.single.planId, result.plans?.single.id);
     expect(result.plans?.single.splitId, result.activeSplitId);
     expect(result.sessions?.single.splitId, result.activeSplitId);
   });
 
-  test('v3 backups preserve all splits and the active selection', () {
-    final createdAt = DateTime(2026);
-    final splits = [
-      Split(id: 'ppl', name: 'PPL', createdAt: createdAt),
-      Split(id: 'ul', name: 'UL', createdAt: createdAt),
-    ];
-    final exported = BackupService.exportData(
-      splits: splits,
-      activeSplitId: 'ul',
-      plans: [
-        WorkoutPlan(id: 'p1', splitId: 'ppl', name: 'Push', exercises: []),
-        WorkoutPlan(id: 'p2', splitId: 'ul', name: 'Upper', exercises: []),
-      ],
-      sessions: [_session('s1', 'ul', 60)],
-      settings: const {'themeMode': 0},
-    );
+  test(
+    'v4 copies preserve all split relationships and the active selection',
+    () {
+      final createdAt = DateTime(2026);
+      final splits = [
+        Split(id: 'ppl', name: 'PPL', createdAt: createdAt),
+        Split(id: 'ul', name: 'UL', createdAt: createdAt),
+      ];
+      final exported = BackupService.exportData(
+        splits: splits,
+        activeSplitId: 'ul',
+        plans: [
+          WorkoutPlan(id: 'p1', splitId: 'ppl', name: 'Push', exercises: []),
+          WorkoutPlan(id: 'p2', splitId: 'ul', name: 'Upper', exercises: []),
+        ],
+        sessions: [_session('s1', 'ul', 60)],
+        settings: const {'themeMode': 0},
+      );
 
-    final imported = BackupService.importData(
-      exported.jsonString,
-      userId: 'user-1',
-    );
+      final imported = BackupService.importData(
+        exported.jsonString,
+        userId: 'user-1',
+      );
 
-    expect(imported.success, isTrue);
-    expect(imported.splits?.map((split) => split.name), ['PPL', 'UL']);
-    expect(imported.activeSplitId, 'ul');
-    expect(imported.plans?.map((plan) => plan.splitId), ['ppl', 'ul']);
-    expect(imported.sessions?.single.splitId, 'ul');
-  });
+      expect(imported.success, isTrue);
+      expect(imported.splits?.map((split) => split.name), ['PPL', 'UL']);
+      final copied = imported.splits!;
+      expect(imported.activeSplitId, copied.last.id);
+      expect(
+        imported.plans?.map((plan) => plan.splitId),
+        copied.map((s) => s.id),
+      );
+      expect(imported.sessions?.single.splitId, copied.last.id);
+      expect(copied.map((s) => s.id), isNot(contains('ul')));
+    },
+  );
 
   test(
     'drafts persist for sync but are excluded from history and stats',
