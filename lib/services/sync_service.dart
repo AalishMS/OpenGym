@@ -212,6 +212,13 @@ class SyncService {
       for (final table in _tables) {
         await _pull(table, account, full: false);
       }
+      // The final pull can deliver a new completion or parent tombstone too.
+      // Normalize/replay only after all progress rows have reconciled, before
+      // the single provider refresh published by this cycle.
+      await _checked(
+        TrainingBlockMigration().normalizeUnderGate(ownerId: user),
+        account,
+      );
       if (full) {
         await _checked(
           prefs.setString(

@@ -12,6 +12,7 @@ import '../utils/training_block_identity.dart';
 import 'hive_service.dart';
 import 'training_block_graph.dart';
 import 'sync_service.dart';
+import 'workout_progression_service.dart';
 
 class TrainingPreparationException implements Exception {
   final Object cause;
@@ -446,7 +447,7 @@ class TrainingBlockMigration {
       progress: progress.values.toList(),
     );
     graph.validate();
-    return graph;
+    return WorkoutProgressionService.reconcileGraph(graph);
   }
 
   static int compareSessionRecency(WorkoutSession a, WorkoutSession b) {

@@ -911,6 +911,17 @@ class HiveService {
   static WorkoutSession? getSessionById(String id) => _sessionsBox.get(id);
 
   static Future<void> upsertSession(WorkoutSession session) async {
+    final saved = session.id == null ? null : getSessionById(session.id!);
+    if (saved?.completionTransition != null) {
+      if (saved!.trainingWeekId != session.trainingWeekId ||
+          saved.planId != session.planId ||
+          saved.splitId != session.splitId) {
+        throw StateError('A completed workout cannot change training slots.');
+      }
+      session = session.copyWith(
+        completionTransition: saved.completionTransition,
+      );
+    }
     if (session.splitId != null && Hive.isBoxOpen(splitsBox)) {
       final split = getSplitById(session.splitId!);
       if (split == null ||

@@ -12,6 +12,7 @@ import 'providers/workout_session_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/split_provider.dart';
+import 'providers/training_block_provider.dart';
 import 'services/hive_service.dart';
 import 'services/adopt_local_data.dart';
 import 'services/supabase_service.dart';
@@ -75,6 +76,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late SplitProvider _splitProvider;
   late CoachProvider _coachProvider;
   late bool _showIntro;
+  late final TrainingBlockProvider _trainingBlockProvider;
   GlobalKey<NavigatorState> _accountNavigatorKey = GlobalKey<NavigatorState>();
   String? _navigatorUserId = SupabaseService.currentUserId;
 
@@ -86,6 +88,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _splitProvider = SplitProvider();
     _workoutPlanProvider = WorkoutPlanProvider(_splitProvider);
     _workoutSessionProvider = WorkoutSessionProvider(_splitProvider);
+    _trainingBlockProvider = TrainingBlockProvider(
+      splitProvider: _splitProvider,
+    );
     _settingsProvider = SettingsProvider();
     _coachProvider = CoachProvider(
       splitProvider: _splitProvider,
@@ -102,6 +107,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _settingsProvider.removeListener(_syncCoachEnabled);
+    _trainingBlockProvider.dispose();
     super.dispose();
   }
 
@@ -132,6 +138,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: _splitProvider),
+        ChangeNotifierProvider.value(value: _trainingBlockProvider),
         ChangeNotifierProvider.value(value: _workoutPlanProvider),
         ChangeNotifierProvider.value(value: _workoutSessionProvider),
         ChangeNotifierProvider.value(value: _settingsProvider),

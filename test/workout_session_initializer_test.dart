@@ -4,6 +4,7 @@ import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart' as gym;
 import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/workout_plan.dart';
+import 'package:gymapp/models/training_week.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/services/workout_session_initializer.dart';
 
@@ -27,6 +28,101 @@ void main() {
         setTargets: [SetTemplate(reps: 8, weight: 42.5)],
       ),
     ],
+  );
+
+  test(
+    'explicit sparse week uses targets, explicit IDs and a fresh clean draft',
+    () {
+      final week = TrainingWeek(
+        id: 'week-3',
+        splitId: 'split-a',
+        blockId: 'block',
+        number: 3,
+        createdAt: DateTime(2026),
+      );
+      final session = WorkoutSessionInitializer.initialize(
+        plan: plan.copyWith(id: 'plan'),
+        week: week,
+        now: DateTime(2026, 10),
+      );
+      expect(session.trainingWeekId, 'week-3');
+      expect(session.planId, 'plan');
+      expect(session.id, isNotNull);
+      expect(session.exercises.first.sets.first.weight, 100.5);
+      expect(session.startedAt, isNull);
+      expect(session.completionTransition, isNull);
+    },
+  );
+
+  test(
+    'explicit inheritance matches normalized duplicate occurrences in current template order',
+    () {
+      final current = plan.copyWith(
+        id: 'plan',
+        exercises: [
+          ExerciseTemplate(
+            name: '  SQUAT ',
+            sets: 2,
+            note: 'Current cue',
+            setTargets: [SetTemplate(reps: 5, weight: 10)],
+          ),
+          ExerciseTemplate(
+            name: 'New',
+            sets: 1,
+            setTargets: [SetTemplate(reps: 8, weight: 20)],
+          ),
+          ExerciseTemplate(name: 'Squat', sets: 1),
+        ],
+      );
+      final source = WorkoutSession(
+        id: 'source',
+        planId: 'plan',
+        splitId: 'split-a',
+        planName: 'Old',
+        date: DateTime(2026),
+        exercises: [
+          Exercise(
+            name: 'squat',
+            note: 'Old cue',
+            sets: [gym.Set(reps: 9, weight: 90, rpe: 8, note: 'Old note')],
+          ),
+          Exercise(name: 'Removed', sets: [gym.Set(reps: 4, weight: 40)]),
+          Exercise(name: 'Squat', sets: [gym.Set(reps: 6, weight: 60)]),
+        ],
+      );
+      final week = TrainingWeek(
+        id: 'week',
+        splitId: 'split-a',
+        blockId: 'block',
+        number: 2,
+        createdAt: DateTime(2026),
+      );
+      final session = WorkoutSessionInitializer.initialize(
+        plan: current,
+        week: week,
+        previousSession: source,
+      );
+      expect(
+        session.exercises.map((e) => e.name),
+        current.exercises.map((e) => e.name),
+      );
+      expect(session.exercises.map((e) => e.sets.first.weight), [90, 20, 60]);
+      expect(session.exercises.first.note, 'Current cue');
+      expect(session.exercises.first.sets.single.note, isNull);
+      session.exercises.first.sets[0] = gym.Set(reps: 1, weight: 1);
+      expect(source.exercises.first.sets.single.weight, 90);
+      expect(
+        identical(
+          WorkoutSessionInitializer.initialize(
+            plan: current,
+            week: week,
+            existingSession: session,
+          ),
+          session,
+        ),
+        isTrue,
+      );
+    },
   );
 
   test('Week 1 receives every prescribed set including decimal weights', () {

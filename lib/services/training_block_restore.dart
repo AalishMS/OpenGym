@@ -12,6 +12,7 @@ import 'hive_service.dart';
 import 'sync_service.dart';
 import 'training_block_graph.dart';
 import 'training_block_migration.dart';
+import 'workout_progression_service.dart';
 
 /// Fixed, validated replacement plus its original safety copy. Replaying a
 /// pending replacement never allocates IDs or recomputes its intended values.
@@ -187,7 +188,7 @@ class TrainingBlockRestore {
       allowLiveChildrenOfDeletedParents: true,
       allowUnowned: true,
     );
-    var imported = graph;
+    var imported = WorkoutProgressionService.reconcileGraph(graph);
     // Tombstone identities are never revived on the server. Copying a backup
     // over a deleted graph creates a new graph, retaining all visible values.
     bool resurrects(Iterable<dynamic> old, Iterable<dynamic> next) {
@@ -206,7 +207,7 @@ class TrainingBlockRestore {
         resurrects(original.blocks, graph.blocks) ||
         resurrects(original.weeks, graph.weeks) ||
         resurrects(original.progress, graph.progress)) {
-      imported = graph.remap(ownerId: owner);
+      imported = imported.remap(ownerId: owner);
     }
     final now = DateTime.now();
     if (stampRecords) {

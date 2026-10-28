@@ -5,10 +5,12 @@ import 'pr_tracking_service.dart';
 class WorkoutCompletionResult {
   final WorkoutSession session;
   final List<PRResult> personalRecords;
+  final bool progressPending;
 
   const WorkoutCompletionResult({
     required this.session,
     required this.personalRecords,
+    this.progressPending = false,
   });
 }
 
