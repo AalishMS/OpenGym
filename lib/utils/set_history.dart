@@ -58,7 +58,14 @@ List<gym.Set> previousExerciseSets(
       return date == 0 ? (b.id ?? '').compareTo(a.id ?? '') : date;
     });
   }
-  for (final session in eligible) {
+  return exerciseSetsFromOrderedHistory(eligible, exerciseName);
+}
+
+List<gym.Set> exerciseSetsFromOrderedHistory(
+  Iterable<WorkoutSession> sessions,
+  String exerciseName,
+) {
+  for (final session in sessions) {
     for (final exercise in session.exercises) {
       if (exercise.name.trim().toLowerCase() ==
               exerciseName.trim().toLowerCase() &&

@@ -1,4 +1,6 @@
 import 'package:uuid/uuid.dart';
+import 'package:hive/hive.dart';
+import '../models/training_block.dart';
 
 import '../models/completion_transition.dart';
 import '../models/training_week.dart';
@@ -114,6 +116,7 @@ class WorkoutProgressionService {
       SyncService.instance.runExclusiveLocalMutation(replayUnderGate);
 
   Future<void> replayUnderGate() async {
+    await recoverBoundaryUnderGate(ownerId: _owner());
     final before = HiveService.readTrainingGraph(ownerId: _owner());
     before.validate();
     final next = reconcileGraph(before);
@@ -301,4 +304,260 @@ class WorkoutProgressionService {
       ),
     );
   });
+  WorkoutProgress _boundaryProgress(String planId, String expectedRevision) {
+    final plan = HiveService.getPlanById(planId);
+    if (plan == null ||
+        plan.deletedAt != null ||
+        plan.userId != _owner() ||
+        plan.splitId == null) {
+      throw StateError('The plan is unavailable.');
+    }
+    HiveService.validateTrainingSplit(plan.splitId!, _owner());
+    final p = HiveService.progressForPlan(plan.splitId!, planId);
+    if (p == null ||
+        p.revision != expectedRevision ||
+        p.state != WorkoutProgressState.awaitingBoundary) {
+      throw StateError('Training progress changed. Open it again.');
+    }
+    return p;
+  }
+
+  Future<TrainingWeek> extendBoundary({
+    required String planId,
+    required String expectedRevision,
+  }) => SyncService.instance.runExclusiveLocalMutation(() async {
+    final pending = Hive.box<dynamic>(
+      HiveService.trainingOperationsBox,
+    ).get('boundary');
+    if (pending is Map &&
+        pending['action'] == 'append' &&
+        pending['planId'] == planId &&
+        pending['expectedRevision'] == expectedRevision) {
+      final recovered = await recoverBoundaryUnderGate(
+        ownerId: _owner(),
+        writeProgress: _writeProgress,
+      );
+      if (recovered != null) {
+        return HiveService.getTrainingWeekById(
+          (recovered['weeks'] as List).first['id'] as String,
+        )!;
+      }
+    }
+    await replayUnderGate();
+    final progress = _boundaryProgress(planId, expectedRevision);
+    final supplied = _nextInBlock(progress);
+    if (supplied != null) {
+      await _writeProgress(
+        progress.copyWith(
+          activeWeekId: supplied.id,
+          state: WorkoutProgressState.ready,
+          revision: _uuid.v4(),
+          updatedAt: _clock(),
+          dirty: true,
+        ),
+      );
+      return supplied;
+    }
+    final source = HiveService.getTrainingWeekById(progress.activeWeekId)!;
+    final now = _clock();
+    final week = TrainingWeek(
+      id: _uuid.v4(),
+      splitId: progress.splitId,
+      blockId: source.blockId,
+      number: source.number + 1,
+      createdAt: now,
+      updatedAt: now,
+      userId: _owner(),
+      dirty: true,
+    );
+    await _persistBoundary('append', progress, [week]);
+    await recoverBoundaryUnderGate(
+      ownerId: _owner(),
+      writeProgress: _writeProgress,
+    );
+    return week;
+  });
+
+  Future<TrainingBlock> createBoundary({
+    required String planId,
+    required String expectedRevision,
+    required String name,
+    required int weekCount,
+  }) => SyncService.instance.runExclusiveLocalMutation(() async {
+    final trimmed = HiveService.validateTrainingName(name);
+    if (weekCount < 1 || weekCount > 52) {
+      throw ArgumentError('Choose 1–52 weeks.');
+    }
+    final pending = Hive.box<dynamic>(
+      HiveService.trainingOperationsBox,
+    ).get('boundary');
+    if (pending is Map &&
+        pending['action'] == 'create' &&
+        pending['planId'] == planId &&
+        pending['expectedRevision'] == expectedRevision) {
+      if ((pending['block'] as Map)['name'] != trimmed ||
+          (pending['weeks'] as List).length != weekCount) {
+        throw StateError(
+          'Retry the original block before changing its details.',
+        );
+      }
+      final recovered = await recoverBoundaryUnderGate(
+        ownerId: _owner(),
+        writeProgress: _writeProgress,
+      );
+      if (recovered != null) {
+        return HiveService.getTrainingBlockById(
+          (recovered['block'] as Map)['id'] as String,
+        )!;
+      }
+    }
+    await replayUnderGate();
+    final progress = _boundaryProgress(planId, expectedRevision);
+    final source = HiveService.getTrainingWeekById(progress.activeWeekId)!;
+    final blocks = HiveService.blocksForSplit(progress.splitId);
+    if (_nextInBlock(progress) != null || blocks.last.id != source.blockId) {
+      throw StateError(
+        'A destination was added. Choose it before creating another block.',
+      );
+    }
+    final now = _clock();
+    final block = TrainingBlock(
+      id: _uuid.v4(),
+      splitId: progress.splitId,
+      name: trimmed,
+      position:
+          blocks.map((b) => b.position).reduce((a, b) => a > b ? a : b) + 1,
+      createdAt: now,
+      updatedAt: now,
+      userId: _owner(),
+      dirty: true,
+    );
+    final weeks = [
+      for (var i = 1; i <= weekCount; i++)
+        TrainingWeek(
+          id: _uuid.v4(),
+          splitId: progress.splitId,
+          blockId: block.id,
+          number: i,
+          createdAt: now,
+          updatedAt: now,
+          userId: _owner(),
+          dirty: true,
+        ),
+    ];
+    await _persistBoundary('create', progress, weeks, block: block);
+    await recoverBoundaryUnderGate(
+      ownerId: _owner(),
+      writeProgress: _writeProgress,
+    );
+    return block;
+  });
+
+  Future<void> _persistBoundary(
+    String action,
+    WorkoutProgress before,
+    List<TrainingWeek> weeks, {
+    TrainingBlock? block,
+  }) async {
+    final target = before.copyWith(
+      activeWeekId: weeks.first.id,
+      state: WorkoutProgressState.ready,
+      revision: _uuid.v4(),
+      updatedAt: _clock(),
+      dirty: true,
+    );
+    final operations = Hive.box<dynamic>(HiveService.trainingOperationsBox);
+    await operations.put('boundary', {
+      'ownerId': _owner(),
+      'action': action,
+      'planId': before.planId,
+      'expectedRevision': before.revision,
+      'sourceWeekId': before.activeWeekId,
+      'block': block?.toJson(),
+      'weeks': weeks.map((w) => w.toJson()).toList(),
+      'progress': target.toJson(),
+    });
+    await operations.flush();
+  }
+
+  /// One fixed boundary allocation and move. The progress compare prevents a
+  /// pending choice from overwriting a later explicit choice at the same slot.
+  static Future<Map<String, dynamic>?> recoverBoundaryUnderGate({
+    required String? ownerId,
+    Future<void> Function(WorkoutProgress)? writeProgress,
+  }) async {
+    final operations = Hive.box<dynamic>(HiveService.trainingOperationsBox);
+    final raw = operations.get('boundary');
+    if (raw == null) return null;
+    final intent = Map<String, dynamic>.from(raw as Map);
+    if (intent['ownerId'] != ownerId) {
+      throw StateError('The boundary choice belongs to another account.');
+    }
+    final target = WorkoutProgress.fromJson(
+      Map<String, dynamic>.from(intent['progress'] as Map),
+    ).copyWith(dirty: true);
+    if (target.userId != ownerId || target.planId != intent['planId']) {
+      throw StateError('Conflicting boundary progress.');
+    }
+    final split = HiveService.getSplitById(target.splitId);
+    final plan = HiveService.getPlanById(target.planId);
+    if (split?.deletedAt != null || plan?.deletedAt != null) {
+      await operations.delete('boundary');
+      await operations.flush();
+      return null;
+    }
+    HiveService.validateTrainingSplit(target.splitId, ownerId);
+    if (plan == null ||
+        plan.userId != ownerId ||
+        plan.splitId != target.splitId) {
+      throw StateError('The boundary plan is unavailable.');
+    }
+    if (intent['block'] case final Map json) {
+      final block = TrainingBlock.fromJson(
+        Map<String, dynamic>.from(json),
+      ).copyWith(dirty: true);
+      if (block.userId != ownerId || block.splitId != target.splitId) {
+        throw StateError('Conflicting boundary block.');
+      }
+      final saved = HiveService.getTrainingBlockById(block.id);
+      if (saved == null) {
+        await HiveService.putTrainingBlockRaw(block);
+      } else if (saved.deletedAt != null ||
+          saved.splitId != block.splitId ||
+          saved.userId != ownerId) {
+        throw StateError('The boundary block changed.');
+      }
+    }
+    for (final rawWeek in intent['weeks'] as List) {
+      final week = TrainingWeek.fromJson(
+        Map<String, dynamic>.from(rawWeek as Map),
+      ).copyWith(dirty: true);
+      if (week.userId != ownerId ||
+          week.splitId != target.splitId ||
+          week.number < 1) {
+        throw StateError('Conflicting boundary week.');
+      }
+      HiveService.validateTrainingBlock(week.splitId, week.blockId, ownerId);
+      final saved = HiveService.getTrainingWeekById(week.id);
+      if (saved == null) {
+        await HiveService.putTrainingWeekRaw(week);
+      } else if (saved.deletedAt != null ||
+          saved.splitId != week.splitId ||
+          saved.blockId != week.blockId) {
+        throw StateError('The boundary week changed.');
+      }
+    }
+    final current = HiveService.getWorkoutProgressById(target.id);
+    if (current != null &&
+        current.deletedAt == null &&
+        current.revision == intent['expectedRevision'] &&
+        current.activeWeekId == intent['sourceWeekId'] &&
+        current.state == WorkoutProgressState.awaitingBoundary) {
+      await (writeProgress ?? HiveService.putWorkoutProgressRaw)(target);
+    }
+    await HiveService.flushTrainingData();
+    await operations.delete('boundary');
+    await operations.flush();
+    return intent;
+  }
 }

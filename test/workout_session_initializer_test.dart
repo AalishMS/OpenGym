@@ -128,7 +128,13 @@ void main() {
   test('Week 1 receives every prescribed set including decimal weights', () {
     final session = WorkoutSessionInitializer.initialize(
       plan: plan,
-      weekNumber: 1,
+      week: TrainingWeek(
+        id: 'week-1',
+        splitId: 'split-a',
+        blockId: 'block',
+        number: 1,
+        createdAt: DateTime(2026),
+      ),
     );
 
     expect(session.splitId, 'split-a');
@@ -159,7 +165,13 @@ void main() {
 
     final session = WorkoutSessionInitializer.initialize(
       plan: plan,
-      weekNumber: 1,
+      week: TrainingWeek(
+        id: 'week-1',
+        splitId: 'split-a',
+        blockId: 'block',
+        number: 1,
+        createdAt: DateTime(2026),
+      ),
       existingSession: existing,
     );
 
@@ -176,7 +188,13 @@ void main() {
 
     final session = WorkoutSessionInitializer.initialize(
       plan: legacyPlan,
-      weekNumber: 1,
+      week: TrainingWeek(
+        id: 'week-1',
+        splitId: 'split-a',
+        blockId: 'block',
+        number: 1,
+        createdAt: DateTime(2026),
+      ),
     );
 
     expect(session.exercises.single.sets, hasLength(3));
@@ -207,27 +225,39 @@ void main() {
 
     final session = WorkoutSessionInitializer.initialize(
       plan: plan,
-      weekNumber: 2,
+      week: TrainingWeek(
+        id: 'week-2',
+        splitId: 'split-a',
+        blockId: 'block',
+        number: 2,
+        createdAt: DateTime(2026),
+      ),
       previousSession: previous,
     );
 
-    final copied = session.exercises.single.sets.single;
+    final copied = session.exercises.first.sets.single;
     expect(
       (copied.reps, copied.weight, copied.rpe, copied.note),
-      (9, 88.75, 7, 'solid'),
+      (9, 88.75, 7, null),
     );
     expect(identical(copied, previous.exercises.single.sets.single), isFalse);
   });
 
-  test('later weeks without prior data ignore Week 1 plan targets', () {
+  test('missing source in later weeks uses current plan targets', () {
     final session = WorkoutSessionInitializer.initialize(
       plan: plan,
-      weekNumber: 2,
+      week: TrainingWeek(
+        id: 'week-2',
+        splitId: 'split-a',
+        blockId: 'block',
+        number: 2,
+        createdAt: DateTime(2026),
+      ),
     );
 
-    expect(session.exercises[0].sets.first.reps, 0);
-    expect(session.exercises[0].sets.first.weight, 0);
-    expect(session.exercises[0].sets.first.rpe, isNull);
+    expect(session.exercises[0].sets.first.reps, 5);
+    expect(session.exercises[0].sets.first.weight, 100.5);
+    expect(session.exercises[0].sets.first.rpe, 8);
     expect(session.exercises[0].note, 'Reduce the load between sets.');
   });
 }

@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -22,14 +24,27 @@ import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
-import 'package:gymapp/widgets/underline_tab_strip.dart';
+import 'package:gymapp/widgets/workout/training_block_strip.dart';
 
 import 'support/hive_test_harness.dart';
+import 'support/pump_with_storage.dart';
+import 'support/test_fonts.dart';
 
 void main() {
   final harness = HiveTestHarness();
   final writes = <WorkoutSession>[];
-  setUp(writes.clear);
+  void workoutTest(String name, Future<void> Function(WidgetTester) body) =>
+      testWidgets(name, (tester) async {
+        try {
+          await body(tester);
+        } finally {
+          await closeStorageWithFrames(tester, harness.close);
+        }
+      });
+  setUp(() async {
+    writes.clear();
+    await harness.open();
+  });
   final plan = WorkoutPlan(
     id: 'continuous-log',
     name: 'Push day',
@@ -70,7 +85,12 @@ void main() {
 
   setUpAll(() async {
     GoogleFonts.config.allowRuntimeFetching = false;
-    await harness.open();
+    if (!const bool.fromEnvironment('WORKOUT_PREVIEW')) await loadTestFonts();
+    SharedPreferences.setMockInitialValues({});
+    await Supabase.initialize(
+      url: 'https://example.supabase.co',
+      publishableKey: 'test-key',
+    );
     if (const bool.fromEnvironment('WORKOUT_PREVIEW')) {
       final font = File('build/previews/manrope.ttf');
       final fontBytes = ByteData.sublistView(font.readAsBytesSync());
@@ -117,6 +137,7 @@ void main() {
       );
       await box.put(session.id, session);
     }
+    await harness.prepareTraining([plan]);
   }
 
   Widget host({
@@ -156,7 +177,7 @@ void main() {
     ),
   );
 
-  testWidgets(
+  workoutTest(
     'continuous log fits narrow screens and large text in both themes',
     (tester) async {
       tester.view.devicePixelRatio = 1;
@@ -177,6 +198,15 @@ void main() {
               expect(toolbar.toolbarHeight, 64);
             } else {
               expect(toolbar.toolbarHeight, greaterThan(64));
+            }
+            if (width == 390 && scale == 1) {
+              expect(
+                (tester.renderObject(find.text('Block 1 · Week 6'))
+                        as RenderParagraph)
+                    .didExceedMaxLines,
+                isFalse,
+                reason: 'The selected block and week must remain readable.',
+              );
             }
             expect(find.text('Bench press'), findsOneWidget);
             final title =
@@ -299,7 +329,7 @@ void main() {
     },
   );
 
-  testWidgets(
+  workoutTest(
     'swiping the set table changes plans and restores the saved workout week',
     (tester) async {
       tester.view.devicePixelRatio = 1;
@@ -314,18 +344,17 @@ void main() {
         of: card,
         matching: find.byKey(const ValueKey('set_entry_row_0')),
       );
-      int selectedWeek() =>
-          tester
-              .widget<UnderlineTabStrip>(
-                find.byWidgetPredicate(
-                  (widget) =>
-                      widget is UnderlineTabStrip &&
-                      widget.rule == StripRule.top,
-                ),
-              )
-              .selectedIndex;
+      int selectedWeek() {
+        final strip = tester.widget<TrainingBlockStrip>(
+          find.byType(TrainingBlockStrip),
+        );
+        return strip.weeksByBlock.values
+            .expand((w) => w)
+            .firstWhere((w) => w.id == strip.selectedWeekId)
+            .number;
+      }
 
-      expect(selectedWeek(), 1);
+      expect(selectedWeek(), 6);
       expect(
         find.descendant(of: card, matching: find.byType(Scrollable)),
         findsNothing,
@@ -336,7 +365,7 @@ void main() {
         tester.widget<WorkoutScreen>(find.byType(WorkoutScreen)).plan.name,
         'Full body',
       );
-      expect(selectedWeek(), 0);
+      expect(selectedWeek(), 1);
       await tester.flingFrom(
         tester.getCenter(row),
         const Offset(-120, 0),
@@ -347,15 +376,16 @@ void main() {
         tester.widget<WorkoutScreen>(find.byType(WorkoutScreen)).plan.name,
         'Push day',
       );
-      expect(selectedWeek(), 1);
+      expect(selectedWeek(), 6);
       expect(tester.widget<ExerciseCard>(card).exercise.sets.first.weight, 70);
-      expect(writes.first.planId, plan.id);
-      expect(writes.first.weekNumber, 6);
+      expect(writes, isEmpty);
+      expect(HiveService.getSessionById('week-6')!.planId, plan.id);
+      expect(HiveService.getSessionById('week-6')!.weekNumber, 6);
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('exercise menu moves an exercise without requiring a drag', (
+  workoutTest('exercise menu moves an exercise without requiring a drag', (
     tester,
   ) async {
     await tester.runAsync(() => seed());
@@ -373,7 +403,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('exercise menu edges remain tappable on narrow screens', (
+  workoutTest('exercise menu edges remain tappable on narrow screens', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -399,7 +429,7 @@ void main() {
     }
   });
 
-  testWidgets('completed log hides editing and workout management controls', (
+  workoutTest('completed log hides editing and workout management controls', (
     tester,
   ) async {
     await tester.runAsync(() => seed(completed: true));
@@ -422,7 +452,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
+  workoutTest(
     'toolbar finish requires a started workout and keeps confirmation',
     (tester) async {
       const channel = MethodChannel(
@@ -479,7 +509,7 @@ void main() {
       await tester.tap(finish);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Log workout'));
-      await tester.pumpAndSettle();
+      await pumpWithStorage(tester);
       expect(writes.single.isCompleted, isTrue);
       expect(find.byTooltip('Workout actions'), findsNothing);
       expect(find.byTooltip('Finish workout'), findsNothing);

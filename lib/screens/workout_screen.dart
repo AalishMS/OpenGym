@@ -1,13 +1,22 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../navigation/app_navigation_observer.dart';
 import '../data/plan_colors.dart';
 import '../models/workout_plan.dart';
+import '../models/training_block.dart';
+import '../models/training_week.dart';
+import '../models/workout_progress.dart';
+import '../providers/training_block_provider.dart';
+import '../repositories/training_block_repository.dart';
+import '../services/workout_progression_service.dart';
+import '../services/sync_service.dart';
+import '../utils/training_block_identity.dart';
+import '../widgets/workout/training_block_strip.dart';
+import '../widgets/workout/training_block_dialogs.dart';
 import '../models/workout_session.dart';
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
@@ -16,9 +25,9 @@ import '../providers/workout_session_provider.dart';
 import '../services/hive_service.dart';
 import '../services/pr_tracking_service.dart';
 import '../services/workout_session_initializer.dart';
-import '../services/workout_completion_service.dart';
 import '../services/workout_timer_notification_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_typography.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
@@ -36,6 +45,7 @@ class WorkoutScreen extends StatefulWidget {
   final WorkoutPlan plan;
   final int planIndex;
   final int? initialWeekNumber;
+  final String? initialWeekId;
   final WorkoutSession? initialSession;
   final bool showLogConfirmationOnOpen;
 
@@ -44,6 +54,7 @@ class WorkoutScreen extends StatefulWidget {
     required this.plan,
     required this.planIndex,
     this.initialWeekNumber,
+    this.initialWeekId,
     this.initialSession,
     this.showLogConfirmationOnOpen = false,
   });
@@ -63,7 +74,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
 
   @override
   bool displaysSession(String sessionId) =>
-      _savedSessionForWeek(_currentWeek)?.id == sessionId;
+      _weeks.isNotEmpty && _savedSessionForWeek(_currentWeek)?.id == sessionId;
 
   @override
   bool get canHandleNotification =>
@@ -78,9 +89,22 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     return true;
   }
 
-  List<int> _weeks = [1];
+  List<String> _weeks = [];
+  Map<String, TrainingWeek> _weekById = {};
+  List<TrainingBlock> _blocks = [];
+  Map<String, List<TrainingWeek>> _weeksByBlock = {};
+  String? _expandedBlockId;
+  late final TrainingBlockProvider _training;
+  late final bool _ownsTraining;
+  late final TrainingBlockRepository _structure;
+  late final WorkoutProgressionService _progression;
+  bool _boundaryShowing = false;
+  bool _progressError = false;
+  final ValueNotifier<DateTime> _now = ValueNotifier(DateTime.now());
+  List<WorkoutSession> _previousRows = [];
+  final Map<String, List<gym.Set>> _previousSets = {};
   int _currentWeekIndex = 0;
-  final Map<int, WorkoutSession> _weekSessions = {};
+  final Map<String, WorkoutSession> _weekSessions = {};
   bool _hasUnsavedChanges = false;
   int _draftRevision = 0;
   Future<bool>? _saveFuture;
@@ -98,12 +122,31 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   @override
   void initState() {
     super.initState();
-    _loadWeeks();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    final provided = context.read<TrainingBlockProvider?>();
+    _ownsTraining = provided == null || provided.splitId != widget.plan.splitId;
+    _training =
+        !_ownsTraining
+            ? provided!
+            : TrainingBlockProvider(
+              splitIdProvider: () => widget.plan.splitId,
+              ownerId: () => widget.plan.userId,
+            );
+    _structure = TrainingBlockRepository(ownerId: () => widget.plan.userId);
+    _progression = WorkoutProgressionService(
+      ownerId: () => widget.plan.userId,
+      writeSession:
+          (session) =>
+              context.read<WorkoutSessionProvider>().upsertSession(session),
+    );
+    _loadStructure(initial: true);
+    _training.addListener(_onTrainingChanged);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       _sessionProvider =
           context.read<WorkoutSessionProvider>()
             ..addListener(_reloadCurrentSession);
+      await _prepareEntry();
+      if (!mounted) return;
       if (widget.showLogConfirmationOnOpen && !_didShowInitialLogConfirmation) {
         _didShowInitialLogConfirmation = true;
         _stopWorkout();
@@ -114,93 +157,124 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   @override
   void dispose() {
     _ticker?.cancel();
+    _now.dispose();
+    _training.removeListener(_onTrainingChanged);
+    if (_ownsTraining) _training.dispose();
     _sessionProvider?.removeListener(_reloadCurrentSession);
     _planSwipeOffset.dispose();
     super.dispose();
   }
 
   void _reloadCurrentSession() {
-    // A provider notification may belong to an older write still in flight.
     if (!mounted || _hasUnsavedChanges || _isSaving || _timerAction != null) {
       return;
     }
-    final saved = _savedSessionForWeek(_currentWeek);
-    if (saved == null) return;
-    _weekSessions[_currentWeek] = saved;
-    _syncTicker(saved);
+    _training.reload();
+  }
+
+  void _onTrainingChanged() {
+    if (!mounted || _hasUnsavedChanges || _isSaving || _timerAction != null) {
+      return;
+    }
+    _loadStructure();
     setState(() {});
   }
 
-  void _loadWeeks() {
-    final planSessions = HiveService.getSessionsForPlan(
-      widget.plan.name,
-      widget.plan.splitId,
-    );
-    final existingWeeks = HiveService.getWeeksForPlan(
-      widget.plan.name,
-      widget.plan.splitId,
-    );
-    if (existingWeeks.isEmpty) {
-      _weeks = [1];
-    } else {
-      _weeks = existingWeeks;
-      final drafts = planSessions.where((session) => !session.isCompleted);
-      if (drafts.isEmpty) {
-        final maxWeek = _weeks.reduce((a, b) => a > b ? a : b);
-        if (!_weeks.contains(maxWeek + 1)) _weeks.add(maxWeek + 1);
-        _currentWeekIndex = _weeks.length - 1;
-      } else {
-        final draft = drafts.reduce((a, b) => a.date.isAfter(b.date) ? a : b);
-        _currentWeekIndex = _weeks.indexOf(draft.weekNumber);
-      }
+  void _loadStructure({bool initial = false}) {
+    final selected = _weeks.isEmpty ? null : _currentWeek;
+    _blocks = _training.blocks;
+    _weekById = _training.weekById;
+    _weeksByBlock = _training.weeksByBlock;
+    _weeks = [
+      for (final block in _blocks)
+        for (final week in _weeksByBlock[block.id] ?? <TrainingWeek>[]) week.id,
+    ];
+    if (_weeks.isEmpty) return;
+    if (!_hasUnsavedChanges) {
+      _weekSessions.removeWhere(
+        (_, session) =>
+            session.id != null &&
+            HiveService.getSessionById(session.id!) == null,
+      );
     }
     final initialSession = widget.initialSession;
-    if (initialSession != null) {
-      if (!_weeks.contains(initialSession.weekNumber)) {
-        _weeks.add(initialSession.weekNumber);
-        _weeks.sort();
-      }
-      _weekSessions[initialSession.weekNumber] = initialSession;
+    final exact =
+        initialSession?.id == null
+            ? null
+            : HiveService.getSessionById(initialSession!.id!);
+    final legacy =
+        widget.initialWeekNumber == null || widget.plan.splitId == null
+            ? null
+            : legacyTrainingWeekId(
+              widget.plan.splitId!,
+              widget.initialWeekNumber!,
+            );
+    final requested =
+        initial
+            ? exact?.trainingWeekId ??
+                initialSession?.trainingWeekId ??
+                widget.initialWeekId ??
+                legacy
+            : selected;
+    final destination =
+        requested != null && _weeks.contains(requested)
+            ? requested
+            : _training.progressByPlan[widget.plan.id]?.activeWeekId;
+    _currentWeekIndex =
+        destination != null && _weeks.contains(destination)
+            ? _weeks.indexOf(destination)
+            : 0;
+    if (initial &&
+        exact != null &&
+        exact.deletedAt == null &&
+        exact.trainingWeekId == _currentWeek) {
+      _weekSessions[_currentWeek] = exact;
     }
-    final requestedWeek =
-        initialSession?.weekNumber ?? widget.initialWeekNumber;
-    if (requestedWeek != null && _weeks.contains(requestedWeek)) {
-      _currentWeekIndex = _weeks.indexOf(requestedWeek);
-    }
+    if (initial) _expandedBlockId = _weekById[_currentWeek]?.blockId;
     _loadSessionForCurrentWeek();
   }
 
   void _loadSessionForCurrentWeek() {
-    final week = _weeks[_currentWeekIndex];
-    final existingSession = _savedSessionForWeek(week);
-    if (existingSession != null) {
-      _weekSessions[week] = existingSession;
-      _syncTicker(existingSession);
+    if (_weeks.isEmpty) return;
+    final saved = _savedSessionForWeek(_currentWeek);
+    if (saved != null) {
+      _weekSessions[_currentWeek] = saved;
+      _syncTicker(saved);
     } else {
       _ticker?.cancel();
       _ticker = null;
     }
+    _previousRows =
+        widget.plan.id == null
+            ? []
+            : _training.previous(
+              widget.plan.id!,
+              _currentWeek,
+              excludingSessionId: saved?.id,
+            );
+    _previousSets.clear();
   }
 
-  WorkoutSession? _savedSessionForWeek(int week) {
+  WorkoutSession? _savedSessionForWeek(String week) {
     final selected = _weekSessions[week];
-    // A renamed plan or another session in the same week must not replace the
-    // draft selected from Dashboard when provider notifications arrive.
     if (selected != null) {
-      final id = selected.id;
-      return id == null ? selected : HiveService.getSessionById(id) ?? selected;
+      final latest =
+          selected.id == null ? null : HiveService.getSessionById(selected.id!);
+      return latest ?? selected;
     }
-    return HiveService.getSessionForPlanAndWeek(
-      widget.plan.name,
-      week,
-      widget.plan.splitId,
-    );
+    if (widget.plan.id == null) return null;
+    return _training.destination(widget.plan.id!, week);
   }
+
+  List<gym.Set> _previousFor(String name) => _previousSets.putIfAbsent(
+    name.trim().toLowerCase(),
+    () => exerciseSetsFromOrderedHistory(_previousRows, name),
+  );
 
   void _syncTicker(WorkoutSession session) {
     if (session.isTimerRunning) {
       _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
-        if (mounted) setState(() {});
+        if (mounted) _now.value = DateTime.now();
       });
     } else {
       _ticker?.cancel();
@@ -208,40 +282,14 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     }
   }
 
-  gym.Set? _getLastSetForExerciseInPlan(String exerciseName) {
-    final currentWeek = _weeks[_currentWeekIndex];
-    if (currentWeek > 1) {
-      final prevWeekSession = HiveService.getSessionForPlanAndWeek(
-        widget.plan.name,
-        currentWeek - 1,
-        widget.plan.splitId,
-      );
-      if (prevWeekSession != null) {
-        for (var exercise in prevWeekSession.exercises) {
-          if (exercise.name.toLowerCase() == exerciseName.toLowerCase() &&
-              exercise.sets.isNotEmpty) {
-            return exercise.sets.last;
-          }
-        }
-      }
-    }
-    return HiveService.getLastSetForExercise(exerciseName, widget.plan.splitId);
-  }
+  gym.Set? _getLastSetForExerciseInPlan(String name) =>
+      _previousFor(name).lastOrNull;
 
-  Future<void> _onWeekChanged(int newIndex) async {
+  Future<void> _onWeekChanged(String weekId) async {
     await _saveBeforeNavigation(() {
-      setState(() => _currentWeekIndex = newIndex);
-      _loadSessionForCurrentWeek();
-    });
-  }
-
-  Future<void> _addNewWeek() async {
-    await _saveBeforeNavigation(() {
-      final lastWeek = _weeks.last;
-      setState(() {
-        _weeks.add(lastWeek + 1);
-        _currentWeekIndex = _weeks.length - 1;
-      });
+      _training.reload();
+      if (!_weeks.contains(weekId)) return;
+      setState(() => _currentWeekIndex = _weeks.indexOf(weekId));
       _loadSessionForCurrentWeek();
     });
   }
@@ -258,6 +306,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     try {
       while (mounted) {
         var session = _getOrCreateSession();
+        if (!_hasUnsavedChanges) return true;
         final saved =
             session.id == null ? null : HiveService.getSessionById(session.id!);
         if (saved != null && (saved.deletedAt != null || saved.isCompleted)) {
@@ -267,6 +316,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
           return true;
         }
         if (session.isCompleted) return true;
+        if (!_hasUnsavedChanges && saved == null) return true;
         final hasSets = session.exercises.any((e) => e.sets.isNotEmpty);
         if (!hasSets && !_hasUnsavedChanges) return true;
         final revision = _draftRevision;
@@ -275,7 +325,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         session = session.copyWith(
           planId: widget.plan.id,
           planName: widget.plan.name,
-          weekNumber: week,
+          weekNumber: _weekById[week]!.number,
+          trainingWeekId: week,
           splitId: widget.plan.splitId,
         );
         _weekSessions[week] = session;
@@ -436,57 +487,37 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     WorkoutDialogs.showPRDialog(context, prs);
   }
 
-  int get _currentWeek => _weeks[_currentWeekIndex];
+  String get _currentWeek => _weeks[_currentWeekIndex];
+  TrainingWeek get _selectedWeek => _weekById[_currentWeek]!;
+  WorkoutProgress? get _progress => _training.progressByPlan[widget.plan.id];
+  bool get _activeSlot =>
+      _progress?.activeWeekId == _currentWeek &&
+      _progress?.state == WorkoutProgressState.ready;
+  String get _contextLabel =>
+      '${_blocks.firstWhere((b) => b.id == _selectedWeek.blockId).name} · Week ${_selectedWeek.number}';
+  bool _canUseTimer(WorkoutSession session) =>
+      _activeSlot || widget.initialSession != null && session.hasStarted;
 
   WorkoutSession _getOrCreateSession() {
-    if (_weekSessions.containsKey(_currentWeek)) {
-      return _weekSessions[_currentWeek]!;
-    }
-
-    final existingSession = HiveService.getSessionForPlanAndWeek(
-      widget.plan.name,
-      _currentWeek,
-      widget.plan.splitId,
-    );
-    final previousSession =
-        _currentWeek > 1
-            ? HiveService.getSessionForPlanAndWeek(
-              widget.plan.name,
-              _currentWeek - 1,
-              widget.plan.splitId,
-            )
-            : null;
+    if (_weekSessions[_currentWeek] case final session?) return session;
     final session = WorkoutSessionInitializer.initialize(
       plan: widget.plan,
-      weekNumber: _currentWeek,
-      existingSession: existingSession,
-      previousSession: previousSession,
+      week: _selectedWeek,
+      existingSession: _savedSessionForWeek(_currentWeek),
+      previousSession:
+          widget.plan.id == null
+              ? null
+              : _training.source(widget.plan.id!, _currentWeek),
     );
     _weekSessions[_currentWeek] = session;
     return session;
   }
 
-  /// All persisted sessions plus any in-memory drafts whose latest edits may
-  /// not have been flushed to Hive yet. Deduplicates by session id so the
-  /// in-memory copy wins when both exist.
-  List<WorkoutSession> _sessionsWithDrafts() {
-    final persisted = HiveService.getSessions();
-    final draftIds = <String>{};
-    final merged = <WorkoutSession>[];
-    for (final draft in _weekSessions.values) {
-      if (draft.id != null) draftIds.add(draft.id!);
-      merged.add(draft);
-    }
-    for (final session in persisted) {
-      if (session.id == null || !draftIds.contains(session.id)) {
-        merged.add(session);
-      }
-    }
-    return merged;
-  }
-
   void _updateSession(WorkoutSession session) {
-    if (_getOrCreateSession().isCompleted) return;
+    if (_getOrCreateSession().isCompleted ||
+        _getOrCreateSession().deletedAt != null) {
+      return;
+    }
     _weekSessions[_currentWeek] = session;
     _hasUnsavedChanges = true;
     _draftRevision++;
@@ -523,8 +554,17 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     // Save entered sets first. Timer state is published only after its write.
     if (!await _autoSave() || !mounted) return;
     current = _getOrCreateSession();
+    if (!_canUseTimer(current)) return;
     if (current.isCompleted || current.deletedAt != null) return;
     final week = _currentWeek;
+    if (current.id != null && HiveService.getSessionById(current.id!) == null) {
+      // Start is an explicit draft-creation action. Persist its stable identity
+      // before asking about another timer, then re-read it after confirmation.
+      _hasUnsavedChanges = true;
+      _draftRevision++;
+      if (!await _autoSave() || !mounted) return;
+      current = _getOrCreateSession();
+    }
 
     if (current.isTimerRunning) {
       final paused = current.copyWith(
@@ -591,7 +631,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     // open. Never overwrite newer sets or restart a finished/deleted session.
     if (current.id != null) {
       final latest = HiveService.getSessionById(current.id!);
-      if (latest == null || latest.deletedAt != null) {
+      if ((latest == null && current.hasStarted) || latest?.deletedAt != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('This workout was deleted. Reopen it from Home.'),
@@ -599,10 +639,12 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         );
         return;
       }
-      current = latest;
-      _weekSessions[week] = latest;
-      _syncTicker(latest);
-      if (latest.isCompleted || latest.isTimerRunning) {
+      if (latest != null) {
+        current = latest;
+        _weekSessions[week] = latest;
+        _syncTicker(latest);
+      }
+      if (latest?.isCompleted == true || latest?.isTimerRunning == true) {
         setState(() {});
         return;
       }
@@ -721,11 +763,14 @@ class _WorkoutScreenState extends State<WorkoutScreen>
 
       try {
         final provider = context.read<WorkoutSessionProvider>();
-        final result = await WorkoutCompletionService.complete(
-          draft,
-          upsert: provider.upsertSession,
-        );
+        if (!await _autoSave() || !mounted) return;
+        if (!_canUseTimer(draft)) return;
+        final result = await _progression.complete(draft.id!);
+        provider.loadSessions();
+        _training.reload();
+        SyncService.instance.scheduleSync();
         _weekSessions[_currentWeek] = result.session;
+        _progressError = result.progressPending;
         _syncTicker(result.session);
         await _updateTimerNotification(
           WorkoutTimerNotificationService.instance.dismiss,
@@ -804,7 +849,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     }
     final clean = WorkoutSessionInitializer.initialize(
       plan: widget.plan,
-      weekNumber: _currentWeek,
+      week: _selectedWeek,
     );
     setState(() {
       _weekSessions[_currentWeek] = clean;
@@ -990,135 +1035,411 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     _autoSave();
   }
 
-  void _showWeekOptionsMenu(BuildContext context, int index, int week) {
-    WorkoutDialogs.showWeekOptionsMenu(
-      context,
-      onRename: () => _renameWeek(index, week),
-      onDelete: () => _deleteWeek(index),
-    );
-  }
-
-  void _renameWeek(int index, int week) {
-    WorkoutDialogs.showRenameWeekDialog(
-      context,
-      currentWeek: week,
-      onRename: (newWeek) async {
-        final otherWeeks = List<int>.from(_weeks)..removeAt(index);
-        if (otherWeeks.contains(newWeek)) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '> Week number already exists',
-                style: GoogleFonts.jetBrainsMono(),
-              ),
-              backgroundColor: errorColor(context),
-            ),
-          );
-          return;
-        }
-        setState(() {
-          _weeks[index] = newWeek;
-        });
-        await HiveService.renameSessionWeek(
-          widget.plan.name,
-          week,
-          newWeek,
-          widget.plan.splitId,
-        );
-      },
-    );
-  }
-
-  /// The saved session behind a week tab. Null when the tab only holds the
-  /// placeholder that [_getOrCreateSession] builds for display, which has
-  /// plan-shaped sets but has never been written.
-  WorkoutSession? _persistedSessionForWeek(int week) {
-    final id = _weekSessions[week]?.id;
-    final session =
-        id != null
-            ? HiveService.getSessionById(id)
-            : HiveService.getSessionForPlanAndWeek(
-              widget.plan.name,
-              week,
-              widget.plan.splitId,
-            );
-    return session?.deletedAt == null ? session : null;
-  }
-
-  void _showWeekMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  Future<void> _deleteWeek(int index) async {
-    if (_timerAction != null || _isNavigating) {
-      _showWeekMessage(
-        'Wait for the workout to finish updating, then try again',
-      );
-      return;
-    }
-    // An autosave still in flight would write the week back after the delete.
-    final pendingSave = _saveFuture;
-    if (pendingSave != null) await pendingSave;
-    if (!mounted) return;
-    if (_weeks.length == 1) {
-      _showWeekMessage("You can't delete the only week");
-      return;
-    }
-
-    final week = _weeks[index];
-    final saved = _persistedSessionForWeek(week);
-    final unsavedEdits = index == _currentWeekIndex && _hasUnsavedChanges;
-    // An empty week has nothing to lose, so it goes without a dialog.
-    if (saved != null || unsavedEdits) {
-      final confirmed = await WorkoutDialogs.showDeleteWeekDialog(
-        context,
-        week: week,
-        logged: saved?.isCompleted ?? false,
-      );
-      if (!confirmed || !mounted) return;
-    }
-
-    if (saved != null) {
-      final provider = context.read<WorkoutSessionProvider>();
-      await provider.deleteSessionsForPlanWeek(
-        widget.plan.name,
-        week,
-        widget.plan.splitId,
-      );
-      // A draft opened under an older plan name is only reachable by id.
-      if (HiveService.getSessionById(saved.id!)?.deletedAt == null) {
-        await provider.deleteSession(saved.id!);
-      }
-      final notification =
-          await WorkoutTimerNotificationService.instance.snapshot();
-      if (notification?.sessionId == saved.id) {
-        await WorkoutTimerNotificationService.instance.dismiss();
-      }
+  Future<void> _prepareEntry() async {
+    if (_weeks.isEmpty) return;
+    try {
+      await _progression.replay();
       if (!mounted) return;
+      _training.reload();
+      _loadStructure(initial: true);
+      setState(() => _progressError = false);
+      if (!widget.showLogConfirmationOnOpen &&
+          widget.initialSession == null &&
+          widget.initialWeekId == null &&
+          widget.initialWeekNumber == null) {
+        await _maybeBoundaryPrompt();
+      }
+    } catch (_) {
+      if (mounted) setState(() => _progressError = true);
     }
+  }
 
-    // The tab list may have changed while the dialog was open.
-    final removeAt = _weeks.indexOf(week);
-    if (removeAt < 0) return;
-    final wasCurrent = removeAt == _currentWeekIndex;
-    setState(() {
-      _weeks.removeAt(removeAt);
-      _weekSessions.remove(week);
-      if (_currentWeekIndex >= _weeks.length) {
-        _currentWeekIndex = _weeks.length - 1;
-      } else if (_currentWeekIndex > removeAt) {
-        _currentWeekIndex -= 1;
+  Future<T> _structureMutation<T>(Future<T> Function() write) async {
+    if (_timerAction != null || !await _autoSave() || !mounted) {
+      throw StateError('Save the workout before changing blocks.');
+    }
+    setState(() => _timerAction = 'Saving blocks');
+    try {
+      final result = await write();
+      if (!mounted) return result;
+      _training.reload();
+      _loadStructure();
+      SyncService.instance.scheduleSync();
+      return result;
+    } finally {
+      if (mounted) setState(() => _timerAction = null);
+    }
+  }
+
+  Future<void> _createBlock() async {
+    final result = await TrainingBlockDialogs.create(
+      context,
+      onSave:
+          (name, count) => _structureMutation(
+            () => _structure.createBlock(
+              splitId: widget.plan.splitId!,
+              name: name,
+              weekCount: count,
+            ),
+          ),
+    );
+    if (result != null && mounted) setState(() => _expandedBlockId = result.id);
+  }
+
+  Future<void> _manageBlock(String blockId) async {
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder:
+          (sheet) => SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ListTile(
+                    title: const Text('Add week'),
+                    onTap: () => Navigator.pop(sheet, 'append'),
+                  ),
+                  ListTile(
+                    title: const Text('Rename block'),
+                    onTap: () => Navigator.pop(sheet, 'rename'),
+                  ),
+                  ListTile(
+                    title: const Text('Reorder blocks'),
+                    onTap: () => Navigator.pop(sheet, 'reorder'),
+                  ),
+                  ListTile(
+                    title: const Text('Create block'),
+                    onTap: () => Navigator.pop(sheet, 'create'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
+    if (!mounted || action == null) return;
+    final block = _blocks.where((b) => b.id == blockId).firstOrNull;
+    if (block == null) return;
+    try {
+      switch (action) {
+        case 'append':
+          final week = await _structureMutation(
+            () => _structure.appendWeek(widget.plan.splitId!, blockId),
+          );
+          if (mounted) {
+            setState(() {
+              _expandedBlockId = blockId;
+              _currentWeekIndex = _weeks.indexOf(week.id);
+            });
+            _loadSessionForCurrentWeek();
+          }
+        case 'rename':
+          await TrainingBlockDialogs.rename(
+            context,
+            block,
+            onSave:
+                (name) => _structureMutation(
+                  () => _structure.renameBlock(
+                    widget.plan.splitId!,
+                    blockId,
+                    name,
+                  ),
+                ),
+          );
+        case 'reorder':
+          await TrainingBlockDialogs.reorder(
+            context,
+            _blocks,
+            onSave:
+                (ids) => _structureMutation(
+                  () => _structure.reorderBlocks(widget.plan.splitId!, ids),
+                ),
+          );
+        case 'create':
+          await _createBlock();
       }
-      if (wasCurrent) {
-        // Drop the deleted draft's edits so they can't be saved to a new week.
-        _hasUnsavedChanges = false;
-        _draftRevision++;
-        _saveError = null;
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not update blocks. Try again.')),
+        );
       }
-    });
-    if (wasCurrent) _loadSessionForCurrentWeek();
+    }
+  }
+
+  void _selectProgress() {
+    if (!mounted) return;
+    _training.reload();
+    _loadStructure();
+    final active = _progress?.activeWeekId;
+    if (active != null && _weeks.contains(active)) {
+      _currentWeekIndex = _weeks.indexOf(active);
+      _expandedBlockId = _weekById[active]!.blockId;
+      _loadSessionForCurrentWeek();
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _continueCompleted() async {
+    final session = _getOrCreateSession();
+    final revision = _progress?.revision;
+    if (revision == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialog) => AlertDialog(
+            title: const Text('Continue from this workout?'),
+            content: const Text(
+              'Keep this completed log and choose the next supplied week.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialog, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialog, true),
+                child: const Text('Continue'),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true || !mounted) return;
+    try {
+      await _progression.continueCompleted(
+        sessionId: session.id!,
+        expectedRevision: revision,
+      );
+      if (mounted) _selectProgress();
+      SyncService.instance.scheduleSync();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Training progress changed. Open the workout again.'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _maybeBoundaryPrompt() async {
+    if (!mounted ||
+        _weeks.isEmpty ||
+        _boundaryShowing ||
+        _progress?.state != WorkoutProgressState.awaitingBoundary ||
+        _progress?.activeWeekId != _currentWeek) {
+      return;
+    }
+    _boundaryShowing = true;
+    final revision = _progress!.revision;
+    var saving = false;
+    String? error;
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder:
+            (sheet) => StatefulBuilder(
+              builder:
+                  (sheet, setSheetState) => ListenableBuilder(
+                    listenable: _training,
+                    builder: (sheet, _) {
+                      final current = _progress;
+                      final source =
+                          current == null
+                              ? null
+                              : _weekById[current.activeWeekId];
+                      final supplied =
+                          source == null
+                              ? <TrainingWeek>[]
+                              : (_weeksByBlock[source.blockId] ??
+                                      <TrainingWeek>[])
+                                  .where((w) => w.number > source.number)
+                                  .toList();
+                      final blockIndex =
+                          source == null
+                              ? -1
+                              : _blocks.indexWhere(
+                                (b) => b.id == source.blockId,
+                              );
+                      final nextBlock =
+                          blockIndex >= 0 && blockIndex + 1 < _blocks.length
+                              ? _blocks[blockIndex + 1]
+                              : null;
+                      final nextWeek =
+                          nextBlock == null
+                              ? null
+                              : _weeksByBlock[nextBlock.id]?.firstOrNull;
+                      final stale =
+                          current?.revision != revision ||
+                          current?.state !=
+                              WorkoutProgressState.awaitingBoundary;
+                      Future<void> choose(
+                        Future<void> Function() action,
+                      ) async {
+                        if (saving) return;
+                        setSheetState(() {
+                          saving = true;
+                          error = null;
+                        });
+                        try {
+                          await action();
+                          if (sheet.mounted) Navigator.pop(sheet);
+                          if (mounted) _selectProgress();
+                          SyncService.instance.scheduleSync();
+                        } catch (_) {
+                          if (mounted) _training.reload();
+                          if (sheet.mounted) {
+                            setSheetState(
+                              () =>
+                                  error =
+                                      'Training choices changed or could not be saved. Try again.',
+                            );
+                          }
+                        } finally {
+                          if (sheet.mounted) {
+                            setSheetState(() => saving = false);
+                          }
+                        }
+                      }
+
+                      return PopScope(
+                        canPop: !saving,
+                        child: SafeArea(
+                          child: SingleChildScrollView(
+                            padding: EdgeInsets.fromLTRB(
+                              24,
+                              8,
+                              24,
+                              24 + MediaQuery.viewInsetsOf(sheet).bottom,
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                  'Choose next week',
+                                  style: Theme.of(sheet).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 12),
+                                Text(_contextLabel),
+                                const SizedBox(height: 16),
+                                if (stale)
+                                  const Text(
+                                    'Training progress changed. Close and open the workout again.',
+                                  )
+                                else ...[
+                                  FilledButton(
+                                    onPressed:
+                                        saving
+                                            ? null
+                                            : () => choose(() async {
+                                              if (supplied.isNotEmpty) {
+                                                await _progression
+                                                    .chooseBoundary(
+                                                      planId: widget.plan.id!,
+                                                      expectedRevision:
+                                                          revision,
+                                                      destinationWeekId:
+                                                          supplied.first.id,
+                                                    );
+                                              } else {
+                                                await _progression
+                                                    .extendBoundary(
+                                                      planId: widget.plan.id!,
+                                                      expectedRevision:
+                                                          revision,
+                                                    );
+                                              }
+                                            }),
+                                    child: Text(
+                                      supplied.isEmpty
+                                          ? 'Add week'
+                                          : 'Continue to Week ${supplied.first.number}',
+                                    ),
+                                  ),
+                                  if (supplied.isEmpty && nextWeek != null)
+                                    OutlinedButton(
+                                      onPressed:
+                                          saving
+                                              ? null
+                                              : () => choose(
+                                                () =>
+                                                    _progression.chooseBoundary(
+                                                      planId: widget.plan.id!,
+                                                      expectedRevision:
+                                                          revision,
+                                                      destinationWeekId:
+                                                          nextWeek.id,
+                                                    ),
+                                              ),
+                                      child: Text('Move to ${nextBlock!.name}'),
+                                    ),
+                                  if (supplied.isEmpty && nextWeek == null)
+                                    OutlinedButton(
+                                      onPressed:
+                                          saving
+                                              ? null
+                                              : () async {
+                                                final block =
+                                                    await TrainingBlockDialogs.create(
+                                                      sheet,
+                                                      onSave:
+                                                          (
+                                                            name,
+                                                            count,
+                                                          ) => _progression
+                                                              .createBoundary(
+                                                                planId:
+                                                                    widget
+                                                                        .plan
+                                                                        .id!,
+                                                                expectedRevision:
+                                                                    revision,
+                                                                name: name,
+                                                                weekCount:
+                                                                    count,
+                                                              ),
+                                                    );
+                                                if (block != null &&
+                                                    sheet.mounted) {
+                                                  Navigator.pop(sheet);
+                                                  if (mounted) {
+                                                    _selectProgress();
+                                                  }
+                                                  SyncService.instance
+                                                      .scheduleSync();
+                                                }
+                                              },
+                                      child: const Text('Create block'),
+                                    ),
+                                ],
+                                if (error != null) Text(error!),
+                                if (saving)
+                                  const Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                TextButton(
+                                  onPressed:
+                                      saving
+                                          ? null
+                                          : () => Navigator.pop(sheet),
+                                  child: const Text('Not now'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+            ),
+      );
+    } finally {
+      _boundaryShowing = false;
+    }
   }
 
   void _deleteExercise(int exerciseIndex) async {
@@ -1140,6 +1461,15 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   @override
   Widget build(BuildContext context) {
     navigationStateChanged();
+    if (_weeks.isEmpty) {
+      return Scaffold(
+        appBar: AppHeader(
+          title: Text(widget.plan.name),
+          leading: AppBackButton(onPressed: () => Navigator.pop(context)),
+        ),
+        body: const Center(child: Text('This workout is no longer available.')),
+      );
+    }
     final session = _getOrCreateSession();
     final accent = accentColor(context);
 
@@ -1159,9 +1489,11 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                 _switchPlan(plans[currentPlanIndex - 1], currentPlanIndex - 1)
             : null;
     final planColor = planColorOf(activePlan.planColor, context);
-    final elapsed = formatDuration(session.elapsedSeconds());
-    final timerStyle = Theme.of(context).textTheme.bodySmall!.copyWith(
-      fontFeatures: const [FontFeature.tabularFigures()],
+    final timerBase = Theme.of(context).textTheme.bodySmall!;
+    final timerStyle = AppTypography.figures(
+      fontSize: timerBase.fontSize,
+      fontWeight: timerBase.fontWeight,
+      height: timerBase.height,
       color: textPrimaryColor(context),
     );
     final titleStyle = Theme.of(context).textTheme.headlineSmall!;
@@ -1176,7 +1508,11 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         .clamp(kToolbarHeight + AppSpacing.sm, double.infinity);
 
     return PopScope(
-      canPop: session.isCompleted && !_isNavigating,
+      canPop:
+          session.isCompleted &&
+          !_isNavigating &&
+          !_isSaving &&
+          _timerAction == null,
       onPopInvokedWithResult: (didPop, result) {
         if (!didPop) _handleBack();
       },
@@ -1187,7 +1523,10 @@ class _WorkoutScreenState extends State<WorkoutScreen>
           appBar: AppHeader(
             toolbarHeight: toolbarHeight,
             titleSpacing: AppSpacing.sm,
-            leading: AppBackButton(onPressed: _handleBack),
+            leading: AppBackButton(
+              onPressed: _handleBack,
+              enabled: !_isSaving && _timerAction == null && !_isNavigating,
+            ),
             title: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1204,31 +1543,36 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                 const SizedBox(height: AppSpacing.xs),
                 Row(
                   children: [
-                    Flexible(
+                    Expanded(
                       child: Text(
-                        'Week $_currentWeek',
+                        _contextLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
                     const SizedBox(width: AppSpacing.sm),
-                    Flexible(
-                      flex: 2,
-                      child: Semantics(
-                        label:
-                            session.isCompleted
-                                ? 'Recorded duration $elapsed'
-                                : 'Elapsed time $elapsed',
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            elapsed,
-                            key: const ValueKey('workout_elapsed_time'),
-                            style: timerStyle,
+                    ValueListenableBuilder<DateTime>(
+                      valueListenable: _now,
+                      builder: (context, now, _) {
+                        final elapsed = formatDuration(
+                          session.elapsedSeconds(now),
+                        );
+                        return Semantics(
+                          label:
+                              session.isCompleted
+                                  ? 'Recorded duration $elapsed'
+                                  : 'Elapsed time $elapsed',
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              elapsed,
+                              key: const ValueKey('workout_elapsed_time'),
+                              style: timerStyle,
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -1244,7 +1588,11 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                             ? 'Pause workout'
                             : 'Start workout',
                     onPressed:
-                        _isSaving || _timerAction != null ? null : _toggleTimer,
+                        _isSaving ||
+                                _timerAction != null ||
+                                !_canUseTimer(session)
+                            ? null
+                            : _toggleTimer,
                     color: accent,
                     constraints: const BoxConstraints(
                       minWidth: 48,
@@ -1266,7 +1614,9 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                             : 'Start workout',
                     child: TextButton(
                       onPressed:
-                          _isSaving || _timerAction != null
+                          _isSaving ||
+                                  _timerAction != null ||
+                                  !_canUseTimer(session)
                               ? null
                               : _toggleTimer,
                       style: TextButton.styleFrom(
@@ -1285,7 +1635,10 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                 IconButton(
                   tooltip: 'Finish workout',
                   onPressed:
-                      session.hasStarted && !_isSaving && _timerAction == null
+                      session.hasStarted &&
+                              !_isSaving &&
+                              _timerAction == null &&
+                              _canUseTimer(session)
                           ? _stopWorkout
                           : null,
                   color: accent,
@@ -1323,6 +1676,26 @@ class _WorkoutScreenState extends State<WorkoutScreen>
           ),
           body: Column(
             children: [
+              if (_progressError)
+                TextButton(
+                  onPressed: _prepareEntry,
+                  child: const Text('Retry training progress'),
+                ),
+              if (!_progressError &&
+                  session.isCompleted &&
+                  _progress?.activeWeekId == _currentWeek)
+                TextButton(
+                  onPressed:
+                      _progress?.state == WorkoutProgressState.awaitingBoundary
+                          ? _maybeBoundaryPrompt
+                          : _continueCompleted,
+                  child: Text(
+                    _progress?.state == WorkoutProgressState.awaitingBoundary
+                        ? 'Choose next week'
+                        : 'Continue',
+                  ),
+                ),
+
               if (_isSaving || (_timerAction != null && !_confirmingFinish))
                 Padding(
                   padding: const EdgeInsets.all(AppSpacing.sm),
@@ -1433,15 +1806,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                           )
                                           : null,
                                   accent: accent,
-                                  previousSets: previousExerciseSets(
-                                    _sessionsWithDrafts(),
-                                    exercise.name,
-                                    splitId: widget.plan.splitId,
-                                    planId: widget.plan.id,
-                                    planName: widget.plan.name,
-                                    beforeWeek: _currentWeek,
-                                    includeDrafts: true,
-                                  ),
+                                  previousSets: _previousFor(exercise.name),
                                   onSetChanged: _changeSetValues,
                                   onSetRpeChanged: _changeSetRpe,
                                   onEntryFinished: () {
@@ -1529,60 +1894,23 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   /// above it said "tab". Same control, same language now: an underline in the
   /// accent. The week number is its own ordinal, so these tabs carry no index
   /// prefix.
-  Widget _buildWeekNavBar(Color accent) {
-    return Container(
-      // The ground reaches into the safe-area inset; only the tabs stop short
-      // of it, so there is no bare strip of background under the bar.
-      color: backgroundColor(context),
-      child: SafeArea(
-        top: false,
-        child: UnderlineTabStrip(
-          rule: StripRule.top,
-          height: 48,
-          color: accent,
-          selectedIndex: _currentWeekIndex,
-          tabs: [
-            for (var index = 0; index < _weeks.length; index++)
-              UnderlineTabData(
-                label: 'Week ${_weeks[index]}',
-                // Save the departing week before loading the selected one.
-                onTap:
-                    index == _currentWeekIndex
-                        ? null
-                        : () => _onWeekChanged(index),
-                onLongPress:
-                    () => _showWeekOptionsMenu(context, index, _weeks[index]),
-              ),
-          ],
-          trailing: Semantics(
-            button: true,
-            label: 'Add week',
-            child: InkWell(
-              onTap: _addNewWeek,
-              borderRadius: AppRadius.chip,
-              child: SizedBox(
-                height: 48,
-                child: Padding(
-                  // Week labels sit slightly above the strip's centre to make
-                  // room for their underline. Match that optical baseline
-                  // while keeping the full 48px add-week tap target.
-                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                  child: Center(
-                    child: Text(
-                      '+ Week ${_weeks.last + 1}',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.labelMedium?.copyWith(color: accent),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+  Widget _buildWeekNavBar(Color accent) => SafeArea(
+    top: false,
+    child: TrainingBlockStrip(
+      blocks: _blocks,
+      weeksByBlock: _weeksByBlock,
+      selectedWeekId: _currentWeek,
+      expandedBlockId: _expandedBlockId,
+      enabled: !_isSaving && !_isNavigating && _timerAction == null,
+      onSelectWeek: _onWeekChanged,
+      onExpandBlock:
+          (id) => setState(
+            () => _expandedBlockId = _expandedBlockId == id ? null : id,
           ),
-        ),
-      ),
-    );
-  }
+      onManageBlock: _manageBlock,
+      onCreateBlock: _createBlock,
+    ),
+  );
 }
 
 class _PlanHeader extends StatelessWidget {

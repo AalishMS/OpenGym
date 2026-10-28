@@ -26,6 +26,7 @@ import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 
 import 'support/hive_test_harness.dart';
+import 'support/pump_with_storage.dart';
 import 'support/test_fonts.dart';
 
 void main() {
@@ -43,10 +44,10 @@ void main() {
       url: 'https://example.supabase.co',
       publishableKey: 'test',
     );
-    await hive.open(includeSplits: true);
   });
   tearDownAll(hive.close);
   setUp(() async {
+    await hive.open(includeSplits: true);
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
     plan = WorkoutPlan(
@@ -68,10 +69,24 @@ void main() {
     await HiveService.putSessionRaw(session);
   });
 
+  void workoutTest(String name, Future<void> Function(WidgetTester) body) =>
+      testWidgets(name, (tester) async {
+        try {
+          await body(tester);
+        } finally {
+          await closeStorageWithFrames(tester, hive.close);
+        }
+      });
+
   Future<void> openShell(
     WidgetTester tester, {
     WorkoutSessionProvider? sessions,
   }) async {
+    await tester.runAsync(
+      () => hive.prepareTraining(HiveService.getAllPlansRaw()),
+    );
+    plan = HiveService.getPlanById(plan.id!)!;
+    session = HiveService.getSessionById(session.id!)!;
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 844);
     addTearDown(tester.view.reset);
@@ -140,7 +155,7 @@ void main() {
   Finder allWorkouts() => find.byType(WorkoutScreen, skipOffstage: false);
 
   for (final deletedWhileWaiting in [false, true]) {
-    testWidgets(
+    workoutTest(
       'new notification workout waits behind a busy modal (deleted: $deletedWhileWaiting)',
       (tester) async {
         await openShell(tester);
@@ -178,7 +193,7 @@ void main() {
     );
   }
 
-  testWidgets('stop confirmation waits for the visible workout autosave', (
+  workoutTest('stop confirmation waits for the visible workout autosave', (
     tester,
   ) async {
     session = session.copyWith(
@@ -202,7 +217,7 @@ void main() {
     expect(allWorkouts(), findsOneWidget);
   });
 
-  testWidgets('notification body does not cancel an open finish confirmation', (
+  workoutTest('notification body does not cancel an open finish confirmation', (
     tester,
   ) async {
     await openShell(tester);
@@ -216,7 +231,7 @@ void main() {
     expect(allWorkouts(), findsOneWidget);
   });
 
-  testWidgets('notification preserves a populated custom exercise dialog', (
+  workoutTest('notification preserves a populated custom exercise dialog', (
     tester,
   ) async {
     await openShell(tester);
@@ -233,7 +248,7 @@ void main() {
     expect(allWorkouts(), findsOneWidget);
   });
 
-  testWidgets('repeated notification opens leave one workout route', (
+  workoutTest('repeated notification opens leave one workout route', (
     tester,
   ) async {
     await openShell(tester);
@@ -247,7 +262,7 @@ void main() {
     expect(find.text('Start workout'), findsOneWidget);
   });
 
-  testWidgets('stop notification reuses an already open workout', (
+  workoutTest('stop notification reuses an already open workout', (
     tester,
   ) async {
     await openShell(tester);
@@ -258,7 +273,7 @@ void main() {
     expect(find.text('Log workout?'), findsOneWidget);
   });
 
-  testWidgets('rapid notification intents do not race the first route build', (
+  workoutTest('rapid notification intents do not race the first route build', (
     tester,
   ) async {
     await openShell(tester);
@@ -268,7 +283,7 @@ void main() {
     expect(allWorkouts(), findsOneWidget);
   });
 
-  testWidgets('a different workout leaves through its normal Back flow', (
+  workoutTest('a different workout leaves through its normal Back flow', (
     tester,
   ) async {
     final other = WorkoutPlan(id: 'pull', name: 'Pull', exercises: []);
@@ -287,7 +302,7 @@ void main() {
     expect(tester.widget<WorkoutScreen>(allWorkouts()).plan.id, 'push');
   });
 
-  testWidgets(
+  workoutTest(
     'notification respects an editor discard prompt above the workout',
     (tester) async {
       await openShell(tester);
@@ -315,7 +330,7 @@ void main() {
     },
   );
 
-  testWidgets('a blocking modal is not bypassed by a notification', (
+  workoutTest('a blocking modal is not bypassed by a notification', (
     tester,
   ) async {
     await openShell(tester);
@@ -348,7 +363,7 @@ void main() {
     expect(find.text('Log workout?'), findsOneWidget);
   });
 
-  testWidgets('notification opens the exact session identity', (tester) async {
+  workoutTest('notification opens the exact session identity', (tester) async {
     final other = session.copyWith(id: 'other-draft', date: DateTime(2026, 2));
     await tester.runAsync(() => HiveService.putSessionRaw(other));
     await openShell(tester);

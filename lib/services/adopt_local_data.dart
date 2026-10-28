@@ -93,8 +93,7 @@ class AdoptLocalData {
     if (!userChanged && lastUser == null) {
       // Finish unowned durable intents before stamping their fixed identities.
       await TrainingBlockRestore().recover(ownerId: null);
-      await HiveService.recoverTrainingOperation(ownerId: null);
-      await HiveService.recoverTrainingWeekRebase(ownerId: null);
+      await HiveService.recoverTrainingOperations(ownerId: null);
     }
     await TrainingBlockRestore().recover(ownerId: userId);
     await prefs.setString(_lastUserKey, userId);

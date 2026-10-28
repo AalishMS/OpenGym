@@ -75,6 +75,7 @@ void main() {
     for (final session in sessions) {
       await box.put(session.id, session);
     }
+    await harness.prepareTraining([plan]);
   });
 
   tearDownAll(() async {

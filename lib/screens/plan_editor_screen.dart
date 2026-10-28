@@ -23,6 +23,10 @@ import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../utils/set_history.dart';
 import '../widgets/workout/workout_dialogs.dart';
+import '../widgets/workout/training_block_dialogs.dart';
+import '../models/training_block.dart';
+import '../models/training_week.dart';
+import '../providers/training_block_provider.dart';
 
 class PlanEditorScreen extends StatefulWidget {
   final WorkoutPlan? plan;
@@ -52,6 +56,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   bool _saved = false;
   bool _showColors = false;
   String? _draftId;
+  String? _startingWeekId;
 
   bool get _canSave => _nameController.text.trim().isNotEmpty;
 
@@ -92,6 +97,16 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
       }
     }
 
+    if (!widget.isEdit && _splitId != null) {
+      final blocks = HiveService.blocksForSplit(_splitId!);
+      if (blocks.isNotEmpty) {
+        _startingWeekId =
+            HiveService.weeksForBlock(
+              _splitId!,
+              blocks.first.id,
+            ).firstOrNull?.id;
+      }
+    }
     _initialSignature = _signature();
     _nameController.addListener(() => setState(() {}));
   }
@@ -111,7 +126,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
           return '${exercise.name}:${exercise.note ?? ''}:$sets';
         })
         .join('|');
-    return '${_nameController.text.trim()}|$_selectedColor|$exerciseParts';
+    return '${_nameController.text.trim()}|$_selectedColor|$exerciseParts|${_startingWeekId ?? ''}';
   }
 
   Future<void> _handleBack() async {
@@ -129,6 +144,39 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
 
     final discard = await WorkoutDialogs.showDiscardChangesDialog(context);
     if (discard && mounted) Navigator.pop(context);
+  }
+
+  List<TrainingBlock> get _startingBlocks =>
+      _splitId == null ? [] : HiveService.blocksForSplit(_splitId!);
+  Map<String, List<TrainingWeek>> get _startingWeeks => {
+    for (final b in _startingBlocks)
+      b.id: HiveService.weeksForBlock(_splitId!, b.id),
+  };
+  String get _startingLabel {
+    final week =
+        _startingWeekId == null
+            ? null
+            : HiveService.getTrainingWeekById(_startingWeekId!);
+    final block =
+        week == null ? null : HiveService.getTrainingBlockById(week.blockId);
+    if (week != null &&
+        week.deletedAt == null &&
+        block != null &&
+        block.deletedAt == null &&
+        week.splitId == _splitId) {
+      return '${block.name} · Week ${week.number}';
+    }
+    return 'Choose starting week';
+  }
+
+  Future<void> _chooseStart() async {
+    final chosen = await TrainingBlockDialogs.startingWeek(
+      context,
+      blocks: _startingBlocks,
+      weeksByBlock: _startingWeeks,
+      selectedWeekId: _startingWeekId,
+    );
+    if (chosen != null && mounted) setState(() => _startingWeekId = chosen);
   }
 
   Future<void> _savePlan() async {
@@ -182,7 +230,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
       if (widget.isEdit) {
         await provider.updatePlan(plan);
       } else {
-        await provider.addPlan(plan);
+        await provider.addPlan(plan, startingWeekId: _startingWeekId);
       }
       if (!mounted) return;
       setState(() {
@@ -360,6 +408,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
 
   @override
   Widget build(BuildContext context) {
+    context.watch<TrainingBlockProvider?>();
     final planColor = _planColor(context);
 
     return PopScope(
@@ -414,6 +463,14 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                               controller: _nameController,
                               marker: planColor,
                             ),
+                            if (!widget.isEdit && _startingBlocks.isNotEmpty)
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text('Starting week'),
+                                subtitle: Text(_startingLabel),
+                                trailing: const Icon(LucideIcons.chevronDown),
+                                onTap: _isSaving ? null : _chooseStart,
+                              ),
                             const SizedBox(height: AppSpacing.xl),
                             Wrap(
                               alignment: WrapAlignment.spaceBetween,

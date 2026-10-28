@@ -18,6 +18,7 @@ import 'training_block_graph.dart';
 import 'training_block_restore.dart';
 import 'training_block_migration.dart';
 import 'sync_service.dart';
+import 'workout_progression_service.dart';
 
 class HiveService {
   static const String trainingBlocksBox = 'training_blocks';
@@ -297,6 +298,7 @@ class HiveService {
   }) async {
     await recoverTrainingWeekRebase(ownerId: ownerId);
     await recoverTrainingOperation(ownerId: ownerId);
+    await WorkoutProgressionService.recoverBoundaryUnderGate(ownerId: ownerId);
   }
 
   static Future<TrainingBlock?> recoverTrainingOperation({

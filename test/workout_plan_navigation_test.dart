@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
@@ -15,6 +16,7 @@ import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/underline_tab_strip.dart';
+import 'package:gymapp/widgets/workout/training_block_strip.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
 
 import 'support/hive_test_harness.dart';
@@ -36,6 +38,7 @@ void main() {
   ];
 
   setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
     await loadTestFonts();
     await harness.open();
   });
@@ -75,6 +78,13 @@ void main() {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(600, 844);
     addTearDown(tester.view.reset);
+    await tester.runAsync(
+      () => harness.prepareTraining([
+        ...planProvider?.plans ?? plans,
+        if (plan != null && !(planProvider?.plans ?? plans).contains(plan))
+          plan,
+      ]),
+    );
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -129,15 +139,16 @@ void main() {
   String currentPlan(WidgetTester tester) =>
       tester.widget<WorkoutScreen>(find.byType(WorkoutScreen)).plan.name;
 
-  int selectedWeek(WidgetTester tester) =>
-      tester
-          .widget<UnderlineTabStrip>(
-            find.byWidgetPredicate(
-              (widget) =>
-                  widget is UnderlineTabStrip && widget.rule == StripRule.top,
-            ),
-          )
-          .selectedIndex;
+  int selectedWeek(WidgetTester tester) {
+    final strip = tester.widget<TrainingBlockStrip>(
+      find.byType(TrainingBlockStrip),
+    );
+    return strip.weeksByBlock.values
+            .expand((weeks) => weeks)
+            .firstWhere((w) => w.id == strip.selectedWeekId)
+            .number -
+        1;
+  }
 
   Future<void> swipe(WidgetTester tester, double dx) async {
     await tester.drag(find.byType(CustomScrollView), Offset(dx, 0));
@@ -176,25 +187,30 @@ void main() {
     expect(currentPlan(tester), 'Pull');
   });
 
-  testWidgets('header and body swipes distinguish plans without IDs', (
-    tester,
-  ) async {
-    final legacyPlans = [
-      for (final plan in plans)
-        WorkoutPlan(name: plan.name, exercises: plan.exercises),
-    ];
-    await open(tester, plan: legacyPlans[1], planProvider: _Plans(legacyPlans));
-    final header =
-        find
-            .descendant(of: find.byType(AppBar), matching: find.text('Pull'))
-            .first;
-    await tester.drag(header, const Offset(130, 0));
-    await tester.pumpAndSettle();
-    expect(currentPlan(tester), 'Push');
-    await swipe(tester, -160);
-    expect(currentPlan(tester), 'Pull');
-    expect(tester.takeException(), isNull);
-  });
+  testWidgets(
+    'header and body swipes distinguish migrated plans by their assigned IDs',
+    (tester) async {
+      final legacyPlans = [
+        for (final plan in plans)
+          WorkoutPlan(name: plan.name, exercises: plan.exercises),
+      ];
+      await open(
+        tester,
+        plan: legacyPlans[1],
+        planProvider: _Plans(legacyPlans),
+      );
+      final header =
+          find
+              .descendant(of: find.byType(AppBar), matching: find.text('Pull'))
+              .first;
+      await tester.drag(header, const Offset(130, 0));
+      await tester.pumpAndSettle();
+      expect(currentPlan(tester), 'Push');
+      await swipe(tester, -160);
+      expect(currentPlan(tester), 'Pull');
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets(
     'switching by swipes and tabs leaves one workout route to close',

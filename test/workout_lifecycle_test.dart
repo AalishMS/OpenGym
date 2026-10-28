@@ -11,6 +11,7 @@ import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart' as gym;
 import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/workout_plan.dart';
+import 'package:gymapp/models/training_week.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
@@ -21,7 +22,7 @@ import 'package:gymapp/services/workout_completion_service.dart';
 import 'package:gymapp/services/workout_session_initializer.dart';
 import 'package:gymapp/services/workout_timer_notification_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
-import 'package:gymapp/widgets/underline_tab_strip.dart';
+import 'package:gymapp/widgets/workout/training_block_strip.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
@@ -88,7 +89,13 @@ void main() {
           ),
         ],
       ),
-      weekNumber: 1,
+      week: TrainingWeek(
+        id: 'week-1',
+        splitId: 'split-a',
+        blockId: 'block',
+        number: 1,
+        createdAt: DateTime(2026),
+      ),
     );
     expect(session.isCompleted, isFalse);
     expect(session.durationSeconds, 0);
@@ -227,18 +234,27 @@ void main() {
         url: 'https://example.supabase.co',
         publishableKey: 'test-publishable-key',
       );
-      await hive.open();
     });
     tearDownAll(hive.close);
 
     setUp(() async {
+      await hive.open();
       if (!Hive.isBoxOpen(HiveService.sessionsBox)) {
         await Hive.openBox<WorkoutSession>(HiveService.sessionsBox);
       }
       await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
       await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
-      await HiveService.putPlanRaw(plan);
+      await HiveService.putPlanRaw(plan.copyWith());
     });
+
+    void workoutTest(String name, Future<void> Function(WidgetTester) body) =>
+        testWidgets(name, (tester) async {
+          try {
+            await body(tester);
+          } finally {
+            await closeStorageWithFrames(tester, hive.close);
+          }
+        });
 
     Future<void> seed(int week, {required bool completed}) =>
         HiveService.putSessionRaw(
@@ -275,6 +291,7 @@ void main() {
           null,
         ),
       );
+      await tester.runAsync(() => hive.prepareTraining([plan]));
       sessions = provider ?? WorkoutSessionProvider();
       await tester.pumpWidget(
         MultiProvider(
@@ -332,25 +349,9 @@ void main() {
     }
 
     Finder weekTab(int week) => find.descendant(
-      of: find.byType(UnderlineTabStrip),
+      of: find.byType(TrainingBlockStrip),
       matching: find.text('Week $week'),
     );
-
-    Future<void> deleteWeek(WidgetTester tester, int week) async {
-      await tester.longPress(weekTab(week));
-      await tester.pumpAndSettle();
-      expect(find.text('Rename week'), findsOneWidget);
-      await tester.tap(find.text('Delete week'));
-      await pumpWithStorage(tester);
-    }
-
-    Future<void> confirm(WidgetTester tester) async {
-      expect(find.text('Delete week?'), findsOneWidget);
-      expect(find.text('Discard workout?'), findsNothing);
-      await tester.tap(find.widgetWithText(ElevatedButton, 'Delete'));
-      await pumpWithStorage(tester);
-      expect(find.text('Delete week?'), findsNothing);
-    }
 
     WorkoutSession oldRunning() {
       final start = DateTime.now().subtract(const Duration(minutes: 20));
@@ -394,17 +395,18 @@ void main() {
       fail('The timer conflict confirmation did not open.');
     }
 
-    testWidgets('a failed first draft write retries with its assigned ID', (
+    workoutTest('a failed first draft write retries with its assigned ID', (
       tester,
     ) async {
-      await open(tester, provider: _FailFirstWriteProvider());
+      final failing = _FailFirstWriteProvider();
+      await open(tester, provider: failing);
       await tester.tap(find.text('Start'));
       await pumpWithStorage(tester);
       expect(find.text('Retry'), findsOneWidget);
-      expect(HiveService.getSessionById('first-write-draft'), isNull);
+      expect(HiveService.getSessionById(failing.assignedId!), isNull);
       await tester.tap(find.text('Retry'));
       await pumpWithStorage(tester);
-      final saved = HiveService.getSessionById('first-write-draft')!;
+      final saved = HiveService.getSessionById(failing.assignedId!)!;
       expect(saved.exercises.single.name, 'Squat');
       expect(find.text('Retry'), findsNothing);
       await tester.tap(find.text('Start'));
@@ -414,7 +416,7 @@ void main() {
       await releaseSessions(tester);
     });
 
-    testWidgets(
+    workoutTest(
       'Start applies a notification pause before checking conflicts',
       (tester) async {
         await tester.runAsync(() => HiveService.putSessionRaw(oldRunning()));
@@ -448,7 +450,7 @@ void main() {
       },
     );
 
-    testWidgets('an old running flag can be paused without losing its sets', (
+    workoutTest('an old running flag can be paused without losing its sets', (
       tester,
     ) async {
       await tester.runAsync(() => HiveService.putSessionRaw(oldRunning()));
@@ -502,7 +504,7 @@ void main() {
       await releaseSessions(tester);
     });
 
-    testWidgets('a failed pause cannot start a second running timer', (
+    workoutTest('a failed pause cannot start a second running timer', (
       tester,
     ) async {
       await tester.runAsync(() => HiveService.putSessionRaw(oldRunning()));
@@ -522,7 +524,7 @@ void main() {
       await releaseSessions(tester);
     });
 
-    testWidgets('Start resolves every saved running timer before starting', (
+    workoutTest('Start resolves every saved running timer before starting', (
       tester,
     ) async {
       await tester.runAsync(() async {
@@ -552,7 +554,7 @@ void main() {
     });
 
     for (final change in ['sets', 'completed', 'deleted']) {
-      testWidgets(
+      workoutTest(
         'Start respects current draft $change changed during confirmation',
         (tester) async {
           await tester.runAsync(() => HiveService.putSessionRaw(oldRunning()));
@@ -597,23 +599,21 @@ void main() {
       );
     }
 
-    testWidgets('the current empty week is removed without a dialog', (
-      tester,
-    ) async {
-      await tester.runAsync(() => seed(1, completed: true));
-      await open(tester);
-      expect(weekTab(2), findsOneWidget);
-
-      await deleteWeek(tester, 2);
-
-      expect(find.byType(AlertDialog), findsNothing);
-      expect(weekTab(2), findsNothing);
-      expect(weekTab(1), findsOneWidget);
-      // The logged week next to it is untouched.
-      expect(HiveService.getSessionById('week-1')!.deletedAt, isNull);
-    });
-
-    testWidgets('the current week with sets in progress is tombstoned', (
+    workoutTest(
+      'empty supplied weeks remain available without per-week deletion',
+      (tester) async {
+        await tester.runAsync(() => seed(1, completed: true));
+        await open(tester);
+        expect(weekTab(2), findsOneWidget);
+        await tester.tap(find.byTooltip('Block actions for Block 1'));
+        await tester.pumpAndSettle();
+        expect(find.text('Delete week'), findsNothing);
+        expect(find.text('Rename week'), findsNothing);
+        expect(find.text('Add week'), findsOneWidget);
+        expect(HiveService.getSessionById('week-1')!.deletedAt, isNull);
+      },
+    );
+    workoutTest('browsing a supplied week keeps its saved incomplete draft', (
       tester,
     ) async {
       await tester.runAsync(() async {
@@ -621,48 +621,50 @@ void main() {
         await seed(2, completed: false);
       });
       await open(tester);
-      expect(weekTab(2), findsOneWidget);
-
-      await deleteWeek(tester, 2);
-      await confirm(tester);
-
-      expect(weekTab(2), findsNothing);
-      expect(HiveService.getSessionById('week-2')!.deletedAt, isNotNull);
+      await tester.tap(weekTab(1));
+      await pumpWithStorage(tester);
+      expect(HiveService.getSessionById('week-2')!.deletedAt, isNull);
       expect(HiveService.getSessionById('week-1')!.deletedAt, isNull);
-      await releaseSessions(tester);
-    });
-
-    testWidgets('a logged past week leaves the tabs and the provider', (
-      tester,
-    ) async {
-      await tester.runAsync(() async {
-        await seed(1, completed: true);
-        await seed(2, completed: true);
-      });
-      await open(tester);
-      expect(sessions.sessions.map((s) => s.id), contains('week-1'));
-
-      await deleteWeek(tester, 1);
-      await confirm(tester);
-
-      expect(weekTab(1), findsNothing);
       expect(weekTab(2), findsOneWidget);
-      expect(HiveService.getSessionById('week-1')!.deletedAt, isNotNull);
-      // History and Stats read the provider; no manual reload is needed.
-      expect(sessions.sessions.map((s) => s.id), isNot(contains('week-1')));
-      expect(sessions.sessions.map((s) => s.id), contains('week-2'));
-      await releaseSessions(tester);
     });
-
-    testWidgets('the only week explains why it stays', (tester) async {
-      await open(tester);
-      expect(weekTab(1), findsOneWidget);
-
-      await deleteWeek(tester, 1);
-
-      expect(find.text("You can't delete the only week"), findsOneWidget);
-      expect(weekTab(1), findsOneWidget);
-    });
+    workoutTest(
+      'deleting a historical log keeps its supplied week and remaining history',
+      (tester) async {
+        await tester.runAsync(() async {
+          await seed(1, completed: true);
+          await seed(2, completed: true);
+        });
+        await open(tester);
+        await tester.tap(find.text('Not now'));
+        await tester.pumpAndSettle();
+        await tester.runAsync(() => sessions.deleteSession('week-1'));
+        await pumpWithStorage(tester);
+        expect(weekTab(1), findsOneWidget);
+        expect(weekTab(2), findsOneWidget);
+        expect(HiveService.getSessionById('week-1')!.deletedAt, isNotNull);
+        expect(sessions.sessions.map((s) => s.id), isNot(contains('week-1')));
+        expect(sessions.sessions.map((s) => s.id), contains('week-2'));
+      },
+    );
+    workoutTest(
+      'opening block actions on empty structure never deletes or logs a week',
+      (tester) async {
+        await open(tester);
+        final ids =
+            HiveService.getAllTrainingWeeksRaw().map((w) => w.id).toSet();
+        await tester.tap(find.byTooltip('Block actions for Block 1'));
+        await tester.pumpAndSettle();
+        expect(find.text('Create block'), findsOneWidget);
+        expect(find.text('Delete week'), findsNothing);
+        await tester.tapAt(const Offset(10, 10));
+        await tester.pumpAndSettle();
+        expect(
+          HiveService.getAllTrainingWeeksRaw().map((w) => w.id).toSet(),
+          ids,
+        );
+        expect(HiveService.getAllSessionsRaw(), isEmpty);
+      },
+    );
   });
 }
 
@@ -677,14 +679,15 @@ class _FailingPauseProvider extends WorkoutSessionProvider {
 }
 
 class _FailFirstWriteProvider extends WorkoutSessionProvider {
+  String? assignedId;
   bool _failed = false;
 
   @override
   Future<void> upsertSession(WorkoutSession session) async {
     if (!_failed) {
       _failed = true;
-      // Hive assigns identity before its first put can fail.
-      session.id ??= 'first-write-draft';
+      // The initializer assigns identity before the first write.
+      assignedId = session.id;
       throw StateError('disk full');
     }
     await super.upsertSession(session);

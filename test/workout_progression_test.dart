@@ -386,4 +386,85 @@ void main() {
       expect(progress().toJson(), before);
     },
   );
+  test(
+    'boundary create retries its fixed structure and move after progress failure',
+    () async {
+      await HiveService.putWorkoutProgressRaw(
+        progress().copyWith(
+          activeWeekId: second,
+          state: WorkoutProgressState.awaitingBoundary,
+        ),
+      );
+      final revision = progress().revision;
+      final failing = WorkoutProgressionService(
+        ownerId: () => 'owner',
+        clock: () => now,
+        writeProgress: (_) async => throw StateError('disk'),
+      );
+      await expectLater(
+        failing.createBoundary(
+          planId: 'push',
+          expectedRevision: revision,
+          name: 'Next',
+          weekCount: 3,
+        ),
+        throwsStateError,
+      );
+      await expectLater(
+        service.createBoundary(
+          planId: 'push',
+          expectedRevision: revision,
+          name: 'Changed',
+          weekCount: 4,
+        ),
+        throwsStateError,
+      );
+      final created = repo.blocksForSplit('split').last.id;
+      final result = await service.createBoundary(
+        planId: 'push',
+        expectedRevision: revision,
+        name: 'Next',
+        weekCount: 3,
+      );
+      expect(result.id, created);
+      expect(repo.blocksForSplit('split'), hasLength(2));
+      expect(
+        progress().activeWeekId,
+        repo.weeksForBlock('split', created).first.id,
+      );
+      expect(progress('pull').activeWeekId, first);
+    },
+  );
+  test(
+    'stale create cannot allocate a block; an existing extension is reused on append',
+    () async {
+      await HiveService.putWorkoutProgressRaw(
+        progress().copyWith(
+          activeWeekId: second,
+          state: WorkoutProgressState.awaitingBoundary,
+        ),
+      );
+      final revision = progress().revision;
+      final extended = await repo.appendWeek(
+        'split',
+        repo.blocksForSplit('split').single.id,
+      );
+      await expectLater(
+        service.createBoundary(
+          planId: 'push',
+          expectedRevision: revision,
+          name: 'Extra',
+          weekCount: 2,
+        ),
+        throwsStateError,
+      );
+      expect(repo.blocksForSplit('split'), hasLength(1));
+      await service.extendBoundary(planId: 'push', expectedRevision: revision);
+      expect(progress().activeWeekId, extended.id);
+      expect(
+        repo.weeksForBlock('split', repo.blocksForSplit('split').single.id),
+        hasLength(3),
+      );
+    },
+  );
 }

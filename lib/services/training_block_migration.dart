@@ -117,7 +117,7 @@ class TrainingBlockMigration {
         await temporary.rename(path);
       }
       await checkpoint(_ownerKey(ownerId), journal, 'snapshot');
-      await HiveService.recoverTrainingWeekRebase(ownerId: ownerId);
+      await HiveService.recoverTrainingOperations(ownerId: ownerId);
       final count = HiveService.getAllSessionsRaw().length;
       final prepared = prepareGraph(_readGraph(ownerId));
       for (final block in prepared.blocks) {

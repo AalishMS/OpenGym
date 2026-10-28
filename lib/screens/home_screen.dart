@@ -6,6 +6,8 @@ import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../providers/split_provider.dart';
 import '../models/workout_plan.dart';
+import '../services/hive_service.dart';
+import '../widgets/workout/training_block_dialogs.dart';
 import '../models/workout_session.dart';
 import '../models/exercise_template.dart';
 import '../models/set_template.dart';
@@ -599,10 +601,25 @@ class _HomeScreenState extends State<HomeScreen> {
                     icon: LucideIcons.copy,
                     label: 'Duplicate plan',
                     color: textPrimary,
-                    onTap: () {
+                    onTap: () async {
                       if (_mutatingPlan) return;
                       Navigator.pop(ctx);
+                      final splitId =
+                          plan.splitId ??
+                          context.read<SplitProvider?>()?.activeSplitId;
+                      if (splitId == null) return;
+                      final blocks = HiveService.blocksForSplit(splitId);
+                      final selected = await TrainingBlockDialogs.startingWeek(
+                        context,
+                        blocks: blocks,
+                        weeksByBlock: {
+                          for (final b in blocks)
+                            b.id: HiveService.weeksForBlock(splitId, b.id),
+                        },
+                      );
+                      if (selected == null || !context.mounted) return;
                       final copyPlan = WorkoutPlan(
+                        splitId: splitId,
                         name: '${plan.name} (Copy)',
                         exercises:
                             plan.exercises
@@ -634,7 +651,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         message: 'Creating a copy of “${plan.name}”.',
                         success: 'Plan copied',
                         startImmediately: true,
-                        persist: () => provider.addPlan(copyPlan),
+                        persist:
+                            () => provider.addPlan(
+                              copyPlan,
+                              startingWeekId: selected,
+                            ),
                       );
                     },
                   ),

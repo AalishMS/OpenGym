@@ -42,6 +42,8 @@ class TrainingBlockProvider with ChangeNotifier {
     reload();
   }
 
+  String? get splitId => _splitId();
+
   List<WorkoutSession> sessionsForSlot(String planId, String weekId) =>
       _sessionsBySlot[(planId, weekId)] ?? const [];
 

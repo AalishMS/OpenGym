@@ -149,12 +149,16 @@ void main() {
     'copy waits for storage and retries the same copy after failure',
     (tester) async {
       final plans = _Plans([plan]);
+      await tester.runAsync(() => harness.prepareTraining([plan]));
       await tester.pumpWidget(host(const HomeScreen(), plans: plans));
       await tester.tap(find.text('Manage'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Plan actions'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Duplicate plan'));
+      await tester.pumpAndSettle();
+      expect(find.text('Choose starting week'), findsOneWidget);
+      await tester.tap(find.text('Use this week'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       expect(plans.writes.length, 1);
@@ -318,6 +322,7 @@ void main() {
         ).put('draft', draft()),
       );
       final sessions = _Sessions();
+      await tester.runAsync(() => harness.prepareTraining([plan]));
       await tester.pumpWidget(
         host(WorkoutScreen(plan: plan, planIndex: 0), sessions: sessions),
       );
@@ -377,6 +382,7 @@ void main() {
         ).put('draft', draft()),
       );
       final sessions = _Sessions();
+      await tester.runAsync(() => harness.prepareTraining([plan]));
       await tester.pumpWidget(
         host(WorkoutScreen(plan: plan, planIndex: 0), sessions: sessions),
       );
@@ -386,10 +392,6 @@ void main() {
       await tester.pump();
       expect(sessions.writes.length, 1);
       expect(find.text('Starting workout'), findsOneWidget);
-      sessions.pending.complete();
-      sessions.pending = Completer<void>();
-      await tester.pump();
-      expect(sessions.writes.length, 2);
       sessions.pending.completeError(StateError('disk full'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Could not change the timer'), findsOneWidget);
@@ -397,9 +399,8 @@ void main() {
       expect(find.text('Pause'), findsNothing);
       sessions.pending = Completer<void>();
       await tester.tap(find.text('Start'));
-      sessions.pending.complete();
-      sessions.pending = Completer<void>();
       await tester.pump();
+      expect(sessions.writes.length, 2);
       expect(sessions.writes.last.isTimerRunning, isTrue);
       sessions.pending.complete();
       await tester.pumpAndSettle();
@@ -407,8 +408,6 @@ void main() {
 
       sessions.pending = Completer<void>();
       await tester.tap(find.text('Pause'));
-      sessions.pending.complete();
-      sessions.pending = Completer<void>();
       await tester.pump();
       expect(sessions.writes.last.isTimerRunning, isFalse);
       sessions.pending.completeError(StateError('disk full'));

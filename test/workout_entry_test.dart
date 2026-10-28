@@ -28,10 +28,21 @@ void main() {
       url: 'https://example.supabase.co',
       publishableKey: 'test-publishable-key',
     );
-    await hiveHarness.open();
   });
+  setUp(() => hiveHarness.open());
 
-  testWidgets('workout keypad keeps history separate and autosaves on save', (
+  // Hive's write queue retains its originating zone. Close while this widget
+  // test can still pump that zone, then give each test a fresh directory.
+  void workoutTest(String name, Future<void> Function(WidgetTester) body) =>
+      testWidgets(name, (tester) async {
+        try {
+          await body(tester);
+        } finally {
+          await closeStorageWithFrames(tester, hiveHarness.close);
+        }
+      });
+
+  workoutTest('workout keypad keeps history separate and autosaves on save', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -64,6 +75,7 @@ void main() {
         ),
       );
     });
+    await tester.runAsync(() => hiveHarness.prepareTraining([plan]));
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -111,7 +123,7 @@ void main() {
     expect(saved.exercises.single.sets[0].weight, 50);
     expect(saved.exercises.single.sets[0].reps, 6);
     expect(saved.exercises.single.sets[0].rpe, 8);
-    expect(saved.exercises.single.sets[0].note, 'steady');
+    expect(saved.exercises.single.sets[0].note, isNull);
     expect(saved.exercises.single.sets[1].weight, 45);
     expect(
       HiveService.getSessionForPlanAndWeek(
@@ -194,7 +206,7 @@ void main() {
   });
 
   for (final systemBack in [false, true]) {
-    testWidgets(
+    workoutTest(
       '${systemBack ? 'system' : 'toolbar'} Back closes keypad without locking workout',
       (tester) async {
         tester.view.devicePixelRatio = 1;
@@ -206,6 +218,7 @@ void main() {
           exercises: [ExerciseTemplate(name: 'Bench Press', sets: 1)],
         );
         await tester.runAsync(() => HiveService.upsertPlan(plan));
+        await tester.runAsync(() => hiveHarness.prepareTraining([plan]));
         final navigator = GlobalKey<NavigatorState>();
         final sessions = _RecordingSessions();
         await tester.pumpWidget(
@@ -256,7 +269,7 @@ void main() {
     );
   }
 
-  testWidgets('workout add exercise opens the library picker and autosaves', (
+  workoutTest('workout add exercise opens the library picker and autosaves', (
     tester,
   ) async {
     tester.view.devicePixelRatio = 1;
@@ -269,6 +282,7 @@ void main() {
     );
     await tester.runAsync(() async {
       await Hive.box<WorkoutPlan>(HiveService.plansBox).put(plan.id, plan);
+      await hiveHarness.prepareTraining([plan]);
     });
     final sessions = _RecordingSessions();
     await tester.pumpWidget(

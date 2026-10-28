@@ -84,6 +84,16 @@ void main() {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = size;
     addTearDown(tester.view.reset);
+    if (screen is WorkoutScreen ||
+        plans.isNotEmpty ||
+        HiveService.getAllSessionsRaw().isNotEmpty) {
+      await tester.runAsync(
+        () => harness.prepareTraining([
+          ...plans,
+          if (screen is WorkoutScreen) screen.plan,
+        ]),
+      );
+    }
     await tester.pumpWidget(
       MultiProvider(
         providers: [
