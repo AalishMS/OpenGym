@@ -46,8 +46,10 @@ the scope of this session.
   block**: Week 1 from Week 1, Week 2 from Week 2, and so on, for the same workout.
 - At the block boundary, offer **Add week** and **Move to next block** when a
   next block exists, or **Add week** and **Create block** when none exists.
-- Archive completed blocks to preserve their logs in History, records, and
-  statistics. Detailed deletion and archive eligibility rules remain open.
+- All blocks, including completed ones, stay in the workout screen's scrollable
+  block navigation. The most recent block remains easy to reach. There is no
+  archiving feature or associated block restore or workout pause/resume workflow.
+  Logs remain available in History, records, and statistics.
 - Migrate all existing weeks/logs into **one initial block per split**, preserving
   their week numbers and data.
 - Expose block management through **long-pressing a block** in the workout
@@ -78,6 +80,8 @@ Confirmed layout and opening behavior:
 
 - Each block reveals its weeks inline beside its label in the same horizontal
   bar. The next block follows the revealed weeks.
+- Keep every live block available by scrolling, including completed blocks;
+  do not hide older blocks or move them into a separate view.
 - On opening the workout screen, resolve the workout's active week and expand
   its containing block. Make that active week visible in the scrollable strip.
 - Opening a different block collapses the previously expanded block as the new
@@ -86,7 +90,7 @@ Confirmed layout and opening behavior:
   adjacent items move smoothly. Exact timing and easing remain design details;
   respect the platform's reduced-motion preference.
 - Long-pressing a block opens its management actions, including access to
-  creating, renaming, reordering, and archiving blocks. Exact labels and the
+  creating, renaming, and reordering blocks. Exact labels and the
   presentation of these actions are still to be designed.
 
 Suggested interaction rules, still open to discussion:
@@ -315,11 +319,10 @@ the same calendar period; independent workout progression remains intact.
 - Prevent an old app version from overwriting or dropping new structure during
   sync. Decide on version gating, a compatibility bridge, or a supported upgrade
   boundary before rollout; nullable fields alone are insufficient protection.
-- Keep historical logs reachable when a block/week is archived or removed.
-  Archiving completed blocks while preserving History, records, and statistics
-  is confirmed. Exact deletion semantics and archive eligibility remain product
-  decisions and must align locally and on the server. In particular, one workout
-  finishing a block does not mean every workout has finished that shared block.
+- Keep historical logs reachable when a block/week is removed. Completed blocks
+  remain in navigation and retain History, records, and statistics. Exact
+  deletion semantics remain product decisions and must align locally and on the
+  server. One workout finishing a block does not move or pause other workouts.
 
 ## Questions still open
 
@@ -335,8 +338,6 @@ the same calendar period; independent workout progression remains intact.
 4. What initializes the first block or a week with no matching previous-block
    session? How are changed exercises matched, and when are source values copied?
 5. What happens when deleting a shared week containing logs from several workouts?
-   When can a shared block be archived if some workouts still have active weeks
-   in it, and how can archived blocks be accessed or restored?
 6. Can the same workout be performed twice in one training week? Existing data
    can contain multiple sessions, while the workout screen normally selects one.
 7. What should a brand-new split or newly installed preset start with, and how
@@ -362,8 +363,9 @@ user-selected starting block/week for a newly added workout;
 no dedicated skipping feature;
 previous-set behavior at block boundaries;
 old-backup upgrades into one initial block per split; interrupted and multi-device
-migration; account isolation; long-press block management; and archive/delete
-behavior without accidental history loss.
+migration; account isolation; long-press block management; every live block
+remaining reachable in the scrollable navigation, including the most recent;
+and deletion behavior without accidental history loss.
 
 When implementation begins, update [DESIGN.md](../../DESIGN.md) and
 [split documentation](../splits.md) to describe the resulting shipped behavior,
