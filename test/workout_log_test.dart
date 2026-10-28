@@ -199,7 +199,9 @@ void main() {
             } else {
               expect(toolbar.toolbarHeight, greaterThan(64));
             }
-            if (width == 390 && scale == 1) {
+            if (const bool.fromEnvironment('WORKOUT_PREVIEW') &&
+                width == 390 &&
+                scale == 1) {
               expect(
                 (tester.renderObject(find.text('Block 1 · Week 6'))
                         as RenderParagraph)

@@ -6,8 +6,12 @@ Branch: `feature/training-blocks`
 
 Reviewed against: `b675c01`
 
-Status: ready to implement in order; production activation requires Task 2's
-compatibility tests. This review changes documentation only.
+Status: paused at the Task 5 checkpoint on the user's request. Tasks 1–5 are
+implemented; Tasks 6–7 and the final whole-branch review remain. Independent
+reviews after Tasks 2 and 4 are complete and their findings are fixed. No
+deployment or release is authorized. Android device checks are explicitly
+pending. See [implementation-status.md](implementation-status.md) for evidence
+and resume instructions.
 
 > For implementation, use `superpowers:executing-plans` task by task. Each task
 > ends with its focused tests, `flutter analyze`, and an explicitly staged commit.
@@ -423,16 +427,16 @@ the current live IDs. Public mutations own the gate; internal ungated helpers
 compose pending operations. Raw writes remain internal to HiveService; reads
 are thin wrappers.
 
-- [ ] Add `test/training_block_repository_test.dart` for empty structure, owner/
+- [x] Add `test/training_block_repository_test.dart` for empty structure, owner/
   split validation, duplicate slot sessions, JSON/adapter round trips and nullable
   copy clearing. Extend `test/support/hive_test_harness.dart` and
   `test/support/pump_with_storage.dart` with all boxes/adapters.
-- [ ] Add `test/training_block_migration_test.dart`: sparse 1/3/12 union, empty
+- [x] Add `test/training_block_migration_test.dart`: sparse 1/3/12 union, empty
   split, missing/ambiguous plans, tombstones, multiple drafts, exact byte-equivalent
   exercise/timer payloads, Dart UUID vectors and failure after every journal phase.
-- [ ] Implement records/repository and resumable normalization; rerunning must
+- [x] Implement records/repository and resumable normalization; rerunning must
   not dirty valid rows, reset progress, or create another initial block.
-- [ ] Run the two new tests, regenerate adapters, analyze, and commit.
+- [x] Run the two new tests, regenerate adapters, analyze, and commit.
 
 **Exit:** Durable empty weeks and preserved legacy data; UI exposure still gated.
 
@@ -448,18 +452,18 @@ before migrated uploads, codecs/cursors for the three tables, and explicit
 upgrade-required/retryable error status. Internal SQL activation/normalization
 operations are idempotent and scoped to `auth.uid()`; no owner supplied by the UI.
 
-- [ ] Inventory base plan/session DDL, triggers, grants, API pre-request hooks and
+- [x] Inventory base plan/session DDL, triggers, grants, API pre-request hooks and
   SDK header support in an isolated database; record findings with the migration.
   The repository lacks initial base-table DDL. Do not guess production constraints.
-- [ ] Add failing transport/database cases: old-client read/upsert/delete rejection,
+- [x] Add failing transport/database cases: old-client read/upsert/delete rejection,
   two owners, own-owner wrong split, partial-replica union, newer remote edits
   during backfill, append collision in both orders and three-retry exhaustion.
-- [ ] Implement schema/backfill/gate and graph ordering. Test parent failure,
+- [x] Implement schema/backfill/gate and graph ordering. Test parent failure,
   late legacy dirty writes, deleted-parent rejection and in-flight account switch.
-- [ ] Test more than one response page, equal timestamps, delayed commit behind
+- [x] Test more than one response page, equal timestamps, delayed commit behind
   the cursor and its full-pull repair, failed page application, and local edits
   during upload. Verify server stale-write rejection, not merely local LWW.
-- [ ] Run focused tests and isolated integration checks, analyze, and commit.
+- [x] Run focused tests and isolated integration checks, analyze, and commit.
 
 **Exit:** Enforced upgrade boundary and convergent graph sync. If the actual API
 cannot enforce the gate, stop activation and fix that task; do not ship a UI-only
@@ -478,14 +482,14 @@ extend split, preset, auth and Coach tests.
 and recovery; no second normalization algorithm. Existing clear/delete APIs
 retain their public meaning and include the new records.
 
-- [ ] Test v4 round trip of empty structure, duplicates, pending completion and
+- [x] Test v4 round trip of empty structure, duplicates, pending completion and
   boundary states; v1–3 normalization; conflicting links rejected before writes.
-- [ ] Test same-owner restore, foreign graph remap including transition revisions,
+- [x] Test same-owner restore, foreign graph remap including transition revisions,
   process death during replacement, and absent-record tombstones.
-- [ ] Implement every lifecycle matrix row and bounded owner-scoped recovery files.
+- [x] Implement every lifecycle matrix row and bounded owner-scoped recovery files.
   Test plan deletion, split deletion, Clear All Data, custom empty split preservation,
   preset/Coach failure and A→B handover with pending work.
-- [ ] Run `test/training_block_backup_test.dart`, `test/split_data_layer_test.dart`,
+- [x] Run `test/training_block_backup_test.dart`, `test/split_data_layer_test.dart`,
   `test/workout_presets_test.dart`, `test/auth_recovery_test.dart`,
   `test/coach_applier_test.dart`; analyze and commit.
 
@@ -511,18 +515,18 @@ mechanism before this move. Resolver produces `WorkoutSession?` destination and
 source from explicit lists; initializer takes `TrainingWeek week`, plan, optional
 saved destination/source and clock, and returns a `WorkoutSession` without I/O.
 
-- [ ] Add `test/workout_progression_test.dart`: Push advances while Pull stays,
+- [x] Add `test/workout_progression_test.dart`: Push advances while Pull stays,
   no open/calendar/discard transition, boundary next-visit state, completion-write
   failure, progress-write failure, replay twice, changed revision with same week,
   old replay after boundary choice, two-device competing completion, and explicit
   Continue from a completed active slot without another log or PR event.
-- [ ] Implement gate + evidence + pure transition. Test finishing an existing
+- [x] Implement gate + evidence + pure transition. Test finishing an existing
   nonactive timer saves history only. Do not weaken existing PR/timer retry tests.
-- [ ] Extend `test/workout_session_initializer_test.dart` and
+- [x] Extend `test/workout_session_initializer_test.dart` and
   `test/set_history_test.dart`: B2/W2←B1/W2, first supplied Week 3, missing source,
   duplicate exercise names, changed templates, deep-copy, saved destination wins,
   no copied notes/timers/evidence and plan-ID-only filtering.
-- [ ] Implement provider maps and source resolution. Run these tests plus
+- [x] Implement provider maps and source resolution. Run these tests plus
   `test/workout_lifecycle_test.dart`; analyze and commit.
 
 **Exit:** Independent progression and deterministic initialization work without UI.
@@ -538,25 +542,29 @@ new `lib/widgets/workout/training_block_strip.dart` and
 Screen selection is by week/session ID; block creation/append/rename/reorder go
 through the repository's gated mutation methods, not direct widget Hive writes.
 
-- [ ] Add `test/training_block_navigation_test.dart`: inline reveal, one expanded,
+- [x] Add `test/training_block_navigation_test.dart`: inline reveal, one expanded,
   entry scrolls active slot, collapse preserves selected context, failed save
   prevents navigation, no phantom max+1 week on open.
-- [ ] Replace integer caches/keys and legacy per-plan week actions. Preserve exact
+- [x] Replace integer caches/keys and legacy per-plan week actions. Preserve exact
   session selections across provider reloads. Remove `_loadWeeks` auto-append.
-- [ ] Implement next-entry boundary sheets with revision revalidation, dismissal,
+- [x] Implement next-entry boundary sheets with revision revalidation, dismissal,
   existing-extension reuse and create retry using fixed IDs. Test another device
   extending/reordering while a sheet is open.
-- [ ] Add starting-slot selection to new/duplicate plan flows; preserve existing
+- [x] Add starting-slot selection to new/duplicate plan flows; preserve existing
   plan progress. Add accessible Block actions alongside long press.
-- [ ] Use existing AppHeader/AppBackButton, theme colors, AppRadius, figures,
+- [x] Use existing AppHeader/AppBackButton, theme colors, AppRadius, figures,
   48px targets and “Block name · Week N” labels. Test narrow/large-text layouts,
   long names, reduced motion and many blocks; only expanded weeks need widgets.
-- [ ] Run new tests plus `test/workout_plan_navigation_test.dart`,
+- [x] Run new tests plus `test/workout_plan_navigation_test.dart`,
   `test/workout_entry_test.dart`, `test/workout_log_test.dart`,
   `test/navigation_mutation_guards_test.dart`, `test/plan_editor_test.dart`,
   `test/screen_layout_test.dart`; analyze, hot reload/restart and commit.
 
 **Exit:** The agreed interaction is usable without changing timer/save semantics.
+
+> Task 5 device verification: Android restart and interactions remain pending
+> by user choice. Web debug compilation/restart completed, but browser workout
+> interaction was not verified. Actual-font widget screenshots were inspected.
 
 ### Task 6 — exact routes, timer, history, and Coach
 

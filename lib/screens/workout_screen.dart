@@ -1541,40 +1541,50 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _contextLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    ValueListenableBuilder<DateTime>(
-                      valueListenable: _now,
-                      builder: (context, now, _) {
-                        final elapsed = formatDuration(
-                          session.elapsedSeconds(now),
-                        );
-                        return Semantics(
-                          label:
-                              session.isCompleted
-                                  ? 'Recorded duration $elapsed'
-                                  : 'Elapsed time $elapsed',
-                          child: FittedBox(
-                            fit: BoxFit.scaleDown,
+                LayoutBuilder(
+                  builder:
+                      (context, constraints) => Row(
+                        children: [
+                          Expanded(
                             child: Text(
-                              elapsed,
-                              key: const ValueKey('workout_elapsed_time'),
-                              style: timerStyle,
+                              _contextLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ),
-                        );
-                      },
-                    ),
-                  ],
+                          const SizedBox(width: AppSpacing.sm),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: constraints.maxWidth * .45,
+                            ),
+                            child: ValueListenableBuilder<DateTime>(
+                              valueListenable: _now,
+                              builder: (context, now, _) {
+                                final elapsed = formatDuration(
+                                  session.elapsedSeconds(now),
+                                );
+                                return Semantics(
+                                  label:
+                                      session.isCompleted
+                                          ? 'Recorded duration $elapsed'
+                                          : 'Elapsed time $elapsed',
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(
+                                      elapsed,
+                                      key: const ValueKey(
+                                        'workout_elapsed_time',
+                                      ),
+                                      style: timerStyle,
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
                 ),
               ],
             ),
