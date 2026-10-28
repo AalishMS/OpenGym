@@ -4,926 +4,626 @@ Date: 2026-10-28
 
 Branch: `feature/training-blocks`
 
-Repository baseline: `6b0e27c` (`docs: keep unlogged workouts on their current week`)
+Reviewed against: `b675c01`
 
-Status: proposed implementation plan; no application implementation authorized
+Status: ready to implement in order; production activation requires Task 2's
+compatibility tests. This review changes documentation only.
 
-## Authority and scope
+> For implementation, use `superpowers:executing-plans` task by task. Each task
+> ends with its focused tests, `flutter analyze`, and an explicitly staged commit.
+> Do not ship an intermediate client that exposes the old week UI to new data.
 
-[initialization.md](initialization.md) is the product source of truth. This plan
-also follows [AGENTS.md](../../AGENTS.md), [DESIGN.md](../../DESIGN.md),
-[split workspaces](../splits.md), and the relevant Coach contract in
-[docs/coach.md](../coach.md). Repository findings below describe this commit,
-not a verified live database schema.
+**Goal:** Split-wide blocks of durable weeks, with independent workout progress,
+matching-week starting values, and unchanged access to historical logs.
 
-**Agreed** means confirmed behavior in initialization.md and the latest brief.
-**Recommended** means an implementation or product default proposed here, still
-subject to acceptance. **Unresolved** means a decision remains open. Phase 0
-identifies which decisions actually block dependent implementation or rollout.
+**Architecture:** Keep Hive as runtime truth and Provider for UI state. Add three
+small records: block, week, and per-plan progress. Sessions reference weeks;
+plans remain shared prescription templates. Reuse existing sync, navigation,
+timer, backup, and mutation infrastructure.
 
-This deliverable is documentation only. Application changes, adapter generation,
-builds, tests, database access, migration execution, deployment, PR, and push are
-future work. The feature notes and this plan reflect the user's removal of
-archiving. Keep DESIGN.md unchanged until implementation is authorized.
+**Stack:** Existing Flutter/Dart, Hive, Provider, UUID, and Supabase dependencies.
+No new package, state-management system, event bus, or generic sync framework.
 
-## Agreed product contract
+**Product source:** [initialization.md](initialization.md). Its confirmed
+requirements remain authoritative. This revision resolves its open implementation
+choices with the explicit V1 defaults below; these are review recommendations,
+not claims of previously obtained user approval. [DESIGN.md](../../DESIGN.md),
+[split workspaces](../splits.md), [Coach](../coach.md), and
+[AGENTS.md](../../AGENTS.md) continue to apply.
 
-- A split owns shared blocks and planned weeks. Every workout plan in the split
-  sees the same structure; each workout progresses independently.
-- Weeks restart at 1 in each new block. A week has durable identity independent
-  of its label, number, or order. Preserve existing numbering, including gaps,
-  when migrating the initial block.
-- Creating a block accepts an upfront week count; Add week can extend it later.
-  Empty planned weeks persist without manufacturing performed sessions.
-- The horizontal bottom navigation expands weeks inline beside their block.
-  At most one block is expanded. Entering a workout expands its active week's
-  block and scrolls that week into view. Use a simple expansion animation.
-- All blocks, including completed ones, stay in the horizontally scrollable
-  workout navigation. The most recent block remains easy to reach. There is no
-  archiving feature, hidden-block view, block restore action, or associated
-  workout pause/resume workflow.
-- Long-pressing a block opens block management, including access to creation,
-  naming, and reordering. Detailed presentation remains open.
-- Logging/completing advances that workout through the supplied weeks. Opening,
-  leaving, elapsed calendar time, and another workout's completion do not.
-  An unlogged Week 2 returns as Week 2, with its saved values/draft intact,
-  even the following calendar week. There is no missed-visit metadata,
-  calendar/schedule detection, Skip week action, or dedicated skipping feature.
-- Completing the final provided week leaves the decision until the **next
-  visit**. Offer Add week / Move to next block when a next block exists;
-  otherwise Add week / Create block. Do not append or cross automatically.
-- Later-block values inherit from the same workout's matching week in the
-  previous block: B2/W1 from B1/W1, B2/W2 from B1/W2. Existing destination
-  sessions always win. First-block and missing-source rules are not agreed.
-- Adding a workout lets the user choose its starting block and week.
-- Completing or moving beyond a block leaves its logs in History, records, and
-  statistics and its block available in navigation.
-- Upgrade existing data into one initial block per split, preserving session
-  IDs, week numbers, dates, sets, completion, and timers, including orphaned
-  and duplicate historical logs.
-- V1 groups weeks. Plans remain split-wide prescription templates; do not add
-  block-specific exercises, targets, plan copies, or prescription versions.
+## Review findings and resulting decisions
 
-## Repository findings and change map
+The previous plan had the right aggregate boundaries and integration coverage,
+but was not yet executable without further product and recovery design.
 
-| Existing path | Relevant behavior and required integration |
+| Finding | Resolution in this plan |
 | --- | --- |
-| `lib/models/workout_session.dart` | Hive type 4; fields 0–14 include integer `weekNumber`, optional `planId`/`splitId`, stable session ID, draft/completion and timer data. Add links without repurposing fields. |
-| `lib/models/workout_plan.dart` | Hive type 3; fields through 10, with field 3 deliberately unused. Stable plan ID, shared template and display order. Do not create one plan per block. |
-| `lib/models/split.dart`, `lib/models/split_preference.dart` | Types 6 and 7; split ownership and account-level active selection. Existing registered model types occupy 0–7. |
-| `lib/services/hive_service.dart` | Four boxes; ID-key migration, `ensureSplitWorkspace`, dirty/raw accessors, replacement and tombstone helpers. `getSessionsForPlan`, `getWeeksForPlan`, `getSessionForPlanAndWeek`, `renameSessionWeek`, and `deleteSessionForPlanAndWeek` still use names/numbers. The comment “now id-based” above week helpers does not make their lookup identity safe. |
-| `lib/screens/workout_screen.dart` | `_loadWeeks` derives per-plan integer tabs and appends max+1 on opening without a draft. `_weekSessions` is keyed by integer; restoration, initializer, previous-set lookup, widget keys, rename/delete, and `initialWeekNumber` share that assumption. Save revisions and `_saveBeforeNavigation` already guard edits. |
-| `lib/services/workout_session_initializer.dart` | Existing destination wins; Week 1 seeds plan targets; later weeks copy the previous session wholesale or use zeroed sets. Matching-week inheritance needs explicit source resolution. |
-| `lib/services/workout_completion_service.dart` | Completes a started draft in one session upsert, stops its timer, and checks PRs against completed history excluding itself. Preserve retry behavior; add recoverable progression after the completion write. |
-| `lib/providers/workout_session_provider.dart`, `lib/providers/workout_plan_provider.dart`, `lib/providers/split_provider.dart` | Provider/ChangeNotifier, split listeners, local writes then sync. Session provider exposes completed sessions; shared structure cannot be inferred from that list. Split provider listens to sync changes and triggers dependent reloads. |
-| `lib/main.dart`, `lib/auth/auth_gate.dart` | Hive/Supabase startup, local account preparation, providers, account-specific Navigator replacement. New state must prepare before display and reset on handover. Offline-only builds also need block migration. |
-| `lib/services/sync_service.dart` | Split/preference pull before bootstrap; live parents push before plans/sessions, deleted splits last; whole-row last-write-wins, per-table cursors and exclusive local mutation helper. Current pushes stamp the signed-in owner; do not extend that practice to arbitrary foreign rows. |
-| `supabase/migrations/20260904060853_add_split_scoped_workspaces.sql` | Composite split/owner FKs, RLS, grants, sequence trigger, legacy split assignment and split tombstone cascade. Following `20260904061059_fix_split_tombstone_cascade.sql`, `20260904061229_complete_split_access_and_indexes.sql`, `20260904061315_tighten_workout_table_grants.sql` amend behavior. Initial base plan/session table creation is not in this migration set; audit it in a future isolated environment before asserting constraints. |
-| `lib/services/backup_service.dart`, `lib/screens/settings_screen.dart` | Backup version 3; versions 1–2 collapse into My Split. Settings explicitly supplies exports and passes validated imports to `replaceAllWorkoutData`, then reloads providers. Updating JSON alone is insufficient. |
-| `lib/services/adopt_local_data.dart` | First-account adoption; different-user cache clearing and four cursor resets. New boxes, journals, safety backups, and cursor keys must join this lifecycle. |
-| `lib/services/workout_preset_installer.dart`, `lib/services/split_install_target.dart`, `lib/services/sample_data_seeder.dart` | Preset and Coach new-split installation share target preparation/rollback. Sample data creates historical numbered sessions; split clearing and all-data helpers currently operate on plans/sessions. |
-| `lib/app_shell.dart`, `lib/navigation/app_navigation_observer.dart` | Timer opens and route reuse target exact session IDs, wait behind modals and autosaves, and recheck deferred destinations. Keep these guarantees. |
-| `lib/services/workout_timer_notification_service.dart`, `android/app/src/main/kotlin/com/aalishms/opengym/WorkoutTimerNotification.kt` | Native persisted snapshot includes session ID, plan/split and integer week; title is plan + Week N. Add block display context compatibly, retaining session ID as routing authority. |
-| `lib/screens/home_screen.dart`, `lib/screens/dashboard_screen.dart`, `lib/widgets/home/up_next_card.dart` | Plan entry versus exact draft resume must remain distinct. Dashboard already passes `initialSession`, including a fallback for a missing plan. |
-| `lib/utils/set_history.dart`, `lib/utils/plan_stats.dart` | Previous-set sorting/filtering uses `beforeWeek`; plan stats has legacy name fallback. Raw week numbers cannot order repeated Week 1s. |
-| `lib/screens/history_screen.dart`, `lib/widgets/history/history_journal_data.dart`, `lib/widgets/history/history_journal_widgets.dart`, `lib/widgets/history/workout_details_widgets.dart` | History details use session identity; labels need block context. Preserve orphan records and exact-session detail routing. |
-| `lib/services/statistics_analytics_service.dart`, `lib/services/pr_tracking_service.dart`, `lib/screens/stats_screen.dart` | Completed sessions and logged dates drive analytics. Include logs across all blocks without collapsing distinct logs by week. |
-| `lib/services/coach/coach_context_builder.dart`, `lib/services/coach/coach_applier.dart`, `lib/screens/coach_review_screen.dart` | Coach summarizes completed sessions and edits shared plans. Its current apply rollback covers plans/splits/preferences, not structure/progress. New workouts need starting-week selection without inventing block prescriptions or expanding the model contract unnecessarily. |
-
-## Recommended schema and aggregate boundaries
-
-Use **separate block and week records**, plus **one small progress record per
-plan**. Keep Hive as runtime truth and Provider as the UI pattern. Use existing
-UUID and timestamp/tombstone conventions; no event-sourcing system or generic
-repository framework is needed.
-
-### Proposed records
-
-- `TrainingBlock`: `id`, `splitId`, `name`, `position`, `createdAt`, and
-  `userId/updatedAt/deletedAt/dirty`. Completion does not hide a block or add
-  another lifecycle state.
-- `TrainingWeek`: `id`, `blockId`, `splitId`, `number`, `position`, `createdAt`,
-  and normal sync metadata. `number` is a displayed label, never a lookup key.
-  New blocks create 1…N; extension appends max(number)+1. Migration preserves
-  labels/gaps, and sorts them numerically. No arbitrary week renumber/reorder
-  UI is required in V1; retire the old per-plan rename-week action.
-- `WorkoutProgress`: deterministic `id` per `(splitId, planId)`, `splitId`,
-  `planId`, `activeWeekId`, `state` (`ready` or `awaitingBoundary`), optional
-  `lastAppliedCompletionSessionId`, and normal sync metadata. This record is
-  explicit training position, not the last week the user happened to view.
-  A new workout's chosen start is its first `activeWeekId`; earlier slots do
-  not acquire fictitious completion flags.
-- `WorkoutSession`: append nullable `trainingWeekId` at Hive field 15; retain
-  existing fields 0–14 unchanged. Derive block through the week, avoiding two
-  independently writable structural references. Retain `weekNumber` as a
-  legacy/display snapshot; new navigation and progression never query by it.
-  Add a payload schema version for compatibility; do not equate it with backup
-  format version. If stored locally, allocate field 17 or later, leaving field
-  16 for transition evidence. JSON/copyWith/adapter round trips preserve links.
-  Recommend one optional completion-transition value at appended Hive field 16,
-  encoded as a primitive map locally and in JSON: either `nextWeekId` or an
-  explicit boundary outcome. Its source is the session's `trainingWeekId`;
-  session ID is the idempotency key. This is written only with a successful
-  active-slot completion and travels with that session for crash/sync recovery.
-  Legacy sessions have no transition; merely finding a completed log must not
-  manufacture a new progression event.
-
-Proposed paths: `lib/models/training_block.dart`,
-`lib/models/training_week.dart`, `lib/models/workout_progress.dart`; boxes
-`training_blocks`, `training_weeks`, `workout_progress`; Hive types 8, 9, 10
-subject to a fresh collision check at implementation. Generated companions
-would be produced later by build_runner, never handwritten. Mirror these as
-`public.training_blocks`, `public.training_weeks`, `public.workout_progress`.
-
-Keep progress separate from `WorkoutPlan`: Coach/plan edits and logging then do
-not overwrite each other through the same whole-row conflict unit. Three new
-small record types cost more wiring than embedding, but each has a distinct
-mutation lifecycle. No separate persisted browser-selection model is needed.
-
-### Identity, ordering, and relationship rules
-
-1. New blocks/weeks use random UUIDs. Rename, reorder and label changes
-   retain IDs. Use `(position, id)` as a deterministic order, including tie
-   breaking after concurrent reorder. Never use list index as identity.
-2. Destination identity is `(owner/cache scope, splitId, planId, trainingWeekId)`;
-   exact log identity is `sessionId`. Return a list of sessions for a destination,
-   not an assumed unique row. Do **not** add a unique constraint on
-   `(planId, trainingWeekId)`: legacy duplicates must survive.
-3. Maintain unique live displayed week numbers within a block. For concurrent
-   offline Add week collisions, retain both UUIDs and both sets of session data:
-   the rejected append is rebased to the next available number and retried,
-   updating its local display snapshot, rather than merging/deleting a week.
-   Surface the renumbering when it affects an already viewed slot. Use bounded
-   retries, keep it dirty on failure, and test the server constraint/retry path.
-   This is an exceptional conflict rule, not a general renumbering feature.
-4. Composite keys/FKs must enforce owner **and split** through the graph:
-   block → `(splitId, userId)`; week → `(blockId, splitId, userId)`;
-   linked session → `(trainingWeekId, splitId, userId)`; progress → both its
-   plan and week in that same split/owner. Add supporting unique parent keys
-   and child indexes. An ID-only FK or owner-only RLS is insufficient.
-5. A non-null session plan reference must agree with its owner/split when the
-   plan exists. Keep nullable/missing-plan history as history; do not require a
-   live plan to display a migrated log. Audit any existing plan FK before
-   deciding how to retain truly dangling legacy references. Locally retain the
-   original value; if a server FK requires normalization, preserve it in a
-   legacy-reference payload field rather than inventing a plan or dropping a log.
-6. Validate graph relationships on local writes, import, and remote decode.
-   Promoted remote columns are canonical; reject conflicting JSON links, never
-   silently relink them to the active split. A legacy **missing** link follows
-   migration; an invalid **present** link is a recoverable data error.
-7. Keep tombstoned structural records for referencing history and stale-device
-   reconciliation. Do not reuse their IDs/numbers to resurrect deleted content.
-   Active progression cannot target a deleted week/block.
-
-### Material alternatives
-
-Embedding weeks in a block reduces boxes/tables and makes a create-block write
-simple, but whole-row last-write-wins can lose another device's appended week
-and leave sessions referencing its removed child. Making that safe requires
-merging or compare-and-retry logic for the entire array. Embedding all structure
-in Split increases that contention further. Separate rows contain independent
-week edits and make parent validation explicit; they still require append
-conflict handling and do not solve concurrent reorder globally.
-
-Deriving progress only from completed logs avoids a record, but cannot represent
-an explicitly chosen starting slot or a deliberate boundary transition cleanly,
-and historical deletion/editing would change the inferred position. Embedding
-progress in a plan saves one table but couples unrelated Coach/template edits
-to logging. Recommend the explicit small progress aggregate, with completed
-sessions as recovery evidence, not a full event log.
-
-## Recommended runtime rules and proposed product defaults
-
-These defaults are proposals, not additional confirmed user decisions.
-
-### Progress versus browsing
-
-Implement a focused `lib/services/workout_progression_service.dart`, with
-split-scoped access through `lib/repositories/training_block_repository.dart`
-and `lib/providers/training_block_provider.dart`. Keep the repository thin;
-pure progression/source-resolution decisions belong in services. The provider
-owns shared structure and per-plan progress; the screen owns only selected
-week/session and `expandedBlockId`.
-
-- Ordinary workout entry resolves that plan's active week. Switching workouts
-  saves first and opens the new workout's own active week, rather than carrying
-  the browsed week across. Exact-session entry overrides browser selection only.
-- Expanding/collapsing a block does not load a week or modify progress. Tapping
-  a week changes browser selection after save succeeds. Closing the selected
-  block leaves its selection recognizable in the label/heading.
-- Proposed V1 logging rule: edit drafts while browsing, but enable Log workout
-  only for the active slot; completed historical sessions remain read-only in
-  the workout screen. This avoids turning future-week browsing into an implicit
-  skipping mechanism. Confirm this restriction before wiring completion UI.
-- Completion persists the finished session first. Only after success, if it is
-  the active slot, advance its progress to the next supplied week in that block,
-  or keep the final week with `awaitingBoundary`. The screen may keep showing
-  the just-logged result; it need not immediately navigate to another session.
-- Use `lastAppliedCompletionSessionId` and expected active-week checks to make
-  retries harmless. Crash between session and progress writes is repaired from
-  that completed active session on restart/pull before resolving entry. A
-  completion-transition value is part of the same session aggregate write as
-  completion. It records the intended successor ID (or boundary), so a later
-  reorder cannot alter recovery on this device or another device. A separate
-  completion journal is unnecessary. Apply only this committed evidence against
-  its expected active source; a normal open does not invent a transition from
-  an arbitrary historical completed session. Sync it before dependent progress.
-- Normal open/leave, autosave, pause/resume, discard, draft deletion, and changes
-  in calendar time have no progression transition. No visit timestamps or
-  “missed” flags are introduced. Historical edits/deletes never rewind progress.
-- Existing completed destinations can arise from legacy duplicates or sync.
-  Do not create replacement logs or recursively walk to a later block. Resolve
-  completion evidence for the active slot idempotently; ambiguous conflicting
-  drafts/completions require an explicit selection/recovery notice, not data loss.
-- A final completion marks the pending boundary without opening a prompt in the
-  current visit. On the next ordinary plan entry, offer the required choices.
-  Exact historical/detail/notification navigation does not trigger that prompt.
-  “Next visit” is route entry, not foreground resume or a provider rebuild.
-- Proposed dismissal: keep the completed final session visible/read-only and
-  retain `awaitingBoundary`; expose a Choose next week action and offer the
-  choices again on the next ordinary entry. Dismissal adds no week and does
-  not cross the boundary.
-- Boundary Add week persists a shared appended week and moves only the choosing
-  workout into it. If another device already extended the block, offer/use the
-  existing next supplied week instead of accidentally appending twice; recheck
-  at confirmation. Other ready workouts progress into it through completion.
-  A workout still awaiting a boundary may explicitly continue into that existing
-  extension. A workout already in a later block stays there.
-- Move to next block chooses the first week of the next live block in
-  shared order. Create block collects name/count, commits shared structure,
-  then moves only this workout. Merely creating/reordering a block in management
-  does not activate it for every workout. Revalidate after asynchronous dialogs.
-
-Use existing exclusive-local-mutation gating and a small journal/compensating
-rollback for multi-box writes; Hive has no cross-box transaction here. Do not
-hold a successful completion hostage to a transient progress-write failure:
-show the completed log accurately, retain recovery work, and retry progression
-without logging again or restarting its timer.
-
-Per-plan progress uses the existing last-write-wins policy, not a split-wide
-maximum. Document that simultaneous choices for the **same workout** resolve
-by that record's timestamp; sessions remain intact. Never merge cursors by
-week number, since blocks can be reordered. Reject replayed completion events
-whose expected source is no longer active. A winning explicit boundary choice
-must not be undone by recovery of an older completed week. Test reordered
-push/pull and same-session completion on two devices.
-
-### Destination selection and value initialization
-
-Add a focused source resolver (proposed
-`lib/services/training_week_session_resolver.dart`) and pass resolved records
-to `WorkoutSessionInitializer`; do not make the initializer query global Hive.
-
-1. An explicitly requested live session ID wins, including a particular duplicate
-   log/draft. For ordinary slot entry, prefer its running draft, then most recent
-   incomplete draft, then most recent completed log. Use updated/date and ID
-   tie breakers consistently, never Hive insertion order. If several drafts are
-   running, retain the existing account-wide timer conflict resolution.
-2. Any saved destination wins over all inheritance/template changes. Reopening
-   an unlogged draft restores it exactly. Save initialized values as a genuine
-   **incomplete** destination draft when first edited/started or explicitly
-   saved, not as completed sessions for every planned slot. Do not persist
-   untouched previews just because plan-shaped sets exist.
-3. For block N > 1, resolve the immediately preceding block in shared order;
-   match its week by displayed number and the same stable plan ID. Prefer the
-   latest completed source log using the
-   deterministic tie breaker. Proposed fallback: do not inherit unfinished
-   source drafts; use plan targets when no completed matching source exists.
-   Never substitute that preceding block's final week for every destination.
-4. Proposed first-block behavior: Week 1 uses current plan targets; subsequent
-   weeks copy the same workout's previous provided completed week when present,
-   preserving familiar carry-forward. If absent, use current plan targets.
-   For any later-block missing matching week/session, use current plan targets
-   directly, rather than chaining through unrelated earlier weeks/blocks.
-5. Match source exercises by trimmed, whitespace-normalized, case-insensitive
-   name and occurrence index for duplicate names. No fuzzy matching or new
-   exercise-ID migration is needed in V1. Keep current plan exercise order and
-   guidance; for matched exercises copy ordered source reps/weight/RPE and set
-   count. New/unmatched exercises use their plan targets; removed source
-   exercises are not reintroduced. Do not copy past set notes as instructions.
-   Confirm this mapping rule; stable exercise identities can be a later feature.
-6. Copy once into a deep, editable draft with its own session identity, current
-   date and `isCompleted: false`; reset start/timer/duration. Subsequent source
-   edits, block reorder or template changes do not overwrite saved destinations.
-   An untouched preview can reflect the source until it becomes a saved draft.
-   Discard resets the same active slot using these rules; it does not advance it.
-   Never copy completion-transition evidence into the new draft.
-
-Keep “Previous” set references separate from initialization. Replace `beforeWeek`
-with a structural cutoff `(block position/id, week position/id)` for workout
-references; use completed same-plan, same-split earlier slots, ordered by that
-cutoff and then log date/ID. A B2/W1 reference can use B1's final performed week
-while its **initial values** still come from B1/W1. Plan-editor Last values
-remain date-based and split-scoped. Never include the selected session itself,
-future slots, foreign splits, or inherited draft values as performed history.
-
-### Management and creation defaults
-
-- Propose name “Block 1” and one persisted Week 1 for a brand-new empty split or
-  preset, avoiding an invented program duration. A creation sheet allows any
-  supported positive upfront count, prefilled with 1; choose a modest validated
-  cap during UI work, not an unbounded allocation. Use ordinary split-wide plans.
-- Add a starting block/week picker to `lib/screens/plan_editor_screen.dart` for
-  new plans, defaulting to first week of first live block and clearly
-  showing the shared split. Save plan and progress together with rollback.
-  Duplication and Coach-created plans need the same selection rule; existing
-  plan edits do not reset progress.
-- Management sheet: Create block, Rename, and Reorder blocks.
-  Add week belongs to the specified expanded block.
-  Explain once that structure changes affect every workout in this split.
-  Duplication, block prescriptions, arbitrary week relabeling and bulk log
-  deletion are deferred recommendations, not confirmed omissions.
-- All live blocks remain in the scrollable strip regardless of which workouts
-  have finished them. Workouts keep their own positions and drafts without a
-  block-driven pause state. Reordering changes future block resolution; pointers,
-  historical links and saved initialized values stay attached to their IDs.
-- Proposed deletion limit: allow removal only of empty weeks/blocks with no live
-  sessions, progress references or running timers; preserve at least one usable
-  week/block. Never cascade-delete shared logged weeks from the old per-plan
-  menu. Blocks containing logs remain in navigation. Keep tombstones and identity
-  records; a later permanent-delete feature needs separate agreement.
-
-## Migration and compatibility design
-
-### Deterministic local and server upgrade
-
-Implement one reusable legacy-normalization algorithm, used at startup,
-post-pull, and import, with matching UUID test vectors for Dart and SQL.
-Proposed paths: `lib/utils/training_block_identity.dart` and
-`lib/services/training_block_migration.dart`.
-
-1. Finish existing stable-ID and split assignment first, in the correct
-   account/cache scope. Do not migrate account A's cached records as B's data.
-   Run before workout UI exposure; in offline-only mode use the existing local
-   split convention without requiring auth/network.
-2. Derive the initial block UUID v5 from a frozen namespace string containing
-   the immutable split UUID and migration version, e.g.
-   `https://opengym.app/splits/<splitId>/training-blocks/legacy-v1`. Derive its
-   legacy week UUIDs from that block ID plus the original integer label. This
-   deliberate migration-only use of old numbers gives two devices identical
-   identities. Normal new IDs never depend on labels. A late migration must
-   not depend on the user's current name, block order, migration date or owner
-   stamping; adoption of the same split preserves these IDs.
-3. Use the **union** of persisted legacy session numbers across all workouts in
-   that split, including orphan history and tombstoned sessions needing links.
-   Create one initial block, one week per distinct number, preserve gaps, and
-   link every existing session while retaining its ID and all historical fields.
-   Do not deduplicate logs or identify a plan by ambiguous name. An empty split
-   gets one Week 1. Existing in-memory-only tabs cannot be recovered; state that
-   limitation rather than manufacturing guessed historical weeks.
-4. Assign missing plan IDs only if one unambiguous plan exists in the same
-   owner/split with the legacy name. Otherwise retain orphan/ambiguous history
-   with its plan-name snapshot and week link. Same-name plans never share new
-   sessions. Malformed labels/relationships are preserved in the safety backup
-   and surfaced for recovery; never silently discard/renumber historical data.
-5. Initialize progress per extant plan once: most recent unfinished draft's
-   mapped week (deterministic tie breakers), otherwise the next **existing**
-   supplied week after its highest completed legacy number, or
-   `awaitingBoundary` on its highest completed final slot. A plan without logs
-   starts at the first existing week. Do not fill historical gaps or append a
-   new week from elapsed time. Where contradictory drafts/logs prevent a safe
-   choice, retain all records and offer recovery selection rather than guessing
-   completion. Old unfinished drafts remain unfinished.
-6. Before changing links, write a complete, owner-scoped safety snapshot to an
-   on-device file and durably record its path plus a migration journal. Include
-   raw tombstones and existing migration inputs. Avoid a large new JSON blob
-   in SharedPreferences. Journal phases: snapshot, parents, links, progress,
-   verification, complete. Upsert missing deterministic parents, then links;
-   each phase must safely resume after process termination. Mark complete only
-   after verifying all expected links/counts and flushing storage.
-7. Do not bump performance dates/timers, or use “now” to overwrite migrated
-   historical fields. Keep new-link sync metadata explicit. For deterministic
-   parent bootstrap, insert-if-absent on server, then pull the existing parent;
-   never let a late upgrader rename/reorder it with a newer bootstrap
-   timestamp. Tombstones win over recreation. Unchanged records are not dirtied
-   on every scan; no backup/journal reruns when already valid.
-   Bootstrap progress is also provisional/insert-if-absent: a late upgrader
-   must pull and adopt existing server progress instead of pushing a fresh
-   inferred cursor over a workout that already entered a later block.
-8. Protect startup failure: do not let main.dart's broad startup catch expose a
-   partially migrated mutable workout screen. Offer retry/recovery/export while
-   keeping the original data recoverable. Providers see a coherent graph only.
-
-A one-shot flag is an optimization, not the entire compatibility mechanism.
-Every future legacy pull/import missing `trainingWeekId` repeats the same
-mapping for only those records and ensures missing legacy weeks. It never
-re-initializes existing progress or creates a second initial block. Reject a
-late record that would revive a deleted split/week; retain a recoverable copy
-rather than moving it to a different block. Late rows belonging to a live initial
-block retain that link without changing any workout's progress. Tombstone
-suppression and account preparation happen before normalization.
-
-If a previously unseen legacy Week N collides with a newer planned Week N in
-the initial block, reserve the original label/deterministic ID for legacy data.
-Rebase the newer random-ID week to an available label using the append-conflict
-path, preserving its ID, sessions and progress references. Do not merge slots
-by label or change old session IDs. Show the label correction when relevant;
-saved destination values remain untouched. Include this partial-replica case
-in migration tests, not just collisions between two new appends.
-
-Server backfill must apply the same split union and ID algorithm. Client and
-server can each know only part of that union; separate week rows let the union
-converge without one device replacing another's complete list. Match seed
-numbers, null links, tombstones and partial backfill in cross-language fixtures.
-Do not regenerate stable session IDs even when the destination has duplicates.
-
-### Supported old-client boundary: release blocker
-
-**Recommend a server-enforced upgrade boundary**, with a preparatory compatible
-release, instead of pretending old binaries can safely edit repeated Week 1s.
-An older client's whole JSON write strips unknown fields; older navigation can
-also combine unrelated weeks. Preserving nullable columns alone does not help.
-
-Concrete proposal to prove in Phase 0, then implement in the compatibility phase:
-
-- Supported clients send an explicit training-schema capability on every data
-  request, configured in `lib/services/supabase_service.dart`; use a request
-  header with a versioned value. This is a protocol gate, not authentication.
-  RLS/ownership still provide authorization.
-- Persist server-controlled per-account activation/minimum schema state in a
-  small capability record, separate from workout aggregates. Clients cannot
-  lower it or clear it through backup restore or Clear split data. Activation
-  and backfill are a serialized server operation, not a local feature flag.
-- Before activation, a preparatory release can reconcile legacy data and report
-  upgrade-required sync errors. After activation, database guards reject writes
-  from missing/old capabilities across **all** affected mutation paths: plans,
-  sessions, progress, structure, splits/preferences as applicable, including
-  direct DELETE and legacy upsert paths. Gate reads of incompatible workout
-  data too; simply hiding the new tables leaves old clients seeing misleading
-  flattened logs. Document and test privileged migration exceptions narrowly.
-- New clients include versioned payloads and structural links and recognize the
-  server's upgrade-required result; do not clear dirty queues or advertise a
-  successful sync. An old binary cannot be made to show new explanatory copy
-  remotely: it may only see a sync failure until updated. Communicate that
-  limitation in release guidance. Offline old clients can still edit their own
-  stale cache; retain those records for normalization when they upgrade.
-- Activate only after compatibility guards and late-legacy upgrade paths are
-  verified. Do not grant service credentials to the app or trust user-editable
-  JWT metadata. Verify request-header availability for the installed SDK/API
-  in an isolated environment before settling the exact gate implementation.
-
-A compatibility bridge that preserves links on old writes is an alternative if
-requiring upgrades is rejected, but it must also prevent ambiguous old week
-navigation and destructive writes. That is materially larger scope. A UI-only
-update prompt or a `schemaVersion` stored only in JSON is not an acceptable gate.
-Do not activate blocks for synced accounts without an enforceable choice.
-
-### Sync graph and deletion ordering
-
-Extend `lib/services/sync_service.dart` status, dirty enumeration, cursor
-management, row codecs and change notifications for all three new tables.
-Use normal promoted columns for links/order and metadata; retain
-versioned session payloads. Follow the Supabase skills for future implementation
-and confirm current APIs then; this plan makes no live schema assumptions.
-
-- Before pushing, pull split/structure tombstones and reconcile parent state;
-  reject stale local children of deleted parents. Push live splits → live
-  blocks → live weeks → plans → sessions → progress → preference. Progress must
-  not reference an unpushed completion/session or destination. Parent failure
-  defers its children without losing local edits or blocking offline logging.
-- During the upgrade's first reconciliation, pull existing sessions/progress
-  before uploading migrated aggregates. Adding a link must not give a stale
-  cached log a new timestamp that overwrites a newer remote log. Backfill links
-  additively against the current server row, and condition migrated writes on
-  the revision read; if it changed, pull/normalize again. This targeted upgrade
-  path is distinct from ordinary user edits under the existing LWW policy.
-- Push empty-child tombstones before their deleted block, and deleted splits
-  last, after preference replacement. Split tombstone cascade covers blocks,
-  weeks, progress and existing plans/sessions on both client and server.
-  Completing or moving beyond a block never tombstones sessions. Empty-week/block
-  deletion retains history references and rejects live child writes after deletion.
-- Pull in parent order, then plans/sessions, then progress; publish a coherent
-  provider refresh after reconciliation. Retain or refetch unresolved children
-  durably. Do not advance a table's cursor past an unapplied child unless it is
-  in a durable retry/quarantine queue. Reject foreign-owner/split edges; do not
-  “repair” them by assigning the current owner. A remote deleted parent wins
-  over a newer stale live child, including when the child was dirtied offline.
-- Add `(user_id, server_seq)` cursor indexes and relationship indexes. RLS must
-  cover SELECT/INSERT/UPDATE with ownership `USING` and `WITH CHECK`; grant only
-  the necessary operations, revoke anonymous access and public execution of
-  internal helpers. Composite FKs additionally prevent cross-split ownership
-  mistakes. Test authenticated users with another owner's UUID and own UUIDs
-  from another split. Keep account-erasure cascades distinct from ordinary block
-  completion and progression.
-- Reuse timestamp last-write-wins for independent records and tombstone priority.
-  Dirty flags clear only for the exact revision acknowledged, not a row edited
-  while its upload was in flight. Ensure cursor pagination does not lose rows
-  sharing a server sequence timestamp (use a stable sequence+ID continuation or
-  inclusive replay with idempotent application). Current tests primarily cover
-  cursor parsing, so add transport/relationship tests rather than assuming them.
-- A sync cycle captures account identity/generation and rechecks it after awaited
-  operations. Handover drains/cancels old work before clearing and displaying
-  the next cache. No response/journal/provider from A can repopulate B's boxes.
-
-## Dependency-ordered implementation phases
-
-Paths marked “new” are proposed; migration filenames must be generated later by
-the Supabase CLI, not invented here. Each phase is a reviewable commit group,
-not a request to execute it during this documentation task.
-
-### Phase 0 — settle contracts and compatibility proof
-
-Dependencies: none.
-
-1. Accept or replace the genuinely blocking choices below; record decisions in
-   a follow-up product specification. Accept the aggregate direction and freeze
-   legacy UUID namespace/test vectors before writing persistent data.
-2. In a later authorized isolated development environment, inventory existing
-   plan/session constraints, update triggers, sequence types and grants. Prove
-   old-client insert/upsert/update/delete/read rejection and upgraded-client
-   reconciliation using the proposed capability gate. Check SDK header support.
-3. Define a fixture matrix: mixed plan numbering/gaps, no data, duplicate names,
-   duplicate sessions, deleted plans, orphan history, drafts/running timers,
-   two partial offline replicas, and foreign relationships. Define a bound and
-   user feedback for concurrent week-number append retries.
-
-Exit: the team can state which clients may write, how conflicting slots are
-resolved, and which operations can advance progress. No cloud activation before
-this gate passes. Storage work can proceed after schema contracts are accepted;
-UI polish need not block it.
-
-### Phase 1 — local structure, identities, and resumable migration
-
-Dependencies: Phase 0 schema/identity agreement.
-
-1. Add the three models/boxes and deterministic legacy/progress identity helpers.
-   Extend `lib/models/workout_session.dart` serialization/copy and appended
-   fields. Preserve all adapter IDs/indices/default legacy completion behavior.
-2. Extend `lib/services/hive_service.dart` registration, raw/live reads, scoped
-   CRUD, dirty/tombstone handling and relationship checks. Add the thin
-   `lib/repositories/training_block_repository.dart` and migration service.
-3. Add ID-based `sessionsForPlanWeek(planId, weekId, splitId)` and exact-session
-   access. Isolate any legacy name fallback inside normalization; deprecate
-   number/name mutation helpers so no new UI can call them accidentally.
-4. Run resumable migration after stable-ID/split/account setup, before normal
-   entry; cover offline-only startup in `lib/main.dart`, account preparation in
-   `lib/services/adopt_local_data.dart`, and failure presentation through
-   `lib/auth/auth_gate.dart` as needed. Do not migrate a previous account first.
-5. Update `test/support/hive_test_harness.dart`,
-   `test/support/pump_with_storage.dart`, and storage-opening fixtures to include
-   new adapters/boxes. Add `test/training_block_migration_test.dart` and
-   `test/training_block_repository_test.dart` (new).
-
-Exit: empty planned weeks, split scoping, duplicate/orphan logs and crash-resume
-migration work locally without navigation changes or fake completed sessions.
-Do not ship a temporary old workout UI against new repeated-number data.
-
-### Phase 2 — server compatibility and graph sync
-
-Dependencies: Phase 1 model contracts; Phase 0 compatibility proof.
-
-1. Generate additive migrations under `supabase/migrations/` for tables,
-   indexes, composite ownership FKs, nullable session link, payload agreement,
-   capability state/guards, deterministic backfill and lifecycle protections.
-   Stage constraint validation/backfill so historical inconsistencies can be
-   retained/repaired deliberately. Do not edit old migration files.
-2. Extend `lib/services/supabase_service.dart` capability transport and
-   `lib/services/sync_service.dart` dependency ordering/codecs/cursors,
-   bootstrap insert-if-absent behavior, tombstones and conflict retries. Include
-   activation/upgrade-required state in sync status surfaced by Settings.
-3. Extend `lib/services/adopt_local_data.dart` to adopt only unowned rows or
-   already-owned same-account data, include new cursors/boxes/journals and
-   account-generation guards. Audit existing broad owner stamping as part of
-   the touched paths; a wrong-owner record is never a successful adoption.
-4. Add `test/training_block_sync_test.dart` (new) with a fake transport; extend
-   `test/sync_sequence_test.dart`, `test/sync_data_flow_test.dart`,
-   `test/split_data_layer_test.dart`. Plan isolated authenticated database
-   integration checks in `docs/online_support_verification.md` later.
-
-Exit: partial-replica migration converges; parent failure/retry, old-client
-rejection, deleted-parent suppression, account handover and late legacy pulls
-are proven. No production activation yet.
-
-### Phase 3 — backup and complete data lifecycle
-
-Dependencies: Phase 1 local graph; Phase 2 compatibility contract.
-
-1. Bump `lib/services/backup_service.dart` to format **4**. Export blocks, weeks
-   (including empty weeks and completed blocks), progress and linked sessions
-   in addition to splits/plans/settings. Extend `ImportResult`; retain supported versions 1–3
-   through the shared deterministic upgrade algorithm, not a second migration.
-2. Validate the entire graph before writes: duplicate IDs, conflicting links,
-   unknown blocks/weeks, cross-split plan references, progress targets and active
-   split. Preserve distinct session IDs at the same slot. Do not let the current
-   importer's plan-derived split assignment mask a conflicting supplied split.
-   Reject malformed v4 graphs with actionable errors and no partial replacement.
-3. Update `lib/screens/settings_screen.dart` export arguments, import preview,
-   confirmation copy and provider reloads, plus
-   `HiveService.replaceAllWorkoutData`. Gate replacement from sync; safety
-   snapshot/journal and rollback/recovery must include every new box. Preserve
-   block order and destination IDs. Tombstone absent replaced records, not
-   just plans/sessions, so another device cannot restore the discarded structure.
-4. Ownership: backups carry source-account provenance separately from row
-   ownership. Same-account restore preserves IDs; confirmed foreign-account
-   copy remaps the **whole graph**, including sessions and progress IDs, before
-   assigning the new owner. Unknown-provenance legacy restores need an explicit
-   same-account assertion or graph-copy mode, not blind reassignment of UUIDs
-   that may belong to someone else. Remapping is an import mode, not the normal
-   same-account migration. Never copy account capability state between users.
-5. Extend account clearing, split deletion, `softDeleteAllWorkoutData`,
-   `softDeleteWorkoutDataForSplit`, physical cache resets and raw rollback APIs.
-   Recommended Clear split/all workout data behavior: retain split profiles,
-   tombstone blocks/weeks/progress with workout data, then create one fresh
-   usable default block/week with new IDs. Sample replacement affects only the
-   selected split. Do not rerun legacy bootstrap into tombstoned IDs.
-6. Update `lib/services/workout_preset_installer.dart`,
-   `lib/services/split_install_target.dart`, `lib/services/sample_data_seeder.dart`
-   and their rollback stages. Install default structure and plan progress with
-   no fake sessions; sample logs map their existing 1–5 labels through the
-   normal migration/fixture builder. “Untouched default split” reuse must
-   distinguish an automatically created Block 1/Week 1 from intentional user
-   structure, so preset reuse never destroys a custom empty block profile.
-7. Add `test/training_block_backup_test.dart` (new); extend
-   `test/split_data_layer_test.dart`, `test/workout_presets_test.dart`,
-   `test/auth_recovery_test.dart`, and account/lifecycle fixtures where relevant.
-
-Exit: v4 round trip, v1–3 upgrades, replacement failure recovery, preset rollback,
-account switching and clearing cover every new record type. Backups remain a
-usable recovery path before feature activation.
-
-### Phase 4 — progression and initialization services
-
-Dependencies: Phases 1–3; completion/browsing decision accepted.
-
-1. Add progression and source-resolution services described above. Implement
-   pure transitions for completion, boundary choices, new-plan start, draft
-   preservation, and no-op browsing. Integrate committed transition evidence and
-   `lib/services/workout_completion_service.dart` without weakening failed-write
-   or PR semantics. Normalize pulled completion/progress in dependency order.
-2. Refactor `lib/services/workout_session_initializer.dart` to take explicit
-   destination and source. Replace raw previous-number resolution in
-   `lib/utils/set_history.dart`; update plan-editor lookup callers separately.
-3. Add `lib/providers/training_block_provider.dart`, wire it in `lib/main.dart`,
-   and reload/dispose with split/account changes. Keep completed history in
-   `WorkoutSessionProvider`; expose durable structure even with zero sessions.
-4. Add `test/workout_progression_test.dart` (new). Extend
-   `test/workout_session_initializer_test.dart`, `test/set_history_test.dart`,
-   `test/workout_lifecycle_test.dart`, `test/coach_applier_test.dart` as needed.
-   Existing “later weeks without prior data ignore targets” expectations must
-   be deliberately updated if the proposed fallback is approved.
-
-Exit: completing Push W1 advances only Push; unlogged W2 survives a week of
-calendar time/restarts unchanged; final completion leaves a pending choice;
-matching-week inheritance and crash recovery preserve destination sessions.
-
-### Phase 5 — inline navigation, boundary choices, and management
-
-Dependencies: Phase 4; deletion eligibility accepted before deletion actions.
-
-1. Replace integer state/caches/routes and widget keys in
-   `lib/screens/workout_screen.dart` with week/session IDs and local browser
-   selection. Remove `_loadWeeks` automatic max+1 creation and per-plan
-   rename/delete operations. Reuse save revision/navigation locks; failed saves
-   leave selection and expanded target unchanged.
-2. Add `lib/widgets/workout/training_block_strip.dart` (new). Model the strip as
-   block label, that block's revealed week children, then following block.
-   Keep every live block header available in the scrollable strip, including
-   completed blocks. Bring a newly created block into view without changing
-   another workout's progression.
-   Animate simple width/size reveal for one block; use no animation under
-   `MediaQuery.disableAnimationsOf`. On ordinary entry expand/scroll active
-   week after layout; on exact resume show its target even when it differs from
-   the progression cursor. Use a dedicated controller, not a week-number offset.
-3. Add management and boundary sheets in
-   `lib/widgets/workout/workout_dialogs.dart` or focused new
-   `lib/widgets/workout/training_block_dialogs.dart`. Boundary prompts run once
-   per ordinary route entry, after pending saves/dialogs settle. Actions verify
-   current parent/progress state again before writing, show split-wide effects,
-   disable during persistence and preserve input on failure.
-4. Update `lib/screens/plan_editor_screen.dart` new-plan/duplicate flow with
-   starting-slot selection and rollback. Keep existing plans' progression when
-   renaming/reordering/editing exercises. No “set current week” shortcut that
-   becomes a skipping feature.
-5. Show “Block name · Week N” in the workout heading and semantic labels.
-   A selected collapsed block retains a marker/summary; long names can truncate
-   visually with full semantics. Keep 48px targets, horizontal scrolling, large
-   text, and logger space. Provide an accessible Block actions button/semantic
-   action in addition to long press. Use AppHeader/AppBackButton, theme color
-   roles, AppRadius and AppTypography.figures; accent actions stay independent
-   of plan color. No new visual system is needed.
-6. Add `test/training_block_navigation_test.dart` (new) and extend
-   `test/workout_plan_navigation_test.dart`, `test/workout_entry_test.dart`,
-   `test/workout_log_test.dart`, `test/navigation_mutation_guards_test.dart`,
-   `test/plan_editor_test.dart`, `test/screen_layout_test.dart`,
-   `test/ui_hierarchy_accessibility_test.dart`. Replace legacy empty-tab/delete
-   expectations in `test/workout_lifecycle_test.dart` with shared-structure rules;
-   do not simply delete autosave/timer coverage.
-
-Exit: shared inline structure, independent active positions, next-visit boundary
-choices, stable saved drafts, upfront block length/extension, starting picker,
-long-press management and accessible reduced-motion behavior are usable.
-
-### Phase 6 — exact routes and secondary surfaces
-
-Dependencies: Phase 4 APIs; Phase 5 entry behavior.
-
-1. Replace `initialWeekNumber` with a typed identity destination (proposed
-   `lib/navigation/workout_destination.dart`) across
-   `lib/app_shell.dart`, `lib/screens/home_screen.dart`,
-   `lib/screens/dashboard_screen.dart`, and `lib/screens/workout_screen.dart`.
-   Preserve explicit `sessionId` priority and re-fetch at actual route delivery.
-   `lib/navigation/app_navigation_observer.dart` must continue reusing a route
-   by exact displayed session, not by plan/week label.
-2. Extend `lib/services/workout_timer_notification_service.dart` and
-   `android/app/src/main/kotlin/com/aalishms/opengym/WorkoutTimerNotification.kt`
-   with optional block/week identity and display context. Old saved snapshots
-   still parse; resolve missing context from the session's new link. Keep Stop
-   confirmation, accumulation, account-wide running-timer conflict resolution,
-   native state revision and deferred-modal behavior unchanged. Invalidate
-   foreign/deleted session intents on account handover. Cover the native mapping
-   in `android/app/src/test/kotlin/com/aalishms/opengym/WorkoutTimerStateTest.kt`.
-3. Add block context to History rows/details and recent/resume widgets in the
-   paths listed above. Resolve block context across the full shared structure.
-   Prefer a retained label/legacy fallback when a parent is unresolved, never an empty
-   History row or accidental relink. Keep raw weekNumber only for that fallback.
-4. Audit `lib/utils/plan_stats.dart`, `lib/services/statistics_analytics_service.dart`,
-   `lib/services/pr_tracking_service.dart`, `lib/screens/stats_screen.dart` and
-   dashboard/heatmap callers: include completed logs across all blocks,
-   keep date-based calendar analytics, count every distinct historical session
-   once, exclude drafts and tombstones. Block analytics filters are deferred.
-5. Coach: keep summary eligibility date-based across all history and shared
-   template scope explicit in `lib/screens/coach_review_screen.dart`. Extend
-   `lib/services/coach/coach_applier.dart` rollback to new-plan progress/default
-   structure. Resolve each added plan's starting slot in the review UI before
-   applying; default visibly and require the user can change it. Updated
-   existing plans retain progress and saved sessions. Inheritance uses current
-   template only for unsaved destinations/fallbacks. No Edge Function deployment
-   or new block proposal contract is required unless context fields are later
-   approved; if added, version both app and `supabase/functions/coach/contracts/`.
-6. Extend `test/workout_notification_navigation_test.dart`,
-   `test/home_screen_test.dart`, `test/history_redesign_test.dart`,
-   `test/statistics_analytics_test.dart`, `test/coach_context_builder_test.dart`,
-   `test/coach_applier_test.dart`, `test/coach_ui_test.dart` with repeated week
-   labels, duplicates/orphans, completed blocks and exact-session targets.
-
-Exit: nothing outside the logger interprets raw Week 1 as a globally unique
-training destination, and history across all blocks remains visible and counted.
-
-### Phase 7 — validation, documentation, and controlled release
-
-Dependencies: all preceding phase exits.
-
-Update DESIGN.md, docs/splits.md, docs/coach.md and
-`docs/online_support_verification.md` **when implementation is authorized and
-behavior is settled**, not in this session. Document compatibility minimum,
-clear/import semantics and recovery. Keep the feature notes consistent with
-confirmed product scope.
-
-Use a manageable rollout:
-
-1. Additive server schema/guards and a preparatory client release, with blocks
-   disabled for normal users. It understands upgrade-required status, backup v4
-   and migration recovery. Verify no changed behavior for unactivated accounts.
-2. Internal/offline fixture validation and two-device isolated account trials;
-   then a small opted-in account cohort. Back up before local/server activation;
-   activate per account only when its compatibility boundary can be enforced.
-3. Release the feature-capable client; expand account activation after observing
-   migration failures, relationship quarantines, sync retry/conflict behavior
-   and native resume. No sensitive workout payloads in diagnostics.
-4. Leave additive schema and migrated data in place on rollback. Disable further
-   activation/structure mutations and ship a forward fix; never downgrade an
-   activated account to an old writer or flatten repeated week identities.
-   Old clients' queued offline edits must survive until a capable client upgrades
-   and normalizes them. Offline-only builds can migrate locally without network
-   activation, but must negotiate the boundary before their first later sync.
-
-When a future release is approved, follow AGENTS.md: increment both version name
-and globally increasing +build in pubspec.yaml, preserve signing identity, and
-use the exact version tag and universal APK. Release mechanics are out of scope
-for this documentation commit.
-
-## Future validation commands and acceptance checks — do not run now
-
-During implementation, follow the project's required analyzer workflow after
-changes and regenerate adapters after Hive model changes, followed by a full
-restart for manual verification. These examples are recorded only:
-
-```bash
-flutter pub run build_runner build --delete-conflicting-outputs
-flutter analyze
-flutter test test/training_block_migration_test.dart test/training_block_repository_test.dart test/training_block_backup_test.dart
-flutter test test/training_block_sync_test.dart test/workout_progression_test.dart test/training_block_navigation_test.dart
-flutter test test/workout_session_initializer_test.dart test/set_history_test.dart test/workout_lifecycle_test.dart
-flutter test test/workout_notification_navigation_test.dart test/workout_plan_navigation_test.dart test/navigation_mutation_guards_test.dart
-flutter test test/split_data_layer_test.dart test/workout_presets_test.dart test/statistics_analytics_test.dart
-flutter test test/coach_applier_test.dart test/coach_context_builder_test.dart test/coach_ui_test.dart
-flutter test
-```
-
-New test paths above are planned files, not existing passing tests. Discover
-Supabase CLI commands with `--help` when later authorized; generate migrations
-with `supabase migration new <descriptive-name>`. Run migration/backfill, RLS,
-foreign-key, downgrade-client and tombstone integration checks only in an
-explicitly isolated development/test database. Inspect Android Gradle task names
-before running the existing native timer unit tests. No live Coach/model call is
-needed for this feature's normal regression checks.
-
-Acceptance matrix:
-
-- **Shared empty structure:** Create B1/W1–4; Push/Pull/Legs show identical IDs
-  before any logs. Restart, v4 round trip and another device preserve all four
-  weeks; History/PR/workout counts remain empty.
-- **Independent progression:** Complete Push W1; Push advances to supplied W2,
-  Pull stays W1. Edit/leave Push W2 without completing; reopening tomorrow or
-  seven days later retains W2 and every saved value, with no metadata tracking
-  a missed visit. Discard does not advance. No Skip week UI exists.
-- **Boundary:** Finish final week without an immediate prompt. Next ordinary
-  visit offers exactly the appropriate pair. Cancel/dismiss creates nothing;
-  Add week extends shared structure but advances only the choosing workout;
-  Move/Create never moves another workout. Another device extending while the
-  sheet is open is revalidated. A completed session is not logged twice.
-- **Inheritance:** B2/W1 copies B1/W1, B2/W2 copies B1/W2. Missing/short previous
-  blocks, no completed source, changed/duplicate exercise names, different set
-  counts, plan-target fallback and first-block carry-forward match the accepted
-  rules. Saved destination drafts/completions survive source edits and reorder.
-  No completion/date/timer history is copied to a fresh destination.
-- **Identity/navigation:** Two blocks' Week 1s, same-name plans, two logs in one
-  slot, renamed plans and orphan history remain distinct. Notification body/
-  Stop opens the exact running session behind modals/autosave, reuses its route,
-  and never substitutes the ordinary active slot. Failed saves block navigation.
-- **Migration:** Sparse weeks 1/3/12 across workouts become one shared initial
-  block preserving labels and session IDs/bytes for exercise/timer data. Kill
-  after each journal phase; retry is idempotent. Two devices with disjoint week
-  subsets converge to one block and the union of weeks. Late legacy pull/import
-  adds only missing mappings and never resets migrated progress. Parent
-  tombstones, duplicates, ambiguous names and malformed references are covered.
-- **Sync/ownership:** Empty structures sync. Reordered parent/child delivery,
-  parent push failure, completion before progress, concurrent append/reorder,
-  same-plan progress conflict, cursor page ties and in-flight local edits lose
-  no records. Wrong-owner and same-owner/wrong-split graphs fail. Old binaries
-  cannot mutate or delete an activated graph. A→B account handover during sync,
-  migration or native intent delivery never leaks/cache-restores A's data.
-- **Lifecycle:** Completed blocks stay in workout navigation with History,
-  records and date-based stats intact. A workout still using an older block
-  retains its progress, draft and timer independently of other workouts.
-  Split deletion cascades durable tombstones; a stale offline child cannot
-  revive them. Clear split, all-workout-data helper, sample replacement, preset
-  install/rollback, Coach new/removed plans, and failed import touch only the
-  intended owner/split and include all new records.
-- **Interaction/accessibility:** Inline reveal places weeks beside their block,
-  at most one expanded; entering scrolls the correct target into view. Selection
-  remains understandable when collapsed. Long names, many blocks, small phone,
-  large text, screen-reader Block/Week labels, reduced motion, action sheets,
-  theme contrast and a running timer remain usable. All live block headers stay
-  available by scrolling; the most recent block remains easy to reach and
-  ordinary entry still reveals that workout's own active week.
-
-## Unresolved choices and implementation gates
-
-### Genuinely blocking decisions
-
-1. **Supported upgrade boundary (blocks synced rollout):** Accept requiring
-   capable clients after account activation, including older binaries showing
-   a sync error and retaining offline edits until upgrade, or fund a full
-   compatibility bridge. Recommended: enforced boundary with preparatory release.
-2. **Repeat sessions and nonactive-slot logging (blocks completion/UI contract):**
-   Can users explicitly perform a workout twice in a slot, and can they log a
-   manually browsed future/older slot? Recommended V1: preserve all legacy and
-   concurrently created sessions, exact-session resume, no new Repeat action,
-   and logging only at the progression-selected active slot. Never impose a
-   destructive uniqueness constraint while this is unresolved.
-
-These do not require a long questionnaire now. Resolve each before its dependent
-phase; independent model/migration work can be planned against the recommendations.
-
-### Reasonable defaults to confirm, not reasons to stall discovery
-
-- Boundary dismissal retains the completed final session/pending choice;
-  switching workouts resumes each workout's active week.
-- Extending an earlier block never pulls a workout back from a later block;
-  creating a block in management does not activate every workout.
-- First block and missing-source initialization, completed-source preference,
-  exercise name/occurrence matching and copy-on-save follow the rules above.
-- Empty split/preset starts with Block 1 / Week 1; new plans and Coach additions
-  expose a start picker. Block names need not be globally unique; IDs disambiguate.
-- Reorder affects future resolution, not saved destinations. Completed blocks
-  retain chronological History/records/stats. No V1 block analytics or
-  prescription UI.
-- Empty-only structural deletion, Clear split reset behavior, preset “untouched”
-  detection, cross-account backup copy mode and concurrent append feedback
-  follow the conservative proposals above.
-
-## Main risks and scope controls
-
-The largest risk is silent identity loss from old writers or late bootstrap,
-followed by inconsistent migration across offline replicas. Address those before
-UI activation. Next are cross-box interruption and account handover races.
-Journals, relationship validation, exact-session routing and phase-specific
-failure tests are required work, not polish.
-
-Separate records still inherit existing timestamp conflict limitations. Do not
-claim collaborative ordering or merge guarantees that this plan does not build.
-Prefer explicit, recoverable conflicts to overwriting sessions. Keep duplication,
-calendar scheduling, skip logic, historical block reconstruction, permanent
-logged-week deletion, block analytics, prescription templates and Coach block
-editing out of V1 unless separately agreed. The feature should add durable week
-groups and deliberate independent progression, not a new training-program engine.
-
-## Documentation-session verification
-
-Repository inspection and documentation review only. The author checks the
-Markdown diff, repository path references, consistency with confirmed product
-scope, and `git diff --check`, then stages the documentation files explicitly and
-commits on the existing branch. Follow AGENTS.md for required static analysis.
-Application tests and database validation above are deferred and must not be
-reported as executed or passing.
+| Active-week checks alone cannot distinguish a stale completion from a new visit to the same slot after reorder. Replaying with a fresh timestamp can overwrite a later choice. | Revision-bound completion evidence with a fixed resulting revision and timestamp; replay checks the full expected progress state. |
+| Migration's “most recent draft” can select a browsed future draft and appear to skip unfinished weeks. The rule was mixed with an undefined recovery picker. | A deterministic, migration-only selection rule; preserve all other drafts and make them reachable by exact ID. No new general recovery-selection workflow. |
+| Week `position` duplicates `number` while week reorder is excluded. | Store only the week number; order weeks numerically. Only blocks have `position`. |
+| Empty-week/block deletion adds distributed reference checks and tombstone races to an unrequested feature. | Defer individual structural deletion. Retain tombstones for existing split deletion, data clearing, and restore. |
+| Concurrent append rebasing lacked a retry bound and stable precedence for late legacy data. | Specify three attempts, local-ID preservation, and legacy-number reservation. |
+| Cursor handling assumed timestamp pagination would guarantee delivery. Existing `server_seq` is `timestamptz` set by `now()`, and `_selectSince` uses strict `gt` without pagination. | Paginate explicitly and add full reconciliation for late commits. Do not describe timestamps or a plain sequence as commit order. |
+| The rollout required a preparatory release, cohort machinery, and another feature release. | One capable client plus additive server deployment and an irreversible per-account compatibility boundary. Test with isolated accounts before release; no cohort platform. |
+| Many defaults and limits remained “to confirm” or “choose during UI work.” | Fix the V1 contract below and give each implementation task concrete interfaces and acceptance tests. |
+
+## V1 contract and scope limits
+
+- Blocks and planned weeks belong to a split. Every workout sees identical
+  structure, including empty weeks and blocks other workouts have completed.
+- New blocks start at Week 1. Migration preserves existing numbers and gaps.
+  All navigation and writes use IDs; labels are never session identity.
+- Each workout has its own active week. Logging/completing advances through
+  supplied weeks in that block. Opening, leaving, calendar time, browsing,
+  discarding a draft, and another workout's completion never advance it.
+- Completing the last supplied week records a pending boundary. On the next
+  ordinary route entry, offer Add week / Move to next block if a next block
+  exists, otherwise Add week / Create block. No prompt immediately on completion.
+  Dismissal leaves the completed result visible and a Choose next week action.
+- A block extension is shared; only the workout choosing its boundary action
+  moves. Workouts already in a later block never move backward automatically.
+  Creating a block in management never activates it for other workouts.
+- Ordinary entry and workout switching open that workout's active week.
+  Exact-session entry opens the requested log/draft, without moving progress or
+  triggering a boundary prompt. Save-before-navigation remains mandatory.
+- Browsing may edit/save incomplete drafts, but a new timer and Log workout are
+  enabled only for the active slot. Completed logs are read-only in the logger.
+  An already-started nonactive draft from migration or another device can resume,
+  stop, and finish by exact ID; finishing it saves history without advancing
+  progress. This exception prevents stranded timers and does not enable Skip.
+- No new Repeat workout action. Preserve all existing/concurrent session IDs,
+  including several in the same slot; do not impose session-slot uniqueness.
+- New/duplicated plans and Coach additions choose a starting block/week, visibly
+  defaulted to the first week of the first block. Existing plan edits keep progress.
+- A new split starts with Block 1 / Week 1. Create block accepts a trimmed name
+  of 1–40 characters and 1–52 initial weeks, default 1. Names need not be unique.
+  The creation limit bounds one allocation, not migration or lifetime length;
+  Add week may extend beyond 52. Do not impose a new limit on migrated numbers.
+- Block actions: Create block, Rename, Reorder. Add week belongs to a specific
+  block. No individual block/week deletion, week renaming/reordering, archiving,
+  skipping, calendar scheduling, block prescriptions, block duplication, block
+  analytics, or Coach block-editing contract in V1.
+- Existing split deletion, plan deletion, session deletion, Clear All Data,
+  sample replacement and backup restore remain supported. Deleting a historical
+  log does not rewind progress. All completed logs remain eligible for existing
+  date-based History, records, and statistics.
+
+## Data contracts
+
+### Records and identity
+
+All new records use existing `userId`, `updatedAt`, `deletedAt`, `dirty`
+conventions. New IDs are UUID v4 except the explicitly deterministic cases below.
+
+| Record | Fields beyond sync metadata | Storage |
+| --- | --- | --- |
+| `TrainingBlock` | `id`, `splitId`, `name`, integer `position`, `createdAt` | Hive `training_blocks`, type 8; SQL `training_blocks` |
+| `TrainingWeek` | `id`, `splitId`, `blockId`, positive integer `number`, `createdAt` | Hive `training_weeks`, type 9; SQL `training_weeks` |
+| `WorkoutProgress` | `id`, `splitId`, `planId`, `activeWeekId`, `state` (`ready`, `awaitingBoundary`), `revision` | Hive `workout_progress`, type 10; SQL `workout_progress` |
+| `WorkoutSession` additions | nullable `trainingWeekId` at Hive field 15; nullable primitive-map `completionTransition` at field 16 | Existing box/table; preserve fields 0–14 |
+
+Check type collisions before implementation. Generate adapters; never hand-edit
+them. Use a typed Dart value for transition validation/serialization, stored as
+a map so it does not require another Hive type. Session JSON emits
+`trainingSchemaVersion: 1`; no extra Hive schema-version field is needed. Missing
+JSON version means legacy; unsupported future versions fail explicitly.
+
+Retain `weekNumber` as a legacy/display snapshot. Derive the block through the
+week; do not add another writable block link to sessions or timer destinations.
+`copyWith` must distinguish keeping a nullable field from explicitly clearing it.
+
+Freeze deterministic identities with Dart/SQL fixture vectors:
+
+- Legacy block = UUID v5, URL namespace,
+  `https://opengym.app/splits/<lowercase-split-uuid>/training-blocks/legacy-v1`.
+- Legacy week = UUID v5, namespace = legacy block UUID, name = canonical decimal
+  week number (no whitespace or leading zeroes).
+- Progress ID = UUID v5, URL namespace,
+  `https://opengym.app/splits/<lowercase-split-uuid>/plans/<lowercase-plan-uuid>/progress-v1`.
+- Initial migrated progress revision = UUID v5, namespace = progress ID,
+  name = `initial-v1`. Normal explicit moves use UUID v4 revisions.
+
+Blocks sort by `(position, id)`; weeks by `(number, id)`. Block reorder updates
+positions under the local mutation gate. Concurrent reorder uses existing LWW
+per row and UUID tie-breaking; do not add a collaborative ordering algorithm.
+
+### Relationship and append rules
+
+- Slot identity is `(owner/cache scope, splitId, planId, trainingWeekId)`;
+  exact log identity is `sessionId`. Queries return a list, not a unique session.
+- Composite server FKs enforce owner **and split**: block → split;
+  week → block/split; linked session → week/split; progress → plan/split and
+  week/split. Add the supporting parent unique keys and child indexes.
+- Retain nullable/missing-plan history. Never invent a plan for an orphan or
+  discard a log to satisfy a new FK. Audit existing plan constraints in Task 2;
+  if a dangling ID must be normalized for server storage, preserve its original
+  value in a legacy-reference payload field and restore it on export.
+- Promoted remote links are canonical. Validate JSON agreement, local writes,
+  imports, and pulled relationships. Missing legacy links can be normalized;
+  conflicting supplied links are errors, never reassigned to the active split.
+- Keep a unique live `(blockId, number)` server constraint. Append chooses
+  max live number + 1 locally. On a server collision, fetch the block's weeks,
+  assign the rejected week the next available number, and retry at most three
+  times per sync cycle. Keep the same week/session/progress IDs and saved values.
+  Update affected session display snapshots under the mutation gate. Keep dirty
+  data and show a retryable sync error if retries exhaust; never discard a week.
+- Legacy deterministic weeks reserve their original labels. A late legacy Week N
+  takes precedence over a conflicting new random-ID Week N. A transactional
+  normalization operation rebases the new week before inserting the legacy
+  one, using the same rule. Test this collision in both arrival orders.
+- Retain structural tombstones for clear/restore/split deletion. A deleted parent
+  wins over a stale live child; IDs are never reused to resurrect a graph.
+
+Separate week rows prevent one device's whole-block write from removing another
+week with logs. Separate progress prevents Coach/template edits from overwriting
+training position. These three conflict units are justified; do not add a second
+repository/cache layer or persist browser selection.
+
+## Runtime rules
+
+### Completion and recovery
+
+`WorkoutProgressionService` owns progression. `WorkoutCompletionService` remains
+responsible for the completed session, stopped timer, and PR result. Execute a
+completion under the existing exclusive local mutation gate; never recursively
+acquire it from internal helpers.
+
+A transition contains `expectedRevision`, `sourceWeekId`, `nextWeekId` (null for
+boundary), `resultRevision` (the completing session UUID), and `committedAt`.
+Validate that the source matches the session and the target is in the same block.
+For active-slot completion:
+
+1. Re-read progress and the latest session under the gate. Compute the next
+   supplied week once. Write completion and transition in **one session upsert**.
+   A failed write leaves the original draft/timer and progress unchanged.
+2. Apply the recorded result only if progress is `ready` at both the expected
+   revision and source week. Next week gives `ready`; null target gives
+   `awaitingBoundary` at the source. Set revision to `resultRevision` and
+   `updatedAt` to the recorded `committedAt`, never the recovery time.
+3. If progress persistence fails, completion still succeeded. Show the completed
+   log, retain its evidence, and replay before the next ordinary entry or sync.
+   Never log twice or restart the timer. Recovery is idempotent; an already
+   applied result or mismatching revision is a no-op.
+4. Reconcile pulled progress with local progress before replaying session evidence.
+   An explicit later boundary choice has a new revision and cannot be undone by
+   old evidence. Process eligible evidence deterministically by
+   `(committedAt, sessionId)`; bound each reconciliation to the available evidence
+   count. Do not infer events from legacy completed logs without evidence.
+
+No separate completion journal or event table. Preserve evidence when editing or
+soft-deleting a completed session until its outcome is reconciled; deletion does
+not reverse it. Cross-device concurrent edits of the *same session* retain the
+existing whole-row LWW limitation; this plan does not promise set-level merging.
+If reconciliation leaves a `ready` slot containing only completed logs and no
+applicable transition, show its saved result with an explicit Continue action.
+On confirmation, re-read the selected completed session and current progress;
+advance from that active slot using a fresh progress revision and the normal
+successor/boundary rule. This is a single progress write, not another completion
+or PR event. It cannot move past an uncompleted slot. Do not automatically infer
+progress from arbitrary historical logs or introduce a general Set current week
+action. Include this exceptional conflict-recovery case in Task 4 tests.
+
+Same-workout concurrent choices use `(updatedAt, revision)` ordering for progress
+on both client and server. A stale upsert must not overwrite a newer server row;
+prove the server comparison, not just the client's pull comparison.
+
+Boundary actions re-read progress after any dialog. If another device extended
+the block, show Continue to Week N and use that supplied successor instead of
+appending again. Move uses the first week of the next block in current order;
+Create persists the block/weeks before moving only this workout. If reorder
+changes the proposed next block while the sheet is open, refresh the choice
+before applying it. Each move replaces the progress revision. Keeping the same
+active week ID is insufficient to establish that a dialog is still current.
+
+### Destination and inheritance
+
+A focused `TrainingWeekSessionResolver` consumes a split-scoped snapshot; it does
+not query global Hive from inside the initializer.
+
+1. Exact live session ID wins. Otherwise choose the slot's running draft, then
+   latest incomplete draft, then latest completed log. Within each category use
+   `(updatedAt ?? date, date, id)` descending. Keep the existing account-wide
+   running-timer conflict handling. All duplicates remain reachable in History
+   or the existing resume surfaces; no deduplication or replacement log.
+2. Any saved destination wins over inheritance. Initialize an unsaved preview,
+   then persist a real incomplete draft only on edit/start/explicit save.
+   Untouched plan-shaped previews do not create history or migration inputs.
+3. Later blocks use the immediately preceding live block in current order,
+   same plan ID and matching week number. Use its latest completed session;
+   ignore source drafts. If absent, use current plan targets directly.
+4. In the first block, the first supplied week uses plan targets (even if its
+   migrated label is 3). Later supplied weeks use the immediately preceding
+   supplied week's completed session; absent source means plan targets.
+5. Match exercises by trimmed, whitespace-normalized, case-insensitive name plus
+   occurrence index for duplicates. Preserve current plan order/guidance; copy
+   matching source sets' reps, weight, RPE and count. New exercises use targets;
+   removed exercises and past set notes are not copied. No fuzzy matching.
+6. New draft: fresh session ID, current date, incomplete, no start/running timer,
+   zero duration, no completion evidence, explicit plan/split/week IDs. Deep-copy
+   sets. Source/template edits and reorder never overwrite a saved destination.
+
+“Previous” references are separate from starting values: completed same-plan,
+same-split sessions in earlier structural slots, ordered by block `(position,id)`,
+then week number, then date/ID. Thus B2/W1 can show B1's final performed week as
+Previous while inheriting B1/W1. Exclude itself, drafts and future slots.
+Plan-editor Last remains date-based. Fix plan-ID filtering even when no plan-name
+argument is provided; the current helper only applies it inside a name guard.
+
+### Local mutation boundaries and efficient reads
+
+`TrainingBlockProvider` exposes the active split's structure/progress; the workout
+screen owns selected week/session and expanded block only. Build in-memory maps
+by block ID, week ID, plan ID, and `(planId, weekId)` on data reload. Do not scan
+all history per chip, build, or timer tick; do not persist duplicate indexes.
+Scope rebuilds so the elapsed-time ticker does not rebuild the block strip.
+
+Reuse `SyncService.runExclusiveLocalMutation`. It prevents sync interleaving,
+not process death. For block creation, plan+start creation and boundary create,
+use one small pending-operation record with fixed IDs and intended writes;
+flush it before writes, roll forward idempotently on restart, clear after flush.
+Publish provider changes only after completion. A failed action retries the same
+IDs, not a second block. Migration and replacement use their larger safety
+snapshot described below. Do not build a generic transaction framework.
+
+## Migration, backup, and account lifecycle
+
+### Resumable normalization
+
+One `TrainingBlockMigration` algorithm serves startup, late legacy pull and
+v1–3 import, with matching SQL identity fixtures.
+
+1. Finish existing ID and split assignment in the correct account/cache scope.
+   Offline-only startup must work without auth/network. Never migrate A's cache
+   as B's data. New structure is hidden until preparation succeeds.
+2. Snapshot raw records, including tombstones, to an owner-scoped local file.
+   Record snapshot path and phases: snapshot → parents → links → progress →
+   verification → complete. Flush at phase boundaries and make each repeatable.
+   Do not store a full backup blob in SharedPreferences. Retain only the latest
+   successful migration safety snapshot per owner; pending recovery is never pruned.
+3. For each split, create its deterministic initial block and the union of legacy
+   session numbers across all plans, including orphan/tombstoned history. Empty
+   split gets Week 1. Preserve gaps, IDs, dates, completion, exercise and timer
+   data. Invalid nonpositive/malformed labels stop normalization with export/retry
+   available; do not silently rename them. In-memory-only tabs are unrecoverable.
+4. Link by stable plan ID. Assign a missing plan ID only when the same owner/split
+   contains exactly one matching plan name. Ambiguous history stays orphaned.
+5. Initialize missing progress once: running draft first, otherwise latest
+   incomplete draft by `(updatedAt ?? date, date, id)`. Without drafts, choose
+   the next supplied week after the highest completed legacy number, or keep
+   that final week `awaitingBoundary`. No logs means the first supplied week.
+   This migration heuristic preserves draft access; it cannot infer whether an
+   old draft was browsing or training. Preserve every other draft for exact resume.
+6. Verify counts/links and flush before complete. Never expose a partially
+   migrated logger through main.dart's broad startup catch. Show retry/export
+   on failure without overwriting the original snapshot.
+7. Late missing links use the same deterministic mapping, not a second initial
+   block. Existing progress is never reset. Parent/progress bootstrap is
+   insert-if-absent; a late device adopts existing server state. Deleted parents
+   reject resurrection and retain the local source in the recovery snapshot.
+
+Migration must not bump stale session timestamps to “now” and overwrite newer
+remote sets. During first sync, pull current sessions/progress before sending
+migrated rows. Link backfill updates only missing links against the read revision;
+if it changed, fetch and normalize again. Preserve genuinely dirty legacy edits
+for normal conflict reconciliation; never clear them just because links migrated.
+
+### Backup and lifecycle matrix
+
+Backup v4 includes blocks, weeks (including empty ones), progress, linked sessions,
+plans/splits/settings and source-account provenance. Validate the complete graph
+before replacement; reject conflicting supplied references and unknown versions.
+Versions 1–3 reuse normalization. Same-account restore preserves IDs; copying
+foreign/unknown-provenance data remaps the whole graph, including progress
+revisions and transition references. Never copy server activation state.
+
+| Operation | Required behavior |
+| --- | --- |
+| Restore | Validate first; pause sync, snapshot every box, journal replacement; tombstone absent replaced records and recover after interruption. Update Settings callers and provider reloads. |
+| First account adoption | Adopt only unowned/same-owner rows; include structure/progress and pending operations. Preserve deterministic IDs. |
+| Account handover | Drain/cancel old sync, invalidate navigation/native intents, clear all boxes/cursors/pending operations and owner-scoped safety files before displaying the new cache. |
+| Delete plan / Coach remove plan | Tombstone its progress; retain logged sessions and their week links. No active progress may point to a deleted plan. |
+| Delete split | Cascade tombstones through blocks/weeks/progress/plans/sessions; select replacement preference first. Reject stale children. |
+| Clear workouts | Retain split profiles; tombstone their workout graph and create a fresh Block 1 / Week 1 with new IDs. Do not revive deterministic legacy IDs. |
+| Preset / Coach add plan | Create default structure if absent, choose each plan's start, and include progress/structure in pending operation or rollback. No fake sessions. |
+| Sample replacement | Affect only the selected split; create its 1–5 week structure and link fixture logs. |
+
+Default-split reuse is allowed only for the pristine auto-created structure
+(Block 1, Week 1, unchanged initial metadata, no plans/logs/pending operations).
+Treat renamed, extended, reordered or otherwise edited empty structure as user
+content. Never delete it because there are no performed sessions.
+
+## Server compatibility and sync
+
+### Upgrade boundary
+
+Use one feature-capable release, preceded by additive server schema deployment.
+The capable client sends `x-opengym-training-schema: 1`. Store irreversible
+per-account `minimum_training_schema` in a server-controlled capability row;
+activation/backfill is an authenticated, serialized RPC. No client may lower it.
+Before first sync of migrated local data, negotiate/activate this boundary.
+Offline-only builds migrate locally and negotiate when later enabling sync.
+
+After activation, reject incompatible reads and writes through all affected
+routes, including old session/plan upserts, direct DELETE, split cascades and
+preferences. Return an explicit upgrade-required error rather than an empty
+successful SELECT. Headers are protocol compatibility, **not authorization**;
+RLS still checks the authenticated owner and FKs check relationships. Old apps
+may only display their existing sync error; they retain local edits until upgraded.
+Do not add a full old-client translation bridge or preparatory binary release.
+
+PostgREST exposes lowercased request headers through `request.headers`; verify
+transport with the installed SDK and deployed API in Task 2. RLS and table grants
+are separate controls. See [PostgREST transaction settings](https://docs.postgrest.org/en/stable/references/transactions.html#request-headers-cookies-and-jwt-claims)
+and [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security).
+Use an API pre-request guard (or equivalent tested error-raising gate), not
+SELECT filtering alone. Existing deployments/privileged paths must be inventoried
+before choosing its migration/configuration details. No service key in the app.
+
+### Ordering, conflicts, and delivery
+
+- Pull parent tombstones before push. Push live splits → blocks → weeks → plans
+  → sessions → progress → preference, deleted splits last. Parent failures defer
+  children without clearing dirty flags or blocking offline logging.
+- Pull parents, plans, sessions, then progress; replay completion evidence only
+  after progress reconciliation. Publish one coherent provider refresh.
+- Apply existing timestamp LWW semantics consistently on the server, not blindly
+  upsert stale rows. Clear dirty only for the exact acknowledged local revision;
+  an in-flight edit remains dirty. Parent tombstones override live children even
+  when the child's clock is newer.
+- Do not advance a cursor past an unapplied relationship. Simplest V1 behavior:
+  keep the table cursor unchanged, report a retryable sync error and replay the
+  page after parent refetch. Invalid remote graphs must not enter normal boxes.
+  No new durable quarantine queue/dashboard is required.
+- Use explicit pages and `(server_seq, id)` continuation for deltas, inclusive
+  replay at the saved timestamp, and save the cursor only after the entire pull
+  applies. This fixes ties/response limits, **not late commits with older stamps**.
+  Add a paginated full pull at initial/account sync and at most once per 24 hours
+  on a successful foreground sync; manual retry requests one immediately. Scan
+  by stable ID; restart the sweep after interruption and never infer deletion
+  from absence. This bounds eventual repair without introducing a change-log
+  service. Include tombstones. Small structural tables may always use full pull.
+- Capture account ID/generation at cycle start and recheck after awaits. A stale
+  response cannot write into the next account's cache.
+- Index `(user_id, server_seq, id)` and graph relationships. Enable RLS, explicit
+  authenticated grants and owner `USING`/`WITH CHECK`; revoke anonymous access and
+  public execution of internal helpers. Test own-owner/wrong-split as well as
+  wrong-owner links. Keep account-erasure hard cascades separate from tombstones.
+
+## Implementation tasks
+
+Each task follows: add its named failing cases, implement the listed contract,
+run focused tests and required analysis, review the diff, explicitly stage and
+commit. New test files below are planned, not existing passing tests. Keep
+implementation in these focused files; do not simultaneously refactor unrelated
+workout UI or replace the sync architecture.
+
+### Task 1 — local records, reads, and migration
+
+**Files:** New `lib/models/{training_block,training_week,workout_progress}.dart`,
+`lib/utils/training_block_identity.dart`,
+`lib/services/training_block_migration.dart`,
+`lib/repositories/training_block_repository.dart`. Modify
+`lib/models/workout_session.dart`, `lib/services/hive_service.dart`,
+`lib/services/adopt_local_data.dart`, `lib/main.dart`, `lib/auth/auth_gate.dart`,
+and Hive test harnesses. Generate model adapters.
+
+**Interfaces:** `TrainingBlockRepository` provides
+`List<TrainingBlock> blocksForSplit(String splitId)`,
+`List<TrainingWeek> weeksForBlock(String splitId, String blockId)`,
+`WorkoutProgress? progressForPlan(String splitId, String planId)`, and
+`List<WorkoutSession> sessionsForPlanWeek(String splitId, String planId, String weekId)`.
+`TrainingBlockMigration.normalize({required String? ownerId})` returns
+`Future<void>` and throws a recoverable preparation error on invalid input.
+Public mutations are `Future<TrainingBlock> createBlock({required String splitId,
+required String name, required int weekCount})`, `Future<TrainingWeek>
+appendWeek(String splitId, String blockId)`, `Future<void> renameBlock(String
+splitId, String blockId, String name)`, and `Future<void> reorderBlocks(String
+splitId, List<String> orderedIds)`. Validate the supplied reorder contains exactly
+the current live IDs. Public mutations own the gate; internal ungated helpers
+compose pending operations. Raw writes remain internal to HiveService; reads
+are thin wrappers.
+
+- [ ] Add `test/training_block_repository_test.dart` for empty structure, owner/
+  split validation, duplicate slot sessions, JSON/adapter round trips and nullable
+  copy clearing. Extend `test/support/hive_test_harness.dart` and
+  `test/support/pump_with_storage.dart` with all boxes/adapters.
+- [ ] Add `test/training_block_migration_test.dart`: sparse 1/3/12 union, empty
+  split, missing/ambiguous plans, tombstones, multiple drafts, exact byte-equivalent
+  exercise/timer payloads, Dart UUID vectors and failure after every journal phase.
+- [ ] Implement records/repository and resumable normalization; rerunning must
+  not dirty valid rows, reset progress, or create another initial block.
+- [ ] Run the two new tests, regenerate adapters, analyze, and commit.
+
+**Exit:** Durable empty weeks and preserved legacy data; UI exposure still gated.
+
+### Task 2 — isolated server proof and graph sync
+
+**Files:** New CLI-generated migrations under `supabase/migrations/`; modify
+`lib/services/{supabase_service,sync_service,adopt_local_data}.dart` and
+`lib/screens/settings_screen.dart`. New `test/training_block_sync_test.dart`;
+extend `test/sync_sequence_test.dart` and `test/sync_data_flow_test.dart`.
+
+**Interfaces:** Sync keeps its existing scheduling API. Add capability negotiation
+before migrated uploads, codecs/cursors for the three tables, and explicit
+upgrade-required/retryable error status. Internal SQL activation/normalization
+operations are idempotent and scoped to `auth.uid()`; no owner supplied by the UI.
+
+- [ ] Inventory base plan/session DDL, triggers, grants, API pre-request hooks and
+  SDK header support in an isolated database; record findings with the migration.
+  The repository lacks initial base-table DDL. Do not guess production constraints.
+- [ ] Add failing transport/database cases: old-client read/upsert/delete rejection,
+  two owners, own-owner wrong split, partial-replica union, newer remote edits
+  during backfill, append collision in both orders and three-retry exhaustion.
+- [ ] Implement schema/backfill/gate and graph ordering. Test parent failure,
+  late legacy dirty writes, deleted-parent rejection and in-flight account switch.
+- [ ] Test more than one response page, equal timestamps, delayed commit behind
+  the cursor and its full-pull repair, failed page application, and local edits
+  during upload. Verify server stale-write rejection, not merely local LWW.
+- [ ] Run focused tests and isolated integration checks, analyze, and commit.
+
+**Exit:** Enforced upgrade boundary and convergent graph sync. If the actual API
+cannot enforce the gate, stop activation and fix that task; do not ship a UI-only
+warning. This is an implementation proof obligation, not another product decision.
+
+### Task 3 — backups and all lifecycle operations
+
+**Files:** `lib/services/{backup_service,hive_service,adopt_local_data,
+workout_preset_installer,split_install_target,sample_data_seeder}.dart`,
+`lib/services/coach/coach_applier.dart`, `lib/screens/settings_screen.dart`,
+plan/split provider delete paths. New `test/training_block_backup_test.dart`;
+extend split, preset, auth and Coach tests.
+
+**Interfaces:** Extend `ImportResult` and `replaceAllWorkoutData` with
+`blocks`, `weeks`, `progress`. Reuse the typed validated graph for replacement
+and recovery; no second normalization algorithm. Existing clear/delete APIs
+retain their public meaning and include the new records.
+
+- [ ] Test v4 round trip of empty structure, duplicates, pending completion and
+  boundary states; v1–3 normalization; conflicting links rejected before writes.
+- [ ] Test same-owner restore, foreign graph remap including transition revisions,
+  process death during replacement, and absent-record tombstones.
+- [ ] Implement every lifecycle matrix row and bounded owner-scoped recovery files.
+  Test plan deletion, split deletion, Clear All Data, custom empty split preservation,
+  preset/Coach failure and A→B handover with pending work.
+- [ ] Run `test/training_block_backup_test.dart`, `test/split_data_layer_test.dart`,
+  `test/workout_presets_test.dart`, `test/auth_recovery_test.dart`,
+  `test/coach_applier_test.dart`; analyze and commit.
+
+**Exit:** Recovery/export is usable before enabling the feature UI.
+
+### Task 4 — progression, source resolution, and provider
+
+**Files:** New `lib/services/workout_progression_service.dart`,
+`lib/services/training_week_session_resolver.dart`,
+`lib/providers/training_block_provider.dart`; modify completion/initializer,
+`lib/utils/set_history.dart`, provider wiring in `lib/main.dart`.
+
+**Interfaces:** `WorkoutProgressionService.complete(String sessionId)` returns
+`Future<WorkoutCompletionResult>` and owns the outer gate;
+`applyCompletion(WorkoutProgress progress, WorkoutSession completed)` is a pure
+`WorkoutProgress?` transition (`null` = no change).
+`continueCompleted({required String sessionId, required String expectedRevision})`
+returns `Future<void>` for the explicit completed-slot recovery above.
+`chooseBoundary({required String planId, required String expectedRevision,
+required String destinationWeekId})` returns `Future<void>` and validates the
+allowed successor under the gate. Structure creation uses the pending-operation
+mechanism before this move. Resolver produces `WorkoutSession?` destination and
+source from explicit lists; initializer takes `TrainingWeek week`, plan, optional
+saved destination/source and clock, and returns a `WorkoutSession` without I/O.
+
+- [ ] Add `test/workout_progression_test.dart`: Push advances while Pull stays,
+  no open/calendar/discard transition, boundary next-visit state, completion-write
+  failure, progress-write failure, replay twice, changed revision with same week,
+  old replay after boundary choice, two-device competing completion, and explicit
+  Continue from a completed active slot without another log or PR event.
+- [ ] Implement gate + evidence + pure transition. Test finishing an existing
+  nonactive timer saves history only. Do not weaken existing PR/timer retry tests.
+- [ ] Extend `test/workout_session_initializer_test.dart` and
+  `test/set_history_test.dart`: B2/W2←B1/W2, first supplied Week 3, missing source,
+  duplicate exercise names, changed templates, deep-copy, saved destination wins,
+  no copied notes/timers/evidence and plan-ID-only filtering.
+- [ ] Implement provider maps and source resolution. Run these tests plus
+  `test/workout_lifecycle_test.dart`; analyze and commit.
+
+**Exit:** Independent progression and deterministic initialization work without UI.
+
+### Task 5 — workout navigation and management
+
+**Files:** `lib/screens/workout_screen.dart`, `lib/screens/plan_editor_screen.dart`,
+new `lib/widgets/workout/training_block_strip.dart` and
+`lib/widgets/workout/training_block_dialogs.dart`; relevant plan provider paths.
+
+**Interfaces:** Strip accepts ordered blocks/weeks, `selectedWeekId`,
+`expandedBlockId` and select/expand/manage callbacks. It does no persistence.
+Screen selection is by week/session ID; block creation/append/rename/reorder go
+through the repository's gated mutation methods, not direct widget Hive writes.
+
+- [ ] Add `test/training_block_navigation_test.dart`: inline reveal, one expanded,
+  entry scrolls active slot, collapse preserves selected context, failed save
+  prevents navigation, no phantom max+1 week on open.
+- [ ] Replace integer caches/keys and legacy per-plan week actions. Preserve exact
+  session selections across provider reloads. Remove `_loadWeeks` auto-append.
+- [ ] Implement next-entry boundary sheets with revision revalidation, dismissal,
+  existing-extension reuse and create retry using fixed IDs. Test another device
+  extending/reordering while a sheet is open.
+- [ ] Add starting-slot selection to new/duplicate plan flows; preserve existing
+  plan progress. Add accessible Block actions alongside long press.
+- [ ] Use existing AppHeader/AppBackButton, theme colors, AppRadius, figures,
+  48px targets and “Block name · Week N” labels. Test narrow/large-text layouts,
+  long names, reduced motion and many blocks; only expanded weeks need widgets.
+- [ ] Run new tests plus `test/workout_plan_navigation_test.dart`,
+  `test/workout_entry_test.dart`, `test/workout_log_test.dart`,
+  `test/navigation_mutation_guards_test.dart`, `test/plan_editor_test.dart`,
+  `test/screen_layout_test.dart`; analyze, hot reload/restart and commit.
+
+**Exit:** The agreed interaction is usable without changing timer/save semantics.
+
+### Task 6 — exact routes, timer, history, and Coach
+
+**Files:** New `lib/navigation/workout_destination.dart`; modify
+`lib/app_shell.dart`, `lib/navigation/app_navigation_observer.dart`,
+`lib/screens/{home_screen,dashboard_screen,workout_screen,history_screen,stats_screen,
+coach_review_screen}.dart`, relevant Home/History widgets,
+`lib/services/workout_timer_notification_service.dart`, native
+`android/app/src/main/kotlin/com/aalishms/opengym/WorkoutTimerNotification.kt`,
+`lib/utils/plan_stats.dart`, statistics/PR services and Coach context/applier.
+
+**Interfaces:** `WorkoutDestination.active(planId)`,
+`WorkoutDestination.week(planId, weekId)`, `WorkoutDestination.session(sessionId)`
+replace `initialWeekNumber`. Re-fetch at route delivery in the current account;
+exact session ID wins. Notification block text is optional display context only.
+
+- [ ] Preserve deferred navigation behind sheets/autosaves, exact route reuse,
+  orphan detail routes, notification Stop confirmation and account invalidation.
+  Test two Week 1s, duplicate logs, renamed/deleted plans and old native snapshots.
+- [ ] Show block context in history/resume/timer surfaces; unresolved/tombstoned
+  context uses retained labels/legacy Week N, never drops a history row.
+- [ ] Audit analytics to count every distinct completed session once across all
+  blocks and remain date-based. Exclude drafts/tombstones; no block filters.
+- [ ] Coach retains its shared-template contract and date-based history context.
+  Review UI selects starts for added plans; removal tombstones progress, edits
+  retain progress. No Edge Function deployment or response-contract expansion.
+- [ ] Run notification/navigation, Home, History, statistics and Coach test suites,
+  plus existing native timer tests after discovering the Gradle task. Analyze,
+  hot reload/restart and commit.
+
+**Exit:** No caller treats a displayed week number as a unique training location.
+
+### Task 7 — full verification and release preparation
+
+- [ ] Run `flutter analyze` and `flutter test`. After Hive model edits run
+  `flutter pub run build_runner build --delete-conflicting-outputs` and fully
+  restart; generated files must match. Follow required analysis after changes.
+- [ ] Perform two-device isolated account trials: independent offline completion,
+  matching-week inheritance, competing append, late legacy upgrade, account switch,
+  failed import/restart, native resume and pending boundary dismissal.
+- [ ] Measure a fixture with 100 blocks × 52 weeks plus 10,000 sessions: one
+  index-build per reload, no full-history scans during chip builds/timer ticks,
+  bounded visible strip construction, and no rebuild-induced frame spikes on
+  the project's Android test device. Record profile observations; do not add a
+  benchmark framework or claim a universal device timing guarantee.
+- [ ] Update DESIGN.md, docs/splits.md, docs/coach.md and
+  docs/online_support_verification.md to describe implemented behavior and actual
+  compatibility checks. Keep initialization.md as historical discovery context.
+- [ ] Deploy additive server changes only through the authorized release workflow;
+  validate with isolated accounts, then release the capable client. Activation
+  follows successful backup/preparation. Roll back via forward fixes or stopping
+  new activations; never downgrade activated data to an old writer.
+- [ ] Follow AGENTS.md for a release: bump version name and increasing +build,
+  exact tag match, same signing key, one universal APK, non-draft/non-prerelease.
+
+## Review focus and readiness limits
+
+The five highest-risk cases have explicit owners:
+
+1. Old queued edits after activation → Task 2 compatibility/backfill tests.
+2. Crash after session completion but before progress → Task 4 revision replay tests.
+3. Two partial replicas with colliding legacy/new week labels → Tasks 1–2 fixtures.
+4. Account switch during sync or recovery → Tasks 2–3 ownership tests.
+5. Exact running session outside current progress → Tasks 4 and 6 timer tests.
+
+The plan is ready for implementation with the stated V1 defaults. Database
+constraints, API gate configuration, native behavior and performance remain
+verification work in the tasks above; this documentation review does not certify
+a live database or authorize deployment. Do not replace those checks with
+assumptions, and do not expand V1 to resolve unrelated app-wide architecture debt.
