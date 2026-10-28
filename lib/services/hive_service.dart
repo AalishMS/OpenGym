@@ -105,6 +105,94 @@ class HiveService {
   static Future<void> putWorkoutProgressRaw(WorkoutProgress progress) =>
       Hive.box<WorkoutProgress>(workoutProgressBox).put(progress.id, progress);
 
+  /// Caller owns the existing mutation gate. Persist a fixed relabel intent
+  /// before the week changes, so startup can finish all display snapshots.
+  static Future<void> persistTrainingWeekRebase(
+    TrainingWeek target, {
+    required String? ownerId,
+  }) async {
+    await recoverTrainingWeekRebase(ownerId: ownerId);
+    final current = getTrainingWeekById(target.id);
+    if (current == null ||
+        current.userId != ownerId ||
+        target.userId != ownerId ||
+        current.splitId != target.splitId ||
+        current.blockId != target.blockId) {
+      throw StateError('The rebased week is unavailable in this account.');
+    }
+    if (current.number == target.number) {
+      await putTrainingWeekRaw(target);
+      return;
+    }
+    final operations = Hive.box<dynamic>(trainingOperationsBox);
+    await operations.put('weekRebase', {
+      'ownerId': ownerId,
+      'previousNumber': current.number,
+      'week': target.toJson(),
+      'dirty': target.dirty,
+    });
+    await operations.flush();
+    await recoverTrainingWeekRebase(ownerId: ownerId);
+  }
+
+  static Future<void> recoverTrainingWeekRebase({
+    required String? ownerId,
+  }) async {
+    final operations = Hive.box<dynamic>(trainingOperationsBox);
+    final raw = operations.get('weekRebase');
+    if (raw == null) return;
+    final intent = Map<String, dynamic>.from(raw as Map);
+    if (intent['ownerId'] != ownerId) {
+      throw StateError('Pending week rebase belongs to another account.');
+    }
+    final target = TrainingWeek.fromJson(
+      Map<String, dynamic>.from(intent['week'] as Map),
+    ).copyWith(dirty: intent['dirty'] as bool?);
+    final current = getTrainingWeekById(target.id);
+    if (current == null ||
+        current.userId != ownerId ||
+        target.userId != ownerId ||
+        current.splitId != target.splitId ||
+        current.blockId != target.blockId ||
+        (current.number != intent['previousNumber'] &&
+            current.number != target.number)) {
+      throw StateError(
+        'The pending week rebase conflicts with saved structure.',
+      );
+    }
+    // A later durable deletion wins; recovery never revives a parent or week.
+    final value =
+        current.deletedAt != null && target.deletedAt == null
+            ? current
+            : target;
+    final split = getSplitById(value.splitId);
+    final block = getTrainingBlockById(value.blockId);
+    if (split == null ||
+        block == null ||
+        split.userId != ownerId ||
+        block.userId != ownerId ||
+        block.splitId != value.splitId) {
+      throw StateError('The pending rebase parent is unavailable.');
+    }
+    await putTrainingWeekRaw(value);
+    await Hive.box<TrainingWeek>(trainingWeeksBox).flush();
+    // Re-read current rows so an unrelated saved edit is never overwritten by
+    // recovery. Only the display snapshot changes; IDs, sets and timers stay.
+    for (final session in getAllSessionsRaw().where(
+      (s) => s.trainingWeekId == value.id && s.weekNumber != value.number,
+    )) {
+      if (session.userId != ownerId || session.splitId != value.splitId) {
+        throw StateError('A pending session rebase has conflicting ownership.');
+      }
+      await putSessionRaw(
+        session.copyWith(weekNumber: value.number, dirty: true),
+      );
+    }
+    await _sessionsBox.flush();
+    await operations.delete('weekRebase');
+    await operations.flush();
+  }
+
   static String validateTrainingName(String value) {
     final name = value.trim();
     if (name.isEmpty || name.length > 40) {
@@ -208,13 +296,17 @@ class HiveService {
   }
 
   static Future<void> clearTrainingData() async {
-    for (final name in [
-      trainingBlocksBox,
-      trainingWeeksBox,
-      workoutProgressBox,
-      trainingOperationsBox,
-    ]) {
-      if (Hive.isBoxOpen(name)) await Hive.box(name).clear();
+    if (Hive.isBoxOpen(trainingBlocksBox)) {
+      await Hive.box<TrainingBlock>(trainingBlocksBox).clear();
+    }
+    if (Hive.isBoxOpen(trainingWeeksBox)) {
+      await Hive.box<TrainingWeek>(trainingWeeksBox).clear();
+    }
+    if (Hive.isBoxOpen(workoutProgressBox)) {
+      await Hive.box<WorkoutProgress>(workoutProgressBox).clear();
+    }
+    if (Hive.isBoxOpen(trainingOperationsBox)) {
+      await Hive.box<dynamic>(trainingOperationsBox).clear();
     }
   }
 

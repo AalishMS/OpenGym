@@ -159,11 +159,11 @@ begin
   select * into strict parent from public.splits where id=split for share;
   if auth.uid() is not null and parent.user_id<>auth.uid() then raise insufficient_privilege; end if;
   insert into public.training_blocks(id,user_id,split_id,name,position,created_at,updated_at,deleted_at)
-    values(block,parent.user_id,split,'Block 1',0,parent.created_at,parent.updated_at,parent.deleted_at) on conflict(id) do nothing;
+    values(block,parent.user_id,split,'Block 1',0,parent.created_at,'epoch'::timestamptz,parent.deleted_at) on conflict(id) do nothing;
   select deleted_at into existing_deleted from public.training_blocks where id=block;
   if existing_deleted is not null and parent.deleted_at is null then raise check_violation using message='Deleted legacy block cannot be restored'; end if;
   insert into public.training_weeks(id,user_id,split_id,block_id,number,created_at,updated_at,deleted_at)
-    values(week,parent.user_id,split,block,number,parent.created_at,parent.updated_at,parent.deleted_at) on conflict(id) do nothing;
+    values(week,parent.user_id,split,block,number,parent.created_at,'epoch'::timestamptz,parent.deleted_at) on conflict(id) do nothing;
   select deleted_at into existing_deleted from public.training_weeks where id=week;
   if existing_deleted is not null and parent.deleted_at is null then raise check_violation using message='Deleted legacy week cannot be restored'; end if;
   return week;
@@ -273,7 +273,7 @@ begin
       end if;
     end if;
     if selected_week is null then raise check_violation using message='No supplied training week'; end if;
-    insert into public.workout_progress(id,user_id,split_id,plan_id,active_week_id,state,revision,updated_at) values(training_internal.progress_id(plan.split_id,plan.id),owner,plan.split_id,plan.id,selected_week,progress_state,training_internal.initial_revision(plan.split_id,plan.id),plan.updated_at) on conflict(id) do nothing;
+    insert into public.workout_progress(id,user_id,split_id,plan_id,active_week_id,state,revision,updated_at) values(training_internal.progress_id(plan.split_id,plan.id),owner,plan.split_id,plan.id,selected_week,progress_state,training_internal.initial_revision(plan.split_id,plan.id),'epoch'::timestamptz) on conflict(id) do nothing;
     selected_week := null;
   end loop;
 end

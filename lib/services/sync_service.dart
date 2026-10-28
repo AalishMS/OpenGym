@@ -140,6 +140,10 @@ class SyncService {
     final account = _SyncAccount(user);
     try {
       _db.rest.headers['x-opengym-training-schema'] = '1';
+      await _checked(
+        HiveService.recoverTrainingWeekRebase(ownerId: user),
+        account,
+      );
       // Activation/backfill is serialized on the server, and runs before any
       // migrated upload. Missing schema or an incompatible API fails closed.
       final capability = await _checked(
@@ -287,6 +291,28 @@ class SyncService {
     }
   }
 
+  bool _isBootstrap(String table, String id) {
+    if (table == 'training_blocks') {
+      final b = HiveService.getTrainingBlockById(id);
+      return b != null &&
+          b.updatedAt == null &&
+          b.id == legacyTrainingBlockId(b.splitId);
+    }
+    if (table == 'training_weeks') {
+      final w = HiveService.getTrainingWeekById(id);
+      return w != null &&
+          w.updatedAt == null &&
+          w.id == legacyTrainingWeekId(w.splitId, w.number);
+    }
+    if (table == 'workout_progress') {
+      final p = HiveService.getWorkoutProgressById(id);
+      return p != null &&
+          p.updatedAt == null &&
+          p.revision == initialProgressRevision(p.splitId, p.planId);
+    }
+    return false;
+  }
+
   Future<void> _push(
     String table,
     Map<String, dynamic> row,
@@ -297,12 +323,27 @@ class SyncService {
       throw StateError('A pending row belongs to a different account.');
     }
     _validateRow(table, row, account.id);
-    final rows = await _checked(_db.from(table).upsert(row).select(), account);
+    final id = (row['id'] ?? row['user_id']) as String;
+    final bootstrap = _isBootstrap(table, id) && row['deleted_at'] == null;
+    var rows = await _checked(
+      _db.from(table).upsert(row, ignoreDuplicates: bootstrap).select(),
+      account,
+    );
+    if (bootstrap && rows.isEmpty) {
+      rows = await _checked(
+        _db
+            .from(table)
+            .select()
+            .eq('user_id', account.id)
+            .eq('id', id)
+            .limit(1),
+        account,
+      );
+    }
     if (rows.length != 1) {
       throw StateError('The server did not acknowledge this write.');
     }
     final acknowledged = rows.single;
-    final id = (row['id'] ?? row['user_id']) as String;
     final latest = _localRow(table, id);
     if (latest == null || !_same(latest, row)) return;
     if (!_rowMatches(row, acknowledged)) {
@@ -365,17 +406,10 @@ class SyncService {
           updatedAt: DateTime.now(),
           dirty: true,
         );
-        await _checked(HiveService.putTrainingWeekRaw(week), account);
-        for (final session in HiveService.getAllSessionsRaw().where(
-          (s) => s.trainingWeekId == week.id,
-        )) {
-          await _checked(
-            HiveService.putSessionRaw(
-              session.copyWith(weekNumber: next, dirty: true),
-            ),
-            account,
-          );
-        }
+        await _checked(
+          HiveService.persistTrainingWeekRebase(week, ownerId: account.id),
+          account,
+        );
       }
     }
   }
@@ -438,11 +472,69 @@ class SyncService {
     }
   }
 
+  bool _dominatedByParentDeletion(
+    String table,
+    Map<String, dynamic> row,
+    String owner,
+  ) {
+    if (table == 'splits' ||
+        row['deleted_at'] != null ||
+        row['user_id'] != owner) {
+      return false;
+    }
+    final splitId =
+        (table == 'split_preferences'
+                ? row['active_split_id']
+                : row['split_id'])
+            as String;
+    final split = HiveService.getSplitById(splitId);
+    if (split != null && split.userId == owner && split.deletedAt != null) {
+      return true;
+    }
+    if (table == 'training_weeks') {
+      final block = HiveService.getTrainingBlockById(row['block_id'] as String);
+      if (block != null &&
+          block.userId == owner &&
+          block.splitId == splitId &&
+          block.deletedAt != null) {
+        return true;
+      }
+    }
+    if (table == 'workout_sessions' || table == 'workout_progress') {
+      final weekId =
+          (table == 'workout_progress'
+                  ? row['active_week_id']
+                  : row['training_week_id'])
+              as String?;
+      final week =
+          weekId == null ? null : HiveService.getTrainingWeekById(weekId);
+      if (week != null &&
+          week.userId == owner &&
+          week.splitId == splitId &&
+          week.deletedAt != null) {
+        return true;
+      }
+    }
+    if (table == 'workout_progress') {
+      final plan = HiveService.getPlanById(row['plan_id'] as String);
+      if (plan != null &&
+          plan.userId == owner &&
+          plan.splitId == splitId &&
+          plan.deletedAt != null) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   Future<void> _applyRow(
     String table,
     Map<String, dynamic> row,
     String owner,
   ) async {
+    // A durable parent deletion already represents the outcome for stale live
+    // descendants. Do not resurrect them or block uploading the pending delete.
+    if (_dominatedByParentDeletion(table, row, owner)) return;
     _validateRow(table, row, owner);
     final id = (row['id'] ?? row['user_id']) as String;
     final local = _localRow(table, id);
@@ -456,6 +548,8 @@ class SyncService {
     if (local?['deleted_at'] != null && row['deleted_at'] == null) wins = false;
     if (table == 'workout_progress' &&
         local != null &&
+        local['deleted_at'] == null &&
+        row['deleted_at'] == null &&
         localTime == remoteTime) {
       wins =
           (row['revision'] as String).compareTo(local['revision'] as String) >=
@@ -470,6 +564,7 @@ class SyncService {
             )) {
       wins = row['deleted_at'] != null || local['deleted_at'] == null;
     }
+    if (_isBootstrap(table, id) && local?['deleted_at'] == null) wins = true;
     if (!wins) return;
     switch (table) {
       case 'splits':
@@ -510,17 +605,13 @@ class SyncService {
           userId: owner,
           dirty: false,
         );
-        await HiveService.putTrainingWeekRaw(remoteWeek);
         if (local != null && local['number'] != remoteWeek.number) {
-          for (final session in HiveService.getAllSessionsRaw().where(
-            (s) =>
-                s.trainingWeekId == remoteWeek.id &&
-                s.weekNumber != remoteWeek.number,
-          )) {
-            await HiveService.putSessionRaw(
-              session.copyWith(weekNumber: remoteWeek.number, dirty: true),
-            );
-          }
+          await HiveService.persistTrainingWeekRebase(
+            remoteWeek,
+            ownerId: owner,
+          );
+        } else {
+          await HiveService.putTrainingWeekRaw(remoteWeek);
         }
       case 'workout_plans':
         final data = _canonicalData(row, ['id', 'splitId']);
@@ -647,7 +738,7 @@ class SyncService {
     'name': r.name,
     'position': r.position,
     'created_at': _ts(r.createdAt),
-    'updated_at': _ts(r.updatedAt ?? r.createdAt),
+    'updated_at': _ts(r.updatedAt),
     'deleted_at': r.deletedAt == null ? null : _ts(r.deletedAt),
   };
   Map<String, dynamic> _weekRow(TrainingWeek r) => {
@@ -657,7 +748,7 @@ class SyncService {
     'block_id': r.blockId,
     'number': r.number,
     'created_at': _ts(r.createdAt),
-    'updated_at': _ts(r.updatedAt ?? r.createdAt),
+    'updated_at': _ts(r.updatedAt),
     'deleted_at': r.deletedAt == null ? null : _ts(r.deletedAt),
   };
   Map<String, dynamic> _planRow(WorkoutPlan r) => {

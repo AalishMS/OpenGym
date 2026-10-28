@@ -70,3 +70,9 @@ activation, and an old HTTP write held across activation.
 These checks prove the isolated schema/API. They do not certify production
 pre-request configuration, authorize deploying this migration, or activate any
 production account.
+
+Bootstrap rows use neutral edit timestamps (null locally, epoch on first SQL
+insert), and the client inserts them only when absent. Existing server structure
+wins over synthetic defaults, while explicit local edits use normal LWW. Local
+week relabels also flush a fixed-week recovery intent before changing the week or
+session labels; startup and sync finish that intent before graph validation.

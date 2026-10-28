@@ -227,6 +227,14 @@ class TrainingBlocksApiTest(unittest.TestCase):
         finally:
             sql('drop trigger if exists test_hold_old_write on workout_sessions; drop function if exists training_internal.test_hold_old_write();')
 
+    def test_bootstrap_timestamps_do_not_inherit_split_or_plan_edits(self):
+        sql("update splits set updated_at='2030-01-01'; update workout_plans set updated_at='2030-01-01';")
+        self.activate()
+        for table in ['training_blocks','training_weeks','workout_progress']:
+            rows=api(table)[1]
+            self.assertTrue(rows)
+            self.assertTrue(all(row['updated_at']=='1970-01-01T00:00:00+00:00' for row in rows),(table,rows))
+
     def test_concurrent_activation_is_idempotent(self):
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as workers:
             results = list(workers.map(lambda _: api('rpc/activate_training_schema','POST',{}), range(2)))

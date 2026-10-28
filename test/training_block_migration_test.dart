@@ -14,6 +14,7 @@ import 'package:gymapp/services/adopt_local_data.dart';
 import 'package:gymapp/services/training_block_migration.dart';
 import 'package:gymapp/utils/training_block_identity.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive/hive.dart';
 
 import 'support/hive_test_harness.dart';
 
@@ -147,6 +148,26 @@ void main() {
         jsonEncode(repository.progressForPlan(splitId, planId)!.toJson()),
         snapshot,
       );
+    },
+  );
+
+  test(
+    'migration bootstrap metadata is distinguishable from a structural edit',
+    () async {
+      await HiveService.putSplitRaw(
+        HiveService.getSplitById(
+          splitId,
+        )!.copyWith(updatedAt: DateTime.utc(2030)),
+      );
+      await HiveService.putPlanRaw(
+        HiveService.getPlanById(
+          planId,
+        )!.copyWith(updatedAt: DateTime.utc(2030)),
+      );
+      await TrainingBlockMigration().normalize(ownerId: null);
+      expect(repository.blocksForSplit(splitId).single.updatedAt, isNull);
+      expect(HiveService.getAllTrainingWeeksRaw().single.updatedAt, isNull);
+      expect(repository.progressForPlan(splitId, planId)!.updatedAt, isNull);
     },
   );
 
@@ -339,6 +360,62 @@ void main() {
       );
     },
   );
+
+  for (final writtenSessions in [-1, 0, 1]) {
+    test(
+      'pending rebase recovers after week and $writtenSessions session writes',
+      () async {
+        await TrainingBlockMigration().normalize(ownerId: null);
+        final block = repository.blocksForSplit(splitId).single;
+        final week = await TrainingBlockRepository(
+          ownerId: () => null,
+        ).appendWeek(splitId, block.id);
+        for (final id in ['first', 'second']) {
+          await HiveService.putSessionRaw(
+            WorkoutSession(
+              id: id,
+              date: stamp,
+              planName: 'Push',
+              planId: planId,
+              splitId: splitId,
+              trainingWeekId: week.id,
+              weekNumber: 2,
+              durationSeconds: 72,
+              exercises: [
+                Exercise(name: 'Squat', sets: [Set(reps: 8, weight: 80)]),
+              ],
+            ),
+          );
+        }
+        final target = week.copyWith(number: 3, dirty: true);
+        final operations = Hive.box<dynamic>(HiveService.trainingOperationsBox);
+        await operations.put('weekRebase', {
+          'ownerId': null,
+          'previousNumber': 2,
+          'week': target.toJson(),
+          'dirty': true,
+        });
+        await operations.flush();
+        if (writtenSessions >= 0) await HiveService.putTrainingWeekRaw(target);
+        if (writtenSessions == 1) {
+          await HiveService.putSessionRaw(
+            HiveService.getSessionById('first')!.copyWith(weekNumber: 3),
+          );
+        }
+        await TrainingBlockMigration().normalize(ownerId: null);
+        for (final id in ['first', 'second']) {
+          final saved = HiveService.getSessionById(id)!;
+          expect(saved.trainingWeekId, week.id);
+          expect(saved.weekNumber, 3);
+          expect(saved.durationSeconds, 72);
+          expect(saved.exercises.single.sets.single.weight, 80);
+        }
+        expect(operations.get('weekRebase'), isNull);
+        await TrainingBlockMigration().normalize(ownerId: null);
+        expect(repository.weeksForBlock(splitId, block.id).last.id, week.id);
+      },
+    );
+  }
 
   for (final phase in [
     'snapshot',

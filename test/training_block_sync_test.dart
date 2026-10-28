@@ -13,6 +13,7 @@ import 'package:gymapp/services/training_block_migration.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive/hive.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'support/hive_test_harness.dart';
@@ -107,6 +108,12 @@ class ReplicaApi {
       for (final item in incoming) {
         final row = Map<String, dynamic>.from(item as Map);
         final key = table == 'split_preferences' ? 'user_id' : 'id';
+        if ((request.headers['Prefer'] ?? '').contains(
+              'resolution=ignore-duplicates',
+            ) &&
+            rows.any((r) => r[key] == row[key])) {
+          continue;
+        }
         rows.removeWhere((r) => r[key] == row[key]);
         row['server_seq'] =
             stamp.add(const Duration(days: 1)).toIso8601String();
@@ -606,10 +613,255 @@ void main() {
     await SyncService.instance.syncNow();
     expect(HiveService.blocksForSplit(splitId), isEmpty);
     expect(
-      HiveService.getAllTrainingWeeksRaw().every((w) => w.deletedAt != null),
+      HiveService.getAllTrainingWeeksRaw()
+          .where((w) => w.splitId == splitId)
+          .every((w) => w.deletedAt != null),
       isTrue,
     );
   });
+
+  test(
+    'newer split metadata cannot overwrite a renamed remote bootstrap block',
+    () async {
+      final localBlock = HiveService.getAllTrainingBlocksRaw().single;
+      final localSplit = HiveService.getSplitById(splitId)!;
+      await HiveService.putSplitRaw(
+        localSplit.copyWith(
+          name: 'Offline split edit',
+          updatedAt: DateTime.utc(2030),
+          dirty: true,
+        ),
+      );
+      await HiveService.clearTrainingData();
+      await TrainingBlockMigration().normalize(ownerId: owner);
+      api.tables['splits'] = [
+        {
+          'id': splitId,
+          'user_id': owner,
+          'name': 'A',
+          'created_at': stamp.toIso8601String(),
+          'updated_at': stamp.toIso8601String(),
+          'deleted_at': null,
+          'server_seq': stamp.toIso8601String(),
+        },
+      ];
+      api.tables['training_blocks'] = [
+        {
+          'id': localBlock.id,
+          'user_id': owner,
+          'split_id': splitId,
+          'name': 'Renamed by device A',
+          'position': 4,
+          'created_at': stamp.toIso8601String(),
+          'updated_at': stamp.add(const Duration(days: 1)).toIso8601String(),
+          'deleted_at': null,
+          'server_seq': stamp.toIso8601String(),
+        },
+      ];
+      await SyncService.instance.syncNow();
+      final saved = HiveService.getTrainingBlockById(localBlock.id)!;
+      expect(saved.name, 'Renamed by device A');
+      expect(saved.position, 4);
+      expect(HiveService.getSplitById(splitId)!.name, 'Offline split edit');
+    },
+  );
+
+  test(
+    'bootstrap upload inserts only if absent when a remote edit races the first pull',
+    () async {
+      var raced = false;
+      api.intercept = (r) async {
+        if (!raced &&
+            r.method == 'POST' &&
+            r.url.path.endsWith('/training_blocks')) {
+          raced = true;
+          final incoming = Map<String, dynamic>.from(jsonDecode(r.body) as Map);
+          api.tables['training_blocks']!.add({
+            ...incoming,
+            'name': 'Remote race',
+            'position': 3,
+            'updated_at': stamp.toIso8601String(),
+            'server_seq': stamp.toIso8601String(),
+          });
+        }
+        return null;
+      };
+      await SyncService.instance.syncNow();
+      expect(HiveService.getAllTrainingBlocksRaw().single.name, 'Remote race');
+      final write = api.requests.firstWhere(
+        (r) => r.method == 'POST' && r.url.path.endsWith('/training_blocks'),
+      );
+      expect(write.headers['Prefer'], contains('resolution=ignore-duplicates'));
+    },
+  );
+
+  test(
+    'an explicit local block edit keeps normal LWW after bootstrap',
+    () async {
+      final b = HiveService.getAllTrainingBlocksRaw().single;
+      api.tables['training_blocks'] = [
+        {
+          'id': b.id,
+          'user_id': owner,
+          'split_id': splitId,
+          'name': 'Older remote name',
+          'position': 0,
+          'created_at': stamp.toIso8601String(),
+          'updated_at': stamp.toIso8601String(),
+          'deleted_at': null,
+          'server_seq': stamp.toIso8601String(),
+        },
+      ];
+      await TrainingBlockRepository(
+        ownerId: () => owner,
+      ).renameBlock(splitId, b.id, 'Local edit');
+      await SyncService.instance.syncNow();
+      expect(HiveService.getTrainingBlockById(b.id)!.name, 'Local edit');
+      expect(api.tables['training_blocks']!.single['name'], 'Local edit');
+    },
+  );
+
+  test(
+    'local split deletion syncs despite remote live children and old preference',
+    () async {
+      await SyncService.instance.syncNow();
+      const replacement = '00000000-0000-4000-8000-000000000098';
+      await HiveService.putSplitRaw(
+        Split(
+          id: replacement,
+          name: 'Replacement',
+          createdAt: stamp,
+          updatedAt: stamp,
+          userId: owner,
+          dirty: true,
+        ),
+      );
+      await HiveService.softDeleteSplit(
+        userId: owner,
+        splitId: splitId,
+        replacementSplitId: replacement,
+      );
+      final deleted = HiveService.getSplitById(splitId)!.deletedAt!;
+      for (final b in HiveService.getAllTrainingBlocksRaw().where(
+        (b) => b.splitId == splitId,
+      )) {
+        await HiveService.putTrainingBlockRaw(
+          b.copyWith(deletedAt: deleted, dirty: true),
+        );
+      }
+      for (final w in HiveService.getAllTrainingWeeksRaw().where(
+        (w) => w.splitId == splitId,
+      )) {
+        await HiveService.putTrainingWeekRaw(
+          w.copyWith(deletedAt: deleted, dirty: true),
+        );
+      }
+      for (final p in HiveService.getAllWorkoutProgressRaw().where(
+        (p) => p.splitId == splitId,
+      )) {
+        await HiveService.putWorkoutProgressRaw(
+          p.copyWith(deletedAt: deleted, dirty: true),
+        );
+      }
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(
+        api.tables['splits']!.firstWhere(
+          (r) => r['id'] == splitId,
+        )['deleted_at'],
+        isNotNull,
+      );
+      expect(
+        api.tables['split_preferences']!.single['active_split_id'],
+        replacement,
+      );
+      expect(HiveService.blocksForSplit(splitId), isEmpty);
+    },
+  );
+
+  test(
+    'sync replays a pending remote rebase before pulling or validating sessions',
+    () async {
+      await SyncService.instance.syncNow();
+      final block = HiveService.getAllTrainingBlocksRaw().single;
+      final week = await TrainingBlockRepository(
+        ownerId: () => owner,
+      ).appendWeek(splitId, block.id);
+      await SyncService.instance.syncNow();
+      await HiveService.putSessionRaw(
+        WorkoutSession(
+          id: 'rebase-log',
+          date: stamp,
+          planName: 'Push',
+          planId: planId,
+          splitId: splitId,
+          userId: owner,
+          trainingWeekId: week.id,
+          weekNumber: 2,
+          durationSeconds: 72,
+          exercises: [],
+          dirty: true,
+          updatedAt: stamp,
+        ),
+      );
+      final target = week.copyWith(
+        number: 3,
+        updatedAt: DateTime.utc(2030),
+        dirty: false,
+      );
+      await Hive.box<dynamic>(
+        HiveService.trainingOperationsBox,
+      ).put('weekRebase', {
+        'ownerId': owner,
+        'previousNumber': 2,
+        'week': target.toJson(),
+        'dirty': false,
+      });
+      await HiveService.putTrainingWeekRaw(target);
+      final remote = api.tables['training_weeks']!.firstWhere(
+        (r) => r['id'] == week.id,
+      );
+      remote['number'] = 3;
+      remote['updated_at'] = DateTime.utc(2030).toIso8601String();
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(HiveService.getSessionById('rebase-log')!.weekNumber, 3);
+      expect(HiveService.getSessionById('rebase-log')!.durationSeconds, 72);
+      expect(
+        Hive.box<dynamic>(HiveService.trainingOperationsBox).get('weekRebase'),
+        isNull,
+      );
+    },
+  );
+
+  for (final localDeleted in [true, false]) {
+    test(
+      'progress tombstone beats revision tie when localDeleted=$localDeleted',
+      () async {
+        await SyncService.instance.syncNow();
+        final p = HiveService.getAllWorkoutProgressRaw().single;
+        final time = DateTime.utc(2030);
+        const low = '00000000-0000-4000-8000-000000000001';
+        const high = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+        await HiveService.putWorkoutProgressRaw(
+          p.copyWith(
+            revision: localDeleted ? low : high,
+            updatedAt: time,
+            deletedAt: localDeleted ? time : null,
+            dirty: false,
+          ),
+        );
+        api.tables['workout_progress']![0] = {
+          ...api.tables['workout_progress']!.single,
+          'revision': localDeleted ? high : low,
+          'updated_at': time.toIso8601String(),
+          'deleted_at': localDeleted ? null : time.toIso8601String(),
+        };
+        await SyncService.instance.syncNow();
+        expect(HiveService.getAllWorkoutProgressRaw().single.deletedAt, time);
+      },
+    );
+  }
 
   test(
     'an incompatible API returns an explicit upgrade-required state',

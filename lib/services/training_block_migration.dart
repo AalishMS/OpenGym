@@ -115,6 +115,7 @@ class TrainingBlockMigration {
         await temporary.rename(path);
       }
       await checkpoint(_ownerKey(ownerId), journal, 'snapshot');
+      await HiveService.recoverTrainingWeekRebase(ownerId: ownerId);
       final sessions = HiveService.getAllSessionsRaw();
       final count = sessions.length;
       // Validate all supplied links before any graph mutation.
@@ -149,7 +150,7 @@ class TrainingBlockMigration {
               name: 'Block 1',
               position: 0,
               createdAt: split.createdAt,
-              updatedAt: split.updatedAt,
+              updatedAt: null,
               deletedAt: deleted,
               userId: ownerId,
               dirty: true,
@@ -192,15 +193,11 @@ class TrainingBlockMigration {
               if (n > max) max = n;
             }
             final rebased = conflict.copyWith(number: max + 1, dirty: true);
-            await HiveService.putTrainingWeekRaw(rebased);
+            await HiveService.persistTrainingWeekRebase(
+              rebased,
+              ownerId: ownerId,
+            );
             weeks[rebased.id] = rebased;
-            for (final session in HiveService.getAllSessionsRaw().where(
-              (s) => s.trainingWeekId == rebased.id,
-            )) {
-              await HiveService.putSessionRaw(
-                session.copyWith(weekNumber: rebased.number, dirty: true),
-              );
-            }
           }
           if (existingWeek == null) {
             final week = TrainingWeek(
@@ -209,7 +206,7 @@ class TrainingBlockMigration {
               blockId: blockId,
               number: number,
               createdAt: split.createdAt,
-              updatedAt: split.updatedAt,
+              updatedAt: null,
               deletedAt: deleted,
               userId: ownerId,
               dirty: true,
@@ -304,7 +301,7 @@ class TrainingBlockMigration {
             state: state,
             revision: initialProgressRevision(splitId, plan.id!),
             userId: ownerId,
-            updatedAt: plan.updatedAt,
+            updatedAt: null,
             dirty: true,
           ),
         );
