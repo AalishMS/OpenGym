@@ -290,6 +290,15 @@ class HiveService {
     await recoverTrainingOperation(ownerId: block.userId);
   }
 
+  /// Finish earlier structural intents before composing another local batch.
+  /// Callers already hold the exclusive mutation gate.
+  static Future<void> recoverTrainingOperations({
+    required String? ownerId,
+  }) async {
+    await recoverTrainingWeekRebase(ownerId: ownerId);
+    await recoverTrainingOperation(ownerId: ownerId);
+  }
+
   static Future<TrainingBlock?> recoverTrainingOperation({
     required String? ownerId,
   }) async {
@@ -606,6 +615,7 @@ class HiveService {
     if (splitId == replacementSplitId) {
       throw StateError('Choose a different replacement split.');
     }
+    await recoverTrainingOperations(ownerId: userId);
     final active = getSplits();
     if (active.length <= 1) {
       throw StateError('The last split cannot be deleted.');
@@ -613,7 +623,16 @@ class HiveService {
     if (getSplitPreference(userId)?.activeSplitId == splitId) {
       await setActiveSplit(userId, replacementSplitId);
     }
+    // The parent is the durable deletion intent. Startup can finish every
+    // descendant after any individual write, without reviving old identities.
     final now = DateTime.now();
+    final split = getSplitById(splitId);
+    if (split != null) {
+      split.deletedAt = now;
+      split.updatedAt = now;
+      split.dirty = true;
+      await _splitsBox.put(splitId, split);
+    }
     for (final plan in _plansBox.values.where(
       (p) => p.splitId == splitId && p.deletedAt == null,
     )) {
@@ -650,13 +669,6 @@ class HiveService {
       await putWorkoutProgressRaw(
         p.copyWith(deletedAt: now, updatedAt: now, dirty: true),
       );
-    }
-    final split = getSplitById(splitId);
-    if (split != null) {
-      split.deletedAt = now;
-      split.updatedAt = now;
-      split.dirty = true;
-      await _splitsBox.put(splitId, split);
     }
   });
 
@@ -777,6 +789,7 @@ class HiveService {
     plan.userId = split.userId;
     plan.updatedAt = DateTime.now();
     plan.dirty = true;
+    await recoverTrainingOperations(ownerId: split.userId);
     var graph = TrainingBlockMigration.prepareGraph(
       readTrainingGraph(ownerId: split.userId)
           .ownedBy(split.userId)
@@ -912,6 +925,12 @@ class HiveService {
 
   static Future<void> upsertSession(WorkoutSession session) async {
     final saved = session.id == null ? null : getSessionById(session.id!);
+    if ((saved?.isCompleted == true && !session.isCompleted) ||
+        (saved?.deletedAt != null && session.deletedAt == null)) {
+      throw StateError(
+        'The saved workout was already logged or deleted. Open its saved result.',
+      );
+    }
     if (saved?.completionTransition != null) {
       if (saved!.trainingWeekId != session.trainingWeekId ||
           saved.planId != session.planId ||
@@ -1215,6 +1234,7 @@ class HiveService {
 
   static Future<void> clearWorkoutGraphUnderGate({String? splitId}) async {
     final owner = trainingCacheOwner();
+    await recoverTrainingOperations(ownerId: owner);
     final graph = TrainingBlockMigration.prepareGraph(
       readTrainingGraph(ownerId: owner).ownedBy(owner),
     );

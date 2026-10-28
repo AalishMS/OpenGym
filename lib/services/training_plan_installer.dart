@@ -13,6 +13,7 @@ Future<void> installTrainingPlansUnderGate({
   String? activeSplitId,
   Future<void> Function(String phase)? onPhase,
 }) async {
+  await HiveService.recoverTrainingOperations(ownerId: ownerId);
   final current = HiveService.readTrainingGraph(ownerId: ownerId);
   final planMap = {for (final p in current.plans) p.id!: p, ...plans};
   final splitMap = {

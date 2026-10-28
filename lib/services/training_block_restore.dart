@@ -327,6 +327,7 @@ class TrainingBlockRestore {
                 },
               )
               .toList(),
+      'desiredOperations': <String, dynamic>{},
       'originalOperations': Hive.box<dynamic>(
         HiveService.trainingOperationsBox,
       ).toMap().map((key, value) => MapEntry(key.toString(), value)),
@@ -377,6 +378,17 @@ class TrainingBlockRestore {
     if (graph.ownerId != owner) {
       throw StateError('Conflicting replacement owner.');
     }
+    // This fixed replacement supersedes prior creation/relabel intents. The
+    // original operations remain in the safety payload for explicit rollback.
+    final operations = Hive.box<dynamic>(HiveService.trainingOperationsBox);
+    await operations.clear();
+    await operations.putAll(
+      Map<String, dynamic>.from(
+        payload['desiredOperations'] as Map? ?? const {},
+      ),
+    );
+    await operations.flush();
+
     for (final split in graph.splits) {
       await HiveService.putSplitRaw(split);
     }

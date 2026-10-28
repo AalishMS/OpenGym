@@ -35,6 +35,7 @@ class SampleDataSeeder {
     } else {
       await SyncService.instance.runExclusiveLocalMutation(() async {
         final owner = HiveService.trainingCacheOwner();
+        await HiveService.recoverTrainingOperations(ownerId: owner);
         final current = TrainingBlockMigration.prepareGraph(
           HiveService.readTrainingGraph(ownerId: owner).ownedBy(owner),
         );

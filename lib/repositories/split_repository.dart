@@ -17,6 +17,7 @@ class SplitRepository {
           await HiveService.upsertSplit(split);
           return;
         }
+        await HiveService.recoverTrainingOperations(ownerId: split.userId);
         final graph = TrainingBlockMigration.prepareGraph(
           HiveService.readTrainingGraph(ownerId: split.userId)
               .ownedBy(split.userId)
