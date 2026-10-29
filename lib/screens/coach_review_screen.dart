@@ -33,9 +33,10 @@ class _CoachReviewScreenState extends State<CoachReviewScreen> {
   Widget _startingSlot(String name, bool enabled) {
     final proposal = entry.proposal!.proposal;
     if (proposal.target == CoachTarget.newSplit) {
-      return const Padding(
-        padding: EdgeInsets.all(AppSpacing.sm),
-        child: Text('Starts at Block 1 · Week 1'),
+      return const StartingWeekField(
+        dense: true,
+        value: 'Starts at Block 1 · Week 1',
+        onTap: null,
       );
     }
     final blocks = HiveService.blocksForSplit(proposal.snapshot.splitId);
@@ -55,9 +56,10 @@ class _CoachReviewScreenState extends State<CoachReviewScreen> {
             .where((w) => w.id == selected)
             .firstOrNull;
     final block = blocks.where((b) => b.id == week?.blockId).firstOrNull;
-    return TextButton(
+    return StartingWeekField(
       key: ValueKey('coach-start-$name'),
-      onPressed:
+      dense: true,
+      onTap:
           !enabled || week == null
               ? null
               : () async {
@@ -71,11 +73,10 @@ class _CoachReviewScreenState extends State<CoachReviewScreen> {
                   setState(() => _starts[name] = chosen);
                 }
               },
-      child: Text(
-        week == null
-            ? 'Starting week unavailable'
-            : 'Starts at ${block!.name} · Week ${week.number}',
-      ),
+      value:
+          week == null
+              ? 'Starting week unavailable'
+              : 'Starts at ${block!.name} · Week ${week.number}',
     );
   }
 

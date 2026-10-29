@@ -40,6 +40,7 @@ import '../widgets/workout/plan_swipe_region.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../widgets/workout/training_block_dialogs.dart';
 import '../widgets/workout/training_block_strip.dart';
+import '../widgets/workout/training_boundary_sheet.dart';
 import '../widgets/workout/workout_dialogs.dart';
 
 class WorkoutScreen extends StatefulWidget {
@@ -1265,131 +1266,110 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                         }
                       }
 
+                      final blockName =
+                          source == null
+                              ? null
+                              : _training.blockById[source.blockId]?.name;
+                      Future<void> createBlock() async {
+                        final block = await TrainingBlockDialogs.create(
+                          sheet,
+                          onSave:
+                              (name, count) => _progression.createBoundary(
+                                planId: widget.plan.id!,
+                                expectedRevision: revision,
+                                name: name,
+                                weekCount: count,
+                              ),
+                        );
+                        if (block != null && sheet.mounted) {
+                          Navigator.pop(sheet);
+                          if (mounted) _selectProgress();
+                          SyncService.instance.scheduleSync();
+                        }
+                      }
+
                       return PopScope(
                         canPop: !saving,
                         child: SafeArea(
-                          child: SingleChildScrollView(
-                            padding: EdgeInsets.fromLTRB(
-                              24,
-                              8,
-                              24,
-                              24 + MediaQuery.viewInsetsOf(sheet).bottom,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  'Choose next week',
-                                  style: Theme.of(sheet).textTheme.titleLarge,
+                          child: TrainingBoundarySheet(
+                            message:
+                                source == null || blockName == null
+                                    ? 'Choose where ${widget.plan.name} '
+                                        'goes next.'
+                                    : 'You finished Week ${source.number} of '
+                                        '$blockName. Choose where '
+                                        '${widget.plan.name} goes next.',
+                            staleMessage:
+                                stale
+                                    ? 'Training progress changed. Close and '
+                                        'open the workout again.'
+                                    : null,
+                            saving: saving,
+                            error: error,
+                            onDismiss: () => Navigator.pop(sheet),
+                            options: [
+                              if (supplied.isNotEmpty)
+                                TrainingBoundaryOption(
+                                  icon: LucideIcons.arrowRight,
+                                  title:
+                                      'Continue to Week ${supplied.first.number}',
+                                  detail:
+                                      'Week ${supplied.first.number} is ready'
+                                      '${blockName == null ? '' : ' in $blockName'}.',
+                                  onTap:
+                                      () => choose(
+                                        () => _progression.chooseBoundary(
+                                          planId: widget.plan.id!,
+                                          expectedRevision: revision,
+                                          destinationWeekId: supplied.first.id,
+                                        ),
+                                      ),
+                                )
+                              else
+                                TrainingBoundaryOption(
+                                  icon: LucideIcons.plus,
+                                  title: 'Add week',
+                                  detail:
+                                      source == null || blockName == null
+                                          ? 'Keep going in this block.'
+                                          : 'Keep going in $blockName with '
+                                              'Week ${source.number + 1}.',
+                                  onTap:
+                                      () => choose(
+                                        () => _progression.extendBoundary(
+                                          planId: widget.plan.id!,
+                                          expectedRevision: revision,
+                                        ),
+                                      ),
                                 ),
-                                const SizedBox(height: 12),
-                                Text(_contextLabel),
-                                const SizedBox(height: 16),
-                                if (stale)
-                                  const Text(
-                                    'Training progress changed. Close and open the workout again.',
-                                  )
-                                else ...[
-                                  FilledButton(
-                                    onPressed:
-                                        saving
-                                            ? null
-                                            : () => choose(() async {
-                                              if (supplied.isNotEmpty) {
-                                                await _progression
-                                                    .chooseBoundary(
-                                                      planId: widget.plan.id!,
-                                                      expectedRevision:
-                                                          revision,
-                                                      destinationWeekId:
-                                                          supplied.first.id,
-                                                    );
-                                              } else {
-                                                await _progression
-                                                    .extendBoundary(
-                                                      planId: widget.plan.id!,
-                                                      expectedRevision:
-                                                          revision,
-                                                    );
-                                              }
-                                            }),
-                                    child: Text(
-                                      supplied.isEmpty
-                                          ? 'Add week'
-                                          : 'Continue to Week ${supplied.first.number}',
-                                    ),
-                                  ),
-                                  if (supplied.isEmpty && nextWeek != null)
-                                    OutlinedButton(
-                                      onPressed:
-                                          saving
-                                              ? null
-                                              : () => choose(
-                                                () =>
-                                                    _progression.chooseBoundary(
-                                                      planId: widget.plan.id!,
-                                                      expectedRevision:
-                                                          revision,
-                                                      destinationWeekId:
-                                                          nextWeek.id,
-                                                    ),
-                                              ),
-                                      child: Text('Move to ${nextBlock!.name}'),
-                                    ),
-                                  if (supplied.isEmpty && nextWeek == null)
-                                    OutlinedButton(
-                                      onPressed:
-                                          saving
-                                              ? null
-                                              : () async {
-                                                final block =
-                                                    await TrainingBlockDialogs.create(
-                                                      sheet,
-                                                      onSave:
-                                                          (
-                                                            name,
-                                                            count,
-                                                          ) => _progression
-                                                              .createBoundary(
-                                                                planId:
-                                                                    widget
-                                                                        .plan
-                                                                        .id!,
-                                                                expectedRevision:
-                                                                    revision,
-                                                                name: name,
-                                                                weekCount:
-                                                                    count,
-                                                              ),
-                                                    );
-                                                if (block != null &&
-                                                    sheet.mounted) {
-                                                  Navigator.pop(sheet);
-                                                  if (mounted) {
-                                                    _selectProgress();
-                                                  }
-                                                  SyncService.instance
-                                                      .scheduleSync();
-                                                }
-                                              },
-                                      child: const Text('Create block'),
-                                    ),
-                                ],
-                                if (error != null) Text(error!),
-                                if (saving)
-                                  const Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                TextButton(
-                                  onPressed:
-                                      saving
-                                          ? null
-                                          : () => Navigator.pop(sheet),
-                                  child: const Text('Not now'),
+                              if (supplied.isEmpty && nextWeek != null)
+                                TrainingBoundaryOption(
+                                  icon: LucideIcons.chevronsRight,
+                                  title: 'Move to ${nextBlock!.name}',
+                                  detail:
+                                      'Start Week ${nextWeek.number} of '
+                                      '${nextBlock.name}.',
+                                  onTap:
+                                      () => choose(
+                                        () => _progression.chooseBoundary(
+                                          planId: widget.plan.id!,
+                                          expectedRevision: revision,
+                                          destinationWeekId: nextWeek.id,
+                                        ),
+                                      ),
                                 ),
-                              ],
-                            ),
+                              if (supplied.isEmpty && nextWeek == null)
+                                TrainingBoundaryOption(
+                                  icon: LucideIcons.layersPlus,
+                                  title: 'Create block',
+                                  detail:
+                                      blockName == null
+                                          ? 'Start a new phase of training.'
+                                          : 'Start a new block after '
+                                              '$blockName.',
+                                  onTap: createBlock,
+                                ),
+                            ],
                           ),
                         ),
                       );
@@ -1647,24 +1627,29 @@ class _WorkoutScreenState extends State<WorkoutScreen>
           body: Column(
             children: [
               if (_progressError)
-                TextButton(
-                  onPressed: _prepareEntry,
-                  child: const Text('Retry training progress'),
+                TrainingProgressNotice(
+                  icon: LucideIcons.circleAlert,
+                  isError: true,
+                  message: "Progress didn't load.",
+                  actionLabel: 'Try again',
+                  onAction: _prepareEntry,
                 ),
               if (!_progressError &&
                   session.isCompleted &&
                   _progress?.activeWeekId == _currentWeek)
-                TextButton(
-                  onPressed:
-                      _progress?.state == WorkoutProgressState.awaitingBoundary
-                          ? _maybeBoundaryPrompt
-                          : _continueCompleted,
-                  child: Text(
-                    _progress?.state == WorkoutProgressState.awaitingBoundary
-                        ? 'Choose next week'
-                        : 'Continue',
-                  ),
-                ),
+                _progress?.state == WorkoutProgressState.awaitingBoundary
+                    ? TrainingProgressNotice(
+                      icon: LucideIcons.flagTriangleRight,
+                      message: 'Block complete.',
+                      actionLabel: 'Choose next week',
+                      onAction: _maybeBoundaryPrompt,
+                    )
+                    : TrainingProgressNotice(
+                      icon: LucideIcons.circleCheck,
+                      message: 'Workout logged.',
+                      actionLabel: 'Continue',
+                      onAction: _continueCompleted,
+                    ),
 
               if (_isSaving || (_timerAction != null && !_confirmingFinish))
                 Padding(

@@ -150,13 +150,21 @@ hidden separately for each plan.
 Logging an active week advances automatically while its number is below the
 intended length. Completing the intended final week records a pending boundary
 without allocating another week. On the next ordinary entry, choose Add week,
-Move to the next block, or Create block when none follows. Dismissal preserves
-the completed result and a Choose next week action. Add week extends the shared
+Move to the next block, or Create block when none follows. The choices are
+option cards in a sheet, each with a line saying what it does; the natural next
+step (Add week, or a week that already exists) carries the accent. Dismissal
+preserves the completed result, and a *Block complete* notice above the log
+offers Choose next week. The strip's Add week control also gains an accent
+ground at that point. Add week extends the shared
 intended length by one and moves/reveals only the choosing workout. Browsing,
 time, draft discard and another plan's completion never advance progress.
 
 New and duplicated plans and Coach additions visibly choose a starting slot,
-defaulting to Week 1 of the first block. Pickers include intended future week
+defaulting to Week 1 of the first block. The plan editor shows it as a
+*Starting week* field under the name, and Coach as a one-line *Starts at* row.
+Both open one bottom sheet: each block is a selectable row, and the chosen
+block expands to show its weeks as chips, so block and week read as one
+decision. Pickers include intended future week
 numbers without allocating them; saving the new plan allocates/reuses only its
 chosen slot. Existing plan edits retain progress. Create block accepts an
 intended length of 1–52 weeks and a 1–40 character trimmed name; explicit
@@ -167,10 +175,15 @@ prescriptions and block-based analytics are outside V1.
 The workout's bottom navigation always fills the available width. The selected
 week's block name stays at the left and Add week (+) stays at the right; only
 that block's week tabs scroll between them. The selected week keeps its accent
-underline and scrolls into view. Tapping the block name opens a compact menu
-above it: other blocks in saved order, then Create block, Rename block and
-Reorder blocks. The menu scrolls when needed and closes on selection, outside
-tap or Back. There is no separate block overflow menu or collapse state.
+underline and scrolls into view. The block name sits on a quiet ground, since a
+ground means tappable, and opens a compact menu above it, shaped like the
+split switcher. It lists every block in saved order with its intended length,
+marks the current one with a radio-style check, and then shows Create block,
+Rename block and Reorder blocks under a rule. Reorder is disabled until there
+are two blocks. The block list scrolls while the commands stay pinned, unless
+the text is too large for both to fit; then the whole menu scrolls. It closes
+on selection, outside tap or Back. There is no separate block overflow menu or
+collapse state.
 Switching blocks restores the last week viewed in that block during this screen
 visit, or its first supplied week on the first visit. Navigation saves pending
 edits before changing selection. The plus control is disabled until the active

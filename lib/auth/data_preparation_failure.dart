@@ -2,10 +2,14 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../widgets/app_header.dart';
 import '../services/training_recovery_snapshots.dart';
+import '../theme/app_theme.dart';
+import '../theme/spacing.dart';
+import '../widgets/action_progress.dart';
+import '../widgets/app_header.dart';
 
 Future<XFile> trainingSafetyCopyFile(String? path) async {
   if (path == null) throw StateError('A safety copy is not available yet.');
@@ -60,45 +64,80 @@ class _DataPreparationFailureState extends State<DataPreparationFailure> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: const AppHeader(
-      title: Text('Data recovery'),
-      automaticallyImplyLeading: false,
-    ),
-    body: SafeArea(
-      child: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Your training data needs recovery',
-                style: Theme.of(context).textTheme.titleLarge,
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final accent = accentColor(context);
+    return Scaffold(
+      appBar: const AppHeader(
+        title: Text('Data recovery'),
+        automaticallyImplyLeading: false,
+      ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: accentMutedColor(context),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        child: Icon(
+                          LucideIcons.databaseBackup,
+                          size: 32,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    'Your training data needs recovery',
+                    textAlign: TextAlign.center,
+                    style: textTheme.titleLarge?.copyWith(
+                      color: textPrimaryColor(context),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'OpenGym could not finish preparing your workouts. '
+                    'Nothing has been deleted. Try again, or export a '
+                    'safety copy first.',
+                    textAlign: TextAlign.center,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: textSecondaryColor(context),
+                      height: 1.45,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  ElevatedButton(
+                    onPressed: _busy ? null : () => _run(widget.onRetry),
+                    child: const Text('Retry'),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  OutlinedButton.icon(
+                    onPressed: _busy ? null : () => _run(widget.onExport),
+                    icon: const Icon(LucideIcons.download, size: 18),
+                    label: const Text('Export safety copy'),
+                  ),
+                  if (_busy) ...[
+                    const SizedBox(height: AppSpacing.lg),
+                    const Center(child: ActionProgress('Working')),
+                  ],
+                ],
               ),
-              const SizedBox(height: 12),
-              const Text(
-                'Retry preparation, or export the safety copy before trying again.',
-              ),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _busy ? null : () => _run(widget.onRetry),
-                child: const Text('Retry'),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: _busy ? null : () => _run(widget.onExport),
-                child: const Text('Export safety copy'),
-              ),
-              if (_busy)
-                const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: CircularProgressIndicator(),
-                ),
-            ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

@@ -909,11 +909,7 @@ void main() {
         expect(find.text('Starts at Block 1 · Week 1'), findsOneWidget);
         await tester.tap(find.byKey(const ValueKey('coach-start-Legs')));
         await tester.pumpAndSettle();
-        await tester.tap(find.byType(DropdownButtonFormField<String>).first);
-        await tester.pumpAndSettle();
         await tester.tap(find.text('Strength').last);
-        await tester.pumpAndSettle();
-        await tester.tap(find.byType(DropdownButtonFormField<String>).last);
         await tester.pumpAndSettle();
         await tester.tap(find.text('Week 2').last);
         await tester.pumpAndSettle();

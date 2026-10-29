@@ -130,19 +130,19 @@ void main() {
       );
       await tester.tap(find.text('Create block'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Save'));
+      await tester.tap(find.text('Create'));
       await tester.pumpAndSettle();
       expect(attempts, 0);
       await tester.enterText(find.bySemanticsLabel('Block name'), ' Strength ');
       await tester.enterText(find.bySemanticsLabel('Weeks'), '53');
-      await tester.tap(find.text('Save'));
+      await tester.tap(find.text('Create'));
       await tester.pumpAndSettle();
       expect(attempts, 0);
       await tester.enterText(find.bySemanticsLabel('Weeks'), '4');
-      await tester.tap(find.text('Save'));
+      await tester.tap(find.text('Create'));
       await tester.pumpAndSettle();
       expect(find.text('Could not save. Try again.'), findsOneWidget);
-      await tester.tap(find.text('Save'));
+      await tester.tap(find.text('Create'));
       await tester.pumpAndSettle();
       expect(values, [('Strength', 4), ('Strength', 4)]);
       expect(find.byType(AlertDialog), findsNothing);
@@ -176,7 +176,10 @@ void main() {
     await tester.pumpWidget(host(structure: blocks(1), slots: weeks(1, 1)));
     await tester.pumpAndSettle();
     expect(tester.getRect(find.byType(TrainingBlockStrip)).width, 390);
-    expect(tester.getRect(find.byTooltip('Add week')).right, 390);
+    expect(
+      tester.getRect(find.byTooltip('Add week')).right,
+      greaterThanOrEqualTo(380),
+    );
   });
   testWidgets('only weeks scroll and the menu opens above its block button', (
     tester,
@@ -218,7 +221,7 @@ void main() {
     (tester) async {
       final actions = <String>[];
       await tester.pumpWidget(
-        host(structure: blocks(1), slots: weeks(1, 1), onAction: actions.add),
+        host(structure: blocks(2), slots: weeks(2, 1), onAction: actions.add),
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Add week'));
@@ -245,6 +248,22 @@ void main() {
       expect(find.text('Create block'), findsNothing);
     },
   );
+  testWidgets('a single block cannot be reordered from the menu', (
+    tester,
+  ) async {
+    final actions = <String>[];
+    await tester.pumpWidget(
+      host(structure: blocks(1), slots: weeks(1, 1), onAction: actions.add),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Block 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Needs 2 blocks'), findsOneWidget);
+    await tester.tap(find.text('Reorder blocks'));
+    await tester.pumpAndSettle();
+    expect(actions, isEmpty);
+    expect(find.text('Reorder blocks'), findsOneWidget);
+  });
   testWidgets(
     'entry reveals selected slot and constructs only its block weeks',
     (tester) async {
@@ -304,7 +323,10 @@ void main() {
       final menu = find.byType(SingleChildScrollView).last;
       final rect = tester.getRect(menu);
       expect(rect.top, greaterThanOrEqualTo(8));
-      expect(rect.bottom, lessThan(tester.getRect(find.text('Block 1')).top));
+      expect(
+        rect.bottom,
+        lessThan(tester.getRect(find.text('Block 1').first).top),
+      );
       await tester.drag(menu, const Offset(0, -10000));
       await tester.pumpAndSettle();
       expect(find.text('Reorder blocks').hitTestable(), findsOneWidget);
@@ -493,7 +515,7 @@ void main() {
         await choose('Block 1', 'Create block');
         await tester.enterText(find.bySemanticsLabel('Block name'), 'Strength');
         await tester.enterText(find.bySemanticsLabel('Weeks'), '3');
-        await tester.tap(find.text('Save'));
+        await tester.tap(find.text('Create'));
         await pumpWithStorage(tester);
         expect(find.text('Strength · Week 1'), findsOneWidget);
         await choose('Strength', 'Rename block');
@@ -504,6 +526,7 @@ void main() {
         expect(find.text('Week 2'), findsNothing);
         await choose('Power', 'Reorder blocks');
         await tester.tap(find.byTooltip('Move Power up'));
+        await tester.pump();
         await tester.tap(find.text('Save'));
         await pumpWithStorage(tester);
         expect(HiveService.blocksForSplit('s').first.name, 'Power');

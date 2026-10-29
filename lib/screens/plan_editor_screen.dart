@@ -369,7 +369,9 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   }
 
   void _showAddExerciseSheet() {
-    FocusScope.of(context).unfocus();
+    // Unfocus the field itself: unfocusing the route's scope leaves the field
+    // in that scope's history, so closing the sheet would refocus it.
+    FocusManager.instance.primaryFocus?.unfocus();
     showExercisePickerSheet(
       context,
       selectedExerciseNames: _exercises.map((exercise) => exercise.name),
@@ -466,14 +468,14 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                               controller: _nameController,
                               marker: planColor,
                             ),
-                            if (!widget.isEdit && _startingBlocks.isNotEmpty)
-                              ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                title: const Text('Starting week'),
-                                subtitle: Text(_startingLabel),
-                                trailing: const Icon(LucideIcons.chevronDown),
+                            if (!widget.isEdit &&
+                                _startingBlocks.isNotEmpty) ...[
+                              const SizedBox(height: AppSpacing.md),
+                              StartingWeekField(
+                                value: _startingLabel,
                                 onTap: _isSaving ? null : _chooseStart,
                               ),
+                            ],
                             const SizedBox(height: AppSpacing.xl),
                             Wrap(
                               alignment: WrapAlignment.spaceBetween,
