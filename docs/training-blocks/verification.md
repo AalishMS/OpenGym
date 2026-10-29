@@ -77,13 +77,42 @@ performance thresholds or universal timing guarantees. Source review confirms
 chip status uses the per-slot index and timer ticks update the elapsed display;
 history/source selection occurs on selection/reload, outside those paths.
 
-## Pending checks
+## Android emulator smoke check (2026-10-29)
 
-The user explicitly deferred Android restart, native-device interaction and
-Android frame profiling. No Android device was running during this work. A
-configured emulator became discoverable at resume, but was not launched; the
-chosen scope stayed pending. Physical two-device lifecycle/network trials are
-also pending; independent local cache/API trials cover persistence/convergence.
+The user authorized a focused Android run on the headless Pixel 6 AVD (Android
+15 / API 35, x86_64). The host had no display and the emulator initially lacked
+PulseAudio libraries, so compatible libraries were staged under `/tmp` and the
+AVD ran with SwiftShader. No system packages or project versions were changed.
+The first `flutter run -d emulator-5554` attempt was stopped by the known
+installed-Flutter minimum Gradle check; retry with
+`--android-skip-build-dependency-validation` built and installed the debug APK.
+The offline-only
+run used empty `SUPABASE_URL` and `SUPABASE_ANON_KEY` defines; no account or
+production backend was involved.
+
+- Startup log: `id-key migration OK: 0 plans, 0 sessions.` This checks empty
+  startup only; no populated legacy migration fixture was loaded on Android.
+- Created a local plan and Bench Press workout, edited the first set to 60 × 8,
+  started/paused the timer, then logged the workout at roughly 1:11.
+- The end-of-block prompt offered Add week, Create block, and Not now. Add week
+  advanced from Block 1 · Week 1 to Block 1 · Week 2; prior performance and the
+  new set both displayed 60 × 8.
+- After force-stop/relaunch, the plan and completed Week 1 History entry
+  remained. Home's Start workout reopened the incomplete Week 2 session with
+  Block 1 · Week 2, 60 × 8, and the prior elapsed timer value of 00:05.
+- Home did not auto-open the in-progress workout; resumption required tapping
+  Start workout. The test therefore verifies persisted resume context through
+  the normal plan entry, not automatic route restoration.
+
+The emulator showed a System UI not-responding dialog during software renderer
+startup; selecting Wait restored the app. Startup emitted skipped-frame logs,
+so device performance is not certified. Physical-device behavior, two-device
+trials, populated Android legacy migration, second-block CRUD, default-config
+auth, and frame profiling remain unverified. Physical two-device lifecycle and
+network trials remain pending; independent local cache/API trials cover
+persistence/convergence.
+
+## Other pending checks
 
 Web debug compilation and hot restart completed. The server reported no
 connected debug client; browser workout interaction remains unverified.

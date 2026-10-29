@@ -51,9 +51,8 @@ an observed failing-then-passing regression as well as the real API trial.
 - Task 5 actual-font light/dark workout previews were checked. Web compilation
   and hot restart pass, but no connected browser client's workout interaction
   is certified.
-- Android restart, native-device interaction, physical two-device trials and
-  device frame profiling remain pending by user choice. No Android device was
-  running; a configured emulator became discoverable but was not launched.
+- The focused Android emulator smoke check is recorded below. Physical
+  two-device trials and Android frame profiling remain pending.
 - SQL/API trials use loopback only. Production configuration, migrations,
   activation and release remain untouched and require separate authorization.
 
@@ -81,6 +80,41 @@ requested; regression tests and full verification are the completion gate.
 There is no remaining authorized local implementation work. Device checks,
 full browser workout interaction, production configuration and release remain
 separate pending work; nothing was pushed, merged, tagged or deployed.
+
+## Android emulator smoke check (2026-10-29)
+
+The user authorized a focused Android emulator pass. A headless Pixel 6 AVD
+(Android 15 / API 35, x86_64) was launched with SwiftShader because the host
+has no display and lacked PulseAudio libraries; those libraries were staged
+under `/tmp` without changing system packages. The first Gradle launch hit the
+known Flutter 8.14 versus repository Gradle 8.11.1 check. The debug APK built
+and installed using `--android-skip-build-dependency-validation`; no pinned
+versions changed. For offline interaction only, the run passed empty
+`SUPABASE_URL` and `SUPABASE_ANON_KEY` dart defines. No account was activated.
+
+Observed on the emulator:
+
+- Startup completed the ID-key migration (`0 plans, 0 sessions`) without a
+  crash. This was an empty-store startup, not a populated legacy migration.
+- Created and saved a local plan with Bench Press; opened the workout at Block
+  1 · Week 1, edited the set to 60 × 8, started and paused its timer, and logged
+  the workout (recorded duration about 1:11).
+- The completed-workout boundary prompt offered Add week, Create block, and Not
+  now. Add week advanced to Block 1 · Week 2 and displayed the prior 60 × 8
+  alongside the initialized 60 × 8 values.
+- Force-stopping and relaunching retained the plan and completed History entry.
+  Starting the next workout reopened the incomplete Week 2 session at Block 1
+  · Week 2 with its 60 × 8 values and previously elapsed 00:05 timer. The Home
+  screen itself did not auto-navigate to the workout; tapping Start workout
+  resumed it.
+
+The emulator initially displayed a System UI not-responding dialog during
+software-renderer startup; selecting Wait restored interaction. Startup logged
+skipped frames during initialization, so no frame-performance conclusion is
+claimed. This is emulator-only evidence: no physical device, second-device
+trial, populated legacy-store migration, second-block CRUD, or frame profiling
+was performed. The default-config sign-in gate was not exercised; the test run
+was explicitly offline-only.
 
 ## Workspace ownership
 
