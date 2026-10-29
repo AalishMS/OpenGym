@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/training_block.dart';
 import '../../models/training_week.dart';
+import '../../services/training_week_choices.dart';
 import '../../theme/radii.dart';
 
 abstract final class TrainingBlockDialogs {
@@ -15,7 +16,13 @@ abstract final class TrainingBlockDialogs {
     builder:
         (_) => _StartingWeek(
           blocks: blocks,
-          weeksByBlock: weeksByBlock,
+          weeksByBlock: {
+            for (final block in blocks)
+              block.id: plannedTrainingWeeks(
+                block,
+                weeksByBlock[block.id] ?? [],
+              ),
+          },
           selectedWeekId: selectedWeekId,
         ),
   );
@@ -119,7 +126,11 @@ class _BlockFormState extends State<_BlockForm> {
                   controller: _count,
                   enabled: !_saving,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(labelText: 'Weeks'),
+                  decoration: const InputDecoration(
+                    labelText: 'Weeks',
+                    helperText: 'Weeks appear as you complete each workout.',
+                    helperMaxLines: 2,
+                  ),
                   validator: (value) {
                     final count = int.tryParse(value ?? '');
                     return count == null || count < 1 || count > 52

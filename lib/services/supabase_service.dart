@@ -54,7 +54,7 @@ class SupabaseService {
       // dashboard calls the "anon public" key); supabase_flutter renamed the
       // parameter to publishableKey and accepts the legacy anon key here.
       publishableKey: supabaseAnonKey,
-      headers: const {'x-opengym-training-schema': '1'},
+      headers: const {'x-opengym-training-schema': '2'},
     );
     await _recoverySubscription?.cancel();
     // The SDK replays its last auth event. Subscribe before runApp so a

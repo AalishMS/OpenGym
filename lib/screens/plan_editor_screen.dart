@@ -150,13 +150,16 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
       _splitId == null ? [] : HiveService.blocksForSplit(_splitId!);
   Map<String, List<TrainingWeek>> get _startingWeeks => {
     for (final b in _startingBlocks)
-      b.id: HiveService.weeksForBlock(_splitId!, b.id),
+      b.id: HiveService.startingWeeksForBlock(_splitId!, b.id),
   };
   String get _startingLabel {
     final week =
         _startingWeekId == null
             ? null
-            : HiveService.getTrainingWeekById(_startingWeekId!);
+            : _startingWeeks.values
+                .expand((w) => w)
+                .where((w) => w.id == _startingWeekId)
+                .firstOrNull;
     final block =
         week == null ? null : HiveService.getTrainingBlockById(week.blockId);
     if (week != null &&

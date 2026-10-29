@@ -87,7 +87,7 @@ abstract final class TrainingWeekSessionResolver {
     final blockIndex = ordered.indexWhere((b) => b.id == week.blockId);
     if (blockIndex < 0) return null;
     TrainingWeek? from;
-    if (blockIndex > 0) {
+    if (week.number == 1 && blockIndex > 0) {
       from =
           orderedWeeks(
             splitId,

@@ -43,10 +43,10 @@ def token(owner=OWNER):
     return body + '.' + sig
 
 
-def api(path, method='GET', body=None, owner=OWNER, capable=True):
+def api(path, method='GET', body=None, owner=OWNER, capable=True, schema=1):
     headers = {'Authorization': 'Bearer ' + token(owner), 'Content-Type': 'application/json', 'Prefer': 'return=representation,resolution=merge-duplicates'}
     if capable:
-        headers['X-OpenGym-Training-Schema'] = '1'
+        headers['X-OpenGym-Training-Schema'] = str(schema)
     request = urllib.request.Request(BASE + '/' + path, data=None if body is None else json.dumps(body).encode(), headers=headers, method=method)
     try:
         with urllib.request.urlopen(request, timeout=15) as response:

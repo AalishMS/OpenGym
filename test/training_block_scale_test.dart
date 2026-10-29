@@ -111,6 +111,7 @@ void main() {
           splitId: 'scale',
           planId: 'p',
           activeWeekId: 'b99-w52',
+          availableWeekIds: [for (var w = 1; w <= 52; w++) 'b99-w$w'],
           revision: 'initial',
           state: WorkoutProgressState.ready,
         );

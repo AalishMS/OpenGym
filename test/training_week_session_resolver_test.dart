@@ -48,37 +48,47 @@ void main() {
     exercises: [],
   );
 
-  test(
-    'later blocks inherit matching week from the immediately preceding live block',
-    () {
-      final rows = [
-        log('match', 'b1-w2'),
-        log('wrong-number', 'b1-w3'),
-        log('draft', 'b1-w2', completed: false),
-        log('other-plan', 'b1-w2', plan: 'other'),
-      ];
-      final source = TrainingWeekSessionResolver.source(
+  test('later weeks inherit the preceding week within their own block', () {
+    final rows = [
+      log('match', 'b2-w1'),
+      log('wrong-number', 'b1-w2'),
+      log('draft', 'b2-w1', completed: false),
+      log('other-plan', 'b2-w1', plan: 'other'),
+    ];
+    final source = TrainingWeekSessionResolver.source(
+      splitId: 's',
+      planId: 'p',
+      weekId: 'b2-w2',
+      blocks: blocks,
+      weeks: weeks,
+      sessions: rows,
+    );
+    expect(source!.id, 'match');
+    expect(
+      TrainingWeekSessionResolver.source(
         splitId: 's',
         planId: 'p',
-        weekId: 'b2-w2',
+        weekId: 'b3-w2',
         blocks: blocks,
         weeks: weeks,
         sessions: rows,
-      );
-      expect(source!.id, 'match');
-      expect(
-        TrainingWeekSessionResolver.source(
-          splitId: 's',
-          planId: 'p',
-          weekId: 'b3-w2',
-          blocks: blocks,
-          weeks: weeks,
-          sessions: rows,
-        ),
-        isNull,
-      );
-    },
-  );
+      ),
+      isNull,
+    );
+  });
+  test('new block first week keeps matching Week 1 inheritance', () {
+    expect(
+      TrainingWeekSessionResolver.source(
+        splitId: 's',
+        planId: 'p',
+        weekId: 'b2-w1',
+        blocks: blocks,
+        weeks: weeks,
+        sessions: [log('first', 'b1-w1'), log('last', 'b1-w3')],
+      )!.id,
+      'first',
+    );
+  });
   test(
     'first supplied sparse week has no source; later weeks use previous supplied slot',
     () {

@@ -894,7 +894,7 @@ void main() {
             name: 'Strength',
             weekCount: 2,
           );
-          return repo.weeksForBlock(kSplitId, block.id).last.id;
+          return HiveService.startingWeeksForBlock(kSplitId, block.id).last.id;
         });
         final fixture = await _openChat(tester);
         fixture.client.answer(_validProposal);

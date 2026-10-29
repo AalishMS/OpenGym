@@ -8,6 +8,7 @@ import '../models/workout_plan.dart';
 import '../models/workout_progress.dart';
 import '../models/workout_session.dart';
 import '../utils/training_block_identity.dart';
+import 'training_week_choices.dart';
 
 /// A validated value used by normalization, backup and replacement recovery.
 /// It has no storage, cache, or notification responsibilities.
@@ -64,6 +65,7 @@ class TrainingBlockGraph {
       id: _uuid.v4(),
       splitId: splitId,
       name: 'Block 1',
+      plannedWeekCount: 1,
       position: 0,
       createdAt: now,
       updatedAt: now,
@@ -84,6 +86,51 @@ class TrainingBlockGraph {
           userId: ownerId,
           dirty: true,
         ),
+      ],
+    );
+  }
+
+  TrainingBlockGraph withStartingWeek(String planId, String weekId) {
+    final plan =
+        plans.where((p) => p.id == planId && p.deletedAt == null).single;
+    TrainingWeek? selected;
+    for (final block in blocks.where(
+      (b) => b.splitId == plan.splitId && b.deletedAt == null,
+    )) {
+      selected =
+          plannedTrainingWeeks(block, weeks)
+              .where(
+                (w) =>
+                    w.id == weekId ||
+                    lazyTrainingWeekId(block.splitId, block.id, w.number) ==
+                        weekId,
+              )
+              .firstOrNull;
+      if (selected != null) break;
+    }
+    if (selected == null ||
+        weeks.any((w) => w.id == selected!.id && w.deletedAt != null)) {
+      throw StateError('The starting week is unavailable.');
+    }
+    final week = selected;
+    final allocated = weeks.any((w) => w.id == week.id);
+    final now = DateTime.now();
+    return copyWith(
+      weeks: [
+        ...weeks,
+        if (!allocated)
+          week.copyWith(createdAt: now, updatedAt: now, dirty: true),
+      ],
+      progress: [
+        for (final p in progress)
+          if (p.planId == planId)
+            p.copyWith(
+              activeWeekId: week.id,
+              state: WorkoutProgressState.ready,
+              availableWeekIds: {...?p.availableWeekIds, week.id}.toList(),
+            )
+          else
+            p,
       ],
     );
   }
@@ -241,7 +288,8 @@ class TrainingBlockGraph {
           deletedConflict(b.deletedAt, split.deletedAt) ||
           b.name.trim() != b.name ||
           b.name.isEmpty ||
-          b.name.length > 40) {
+          b.name.length > 40 ||
+          (b.plannedWeekCount != null && b.plannedWeekCount! < 1)) {
         throw const FormatException('Conflicting training block.');
       }
     }
@@ -308,6 +356,13 @@ class TrainingBlockGraph {
             WorkoutProgressState.awaitingBoundary,
           ].contains(p.state)) {
         throw const FormatException('Conflicting workout progress.');
+      }
+      final available = p.availableWeekIds;
+      if (available != null &&
+          (!available.contains(p.activeWeekId) ||
+              available.toSet().length != available.length ||
+              available.any((id) => weekMap[id]?.splitId != p.splitId))) {
+        throw const FormatException('Conflicting available training weeks.');
       }
       if (p.revision.isEmpty) {
         throw const FormatException('Missing progress revision.');
@@ -494,6 +549,8 @@ class TrainingBlockGraph {
             splitId: splitIds[r.splitId],
             planId: planIds[r.planId],
             activeWeekId: weekIds[r.activeWeekId],
+            availableWeekIds:
+                r.availableWeekIds?.map((id) => weekIds[id]!).toList(),
             revision: revision(r.revision),
             userId: ownerId,
           ),

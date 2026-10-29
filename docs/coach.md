@@ -15,8 +15,10 @@ applies.
 The Coach edits shared plan templates across training blocks. Its context remains
 date-based completed history from the active split; it has no block-editing
 response contract. Review shows a starting block/week for each added plan,
-defaulting visibly to the first supplied week of the first block. The shown ID
-is retained through reorder and revalidated on apply. A new split has the sole
+defaulting visibly to Week 1 of the first block. The picker includes the block's
+intended future weeks; selecting one allocates no structure or sessions until
+the added plan is applied. The shown ID is retained through reorder and
+revalidated on apply. A new split has the sole
 Block 1 / Week 1 choice. Existing plan edits retain progress; removal tombstones
 progress and keeps historical sessions. These local changes do not deploy or
 expand the Edge Function contract.

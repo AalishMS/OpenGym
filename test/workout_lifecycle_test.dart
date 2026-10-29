@@ -635,7 +635,10 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.text('Delete week'), findsNothing);
         expect(find.text('Rename week'), findsNothing);
-        expect(find.byTooltip('Add week'), findsOneWidget);
+        expect(
+          find.byTooltip('Complete this block to add a week'),
+          findsOneWidget,
+        );
         expect(HiveService.getSessionById('week-1')!.deletedAt, isNull);
       },
     );

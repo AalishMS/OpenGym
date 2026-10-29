@@ -29,7 +29,8 @@ No remote schema change or account activation was performed for this inventory.
 
 Use PostgreSQL 17.6 and PostgREST 16.5, listening only on `127.0.0.1:55439` and
 `127.0.0.1:55440`. Create the database `opengym_training_blocks_test` owned by your
-local OS user, load `base_schema.sql`, then the training-block migration. Do not
+local OS user, load `base_schema.sql`, then both training-block migrations (the initial schema and lazy independent
+weeks). Do not
 load this fixture into a Supabase project. The Python tests truncate **only this
 named loopback test database** before every case.
 
@@ -48,6 +49,7 @@ Install `psycopg[binary]` in an isolated Python environment, then run:
 
 ```bash
 python3 supabase/tests/training_blocks/test_api.py
+python3 supabase/tests/training_blocks/test_lazy_weeks.py
 flutter test --dart-define=OPENGYM_LOCAL_API_TESTS=true test/integration/training_blocks_api_test.dart
 flutter test test/training_block_sync_test.dart test/sync_sequence_test.dart test/sync_data_flow_test.dart
 flutter analyze
@@ -84,9 +86,18 @@ Hive directories:
 flutter test --dart-define=OPENGYM_LOCAL_API_TESTS=true test/integration/training_blocks_replicas_test.dart
 ```
 
-It performs independent offline completions, creates competing appended weeks,
+It performs independent offline completions with lazily allocated successors,
+creates competing appends with the same canonical slot identity,
 syncs each cache in turn, and checks both stable IDs/logs, independent progress
-and matching-week initialization. It cleans up its own temporary split through
+and Week 1 cross-block initialization. It cleans up its own temporary split through
 the loopback API. This reproduces a pull-before-upload collision that push-only
 retry tests cannot exercise; client normalization must reconcile the accepted
 remote label with the pending local append before strict graph validation.
+
+The lazy-week suite verifies schema 2 activation and schema 1 rejection for
+upgraded accounts, intended duration without eager slot allocation, independent
+per-plan availability, metadata backfill without progress/revision changes, and
+rejection of invalid/foreign available week references. Session JSON remains
+version 1. New lazy slots use a deterministic block/number UUIDv5 ID so two
+replicas do not turn one logical Week 2 into Weeks 2 and 3. The Python suites
+truncate only the named loopback fixture; never run them against a remote project.

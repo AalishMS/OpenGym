@@ -39,6 +39,10 @@ class WorkoutProgress extends HiveObject {
   @HiveField(9)
   bool? dirty;
 
+  /// Durable reached slots, independent of the split-wide allocated weeks.
+  @HiveField(10)
+  final List<String>? availableWeekIds;
+
   WorkoutProgress({
     required this.id,
     required this.splitId,
@@ -50,6 +54,7 @@ class WorkoutProgress extends HiveObject {
     this.updatedAt,
     this.deletedAt,
     this.dirty,
+    this.availableWeekIds,
   }) : assert(
          state == WorkoutProgressState.ready ||
              state == WorkoutProgressState.awaitingBoundary,
@@ -62,6 +67,7 @@ class WorkoutProgress extends HiveObject {
     String? activeWeekId,
     String? state,
     String? revision,
+    List<String>? availableWeekIds,
     Object? userId = _notProvided,
     Object? updatedAt = _notProvided,
     Object? deletedAt = _notProvided,
@@ -71,6 +77,7 @@ class WorkoutProgress extends HiveObject {
     splitId: splitId ?? this.splitId,
     planId: planId ?? this.planId,
     activeWeekId: activeWeekId ?? this.activeWeekId,
+    availableWeekIds: availableWeekIds ?? this.availableWeekIds,
     state: state ?? this.state,
     revision: revision ?? this.revision,
     userId: identical(userId, _notProvided) ? this.userId : userId as String?,
@@ -90,6 +97,7 @@ class WorkoutProgress extends HiveObject {
     'splitId': splitId,
     'planId': planId,
     'activeWeekId': activeWeekId,
+    'availableWeekIds': availableWeekIds,
     'state': state,
     'revision': revision,
     'userId': userId,
@@ -109,6 +117,7 @@ class WorkoutProgress extends HiveObject {
       splitId: json['splitId'] as String,
       planId: json['planId'] as String,
       activeWeekId: json['activeWeekId'] as String,
+      availableWeekIds: (json['availableWeekIds'] as List?)?.cast<String>(),
       state: json['state'] as String,
       revision: json['revision'] as String,
       userId: json['userId'] as String?,

@@ -86,6 +86,27 @@ class TrainingBlockProvider with ChangeNotifier {
     excludingSessionId: excludingSessionId,
   );
 
+  /// Logger navigation is per workout; the full index remains available for
+  /// history, exact links and source resolution.
+  Map<String, List<TrainingWeek>> weeksByBlockForPlan(String planId) {
+    final progress = progressByPlan[planId];
+    final reached = <String>{
+      ...?progress?.availableWeekIds,
+      if (progress != null) progress.activeWeekId,
+      for (final s in sessionById.values)
+        if (s.planId == planId && s.trainingWeekId != null) s.trainingWeekId!,
+    };
+    return Map.unmodifiable({
+      for (final entry in weeksByBlock.entries)
+        entry.key: List<TrainingWeek>.unmodifiable(
+          entry.value.where(
+            (w) =>
+                w.id == entry.value.firstOrNull?.id || reached.contains(w.id),
+          ),
+        ),
+    });
+  }
+
   void reload() {
     final split = _splitId();
     final owner = _owner();

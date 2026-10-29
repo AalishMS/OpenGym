@@ -17,6 +17,7 @@ import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/training_block_migration.dart';
+import 'package:gymapp/services/workout_progression_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
 import 'package:gymapp/widgets/workout/training_block_dialogs.dart';
@@ -366,7 +367,52 @@ void main() {
     }
 
     locationTest(
-      'block switching remembers weeks and Add week targets the displayed block without advancing progress',
+      'Push reveals Week 2 while Pull shows only Week 1 after reopening',
+      (tester) async {
+        final weekId = await tester.runAsync(() async {
+          final repo = TrainingBlockRepository(ownerId: () => null);
+          final block = await repo.createBlock(
+            splitId: 's',
+            name: 'Build',
+            weekCount: 4,
+          );
+          await HiveService.putPlanRaw(plan.copyWith(id: 'pull', name: 'Pull'));
+          await TrainingBlockMigration().normalize(ownerId: null);
+          final first = repo.weeksForBlock('s', block.id).single;
+          await HiveService.putSessionRaw(
+            WorkoutSession(
+              id: 'push-done',
+              splitId: 's',
+              planId: 'p',
+              planName: 'Push',
+              trainingWeekId: first.id,
+              date: now,
+              isCompleted: false,
+              startedAt: now,
+              durationSeconds: 60,
+              exercises: [],
+            ),
+          );
+          await WorkoutProgressionService(
+            ownerId: () => null,
+          ).complete('push-done');
+          return repo.weeksForBlock('s', block.id).last.id;
+        });
+        await open(tester);
+        expect(find.byKey(ValueKey('training-week-$weekId')), findsOneWidget);
+        expect(find.text('Build · Week 2'), findsOneWidget);
+        await tester.pumpWidget(const SizedBox());
+        plan = HiveService.getPlanById('pull')!;
+        await open(tester);
+        expect(find.text('Build · Week 1'), findsOneWidget);
+        expect(find.byKey(ValueKey('training-week-$weekId')), findsNothing);
+        expect(HiveService.getAllSessionsRaw(), hasLength(1));
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    locationTest(
+      'block switching remembers reached weeks and cannot append while browsing',
       (tester) async {
         final ids = await tester.runAsync(() async {
           await TrainingBlockMigration().normalize(ownerId: null);
@@ -377,6 +423,17 @@ void main() {
             splitId: 's',
             name: 'Strength',
             weekCount: 3,
+          );
+          await repo.appendWeek('s', other.id);
+          await repo.appendWeek('s', other.id);
+          final p = HiveService.progressForPlan('s', 'p')!;
+          await HiveService.putWorkoutProgressRaw(
+            p.copyWith(
+              availableWeekIds:
+                  HiveService.getAllTrainingWeeksRaw()
+                      .map((w) => w.id)
+                      .toList(),
+            ),
           );
           return [first.id, secondWeek.id, other.id];
         });
@@ -401,12 +458,19 @@ void main() {
         await tester.tap(find.text('Strength'));
         await pumpWithStorage(tester);
         expect(find.text('Strength · Week 3'), findsOneWidget);
-        await tester.tap(find.byTooltip('Add week'));
-        await pumpWithStorage(tester);
-        expect(find.text('Strength · Week 4'), findsOneWidget);
+        final add = find.byTooltip('Complete this block to add a week');
+        expect(
+          tester
+              .widget<IconButton>(
+                find.ancestor(of: add, matching: find.byType(IconButton)),
+              )
+              .onPressed,
+          isNull,
+        );
+        expect(find.text('Strength · Week 3'), findsOneWidget);
         final repo = TrainingBlockRepository(ownerId: () => null);
         expect(repo.weeksForBlock('s', ids[0]), hasLength(2));
-        expect(repo.weeksForBlock('s', ids[2]), hasLength(4));
+        expect(repo.weeksForBlock('s', ids[2]), hasLength(3));
         expect(
           HiveService.getAllWorkoutProgressRaw().single.activeWeekId,
           progress.activeWeekId,
@@ -437,14 +501,13 @@ void main() {
         await tester.tap(find.text('Save'));
         await pumpWithStorage(tester);
         expect(find.text('Power · Week 1'), findsOneWidget);
-        await tester.tap(find.text('Week 2'));
-        await pumpWithStorage(tester);
+        expect(find.text('Week 2'), findsNothing);
         await choose('Power', 'Reorder blocks');
         await tester.tap(find.byTooltip('Move Power up'));
         await tester.tap(find.text('Save'));
         await pumpWithStorage(tester);
         expect(HiveService.blocksForSplit('s').first.name, 'Power');
-        expect(find.text('Power · Week 2'), findsOneWidget);
+        expect(find.text('Power · Week 1'), findsOneWidget);
         for (final action in [
           'Create block',
           'Rename block',
@@ -453,42 +516,53 @@ void main() {
           await choose('Power', action);
           await tester.tap(find.text('Cancel'));
           await tester.pumpAndSettle();
-          expect(find.text('Power · Week 2'), findsOneWidget);
+          expect(find.text('Power · Week 1'), findsOneWidget);
         }
         expect(HiveService.getAllTrainingBlocksRaw(), hasLength(2));
         expect(HiveService.getAllSessionsRaw(), isEmpty);
       },
     );
 
-    locationTest('failed save prevents switching blocks or appending weeks', (
-      tester,
-    ) async {
-      await tester.runAsync(() async {
-        await TrainingBlockMigration().normalize(ownerId: null);
-        await TrainingBlockRepository(
-          ownerId: () => null,
-        ).createBlock(splitId: 's', name: 'Strength', weekCount: 1);
-      });
-      final failing = _FailingSessions();
-      await open(tester, sessionProvider: failing);
-      await tester.tap(find.text('Add set'));
-      await pumpWithStorage(tester);
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Block 1'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Strength'));
-      await pumpWithStorage(tester);
-      expect(find.text('Block 1 · Week 1'), findsOneWidget);
-      await tester.pump(const Duration(seconds: 5));
-      await tester.pumpAndSettle();
-      final attempts = failing.attempts;
-      await tester.tap(find.byTooltip('Add week'));
-      await pumpWithStorage(tester);
-      expect(find.text('Block 1 · Week 1'), findsOneWidget);
-      expect(failing.attempts, greaterThan(attempts));
-      expect(HiveService.getAllTrainingWeeksRaw(), hasLength(2));
-    });
+    locationTest(
+      'failed save prevents switching blocks and future weeks stay disabled',
+      (tester) async {
+        await tester.runAsync(() async {
+          await TrainingBlockMigration().normalize(ownerId: null);
+          await TrainingBlockRepository(
+            ownerId: () => null,
+          ).createBlock(splitId: 's', name: 'Strength', weekCount: 1);
+        });
+        final failing = _FailingSessions();
+        await open(tester, sessionProvider: failing);
+        await tester.tap(find.text('Add set'));
+        await pumpWithStorage(tester);
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Block 1'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Strength'));
+        await pumpWithStorage(tester);
+        expect(find.text('Block 1 · Week 1'), findsOneWidget);
+        await tester.pump(const Duration(seconds: 5));
+        await tester.pumpAndSettle();
+        final attempts = failing.attempts;
+        expect(
+          tester
+              .widget<IconButton>(
+                find.ancestor(
+                  of: find.byTooltip('Complete this block to add a week'),
+                  matching: find.byType(IconButton),
+                ),
+              )
+              .onPressed,
+          isNull,
+        );
+        await pumpWithStorage(tester);
+        expect(find.text('Block 1 · Week 1'), findsOneWidget);
+        expect(failing.attempts, attempts);
+        expect(HiveService.getAllTrainingWeeksRaw(), hasLength(2));
+      },
+    );
 
     locationTest('opening an empty supplied slot never invents max plus one', (
       tester,
@@ -505,7 +579,15 @@ void main() {
       final second = await tester.runAsync(() async {
         await TrainingBlockMigration().normalize(ownerId: null);
         final repo = TrainingBlockRepository(ownerId: () => null);
-        return repo.appendWeek('s', repo.blocksForSplit('s').single.id);
+        final week = await repo.appendWeek(
+          's',
+          repo.blocksForSplit('s').single.id,
+        );
+        final p = HiveService.progressForPlan('s', 'p')!;
+        await HiveService.putWorkoutProgressRaw(
+          p.copyWith(availableWeekIds: [p.activeWeekId, week.id]),
+        );
+        return week;
       });
       final failing = _FailingSessions();
       await open(tester, sessionProvider: failing);
@@ -547,7 +629,15 @@ void main() {
       final week = await tester.runAsync(() async {
         await TrainingBlockMigration().normalize(ownerId: null);
         final repo = TrainingBlockRepository(ownerId: () => null);
-        return repo.appendWeek('s', repo.blocksForSplit('s').single.id);
+        final week = await repo.appendWeek(
+          's',
+          repo.blocksForSplit('s').single.id,
+        );
+        final p = HiveService.progressForPlan('s', 'p')!;
+        await HiveService.putWorkoutProgressRaw(
+          p.copyWith(availableWeekIds: [p.activeWeekId, week.id]),
+        );
+        return week;
       });
       await open(tester);
       await tester.tap(find.byKey(ValueKey('training-week-${week!.id}')));

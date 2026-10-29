@@ -6,25 +6,27 @@ generation, or cross-device sync; those need a separately configured backend.
 
 ## Phone checklist
 
-- [ ] **Block management and navigation.** Long-press a block to create,
-  rename, and reorder blocks. Create one with multiple weeks and add another
-  week later. Only one block expands at a time, its weeks appear inline, and
-  horizontal scrolling reaches every block/week. Labels update after reorder
+- [ ] **Block management and navigation.** Tap the block name and use its menu to
+  create, rename, and reorder blocks. Create one with four intended weeks and
+  confirm that only Week 1 appears. Extend it only after the fourth completion.
+  The selected block shows its reached weeks inline, and scrolling reaches
+  every available week. Labels update after reorder
   without changing which log belongs to which week.
 - [ ] **Independent progress.** Start Push and Pull at Block 1 / Week 1.
-  Complete Push: it advances to the next supplied week while Pull stays at
+  Complete Push: it reveals and advances to its next week while Pull keeps only
   Week 1. Complete Pull and confirm it advances independently. Reopening,
   browsing, leaving a draft, or discarding it must not advance either plan.
-- [ ] **Boundary choices.** Complete the last supplied week. On the next
+- [ ] **Boundary choices.** Complete the intended final week. On the next
   ordinary workout entry, check Add week and either Move to next block or
   Create block, depending on whether another block exists. Dismiss the choice:
   the completed result remains visible with Choose next week. Reopen the
   choice and try each action on separate test plans. Only the choosing plan
-  moves; shared structure remains visible to the other plan.
-- [ ] **Matching-week values.** Log distinct values in Block 1, such as
+  moves; other plans keep their active week and existing available tabs.
+- [ ] **Sequential values and block starts.** Log distinct values in Block 1, such as
   Week 1 = 60 × 8 and Week 2 = 65 × 6. Move the same plan into Block 2.
-  Its Week 1 starts from Block 1's Week 1 values; its Week 2 starts from
-  Block 1's Week 2 values. New sets must not inherit completed checkmarks.
+  Its Week 1 starts from Block 1's Week 1 values. Log new values there, such as
+  70 × 5; Block 2 Week 2 must inherit 70 × 5 rather than Block 1 Week 2 or plan
+  targets. New sessions must have fresh completion/timer state.
 - [ ] **Same-number weeks and past logs.** Give Block 1 / Week 1 and Block 2 /
   Week 1 visibly different results. Open both through the strip and History:
   each must show its own log. Opening an old log must not move active progress

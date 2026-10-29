@@ -283,7 +283,7 @@ void main() {
   );
 
   test(
-    'v4 round trip preserves empty structure, duplicate logs, evidence and boundary state',
+    'v5 round trip preserves intended structure, duplicate logs, evidence and boundary state',
     () async {
       final repository = TrainingBlockRepository(ownerId: () => owner);
       await repository.createBlock(
@@ -326,14 +326,20 @@ void main() {
         ),
       );
       final exported = backup();
-      expect((jsonDecode(exported.jsonString) as Map)['version'], 4);
+      expect((jsonDecode(exported.jsonString) as Map)['version'], 5);
       final result = BackupService.importData(
         exported.jsonString,
         userId: owner,
       );
       expect(result.success, isTrue, reason: result.errorMessage);
       expect(result.blocks, hasLength(2));
-      expect(result.weeks, hasLength(4));
+      expect(result.weeks, hasLength(2));
+      expect(
+        result.blocks!
+            .singleWhere((b) => b.name == 'Empty block')
+            .plannedWeekCount,
+        3,
+      );
       expect(result.sessions, hasLength(2));
       expect(
         result.sessions!.first.completionTransition,

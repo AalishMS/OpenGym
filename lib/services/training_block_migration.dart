@@ -56,8 +56,15 @@ class TrainingBlockMigration {
       final needsLinks = HiveService.getAllSessionsRaw().any(
         (s) => s.trainingWeekId == null,
       );
+      final needsMetadata =
+          HiveService.getAllTrainingBlocksRaw().any(
+            (b) => b.plannedWeekCount == null,
+          ) ||
+          HiveService.getAllWorkoutProgressRaw().any(
+            (p) => p.availableWeekIds == null,
+          );
       if (!await TrainingRecoverySnapshots.exists(path) ||
-          (journal['phase'] == 'complete' && needsLinks)) {
+          (journal['phase'] == 'complete' && (needsLinks || needsMetadata))) {
         await TrainingRecoverySnapshots.write(
           path,
           jsonEncode({
@@ -475,6 +482,64 @@ class TrainingBlockMigration {
         userId: input.ownerId,
         dirty: true,
       );
+    }
+    // An old block's allocated labels defined its duration. New blocks keep
+    // their explicit duration even when only the first slot is allocated.
+    for (final block in blocks.values.toList()) {
+      if (block.plannedWeekCount != null) continue;
+      final count = weeks.values
+          .where((w) => w.blockId == block.id && w.deletedAt == null)
+          .fold<int>(
+            1,
+            (highest, w) => w.number > highest ? w.number : highest,
+          );
+      blocks[block.id] = block.copyWith(plannedWeekCount: count, dirty: true);
+    }
+    for (final p in progress.values.toList()) {
+      if (p.availableWeekIds != null) continue;
+      final reached = <String>{p.activeWeekId};
+      for (final session in sessions.values.where(
+        (s) => s.planId == p.planId && s.splitId == p.splitId,
+      )) {
+        if (session.trainingWeekId case final id?) reached.add(id);
+        if (session.completionTransition?['nextWeekId'] case final String id) {
+          reached.add(id);
+        }
+      }
+      // For pre-lazy progress, keep earlier supplied slots in each reached
+      // block. Never infer reach from another workout or empty future rows.
+      if (p.availableWeekIds == null) {
+        final highest = <String, int>{};
+        for (final id in reached) {
+          final w = weeks[id];
+          if (w != null && w.number > (highest[w.blockId] ?? 0)) {
+            highest[w.blockId] = w.number;
+          }
+        }
+        reached.addAll(
+          weeks.values
+              .where(
+                (w) =>
+                    w.splitId == p.splitId &&
+                    w.number <= (highest[w.blockId] ?? 0),
+              )
+              .map((w) => w.id),
+        );
+      }
+      final ordered =
+          reached.toList()..sort((a, b) {
+            final left = weeks[a]!;
+            final right = weeks[b]!;
+            final order = blockOrder(
+              blocks[left.blockId]!,
+              blocks[right.blockId]!,
+            );
+            return order == 0 ? weekOrder(left, right) : order;
+          });
+      if (p.availableWeekIds == null ||
+          jsonEncode(ordered) != jsonEncode(p.availableWeekIds)) {
+        progress[p.id] = p.copyWith(availableWeekIds: ordered, dirty: true);
+      }
     }
     final graph = input.copyWith(
       plans: plans.values.toList(),

@@ -27,7 +27,7 @@ void main() {
   tearDown(storage.close);
 
   test(
-    'empty weeks persist without creating sessions; adapters round trip',
+    'intended duration persists while weeks allocate lazily; adapters round trip',
     () async {
       final block = await repository.createBlock(
         splitId: splitId,
@@ -37,9 +37,8 @@ void main() {
       expect(block.name, 'Build');
       expect(repository.weeksForBlock(splitId, block.id).map((w) => w.number), [
         1,
-        2,
-        3,
       ]);
+      expect(block.plannedWeekCount, 3);
       expect(HiveService.getAllSessionsRaw(), isEmpty);
       await Hive.box<TrainingBlock>(HiveService.trainingBlocksBox).close();
       await Hive.openBox<TrainingBlock>(HiveService.trainingBlocksBox);
@@ -50,7 +49,7 @@ void main() {
       expect(TrainingBlock.fromJson(block.toJson()).toJson(), block.toJson());
       final week = repository.weeksForBlock(splitId, block.id).first;
       expect(TrainingWeek.fromJson(week.toJson()).toJson(), week.toJson());
-      expect((await repository.appendWeek(splitId, block.id)).number, 4);
+      expect((await repository.appendWeek(splitId, block.id)).number, 2);
     },
   );
 

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/split_preference.dart';
+import '../utils/training_block_identity.dart';
 import 'hive_service.dart';
 import 'sync_service.dart';
 import 'training_block_graph.dart';
@@ -199,12 +200,39 @@ class TrainingBlockRestore {
       );
     }
 
+    final survivingBlocks = {
+      for (final b in imported.blocks)
+        if (b.deletedAt == null) b.id,
+    };
+    final restoredWeeks = {
+      for (final w in imported.weeks)
+        if (w.deletedAt == null) w.id,
+    };
+    final originalBlocks = {for (final b in original.blocks) b.id: b};
+    final shortensBlock = imported.blocks.any(
+      (b) =>
+          b.deletedAt == null &&
+          b.plannedWeekCount != null &&
+          (originalBlocks[b.id]?.plannedWeekCount ?? 0) > b.plannedWeekCount!,
+    );
+    final removesLazySlot = original.weeks.any(
+      (w) =>
+          w.deletedAt == null &&
+          survivingBlocks.contains(w.blockId) &&
+          w.id == lazyTrainingWeekId(w.splitId, w.blockId, w.number) &&
+          !restoredWeeks.contains(w.id),
+    );
+    // Restoring an earlier schedule must not strand its next canonical slot
+    // behind a tombstone, or ask sync to shrink a monotonic block duration.
+    // A new graph namespace keeps both the old deletion and future allocation.
     if (resurrects(original.splits, graph.splits) ||
         resurrects(original.plans, graph.plans) ||
         resurrects(original.sessions, graph.sessions) ||
         resurrects(original.blocks, graph.blocks) ||
         resurrects(original.weeks, graph.weeks) ||
-        resurrects(original.progress, graph.progress)) {
+        resurrects(original.progress, graph.progress) ||
+        shortensBlock ||
+        removesLazySlot) {
       imported = imported.remap(ownerId: owner);
     }
     final now = DateTime.now();

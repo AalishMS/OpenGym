@@ -20,6 +20,7 @@ import 'package:gymapp/services/sync_service.dart';
 import 'package:gymapp/services/training_week_session_resolver.dart';
 import 'package:gymapp/services/workout_progression_service.dart';
 import 'package:gymapp/services/workout_session_initializer.dart';
+import 'package:gymapp/utils/training_block_identity.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -138,7 +139,15 @@ void main() {
         final repo = TrainingBlockRepository(ownerId: () => _owner);
         final firstBlock = repo.blocksForSplit(splitId).single.id;
         final firstWeek = repo.weeksForBlock(splitId, firstBlock).single.id;
-        final secondWeek = (await repo.appendWeek(splitId, firstBlock)).id;
+        await HiveService.putTrainingBlockRaw(
+          HiveService.getTrainingBlockById(firstBlock)!.copyWith(
+            plannedWeekCount: 4,
+            updatedAt: DateTime.now(),
+            dirty: true,
+          ),
+        );
+        final secondWeek = lazyTrainingWeekId(splitId, firstBlock, 2);
+        expect(repo.weeksForBlock(splitId, firstBlock), hasLength(1));
         final laterBlock = await repo.createBlock(
           splitId: splitId,
           name: 'Matching',
@@ -185,14 +194,29 @@ void main() {
             ).parent.path;
         await sync();
         final pullLog = await log(pullId, 75);
+        expect(
+          HiveService.progressForPlan(splitId, pushId)!.activeWeekId,
+          firstWeek,
+        );
+        expect(HiveService.progressForPlan(splitId, pushId)!.availableWeekIds, [
+          firstWeek,
+        ]);
         final appendB = await repo.appendWeek(splitId, firstBlock);
         expect(appendB.number, 3);
 
         await mount(pathA);
         expect(HiveService.getSessionById(pullLog), isNull);
         final pushLog = await log(pushId, 60);
+        expect(
+          HiveService.progressForPlan(splitId, pullId)!.activeWeekId,
+          firstWeek,
+        );
+        expect(HiveService.progressForPlan(splitId, pullId)!.availableWeekIds, [
+          firstWeek,
+        ]);
         final appendA = await repo.appendWeek(splitId, firstBlock);
         expect(appendA.number, 3);
+        expect(appendA.id, appendB.id);
         await sync();
 
         await mount(pathB);
@@ -214,11 +238,10 @@ void main() {
           1,
           2,
           3,
-          4,
         ]);
         expect(
           repo.weeksForBlock(splitId, firstBlock).map((w) => w.id),
-          containsAll([appendA.id, appendB.id]),
+          contains(appendA.id),
         );
         expect(
           HiveService.progressForPlan(splitId, pushId)!.activeWeekId,
@@ -251,7 +274,6 @@ void main() {
           1,
           2,
           3,
-          4,
         ]);
         expect(
           HiveService.progressForPlan(splitId, pullId)!.activeWeekId,
@@ -264,7 +286,7 @@ void main() {
             Uri.parse('http://127.0.0.1:55440/splits?id=eq.$trialSplitId'),
             headers: {
               'Authorization': 'Bearer $_token',
-              'x-opengym-training-schema': '1',
+              'x-opengym-training-schema': '2',
               'Content-Type': 'application/json',
             },
             body: jsonEncode({'deleted_at': stamp, 'updated_at': stamp}),

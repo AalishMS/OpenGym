@@ -15,6 +15,7 @@ import '../models/set.dart';
 import '../models/set_template.dart';
 import '../utils/split_identity.dart';
 import 'training_block_graph.dart';
+import 'training_week_choices.dart';
 import 'training_block_restore.dart';
 import 'training_block_migration.dart';
 import 'sync_service.dart';
@@ -72,6 +73,17 @@ class HiveService {
           final order = a.position.compareTo(b.position);
           return order == 0 ? a.id.compareTo(b.id) : order;
         });
+  static List<TrainingWeek> startingWeeksForBlock(
+    String splitId,
+    String blockId,
+  ) {
+    final block = getTrainingBlockById(blockId);
+    if (block == null || block.splitId != splitId || block.deletedAt != null) {
+      return [];
+    }
+    return plannedTrainingWeeks(block, weeksForBlock(splitId, blockId));
+  }
+
   static List<TrainingWeek> weeksForBlock(String splitId, String blockId) =>
       getAllTrainingWeeksRaw()
           .where(
@@ -770,64 +782,41 @@ class HiveService {
   /// Returns a plan by id INCLUDING tombstones (get-by-key ignores deletedAt).
   static WorkoutPlan? getPlanById(String id) => _plansBox.get(id);
 
-  static Future<void> createPlan(
-    WorkoutPlan plan, {
-    String? startingWeekId,
-  }) => SyncService.instance.runExclusiveLocalMutation(() async {
-    if (plan.splitId == null || !Hive.isBoxOpen(splitsBox)) {
-      await upsertPlan(plan);
-      return;
-    }
-    final split = getSplitById(plan.splitId!);
-    if (split == null ||
-        split.deletedAt != null ||
-        (plan.userId != null && plan.userId != split.userId)) {
-      throw StateError('The plan split is unavailable.');
-    }
-    plan.id ??= _uuid.v4();
-    if (getPlanById(plan.id!) != null) {
-      throw StateError('The plan already exists.');
-    }
-    plan.userId = split.userId;
-    plan.updatedAt = DateTime.now();
-    plan.dirty = true;
-    await recoverTrainingOperations(ownerId: split.userId);
-    var graph = TrainingBlockMigration.prepareGraph(
-      readTrainingGraph(ownerId: split.userId)
-          .ownedBy(split.userId)
-          .copyWith(plans: [...getAllPlansRaw(), plan])
-          .ensureNewStructure(split.id),
-    );
-    graph = graph.explicitPlanRevisions({plan.id!});
-    if (startingWeekId != null) {
-      final week =
-          graph.weeks
-              .where(
-                (w) =>
-                    w.id == startingWeekId &&
-                    w.splitId == split.id &&
-                    w.deletedAt == null,
-              )
-              .singleOrNull;
-      if (week == null) throw StateError('The starting week is unavailable.');
-      graph = graph.copyWith(
-        progress: [
-          for (final p in graph.progress)
-            if (p.planId == plan.id)
-              p.copyWith(
-                activeWeekId: week.id,
-                state: WorkoutProgressState.ready,
-              )
-            else
-              p,
-        ],
-      );
-    }
-    await TrainingBlockRestore().replaceUnderGate(
-      graph: graph,
-      stampRecords: false,
-    );
-  });
+  static Future<void> createPlan(WorkoutPlan plan, {String? startingWeekId}) =>
+      SyncService.instance.runExclusiveLocalMutation(() async {
+        if (plan.splitId == null || !Hive.isBoxOpen(splitsBox)) {
+          await upsertPlan(plan);
+          return;
+        }
+        final split = getSplitById(plan.splitId!);
+        if (split == null ||
+            split.deletedAt != null ||
+            (plan.userId != null && plan.userId != split.userId)) {
+          throw StateError('The plan split is unavailable.');
+        }
+        plan.id ??= _uuid.v4();
+        if (getPlanById(plan.id!) != null) {
+          throw StateError('The plan already exists.');
+        }
+        plan.userId = split.userId;
+        plan.updatedAt = DateTime.now();
+        plan.dirty = true;
+        await recoverTrainingOperations(ownerId: split.userId);
+        var graph = TrainingBlockMigration.prepareGraph(
+          readTrainingGraph(ownerId: split.userId)
+              .ownedBy(split.userId)
+              .copyWith(plans: [...getAllPlansRaw(), plan])
+              .ensureNewStructure(split.id),
+        );
+        graph = graph.explicitPlanRevisions({plan.id!});
+        if (startingWeekId != null) {
+          graph = graph.withStartingWeek(plan.id!, startingWeekId);
+        }
+        await TrainingBlockRestore().replaceUnderGate(
+          graph: graph,
+          stampRecords: false,
+        );
+      });
 
   static Future<void> upsertPlan(WorkoutPlan plan) async {
     if (plan.splitId != null && Hive.isBoxOpen(splitsBox)) {

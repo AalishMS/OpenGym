@@ -31,6 +31,10 @@ class TrainingBlock extends HiveObject {
   @HiveField(8)
   bool? dirty;
 
+  /// Intended duration; null identifies a pre-lazy block needing normalization.
+  @HiveField(9)
+  final int? plannedWeekCount;
+
   TrainingBlock({
     required this.id,
     required this.splitId,
@@ -41,6 +45,7 @@ class TrainingBlock extends HiveObject {
     this.updatedAt,
     this.deletedAt,
     this.dirty,
+    this.plannedWeekCount,
   });
 
   TrainingBlock copyWith({
@@ -49,6 +54,7 @@ class TrainingBlock extends HiveObject {
     String? name,
     int? position,
     DateTime? createdAt,
+    int? plannedWeekCount,
     Object? userId = _notProvided,
     Object? updatedAt = _notProvided,
     Object? deletedAt = _notProvided,
@@ -57,6 +63,7 @@ class TrainingBlock extends HiveObject {
     id: id ?? this.id,
     splitId: splitId ?? this.splitId,
     name: name ?? this.name,
+    plannedWeekCount: plannedWeekCount ?? this.plannedWeekCount,
     position: position ?? this.position,
     createdAt: createdAt ?? this.createdAt,
     userId: identical(userId, _notProvided) ? this.userId : userId as String?,
@@ -75,6 +82,7 @@ class TrainingBlock extends HiveObject {
     'id': id,
     'splitId': splitId,
     'name': name,
+    'plannedWeekCount': plannedWeekCount,
     'position': position,
     'createdAt': createdAt.toIso8601String(),
     'userId': userId,
@@ -83,10 +91,16 @@ class TrainingBlock extends HiveObject {
   };
 
   factory TrainingBlock.fromJson(Map<String, dynamic> json) {
+    if (json['plannedWeekCount'] != null &&
+        (json['plannedWeekCount'] is! int ||
+            (json['plannedWeekCount'] as int) < 1)) {
+      throw const FormatException('Invalid planned block length.');
+    }
     return TrainingBlock(
       id: json['id'] as String,
       splitId: json['splitId'] as String,
       name: json['name'] as String,
+      plannedWeekCount: json['plannedWeekCount'] as int?,
       position: json['position'] as int,
       createdAt: DateTime.parse(json['createdAt'] as String),
       userId: json['userId'] as String?,

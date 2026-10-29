@@ -1,6 +1,5 @@
 import '../models/split.dart';
 import '../models/workout_plan.dart';
-import '../models/workout_progress.dart';
 import 'hive_service.dart';
 import 'training_block_migration.dart';
 import 'training_block_restore.dart';
@@ -42,30 +41,7 @@ Future<void> installTrainingPlansUnderGate({
     if (plan == null || current.plans.any((p) => p.id == entry.key)) {
       throw StateError('Only added plans can choose a starting week.');
     }
-    final week =
-        desired.weeks
-            .where(
-              (w) =>
-                  w.id == entry.value &&
-                  w.splitId == plan.splitId &&
-                  w.deletedAt == null,
-            )
-            .singleOrNull;
-    if (week == null ||
-        !desired.blocks.any(
-          (b) => b.id == week.blockId && b.deletedAt == null,
-        )) {
-      throw StateError('The starting week is unavailable.');
-    }
-    desired = desired.copyWith(
-      progress: [
-        for (final p in desired.progress)
-          if (p.planId == plan.id)
-            p.copyWith(activeWeekId: week.id, state: WorkoutProgressState.ready)
-          else
-            p,
-      ],
-    );
+    desired = desired.withStartingWeek(plan.id!, entry.value);
   }
   var started = false;
   final writer = TrainingBlockRestore(

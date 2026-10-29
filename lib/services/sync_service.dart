@@ -141,7 +141,7 @@ class SyncService {
     final account = _SyncAccount(user);
     try {
       await _checked(TrainingBlockRestore().recover(ownerId: user), account);
-      _db.rest.headers['x-opengym-training-schema'] = '1';
+      _db.rest.headers['x-opengym-training-schema'] = '2';
       await _checked(
         HiveService.recoverTrainingWeekRebase(ownerId: user),
         account,
@@ -152,7 +152,7 @@ class SyncService {
         _db.rpc('activate_training_schema'),
         account,
       );
-      if (capability is! int || capability != 1) {
+      if (capability is! int || capability != 2) {
         throw StateError('The training schema was not acknowledged.');
       }
       final prefs = await _checked(SharedPreferences.getInstance(), account);
@@ -540,7 +540,21 @@ class SyncService {
         throw StateError('The session week label conflicts with its link.');
       }
     }
+    if (table == 'training_blocks' &&
+        row['planned_week_count'] != null &&
+        (row['planned_week_count'] is! int ||
+            (row['planned_week_count'] as int) < 1)) {
+      throw StateError('Invalid intended block length.');
+    }
     if (table == 'workout_progress') {
+      for (final id in (row['available_week_ids'] as List?) ?? []) {
+        final week = HiveService.getTrainingWeekById(id as String);
+        if (week == null || week.splitId != splitId || week.userId != owner) {
+          throw StateError(
+            'An available training week is unavailable. Retry sync.',
+          );
+        }
+      }
       final plan = HiveService.getPlanById(row['plan_id'] as String);
       if (plan == null ||
           plan.splitId != splitId ||
@@ -644,6 +658,32 @@ class SyncService {
       wins = row['deleted_at'] != null || local['deleted_at'] == null;
     }
     if (_isBootstrap(table, id) && local?['deleted_at'] == null) wins = true;
+    // Intended duration only grows (creation + explicit extension). Preserve
+    // offline legacy weeks and concurrent extensions without reviving stale
+    // names/order or mistaking eagerly allocated legacy rows for new progress.
+    int? blockDuration;
+    if (table == 'training_blocks' &&
+        local != null &&
+        local['user_id'] == owner &&
+        local['split_id'] == row['split_id'] &&
+        local['deleted_at'] == null &&
+        row['deleted_at'] == null) {
+      final localDuration =
+          local['planned_week_count'] as int? ??
+          HiveService.weeksForBlock(row['split_id'] as String, id).fold<int>(
+            1,
+            (highest, w) => w.number > highest ? w.number : highest,
+          );
+      final remoteDuration = row['planned_week_count'] as int? ?? 0;
+      blockDuration =
+          localDuration > remoteDuration ? localDuration : remoteDuration;
+      if (!wins && blockDuration > localDuration) {
+        final block = HiveService.getTrainingBlockById(id)!;
+        await HiveService.putTrainingBlockRaw(
+          block.copyWith(plannedWeekCount: blockDuration, dirty: true),
+        );
+      }
+    }
     if (!wins) return;
     switch (table) {
       case 'splits':
@@ -659,17 +699,23 @@ class SyncService {
         await HiveService.putSplitRaw(value);
         if (value.deletedAt != null) await _tombstoneSplitChildren(value);
       case 'training_blocks':
+        final duration = blockDuration ?? row['planned_week_count'] as int?;
+        final repairDuration = duration != row['planned_week_count'];
         await HiveService.putTrainingBlockRaw(
           TrainingBlock(
             id: id,
             splitId: row['split_id'] as String,
             name: row['name'] as String,
+            plannedWeekCount: duration,
             position: row['position'] as int,
             createdAt: _parseTs(row['created_at'])!,
-            updatedAt: remoteTime,
+            updatedAt:
+                repairDuration && remoteTime == null
+                    ? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true)
+                    : remoteTime,
             deletedAt: _parseTs(row['deleted_at']),
             userId: owner,
-            dirty: false,
+            dirty: repairDuration,
           ),
         );
       case 'training_weeks':
@@ -720,6 +766,8 @@ class SyncService {
             splitId: row['split_id'] as String,
             planId: row['plan_id'] as String,
             activeWeekId: row['active_week_id'] as String,
+            availableWeekIds:
+                (row['available_week_ids'] as List?)?.cast<String>(),
             state: row['state'] as String,
             revision: row['revision'] as String,
             updatedAt: remoteTime,
@@ -816,6 +864,7 @@ class SyncService {
     'split_id': r.splitId,
     'name': r.name,
     'position': r.position,
+    'planned_week_count': r.plannedWeekCount,
     'created_at': _ts(r.createdAt),
     'updated_at': _ts(r.updatedAt),
     'deleted_at': r.deletedAt == null ? null : _ts(r.deletedAt),
@@ -859,6 +908,7 @@ class SyncService {
     'split_id': r.splitId,
     'plan_id': r.planId,
     'active_week_id': r.activeWeekId,
+    'available_week_ids': r.availableWeekIds,
     'state': r.state,
     'revision': r.revision,
     'updated_at': _ts(r.updatedAt),

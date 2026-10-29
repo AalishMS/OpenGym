@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/models/split.dart';
+import 'package:gymapp/models/training_block.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/repositories/training_block_repository.dart';
 import 'package:gymapp/models/workout_session.dart';
@@ -10,6 +11,7 @@ import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/supabase_service.dart';
 import 'package:gymapp/services/sync_service.dart';
 import 'package:gymapp/services/training_block_migration.dart';
+import 'package:gymapp/services/workout_progression_service.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -47,7 +49,7 @@ class ReplicaApi {
     }
     final override = await intercept?.call(request);
     if (override != null) return override;
-    if (request.url.path.contains('/rpc/')) return http.Response('1', 200);
+    if (request.url.path.contains('/rpc/')) return http.Response('2', 200);
     final table = request.url.pathSegments.last;
     final rows = tables.putIfAbsent(table, () => []);
     if (request.method == 'GET') {
@@ -186,13 +188,119 @@ void main() {
   });
 
   test(
+    'sync round trips intended duration and only the completing plan available weeks',
+    () async {
+      final repo = TrainingBlockRepository(ownerId: () => owner);
+      final block = await repo.createBlock(
+        splitId: splitId,
+        name: 'Build',
+        weekCount: 4,
+      );
+      final first = repo.weeksForBlock(splitId, block.id).single;
+      final progress = repo.progressForPlan(splitId, planId)!;
+      await HiveService.putWorkoutProgressRaw(
+        progress.copyWith(activeWeekId: first.id, availableWeekIds: [first.id]),
+      );
+      await HiveService.putSessionRaw(
+        WorkoutSession(
+          id: 'lazy-log',
+          planId: planId,
+          planName: 'Push',
+          splitId: splitId,
+          userId: owner,
+          trainingWeekId: first.id,
+          date: stamp,
+          isCompleted: false,
+          startedAt: stamp,
+          durationSeconds: 60,
+          exercises: [],
+        ),
+      );
+      await WorkoutProgressionService(
+        ownerId: () => owner,
+      ).complete('lazy-log');
+      final weeks = repo.weeksForBlock(splitId, block.id);
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(SyncService.instance.status, SyncStatus.synced);
+      final row = api.tables['training_blocks']!.singleWhere(
+        (r) => r['id'] == block.id,
+      );
+      expect(row['planned_week_count'], 4);
+      expect(api.tables['workout_progress']!.single['available_week_ids'], [
+        first.id,
+        weeks.last.id,
+      ]);
+      await HiveService.clearTrainingData();
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(HiveService.getTrainingBlockById(block.id)!.plannedWeekCount, 4);
+      expect(repo.progressForPlan(splitId, planId)!.availableWeekIds, [
+        first.id,
+        weeks.last.id,
+      ]);
+    },
+  );
+
+  for (final prepared in [false, true]) {
+    test(
+      'partial v1 upload cannot shrink duration (prepared: $prepared)',
+      () async {
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        final repo = TrainingBlockRepository(ownerId: () => owner);
+        final block = repo.blocksForSplit(splitId).single;
+        final oldMetadata = block.toJson();
+        for (var n = 2; n <= 4; n++) {
+          await repo.appendWeek(splitId, block.id);
+        }
+        // V1 appended slots without editing/timestamping the parent block. The
+        // upgraded server only knows Week 1 and has backfilled a duration of one.
+        await HiveService.putTrainingBlockRaw(
+          TrainingBlock.fromJson({...oldMetadata, 'plannedWeekCount': null}),
+        );
+        if (prepared) {
+          await TrainingBlockMigration().normalize(ownerId: owner);
+          expect(
+            HiveService.getTrainingBlockById(block.id)!.plannedWeekCount,
+            4,
+          );
+        }
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        expect(HiveService.getTrainingBlockById(block.id)!.plannedWeekCount, 4);
+        expect(api.tables['training_blocks']!.single['planned_week_count'], 4);
+        expect(repo.weeksForBlock(splitId, block.id), hasLength(4));
+      },
+    );
+  }
+
+  test(
+    'a newer rename retains a remotely extended intended duration',
+    () async {
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      final block = HiveService.blocksForSplit(splitId).single;
+      api.tables['training_blocks']!.single['planned_week_count'] = 5;
+      await HiveService.putTrainingBlockRaw(
+        block.copyWith(
+          name: 'Renamed',
+          plannedWeekCount: 4,
+          updatedAt: DateTime.utc(2026, 10, 29),
+          dirty: true,
+        ),
+      );
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      final saved = HiveService.getTrainingBlockById(block.id)!;
+      expect(saved.name, 'Renamed');
+      expect(saved.plannedWeekCount, 5);
+      expect(api.tables['training_blocks']!.single['planned_week_count'], 5);
+    },
+  );
+
+  test(
     'negotiates capability before graph uploads and sends the installed SDK header',
     () async {
       await SyncService.instance.syncNow();
       final rest =
           api.requests.where((r) => r.url.path.startsWith('/rest/')).toList();
       expect(
-        rest.every((r) => r.headers['x-opengym-training-schema'] == '1'),
+        rest.every((r) => r.headers['x-opengym-training-schema'] == '2'),
         isTrue,
       );
       final writes =

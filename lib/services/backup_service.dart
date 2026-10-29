@@ -66,7 +66,7 @@ class ImportResult {
 }
 
 class BackupService {
-  static const currentVersion = 4;
+  static const currentVersion = 5;
   static const _uuid = Uuid();
 
   static ExportResult exportData({
@@ -215,9 +215,15 @@ class BackupService {
         weeks: weekRows.map(TrainingWeek.fromJson).toList(),
         progress: progressRows.map(WorkoutProgress.fromJson).toList(),
       ).ownedBy(inputOwner);
-      if (version < 4) {
+      if (version < 5) {
         graph = TrainingBlockMigration.prepareGraph(graph);
       } else {
+        if (graph.blocks.any((b) => b.plannedWeekCount == null) ||
+            graph.progress.any((p) => p.availableWeekIds == null)) {
+          throw const FormatException(
+            'Backup is missing block duration or available weeks.',
+          );
+        }
         graph.validate();
       }
       if (source == null || source != userId) {

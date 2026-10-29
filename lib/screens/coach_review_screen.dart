@@ -41,7 +41,10 @@ class _CoachReviewScreenState extends State<CoachReviewScreen> {
     final blocks = HiveService.blocksForSplit(proposal.snapshot.splitId);
     final weeks = {
       for (final b in blocks)
-        b.id: HiveService.weeksForBlock(proposal.snapshot.splitId, b.id),
+        b.id: HiveService.startingWeeksForBlock(
+          proposal.snapshot.splitId,
+          b.id,
+        ),
     };
     final firstWeek = weeks.values.expand((w) => w).firstOrNull?.id;
     if (firstWeek != null) _starts.putIfAbsent(name, () => firstWeek);

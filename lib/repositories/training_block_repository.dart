@@ -7,6 +7,7 @@ import '../models/workout_session.dart';
 import '../services/hive_service.dart';
 import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
+import '../utils/training_block_identity.dart';
 
 class TrainingBlockRepository {
   final String? Function() _owner;
@@ -45,7 +46,9 @@ class TrainingBlockRepository {
     if (recovered != null) {
       if (recovered.splitId != splitId ||
           recovered.name != trimmed ||
-          weeksForBlock(splitId, recovered.id).length != weekCount) {
+          (recovered.plannedWeekCount ??
+                  weeksForBlock(splitId, recovered.id).length) !=
+              weekCount) {
         throw StateError(
           'The previous block creation was recovered. Retry your new action.',
         );
@@ -60,6 +63,7 @@ class TrainingBlockRepository {
       id: _uuid.v4(),
       splitId: splitId,
       name: trimmed,
+      plannedWeekCount: weekCount,
       position:
           blocks.isEmpty
               ? 0
@@ -70,32 +74,39 @@ class TrainingBlockRepository {
       userId: owner,
       dirty: true,
     );
-    final weeks = List.generate(
-      weekCount,
-      (i) => TrainingWeek(
-        id: _uuid.v4(),
+    final weeks = [
+      TrainingWeek(
+        id: lazyTrainingWeekId(splitId, block.id, 1),
         splitId: splitId,
         blockId: block.id,
-        number: i + 1,
+        number: 1,
         createdAt: now,
         updatedAt: now,
         userId: owner,
         dirty: true,
       ),
-    );
+    ];
     await HiveService.persistTrainingCreation(block, weeks);
     return block;
   });
 
   Future<TrainingWeek> appendWeek(String splitId, String blockId) =>
       SyncService.instance.runExclusiveLocalMutation(() async {
-        HiveService.validateTrainingBlock(splitId, blockId, _owner());
+        final block = HiveService.validateTrainingBlock(
+          splitId,
+          blockId,
+          _owner(),
+        );
         final weeks = weeksForBlock(splitId, blockId);
         final now = DateTime.fromMillisecondsSinceEpoch(
           DateTime.now().millisecondsSinceEpoch,
         );
         final week = TrainingWeek(
-          id: _uuid.v4(),
+          id: lazyTrainingWeekId(
+            splitId,
+            blockId,
+            weeks.isEmpty ? 1 : weeks.last.number + 1,
+          ),
           splitId: splitId,
           blockId: blockId,
           number: weeks.isEmpty ? 1 : weeks.last.number + 1,
@@ -105,6 +116,15 @@ class TrainingBlockRepository {
           dirty: true,
         );
         await HiveService.putTrainingWeekRaw(week);
+        if (week.number > (block.plannedWeekCount ?? 0)) {
+          await HiveService.putTrainingBlockRaw(
+            block.copyWith(
+              plannedWeekCount: week.number,
+              updatedAt: now,
+              dirty: true,
+            ),
+          );
+        }
         return week;
       });
 

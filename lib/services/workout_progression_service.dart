@@ -6,6 +6,7 @@ import '../models/completion_transition.dart';
 import '../models/training_week.dart';
 import '../models/workout_progress.dart';
 import '../models/workout_session.dart';
+import '../utils/training_block_identity.dart';
 import 'hive_service.dart';
 import 'supabase_service.dart';
 import 'sync_service.dart';
@@ -55,6 +56,12 @@ class WorkoutProgressionService {
     }
     return progress.copyWith(
       activeWeekId: event.nextWeekId ?? event.sourceWeekId,
+      availableWeekIds:
+          {
+            ...?progress.availableWeekIds,
+            event.sourceWeekId,
+            if (event.nextWeekId != null) event.nextWeekId!,
+          }.toList(),
       state:
           event.nextWeekId == null
               ? WorkoutProgressState.awaitingBoundary
@@ -144,7 +151,54 @@ class WorkoutProgressionService {
       throw StateError('The active week is unavailable.');
     }
     final weeks = HiveService.weeksForBlock(progress.splitId, source.blockId);
-    return weeks.where((w) => w.number > source.number).firstOrNull;
+    final block = HiveService.getTrainingBlockById(source.blockId)!;
+    final limit = block.plannedWeekCount ?? weeks.last.number;
+    return weeks
+        .where((w) => w.number == source.number + 1 && w.number <= limit)
+        .firstOrNull;
+  }
+
+  Future<TrainingWeek?> _ensureNextInBlock(WorkoutProgress progress) async {
+    final source = HiveService.getTrainingWeekById(progress.activeWeekId)!;
+    final block = HiveService.validateTrainingBlock(
+      progress.splitId,
+      source.blockId,
+      _owner(),
+    );
+    final weeks = HiveService.weeksForBlock(progress.splitId, source.blockId);
+    final limit = block.plannedWeekCount ?? weeks.last.number;
+    if (source.number >= limit) return null;
+    final supplied = _nextInBlock(progress);
+    if (supplied != null) return supplied;
+    final now = _clock();
+    final week = TrainingWeek(
+      id: lazyTrainingWeekId(
+        progress.splitId,
+        source.blockId,
+        source.number + 1,
+      ),
+      splitId: progress.splitId,
+      blockId: source.blockId,
+      number: source.number + 1,
+      createdAt: now,
+      updatedAt: now,
+      userId: _owner(),
+      dirty: true,
+    );
+    final existing = HiveService.getTrainingWeekById(week.id);
+    if (existing != null) {
+      if (existing.deletedAt != null ||
+          existing.blockId != source.blockId ||
+          existing.number != week.number) {
+        throw StateError('The next training week changed. Open it again.');
+      }
+      return existing;
+    }
+    // Allocate before writing completion evidence. An interruption leaves an
+    // invisible slot, never a completed workout or another plan's next week.
+    await HiveService.putTrainingWeekRaw(week);
+    await HiveService.flushTrainingData();
+    return week;
   }
 
   Future<WorkoutCompletionResult> complete(String sessionId) =>
@@ -184,7 +238,10 @@ class WorkoutProgressionService {
                 ? CompletionTransition(
                   expectedRevision: progress.revision,
                   sourceWeekId: progress.activeWeekId,
-                  nextWeekId: _nextInBlock(progress)?.id,
+                  nextWeekId:
+                      draft.hasStarted
+                          ? (await _ensureNextInBlock(progress))?.id
+                          : null,
                   resultRevision: draft.id!,
                   committedAt: now,
                 )
@@ -243,10 +300,16 @@ class WorkoutProgressionService {
         ).any((s) => !s.isCompleted)) {
       throw StateError('The completed slot changed. Open it again.');
     }
-    final next = _nextInBlock(progress);
+    final next = await _ensureNextInBlock(progress);
     await _writeProgress(
       progress.copyWith(
         activeWeekId: next?.id ?? progress.activeWeekId,
+        availableWeekIds:
+            {
+              ...?progress.availableWeekIds,
+              progress.activeWeekId,
+              if (next != null) next.id,
+            }.toList(),
         state:
             next == null
                 ? WorkoutProgressState.awaitingBoundary
@@ -297,6 +360,12 @@ class WorkoutProgressionService {
     await _writeProgress(
       progress.copyWith(
         activeWeekId: next.id,
+        availableWeekIds:
+            {
+              ...?progress.availableWeekIds,
+              progress.activeWeekId,
+              next.id,
+            }.toList(),
         state: WorkoutProgressState.ready,
         revision: _uuid.v4(),
         updatedAt: _clock(),
@@ -345,11 +414,17 @@ class WorkoutProgressionService {
     }
     await replayUnderGate();
     final progress = _boundaryProgress(planId, expectedRevision);
-    final supplied = _nextInBlock(progress);
+    final supplied = await _ensureNextInBlock(progress);
     if (supplied != null) {
       await _writeProgress(
         progress.copyWith(
           activeWeekId: supplied.id,
+          availableWeekIds:
+              {
+                ...?progress.availableWeekIds,
+                progress.activeWeekId,
+                supplied.id,
+              }.toList(),
           state: WorkoutProgressState.ready,
           revision: _uuid.v4(),
           updatedAt: _clock(),
@@ -360,17 +435,34 @@ class WorkoutProgressionService {
     }
     final source = HiveService.getTrainingWeekById(progress.activeWeekId)!;
     final now = _clock();
-    final week = TrainingWeek(
-      id: _uuid.v4(),
-      splitId: progress.splitId,
-      blockId: source.blockId,
-      number: source.number + 1,
-      createdAt: now,
+    final retained =
+        HiveService.weeksForBlock(
+          progress.splitId,
+          source.blockId,
+        ).where((w) => w.number == source.number + 1).firstOrNull;
+    final week =
+        retained ??
+        TrainingWeek(
+          id: lazyTrainingWeekId(
+            progress.splitId,
+            source.blockId,
+            source.number + 1,
+          ),
+          splitId: progress.splitId,
+          blockId: source.blockId,
+          number: source.number + 1,
+          createdAt: now,
+          updatedAt: now,
+          userId: _owner(),
+          dirty: true,
+        );
+    final block = HiveService.getTrainingBlockById(source.blockId)!;
+    final extended = block.copyWith(
+      plannedWeekCount: week.number,
       updatedAt: now,
-      userId: _owner(),
       dirty: true,
     );
-    await _persistBoundary('append', progress, [week]);
+    await _persistBoundary('append', progress, [week], block: extended);
     await recoverBoundaryUnderGate(
       ownerId: _owner(),
       writeProgress: _writeProgress,
@@ -396,7 +488,9 @@ class WorkoutProgressionService {
         pending['planId'] == planId &&
         pending['expectedRevision'] == expectedRevision) {
       if ((pending['block'] as Map)['name'] != trimmed ||
-          (pending['weeks'] as List).length != weekCount) {
+          ((pending['block'] as Map)['plannedWeekCount'] ??
+                  (pending['weeks'] as List).length) !=
+              weekCount) {
         throw StateError(
           'Retry the original block before changing its details.',
         );
@@ -425,6 +519,7 @@ class WorkoutProgressionService {
       id: _uuid.v4(),
       splitId: progress.splitId,
       name: trimmed,
+      plannedWeekCount: weekCount,
       position:
           blocks.map((b) => b.position).reduce((a, b) => a > b ? a : b) + 1,
       createdAt: now,
@@ -433,17 +528,16 @@ class WorkoutProgressionService {
       dirty: true,
     );
     final weeks = [
-      for (var i = 1; i <= weekCount; i++)
-        TrainingWeek(
-          id: _uuid.v4(),
-          splitId: progress.splitId,
-          blockId: block.id,
-          number: i,
-          createdAt: now,
-          updatedAt: now,
-          userId: _owner(),
-          dirty: true,
-        ),
+      TrainingWeek(
+        id: lazyTrainingWeekId(progress.splitId, block.id, 1),
+        splitId: progress.splitId,
+        blockId: block.id,
+        number: 1,
+        createdAt: now,
+        updatedAt: now,
+        userId: _owner(),
+        dirty: true,
+      ),
     ];
     await _persistBoundary('create', progress, weeks, block: block);
     await recoverBoundaryUnderGate(
@@ -461,6 +555,12 @@ class WorkoutProgressionService {
   }) async {
     final target = before.copyWith(
       activeWeekId: weeks.first.id,
+      availableWeekIds:
+          {
+            ...?before.availableWeekIds,
+            before.activeWeekId,
+            weeks.first.id,
+          }.toList(),
       state: WorkoutProgressState.ready,
       revision: _uuid.v4(),
       updatedAt: _clock(),
@@ -526,6 +626,15 @@ class WorkoutProgressionService {
           saved.splitId != block.splitId ||
           saved.userId != ownerId) {
         throw StateError('The boundary block changed.');
+      } else if (intent['action'] == 'append' &&
+          (block.plannedWeekCount ?? 0) > (saved.plannedWeekCount ?? 0)) {
+        await HiveService.putTrainingBlockRaw(
+          saved.copyWith(
+            plannedWeekCount: block.plannedWeekCount,
+            updatedAt: block.updatedAt,
+            dirty: true,
+          ),
+        );
       }
     }
     for (final rawWeek in intent['weeks'] as List) {

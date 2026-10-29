@@ -26,13 +26,14 @@ class TrainingBlockAdapter extends TypeAdapter<TrainingBlock> {
       updatedAt: fields[6] as DateTime?,
       deletedAt: fields[7] as DateTime?,
       dirty: fields[8] as bool?,
+      plannedWeekCount: fields[9] as int?,
     );
   }
 
   @override
   void write(BinaryWriter writer, TrainingBlock obj) {
     writer
-      ..writeByte(9)
+      ..writeByte(10)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -50,7 +51,9 @@ class TrainingBlockAdapter extends TypeAdapter<TrainingBlock> {
       ..writeByte(7)
       ..write(obj.deletedAt)
       ..writeByte(8)
-      ..write(obj.dirty);
+      ..write(obj.dirty)
+      ..writeByte(9)
+      ..write(obj.plannedWeekCount);
   }
 
   @override

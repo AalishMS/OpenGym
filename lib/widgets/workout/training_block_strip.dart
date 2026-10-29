@@ -21,6 +21,7 @@ class TrainingBlockStrip extends StatefulWidget {
   final VoidCallback onCreateBlock;
   final ValueChanged<String> onAddWeek;
   final bool enabled;
+  final bool canAddWeek;
 
   const TrainingBlockStrip({
     super.key,
@@ -34,6 +35,7 @@ class TrainingBlockStrip extends StatefulWidget {
     required this.onCreateBlock,
     required this.onAddWeek,
     this.enabled = true,
+    this.canAddWeek = true,
   });
 
   @override
@@ -269,9 +271,12 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Add week',
+                  tooltip:
+                      widget.canAddWeek
+                          ? 'Add week'
+                          : 'Complete this block to add a week',
                   onPressed:
-                      widget.enabled && block != null
+                      widget.enabled && widget.canAddWeek && block != null
                           ? () => widget.onAddWeek(block.id)
                           : null,
                   constraints: BoxConstraints(minWidth: 48, minHeight: height),

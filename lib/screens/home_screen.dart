@@ -610,7 +610,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         blocks: blocks,
                         weeksByBlock: {
                           for (final b in blocks)
-                            b.id: HiveService.weeksForBlock(splitId, b.id),
+                            b.id: HiveService.startingWeeksForBlock(
+                              splitId,
+                              b.id,
+                            ),
                         },
                       );
                       if (selected == null || !context.mounted) return;

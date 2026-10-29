@@ -181,7 +181,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final selected = _weeks.isEmpty ? null : _currentWeek;
     _blocks = _training.blocks;
     _weekById = _training.weekById;
-    _weeksByBlock = _training.weeksByBlock;
+    _weeksByBlock = _training.weeksByBlockForPlan(widget.plan.id ?? '');
     _weeks = [
       for (final block in _blocks)
         for (final week in _weeksByBlock[block.id] ?? <TrainingWeek>[]) week.id,
@@ -1088,20 +1088,14 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     await _onWeekChanged(destination.id);
   }
 
+  bool get _canAddWeek =>
+      _progress?.state == WorkoutProgressState.awaitingBoundary &&
+      _progress?.activeWeekId == _currentWeek;
+
   Future<void> _addWeek(String blockId) async {
-    try {
-      final week = await _structureMutation(
-        () => _structure.appendWeek(widget.plan.splitId!, blockId),
-      );
-      if (!mounted) return;
-      await _onWeekChanged(week.id);
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not add a week. Try again.')),
-        );
-      }
-    }
+    if (!_canAddWeek || blockId != _selectedWeek.blockId) return;
+    if (!await _autoSave() || !mounted) return;
+    await _maybeBoundaryPrompt();
   }
 
   Future<void> _renameBlock(String blockId) async {
@@ -1212,9 +1206,17 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                       final supplied =
                           source == null
                               ? <TrainingWeek>[]
-                              : (_weeksByBlock[source.blockId] ??
+                              : (_training.weeksByBlock[source.blockId] ??
                                       <TrainingWeek>[])
-                                  .where((w) => w.number > source.number)
+                                  .where(
+                                    (w) =>
+                                        w.number == source.number + 1 &&
+                                        w.number <=
+                                            (_training
+                                                    .blockById[source.blockId]
+                                                    ?.plannedWeekCount ??
+                                                w.number),
+                                  )
                                   .toList();
                       final blockIndex =
                           source == null
@@ -1864,6 +1866,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       weeksByBlock: _weeksByBlock,
       selectedWeekId: _currentWeek,
       enabled: !_isSaving && !_isNavigating && _timerAction == null,
+      canAddWeek: _canAddWeek,
       onSelectWeek: _onWeekChanged,
       onSelectBlock: _selectBlock,
       onRenameBlock: _renameBlock,

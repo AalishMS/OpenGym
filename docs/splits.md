@@ -29,24 +29,32 @@ Split deletion is irreversible in the product. Locally and in Supabase it is
 represented by durable tombstones so an offline device cannot restore deleted
 workout data during a later sync.
 
-Backups use format version 4 and include all splits, empty blocks/weeks, per-plan
-progress, linked logs, owner provenance and the active selection. Versions 1–3
-are normalized on import; foreign/unknown-provenance copies receive new IDs. Global settings remain account-wide;
+Backups use format version 5 and include all splits, intended block lengths,
+allocated weeks, per-plan available/active weeks, linked logs, owner provenance
+and the active selection. Versions 1–4 are normalized on import;
+foreign/unknown-provenance copies receive new IDs. Global settings remain account-wide;
 sample data affects only the active split, while Clear All Data removes workout
 data across every split without deleting the split profiles.
 
 ## Blocks and workout progress
 
-A new workspace supplies Block 1 / Week 1. All workouts share its structure;
-each workout has its own active slot. The logger expands the selected block
-inline, constructs only its week controls, and uses durable IDs for navigation.
-Only logging advances progress through supplied weeks. At a block boundary the
-next ordinary entry offers an explicit next step; dismissing keeps the result
-and a Choose next week action. Adding a shared week moves only the workout
-choosing that action. New/duplicated/Coach-added plans choose their start;
-editing an existing plan retains its position.
+A new workspace supplies Block 1 / Week 1. Blocks and week identities are
+shared; available weeks and active progress are independent for each workout.
+A block's chosen length is its intended duration, not a request to allocate
+all weeks upfront. A four-week block starts with Week 1. Logging Push creates
+or reuses its next slot and reveals it only for Push; Pull remains unchanged.
+Each later week inherits that workout's preceding completed week within the
+block. A new block's Week 1 retains matching Week 1 inheritance from the
+preceding block.
 
-Create, rename and reorder blocks, or append weeks to a chosen block. Individual
+Only logging advances progress. After the intended final week, the next
+ordinary entry offers the existing boundary choices; dismissal keeps the result
+and Choose next week action. Add week extends the shared intended duration and
+moves only the choosing workout. The strip cannot add future weeks early.
+New/duplicated/Coach-added plans choose their start from intended weeks, with
+allocation deferred until saving; existing plan edits retain their position.
+
+Create, rename and reorder blocks, or extend a block at its boundary. Individual
 block/week deletion and week rename/reorder are unavailable. History still
 includes every completed live session by date across blocks, even when its
 original plan no longer exists. Exact-session resume keeps duplicate logs and

@@ -1,6 +1,6 @@
 # Lazy, independent block weeks implementation plan
 
-> **For agentic workers:** Use `superpowers:executing-plans` to implement this plan task by task. Steps use checkbox syntax for tracking. This is a proposed plan; implementation has not started.
+> **For agentic workers:** Use `superpowers:executing-plans` to implement this plan task by task. Steps use checkbox syntax for tracking. Implementation is complete; verification and the remaining native-device check are recorded below.
 
 **Goal:** Reveal weeks one at a time for each workout, carry forward its completed values, and ask for a continuation choice only after its configured block length is completed.
 
@@ -57,10 +57,10 @@ Recommended approach: preserve shared week IDs and add per-plan availability. Ma
 
 **Interfaces:** Add nullable legacy-compatible `int? plannedWeekCount` at the next unused block Hive field (9), and `List<String>? availableWeekIds` at the next unused progress field (10). Null means an old record needing normalization; an explicit empty list is distinct. Add the corresponding `copyWith` and JSON support. Normalization produces non-null values for live graphs.
 
-- [ ] Add failing adapter/JSON round-trip and old-record normalization tests. A fresh four-week block has intended length 4. An old block with weeks 1–4 gets length 4; a sparse block uses its highest live week number rather than its row count.
-- [ ] Test availability migration from each plan's own active slot, session slots and recorded completion destinations. Include Week 1, retain reached earlier slots within the same block, and preserve referenced historical slots across blocks. Another plan's sessions or empty future rows must not reveal weeks for this plan. Never rewind an active draft or completed boundary.
-- [ ] Implement model serialization and idempotent graph normalization. Validate available IDs against the same split/owner and remap them when backup/import copies identities. Use recorded IDs for availability so structural rebasing cannot change what the plan reached.
-- [ ] Regenerate with `flutter pub run build_runner build --delete-conflicting-outputs`; analyze after changes. Run `flutter test test/training_block_repository_test.dart test/training_block_migration_test.dart` and require all tests to pass before committing the relevant files explicitly.
+- [x] Add failing adapter/JSON round-trip and old-record normalization tests. A fresh four-week block has intended length 4. An old block with weeks 1–4 gets length 4; a sparse block uses its highest live week number rather than its row count.
+- [x] Test availability migration from each plan's own active slot, session slots and recorded completion destinations. Include Week 1, retain reached earlier slots within the same block, and preserve referenced historical slots across blocks. Another plan's sessions or empty future rows must not reveal weeks for this plan. Never rewind an active draft or completed boundary.
+- [x] Implement model serialization and idempotent graph normalization. Validate available IDs against the same split/owner and remap them when backup/import copies identities. Use recorded IDs for availability so structural rebasing cannot change what the plan reached.
+- [x] Regenerate with `flutter pub run build_runner build --delete-conflicting-outputs`; analyze after changes. Run `flutter test test/training_block_repository_test.dart test/training_block_migration_test.dart` and require all tests to pass before committing the relevant files explicitly.
 
 ## Task 2: Allocate and advance lazily, with recovery
 
@@ -68,12 +68,12 @@ Recommended approach: preserve shared week IDs and add per-plan availability. Ma
 
 **Interfaces:** Preserve the public `createBlock`, `complete`, `continueCompleted`, `extendBoundary` and `createBoundary` signatures. Introduce one internal find-or-create-next-slot operation under the existing exclusive mutation gate. Both ordinary and boundary block creation persist intended length and exactly one initial week.
 
-- [ ] Add failing tests: `weekCount: 4` allocates only Week 1; completing Push allocates/reuses Week 2, updates only Push's availability/progress and leaves Pull byte-for-byte unchanged. Pull's later completion reuses the same Week 2 ID.
-- [ ] Add failing tests for automatic progression through Week 4, awaiting-choice at the limit, no Week 5 allocation before an explicit choice, a one-week block, and `Add week` extending the intended length once. Test a second workout reaching a slot already allocated by the first.
-- [ ] Implement next-slot lookup using the intended length, not the number of allocated/shared rows. Within the limit, reuse or allocate the immediate next number, then reveal it only for the completing plan. At the limit, record a boundary even if another structural row happens to exist beyond it.
-- [ ] Keep creation/continuation intents recoverable with fixed IDs. Persist enough information to recover a successor allocation without silently completing a session whose completion write failed. A durable completed session's transition must replay both progress and availability. Apply the same rules to `continueCompleted` and recovered boundary operations.
-- [ ] Add failure-injection tests before and after allocation, session write, availability/progress write and journal cleanup. Retrying/restarting must keep one successor, preserve the original completion time/revision and never mutate Pull.
-- [ ] Run `flutter test test/workout_progression_test.dart test/training_block_review_recovery_test.dart`; require passing results and analysis, then commit this task explicitly.
+- [x] Add failing tests: `weekCount: 4` allocates only Week 1; completing Push allocates/reuses Week 2, updates only Push's availability/progress and leaves Pull byte-for-byte unchanged. Pull's later completion reuses the same Week 2 ID.
+- [x] Add failing tests for automatic progression through Week 4, awaiting-choice at the limit, no Week 5 allocation before an explicit choice, a one-week block, and `Add week` extending the intended length once. Test a second workout reaching a slot already allocated by the first.
+- [x] Implement next-slot lookup using the intended length, not the number of allocated/shared rows. Within the limit, reuse or allocate the immediate next number, then reveal it only for the completing plan. At the limit, record a boundary even if another structural row happens to exist beyond it.
+- [x] Keep creation/continuation intents recoverable with fixed IDs. Persist enough information to recover a successor allocation without silently completing a session whose completion write failed. A durable completed session's transition must replay both progress and availability. Apply the same rules to `continueCompleted` and recovered boundary operations.
+- [x] Add failure-injection tests before and after allocation, session write, availability/progress write and journal cleanup. Retrying/restarting must keep one successor, preserve the original completion time/revision and never mutate Pull.
+- [x] Run `flutter test test/workout_progression_test.dart test/training_block_review_recovery_test.dart`; require passing results and analysis, then commit this task explicitly.
 
 ## Task 3: Correct inheritance and initialization timing
 
@@ -81,11 +81,11 @@ Recommended approach: preserve shared week IDs and add per-plan availability. Ma
 
 **Interfaces:** Preserve `TrainingWeekSessionResolver.source` and `WorkoutSessionInitializer.initialize` signatures. Change source selection: Week 1 uses matching Week 1 of the immediately preceding live block; later weeks use the preceding supplied/reached slot within their own block, with old sparse history preserved.
 
-- [ ] Write failing tests with deliberately different values: prior block Week 2 = 40 kg, current block Week 1 = 55 kg, template = 30 kg. Current block Week 2 must inherit 55 kg. New block Week 1 must inherit the preceding block's Week 1. Include matching reps, RPE, set count and reset completion state.
-- [ ] Test saved destination priority, missing/deleted/noncompleted sources, duplicate exercise matching and unmatched exercises using plan targets.
-- [ ] Apply the source-selection rule and prevent unreached-week previews from initializing cached sessions. Invalidate only unsaved, untouched initialization caches when their source changes; keep edited or persisted drafts authoritative.
-- [ ] Test completing a source after an earlier screen/provider snapshot and then opening its successor. The successor must use the completed source rather than a cached template snapshot.
-- [ ] Run resolver, initializer and navigation tests, require passing analysis, and commit the relevant files explicitly.
+- [x] Write failing tests with deliberately different values: prior block Week 2 = 40 kg, current block Week 1 = 55 kg, template = 30 kg. Current block Week 2 must inherit 55 kg. New block Week 1 must inherit the preceding block's Week 1. Include matching reps, RPE, set count and reset completion state.
+- [x] Test saved destination priority, missing/deleted/noncompleted sources, duplicate exercise matching and unmatched exercises using plan targets.
+- [x] Apply the source-selection rule and prevent unreached-week previews from initializing cached sessions. Invalidate only unsaved, untouched initialization caches when their source changes; keep edited or persisted drafts authoritative.
+- [x] Test completing a source after an earlier screen/provider snapshot and then opening its successor. The successor must use the completed source rather than a cached template snapshot.
+- [x] Run resolver, initializer and navigation tests, require passing analysis, and commit the relevant files explicitly.
 
 ## Task 4: Show each workout's reached weeks and reuse boundary controls
 
@@ -93,11 +93,11 @@ Recommended approach: preserve shared week IDs and add per-plan availability. Ma
 
 **Interfaces:** Add `Map<String, List<TrainingWeek>> weeksByBlockForPlan(String planId)` to the provider. Keep the full week index for graph resolution and exact-session navigation. Logger tabs and remembered block selections consume the plan-specific projection, not the split-wide list. First weeks of live blocks remain browseable without making that block active.
 
-- [ ] Add widget regressions that create a four-week block, complete Push Week 1 and switch to Pull: Push displays Weeks 1–2; Pull displays Week 1 and retains its values. Repeat after provider reload and app/storage reopen.
-- [ ] Wire logger navigation to the plan-specific projection, maintain selected-tab scrolling, and preserve exact links to existing drafts/logs. The week-count field describes intended length rather than immediate tab creation.
-- [ ] Prevent the strip's `+` from allocating weeks before the current workout reaches its limit. Reuse the existing boundary sheet and preserve its next-visit timing, dismissal and retry behavior. Test that completing Week 3 does not show it, while completing Week 4 does on the next ordinary entry.
-- [ ] Keep explicit new-plan starting-week selection functional using intended week choices and on-confirmation allocation. Test choosing Week 3 of an otherwise unallocated four-week block without exposing Week 3 for Push/Pull or creating preceding sessions.
-- [ ] Run navigation and affected plan-installation tests, require passing analysis, and commit this task explicitly.
+- [x] Add widget regressions that create a four-week block, complete Push Week 1 and switch to Pull: Push displays Weeks 1–2; Pull displays Week 1 and retains its values. Repeat after provider reload and app/storage reopen.
+- [x] Wire logger navigation to the plan-specific projection, maintain selected-tab scrolling, and preserve exact links to existing drafts/logs. The week-count field describes intended length rather than immediate tab creation.
+- [x] Prevent the strip's `+` from allocating weeks before the current workout reaches its limit. Reuse the existing boundary sheet and preserve its next-visit timing, dismissal and retry behavior. Test that completing Week 3 does not show it, while completing Week 4 does on the next ordinary entry.
+- [x] Keep explicit new-plan starting-week selection functional using intended week choices and on-confirmation allocation. Test choosing Week 3 of an otherwise unallocated four-week block without exposing Week 3 for Push/Pull or creating preceding sessions.
+- [x] Run navigation and affected plan-installation tests, require passing analysis, and commit this task explicitly.
 
 ## Task 5: Preserve the new behavior through sync and backups
 
@@ -105,18 +105,26 @@ Recommended approach: preserve shared week IDs and add per-plan availability. Ma
 
 **Interfaces:** Carry `plannedWeekCount` and `availableWeekIds` through remote row mappings and backup graphs. Server columns must default/backfill old rows safely and enforce owner/split-valid links. Update the existing compatibility gate so older clients cannot discard new fields or resume eager creation against upgraded data.
 
-- [ ] Add failing round-trip tests: Push sees Weeks 1–2 and Pull only Week 1 after export/import, account-safe graph cloning and sync to a fresh replica. Preserve intended length 4 even though only two week rows exist. Accept existing backup versions with deterministic normalization; version the new export format to prevent older readers silently discarding new state.
-- [ ] Add a replica test for two plans/devices independently allocating the same logical Week 2 offline. Use a stable canonical slot identity or an explicit alias reconciliation strategy for new lazy slots; preserve existing random IDs and logs. Do not reuse the current generic collision rebase that would turn one Week 2 into Week 3. Include current legacy-label reservation behavior in the test.
-- [ ] Implement serialization, schema/backfill, graph validation and conflict handling together. Ensure dependent week rows are durable/synced before availability references, merge without revealing another plan's weeks, and preserve the existing revision protection for competing completions.
-- [ ] Verify with `flutter test test/training_block_sync_test.dart test/training_block_backup_test.dart test/integration/training_blocks_replicas_test.dart` and the local database/API suite documented in `supabase/tests/training_blocks/README.md`. Follow current Supabase migration tooling; do not apply changes to a remote project during implementation without deployment authorization.
-- [ ] Require passing analysis and commit the migration and affected files explicitly.
+- [x] Add failing round-trip tests: Push sees Weeks 1–2 and Pull only Week 1 after export/import, account-safe graph cloning and sync to a fresh replica. Preserve intended length 4 even though only two week rows exist. Accept existing backup versions with deterministic normalization; version the new export format to prevent older readers silently discarding new state.
+- [x] Add a replica test for two plans/devices independently allocating the same logical Week 2 offline. Use a stable canonical slot identity or an explicit alias reconciliation strategy for new lazy slots; preserve existing random IDs and logs. Do not reuse the current generic collision rebase that would turn one Week 2 into Week 3. Include current legacy-label reservation behavior in the test.
+- [x] Implement serialization, schema/backfill, graph validation and conflict handling together. Ensure dependent week rows are durable/synced before availability references, merge without revealing another plan's weeks, and preserve the existing revision protection for competing completions.
+- [x] Verify with `flutter test test/training_block_sync_test.dart test/training_block_backup_test.dart test/integration/training_blocks_replicas_test.dart` and the local database/API suite documented in `supabase/tests/training_blocks/README.md`. Follow current Supabase migration tooling; do not apply changes to a remote project during implementation without deployment authorization.
+- [x] Require passing analysis and commit the migration and affected files explicitly.
 
 ## Task 6: Verify the complete flow and update current documentation
 
 **Files:** `DESIGN.md`, `docs/splits.md`, `docs/training-blocks/manual-device-checklist.md`, relevant Coach starting-week documentation if its picker changes.
 
-- [ ] Update current documentation to distinguish intended length, allocated shared slots, per-plan available weeks and active progress. Replace the rule that every week in later blocks inherits the preceding block's matching number.
-- [ ] Run `flutter analyze` and `flutter test`. Investigate failures; do not relax contrast, typography, identity or recovery checks to make the suite pass.
-- [ ] Fully restart the app after the Hive changes. Manually create a four-week block, log Push Week 1 with changed values, verify Pull is untouched, verify Push Weeks 2–4 inherit sequentially, and verify the existing continuation sheet appears only at the limit. Create the next block and verify its Week 1 copies the preceding block's Week 1.
-- [ ] Repeat the important transitions after restart and offline/online sync. Verify that a saved draft's custom values survive switching workouts, and that extending the block never immediately moves another workout.
-- [ ] Review the diff, stage only intended files and commit the completed changes. Report actual test results and any device or database checks that could not be performed.
+- [x] Update current documentation to distinguish intended length, allocated shared slots, per-plan available weeks and active progress. Replace the rule that every week in later blocks inherits the preceding block's matching number.
+- [x] Run `flutter analyze` and `flutter test`. Investigate failures; do not relax contrast, typography, identity or recovery checks to make the suite pass.
+- [ ] Native-device follow-up (web restart/smoke and automated equivalents passed): fully restart the app after the Hive changes. Manually create a four-week block, log Push Week 1 with changed values, verify Pull is untouched, verify Push Weeks 2–4 inherit sequentially, and verify the existing continuation sheet appears only at the limit. Create the next block and verify its Week 1 copies the preceding block's Week 1.
+- [x] Repeat the important transitions after restart and offline/online sync. Verify that a saved draft's custom values survive switching workouts, and that extending the block never immediately moves another workout.
+- [x] Review the diff, stage only intended files and commit the completed changes. Report actual test results and any device or database checks that could not be performed.
+
+## Execution notes
+
+- Implemented inline on `feature/training-blocks`, preserving unrelated local configuration/lockfile edits.
+- Independent review found partial-upgrade duration loss and duplicate boundary allocation beyond a limit; both have red-to-green regressions and fixes. Intended length now merges monotonically while block name/order keep LWW behavior.
+- Restoring an earlier schedule remaps the graph when it would shorten a retained block or remove a canonical slot, keeping future lazy weeks allocatable without reviving tombstones.
+- Full Flutter suite, real local API/SDK and two-replica trials, SQL compatibility/lazy suites, fresh migration chain, analyzer and local database security checks passed. Fresh-browser smoke verified one visible week for a new four-week block and a disabled early Add week control.
+- The database migration is prepared and tested locally; it has not been deployed remotely. No native Android device was connected, so phone-specific checks remain on the manual checklist.

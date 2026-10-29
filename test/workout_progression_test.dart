@@ -214,7 +214,10 @@ void main() {
     'last supplied week enters boundary; a later explicit choice defeats old replay',
     () async {
       await HiveService.putWorkoutProgressRaw(
-        progress().copyWith(activeWeekId: second),
+        progress().copyWith(
+          availableWeekIds: [first, second],
+          activeWeekId: second,
+        ),
       );
       await draft(week: second);
       await service.complete('log');
@@ -243,6 +246,7 @@ void main() {
     () async {
       await HiveService.putWorkoutProgressRaw(
         progress().copyWith(
+          availableWeekIds: [first, second],
           activeWeekId: second,
           state: WorkoutProgressState.awaitingBoundary,
         ),
@@ -376,7 +380,11 @@ void main() {
     'finishing a nonactive timer saves history without moving active progress',
     () async {
       await HiveService.putWorkoutProgressRaw(
-        progress().copyWith(activeWeekId: second, revision: 'moved'),
+        progress().copyWith(
+          availableWeekIds: [first, second],
+          activeWeekId: second,
+          revision: 'moved',
+        ),
       );
       await draft();
       final before = progress().toJson();
@@ -391,6 +399,7 @@ void main() {
     () async {
       await HiveService.putWorkoutProgressRaw(
         progress().copyWith(
+          availableWeekIds: [first, second],
           activeWeekId: second,
           state: WorkoutProgressState.awaitingBoundary,
         ),
@@ -440,6 +449,7 @@ void main() {
     () async {
       await HiveService.putWorkoutProgressRaw(
         progress().copyWith(
+          availableWeekIds: [first, second],
           activeWeekId: second,
           state: WorkoutProgressState.awaitingBoundary,
         ),
