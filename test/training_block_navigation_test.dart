@@ -66,8 +66,9 @@ void main() {
     required List<TrainingBlock> structure,
     required Map<String, List<TrainingWeek>> slots,
     String selected = 'b0-w1',
-    String? expanded = 'b0',
     double scale = 1,
+    ValueChanged<String>? onAction,
+    bool enabled = true,
   }) {
     return MaterialApp(
       theme: buildTheme(const Color(0xFF008D8D), Brightness.light),
@@ -79,23 +80,19 @@ void main() {
                 disableAnimations: true,
               ),
               child: Scaffold(
-                body: Column(
-                  children: [
-                    Text('Selected $selected'),
-                    TrainingBlockStrip(
-                      blocks: structure,
-                      weeksByBlock: slots,
-                      selectedWeekId: selected,
-                      expandedBlockId: expanded,
-                      onSelectWeek: (id) => setState(() => selected = id),
-                      onExpandBlock:
-                          (id) => setState(
-                            () => expanded = expanded == id ? null : id,
-                          ),
-                      onManageBlock: (_) {},
-                      onCreateBlock: () {},
-                    ),
-                  ],
+                body: Text('Selected $selected'),
+                bottomNavigationBar: TrainingBlockStrip(
+                  blocks: structure,
+                  weeksByBlock: slots,
+                  selectedWeekId: selected,
+                  onSelectWeek: (id) => setState(() => selected = id),
+                  onSelectBlock:
+                      (id) => setState(() => selected = slots[id]!.first.id),
+                  onRenameBlock: (id) => onAction?.call('rename:$id'),
+                  onReorderBlocks: () => onAction?.call('reorder'),
+                  onCreateBlock: () => onAction?.call('create'),
+                  onAddWeek: (id) => onAction?.call('add:$id'),
+                  enabled: enabled,
                 ),
               ),
             ),
@@ -150,34 +147,111 @@ void main() {
       expect(find.byType(AlertDialog), findsNothing);
     },
   );
+  testWidgets('block name opens a menu with switches and management actions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(structure: blocks(2), slots: weeks(2, 3)));
+    await tester.pumpAndSettle();
+    expect(find.text('Block 2'), findsNothing);
+    await tester.tap(find.text('Block 1'));
+    await tester.pumpAndSettle();
+    expect(find.text('Block 2'), findsOneWidget);
+    expect(find.text('Create block'), findsOneWidget);
+    expect(find.text('Rename block'), findsOneWidget);
+    expect(find.text('Reorder blocks'), findsOneWidget);
+    await tester.tap(find.text('Block 2'));
+    await tester.pumpAndSettle();
+    expect(find.text('Selected b1-w1'), findsOneWidget);
+    expect(find.byKey(const ValueKey('training-week-b0-w2')), findsNothing);
+    expect(find.byKey(const ValueKey('training-week-b1-w2')), findsOneWidget);
+  });
+
+  testWidgets('short bar fills the width with Add week fixed to the right', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(host(structure: blocks(1), slots: weeks(1, 1)));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.byType(TrainingBlockStrip)).width, 390);
+    expect(tester.getRect(find.byTooltip('Add week')).right, 390);
+  });
+  testWidgets('only weeks scroll and the menu opens above its block button', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(host(structure: blocks(2), slots: weeks(2, 52)));
+    await tester.pumpAndSettle();
+    final blockRect = tester.getRect(find.text('Block 1'));
+    final plusRect = tester.getRect(find.byTooltip('Add week'));
+    final scroll = find.descendant(
+      of: find.byType(TrainingBlockStrip),
+      matching: find.byType(SingleChildScrollView),
+    );
+    await tester.drag(scroll, const Offset(-800, 0));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.text('Block 1')), blockRect);
+    expect(tester.getRect(find.byTooltip('Add week')), plusRect);
+    await tester.tap(find.text('Block 1'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getRect(find.text('Reorder blocks')).bottom,
+      lessThan(blockRect.top),
+    );
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Rename block'), findsNothing);
+    expect(find.text('Selected b0-w1'), findsOneWidget);
+    await tester.tap(find.text('Block 1'));
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(380, 100));
+    await tester.pumpAndSettle();
+    expect(find.text('Rename block'), findsNothing);
+  });
+
   testWidgets(
-    'weeks reveal inline; one expanded block and collapse preserves selection',
+    'management and Add week use explicit callbacks; busy bar is disabled',
     (tester) async {
-      await tester.pumpWidget(host(structure: blocks(2), slots: weeks(2, 3)));
+      final actions = <String>[];
+      await tester.pumpWidget(
+        host(structure: blocks(1), slots: weeks(1, 1), onAction: actions.add),
+      );
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('training-week-b0-w2')), findsOneWidget);
-      expect(find.byKey(const ValueKey('training-week-b1-w2')), findsNothing);
-      await tester.tap(find.text('Block 2'));
+      await tester.tap(find.byTooltip('Add week'));
+      for (final label in ['Create block', 'Rename block', 'Reorder blocks']) {
+        await tester.tap(find.text('Block 1'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(label));
+        await tester.pumpAndSettle();
+      }
+      expect(actions, ['add:b0', 'create', 'rename:b0', 'reorder']);
+      await tester.pumpWidget(
+        host(
+          structure: blocks(1),
+          slots: weeks(1, 1),
+          onAction: actions.add,
+          enabled: false,
+        ),
+      );
       await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('training-week-b0-w2')), findsNothing);
-      await tester.tap(find.byKey(const ValueKey('training-week-b1-w2')));
+      await tester.tap(find.byTooltip('Add week'));
+      await tester.tap(find.text('Block 1'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Block 2'));
-      await tester.pumpAndSettle();
-      expect(find.text('Selected b1-w2'), findsOneWidget);
-      expect(find.byKey(const ValueKey('training-week-b1-w2')), findsNothing);
-      expect(find.byTooltip('Block actions for Block 2'), findsOneWidget);
+      expect(actions, hasLength(4));
+      expect(find.text('Create block'), findsNothing);
     },
   );
   testWidgets(
-    'entry scrolls selected slot into view and constructs only expanded weeks',
+    'entry reveals selected slot and constructs only its block weeks',
     (tester) async {
       await tester.pumpWidget(
         host(
           structure: blocks(100),
           slots: weeks(100, 52),
           selected: 'b99-w52',
-          expanded: 'b99',
         ),
       );
       await tester.pumpAndSettle();
@@ -211,6 +285,28 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'many blocks keep the popup bounded and scrollable at large text',
+    (tester) async {
+      tester.view.physicalSize = const Size(320, 640);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        host(structure: blocks(100), slots: weeks(100, 1), scale: 2.4),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Block 1'));
+      await tester.pumpAndSettle();
+      final menu = find.byType(SingleChildScrollView).last;
+      final rect = tester.getRect(menu);
+      expect(rect.top, greaterThanOrEqualTo(8));
+      expect(rect.bottom, lessThan(tester.getRect(find.text('Block 1')).top));
+      await tester.drag(menu, const Offset(0, -10000));
+      await tester.pumpAndSettle();
+      expect(find.text('Reorder blocks').hitTestable(), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -268,6 +364,131 @@ void main() {
       );
       await pumpWithStorage(tester);
     }
+
+    locationTest(
+      'block switching remembers weeks and Add week targets the displayed block without advancing progress',
+      (tester) async {
+        final ids = await tester.runAsync(() async {
+          await TrainingBlockMigration().normalize(ownerId: null);
+          final repo = TrainingBlockRepository(ownerId: () => null);
+          final first = repo.blocksForSplit('s').single;
+          final secondWeek = await repo.appendWeek('s', first.id);
+          final other = await repo.createBlock(
+            splitId: 's',
+            name: 'Strength',
+            weekCount: 3,
+          );
+          return [first.id, secondWeek.id, other.id];
+        });
+        await open(tester);
+        final progress = HiveService.getAllWorkoutProgressRaw().single;
+        await tester.tap(find.byKey(ValueKey('training-week-${ids![1]}')));
+        await pumpWithStorage(tester);
+        await tester.tap(find.text('Block 1'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Strength'));
+        await pumpWithStorage(tester);
+        expect(find.text('Strength · Week 1'), findsOneWidget);
+        await tester.tap(find.text('Week 3'));
+        await pumpWithStorage(tester);
+        await tester.tap(find.text('Strength'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Block 1'));
+        await pumpWithStorage(tester);
+        expect(find.text('Block 1 · Week 2'), findsOneWidget);
+        await tester.tap(find.text('Block 1'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Strength'));
+        await pumpWithStorage(tester);
+        expect(find.text('Strength · Week 3'), findsOneWidget);
+        await tester.tap(find.byTooltip('Add week'));
+        await pumpWithStorage(tester);
+        expect(find.text('Strength · Week 4'), findsOneWidget);
+        final repo = TrainingBlockRepository(ownerId: () => null);
+        expect(repo.weeksForBlock('s', ids[0]), hasLength(2));
+        expect(repo.weeksForBlock('s', ids[2]), hasLength(4));
+        expect(
+          HiveService.getAllWorkoutProgressRaw().single.activeWeekId,
+          progress.activeWeekId,
+        );
+        expect(HiveService.getAllSessionsRaw(), isEmpty);
+      },
+    );
+
+    locationTest(
+      'popup creates and selects a block, renames it, and reorders without losing its week',
+      (tester) async {
+        await open(tester);
+        Future<void> choose(String blockName, String action) async {
+          await tester.tap(find.text(blockName));
+          await tester.pumpAndSettle();
+          await tester.tap(find.text(action));
+          await tester.pumpAndSettle();
+        }
+
+        await choose('Block 1', 'Create block');
+        await tester.enterText(find.bySemanticsLabel('Block name'), 'Strength');
+        await tester.enterText(find.bySemanticsLabel('Weeks'), '3');
+        await tester.tap(find.text('Save'));
+        await pumpWithStorage(tester);
+        expect(find.text('Strength · Week 1'), findsOneWidget);
+        await choose('Strength', 'Rename block');
+        await tester.enterText(find.bySemanticsLabel('Block name'), 'Power');
+        await tester.tap(find.text('Save'));
+        await pumpWithStorage(tester);
+        expect(find.text('Power · Week 1'), findsOneWidget);
+        await tester.tap(find.text('Week 2'));
+        await pumpWithStorage(tester);
+        await choose('Power', 'Reorder blocks');
+        await tester.tap(find.byTooltip('Move Power up'));
+        await tester.tap(find.text('Save'));
+        await pumpWithStorage(tester);
+        expect(HiveService.blocksForSplit('s').first.name, 'Power');
+        expect(find.text('Power · Week 2'), findsOneWidget);
+        for (final action in [
+          'Create block',
+          'Rename block',
+          'Reorder blocks',
+        ]) {
+          await choose('Power', action);
+          await tester.tap(find.text('Cancel'));
+          await tester.pumpAndSettle();
+          expect(find.text('Power · Week 2'), findsOneWidget);
+        }
+        expect(HiveService.getAllTrainingBlocksRaw(), hasLength(2));
+        expect(HiveService.getAllSessionsRaw(), isEmpty);
+      },
+    );
+
+    locationTest('failed save prevents switching blocks or appending weeks', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        await TrainingBlockMigration().normalize(ownerId: null);
+        await TrainingBlockRepository(
+          ownerId: () => null,
+        ).createBlock(splitId: 's', name: 'Strength', weekCount: 1);
+      });
+      final failing = _FailingSessions();
+      await open(tester, sessionProvider: failing);
+      await tester.tap(find.text('Add set'));
+      await pumpWithStorage(tester);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Block 1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Strength'));
+      await pumpWithStorage(tester);
+      expect(find.text('Block 1 · Week 1'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      final attempts = failing.attempts;
+      await tester.tap(find.byTooltip('Add week'));
+      await pumpWithStorage(tester);
+      expect(find.text('Block 1 · Week 1'), findsOneWidget);
+      expect(failing.attempts, greaterThan(attempts));
+      expect(HiveService.getAllTrainingWeeksRaw(), hasLength(2));
+    });
 
     locationTest('opening an empty supplied slot never invents max plus one', (
       tester,

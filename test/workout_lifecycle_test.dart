@@ -631,11 +631,11 @@ void main() {
         await tester.runAsync(() => seed(1, completed: true));
         await open(tester);
         expect(weekTab(2), findsOneWidget);
-        await tester.tap(find.byTooltip('Block actions for Block 1'));
+        await tester.tap(find.text('Block 1'));
         await tester.pumpAndSettle();
         expect(find.text('Delete week'), findsNothing);
         expect(find.text('Rename week'), findsNothing);
-        expect(find.text('Add week'), findsOneWidget);
+        expect(find.byTooltip('Add week'), findsOneWidget);
         expect(HiveService.getSessionById('week-1')!.deletedAt, isNull);
       },
     );
@@ -678,7 +678,7 @@ void main() {
         await open(tester);
         final ids =
             HiveService.getAllTrainingWeeksRaw().map((w) => w.id).toSet();
-        await tester.tap(find.byTooltip('Block actions for Block 1'));
+        await tester.tap(find.text('Block 1'));
         await tester.pumpAndSettle();
         expect(find.text('Create block'), findsOneWidget);
         expect(find.text('Delete week'), findsNothing);

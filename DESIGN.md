@@ -155,6 +155,19 @@ trimmed name; appending can extend beyond 52. Blocks can be renamed/reordered.
 Individual week/block deletion, week rename/reorder, Skip, Repeat, block
 prescriptions and block-based analytics are outside V1.
 
+The workout's bottom navigation always fills the available width. The selected
+week's block name stays at the left and Add week (+) stays at the right; only
+that block's week tabs scroll between them. The selected week keeps its accent
+underline and scrolls into view. Tapping the block name opens a compact menu
+above it: other blocks in saved order, then Create block, Rename block and
+Reorder blocks. The menu scrolls when needed and closes on selection, outside
+tap or Back. There is no separate block overflow menu or collapse state.
+Switching blocks restores the last week viewed in that block during this screen
+visit, or its first supplied week on the first visit. Navigation saves pending
+edits before changing selection. Add week appends to the displayed block and
+selects the new week; creating a block opens its first week. Neither action nor
+browsing advances the plan's active progress.
+
 A completed session carries revision-bound completion evidence with a fixed
 commit time and resulting revision. Recovery applies it only to the exact
 expected progress state, so interruption between the log and progress writes

@@ -90,7 +90,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   Map<String, TrainingWeek> _weekById = {};
   List<TrainingBlock> _blocks = [];
   Map<String, List<TrainingWeek>> _weeksByBlock = {};
-  String? _expandedBlockId;
+  final Map<String, String> _viewedWeekByBlock = {};
   late final TrainingBlockProvider _training;
   late final bool _ownsTraining;
   late final TrainingBlockRepository _structure;
@@ -215,12 +215,12 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         exact.trainingWeekId == _currentWeek) {
       _weekSessions[_currentWeek] = exact;
     }
-    if (initial) _expandedBlockId = _weekById[_currentWeek]?.blockId;
     _loadSessionForCurrentWeek();
   }
 
   void _loadSessionForCurrentWeek() {
     if (_weeks.isEmpty) return;
+    _viewedWeekByBlock[_selectedWeek.blockId] = _currentWeek;
     final saved = _savedSessionForWeek(_currentWeek);
     if (saved != null) {
       _weekSessions[_currentWeek] = saved;
@@ -1074,89 +1074,57 @@ class _WorkoutScreenState extends State<WorkoutScreen>
             ),
           ),
     );
-    if (result != null && mounted) setState(() => _expandedBlockId = result.id);
+    if (result == null || !mounted) return;
+    final first = _weeksByBlock[result.id]?.firstOrNull;
+    if (first != null) await _onWeekChanged(first.id);
   }
 
-  Future<void> _manageBlock(String blockId) async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder:
-          (sheet) => SafeArea(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ListTile(
-                    title: const Text('Add week'),
-                    onTap: () => Navigator.pop(sheet, 'append'),
-                  ),
-                  ListTile(
-                    title: const Text('Rename block'),
-                    onTap: () => Navigator.pop(sheet, 'rename'),
-                  ),
-                  ListTile(
-                    title: const Text('Reorder blocks'),
-                    onTap: () => Navigator.pop(sheet, 'reorder'),
-                  ),
-                  ListTile(
-                    title: const Text('Create block'),
-                    onTap: () => Navigator.pop(sheet, 'create'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-    );
-    if (!mounted || action == null) return;
-    final block = _blocks.where((b) => b.id == blockId).firstOrNull;
-    if (block == null) return;
+  Future<void> _selectBlock(String blockId) async {
+    final weeks = _weeksByBlock[blockId] ?? <TrainingWeek>[];
+    if (weeks.isEmpty) return;
+    final remembered = _viewedWeekByBlock[blockId];
+    final destination =
+        weeks.where((week) => week.id == remembered).firstOrNull ?? weeks.first;
+    await _onWeekChanged(destination.id);
+  }
+
+  Future<void> _addWeek(String blockId) async {
     try {
-      switch (action) {
-        case 'append':
-          final week = await _structureMutation(
-            () => _structure.appendWeek(widget.plan.splitId!, blockId),
-          );
-          if (mounted) {
-            setState(() {
-              _expandedBlockId = blockId;
-              _currentWeekIndex = _weeks.indexOf(week.id);
-            });
-            _loadSessionForCurrentWeek();
-          }
-        case 'rename':
-          await TrainingBlockDialogs.rename(
-            context,
-            block,
-            onSave:
-                (name) => _structureMutation(
-                  () => _structure.renameBlock(
-                    widget.plan.splitId!,
-                    blockId,
-                    name,
-                  ),
-                ),
-          );
-        case 'reorder':
-          await TrainingBlockDialogs.reorder(
-            context,
-            _blocks,
-            onSave:
-                (ids) => _structureMutation(
-                  () => _structure.reorderBlocks(widget.plan.splitId!, ids),
-                ),
-          );
-        case 'create':
-          await _createBlock();
-      }
+      final week = await _structureMutation(
+        () => _structure.appendWeek(widget.plan.splitId!, blockId),
+      );
+      if (!mounted) return;
+      await _onWeekChanged(week.id);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not update blocks. Try again.')),
+          const SnackBar(content: Text('Could not add a week. Try again.')),
         );
       }
     }
   }
+
+  Future<void> _renameBlock(String blockId) async {
+    final block = _blocks.where((b) => b.id == blockId).firstOrNull;
+    if (block == null) return;
+    await TrainingBlockDialogs.rename(
+      context,
+      block,
+      onSave:
+          (name) => _structureMutation(
+            () => _structure.renameBlock(widget.plan.splitId!, blockId, name),
+          ),
+    );
+  }
+
+  Future<void> _reorderBlocks() => TrainingBlockDialogs.reorder(
+    context,
+    _blocks,
+    onSave:
+        (ids) => _structureMutation(
+          () => _structure.reorderBlocks(widget.plan.splitId!, ids),
+        ),
+  );
 
   void _selectProgress() {
     if (!mounted) return;
@@ -1165,7 +1133,6 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final active = _progress?.activeWeekId;
     if (active != null && _weeks.contains(active)) {
       _currentWeekIndex = _weeks.indexOf(active);
-      _expandedBlockId = _weekById[active]!.blockId;
       _loadSessionForCurrentWeek();
     }
     if (mounted) setState(() {});
@@ -1889,26 +1856,19 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     );
   }
 
-  /// The week switcher above the bottom edge — the plan switcher's twin.
-  ///
-  /// It used to be a row of filled pills, which said "toggle" where the strip
-  /// above it said "tab". Same control, same language now: an underline in the
-  /// accent. The week number is its own ordinal, so these tabs carry no index
-  /// prefix.
+  /// Fixed block and Add week controls frame the scrolling week tabs.
   Widget _buildWeekNavBar(Color accent) => SafeArea(
     top: false,
     child: TrainingBlockStrip(
       blocks: _blocks,
       weeksByBlock: _weeksByBlock,
       selectedWeekId: _currentWeek,
-      expandedBlockId: _expandedBlockId,
       enabled: !_isSaving && !_isNavigating && _timerAction == null,
       onSelectWeek: _onWeekChanged,
-      onExpandBlock:
-          (id) => setState(
-            () => _expandedBlockId = _expandedBlockId == id ? null : id,
-          ),
-      onManageBlock: _manageBlock,
+      onSelectBlock: _selectBlock,
+      onRenameBlock: _renameBlock,
+      onReorderBlocks: _reorderBlocks,
+      onAddWeek: _addWeek,
       onCreateBlock: _createBlock,
     ),
   );
