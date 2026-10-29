@@ -1,12 +1,24 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../widgets/app_header.dart';
+import '../services/training_recovery_snapshots.dart';
+
+Future<XFile> trainingSafetyCopyFile(String? path) async {
+  if (path == null) throw StateError('A safety copy is not available yet.');
+  return XFile.fromData(
+    Uint8List.fromList(utf8.encode(await TrainingRecoverySnapshots.read(path))),
+    mimeType: 'application/json',
+    name: 'opengym-training-safety.json',
+  );
+}
 
 Future<void> exportTrainingSafetyCopy(String? path) async {
-  if (path == null) throw StateError('A safety copy is not available yet.');
   await Share.shareXFiles([
-    XFile(path),
+    await trainingSafetyCopyFile(path),
   ], subject: 'OpenGym training safety copy');
 }
 

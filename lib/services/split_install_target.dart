@@ -164,13 +164,18 @@ class SplitInstallTarget {
         blocks.single.id == legacyTrainingBlockId(split.id) &&
         blocks.single.name == 'Block 1' &&
         blocks.single.position == 0 &&
-        blocks.single.updatedAt == null &&
+        _neutralBootstrapStamp(blocks.single.updatedAt) &&
         blocks.single.deletedAt == null &&
         weeks.single.id == legacyTrainingWeekId(split.id, 1) &&
         weeks.single.number == 1 &&
-        weeks.single.updatedAt == null &&
+        _neutralBootstrapStamp(weeks.single.updatedAt) &&
         weeks.single.deletedAt == null;
   }
+
+  // Local synthesis has no edit stamp; SQL represents the same absence as
+  // epoch. Genuine structural changes receive a current mutation timestamp.
+  static bool _neutralBootstrapStamp(DateTime? stamp) =>
+      stamp == null || stamp.microsecondsSinceEpoch == 0;
 
   /// [requested], or a ` (n)`-suffixed form of it that fits in
   /// [maxNameLength] and no other split uses.

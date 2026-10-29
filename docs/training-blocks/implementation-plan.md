@@ -6,10 +6,12 @@ Branch: `feature/training-blocks`
 
 Reviewed against: `b675c01`
 
-Status: Tasks 1–7 are locally implemented and verified. The independent final
-whole-branch review remains required against base `358894a`. Intermediate
-reviews after Tasks 2 and 4 are cleared. Deployment/release is unauthorized;
-Android/device/browser checks remain explicitly pending as documented in
+Status: Tasks 1–7 and the independent whole-branch review against base
+`358894a` are complete locally. The review continued on GPT-6.1 Sol after a usage
+limit interrupted the earlier reviewer. All three Important findings are fixed
+with RED→GREEN regressions and a passing full suite; no Critical/Minor findings
+remain. Deployment/release is unauthorized. Android/device checks and full
+browser workout interaction remain pending as recorded in
 [implementation-status.md](implementation-status.md).
 
 > For implementation, use `superpowers:executing-plans` task by task. Each task

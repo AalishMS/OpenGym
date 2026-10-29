@@ -1,16 +1,15 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:hive/hive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
-import '../models/workout_session.dart';
 import '../models/split_preference.dart';
 import 'hive_service.dart';
 import 'sync_service.dart';
 import 'training_block_graph.dart';
+import 'training_recovery_snapshots.dart';
 import 'training_block_migration.dart';
 import 'workout_progression_service.dart';
 
@@ -33,9 +32,9 @@ class TrainingBlockRestore {
   /// Explicit failures can undo a batch while its exclusive gate is held.
   /// A process death instead leaves the fixed desired graph for roll-forward.
   Future<void> rollbackUnderGate(String? ownerId) async {
-    final file = File(snapshotPath(ownerId));
     final payload = Map<String, dynamic>.from(
-      jsonDecode(await file.readAsString()) as Map,
+      jsonDecode(await TrainingRecoverySnapshots.read(snapshotPath(ownerId)))
+          as Map,
     );
     if (payload['ownerId'] != ownerId) {
       throw StateError('Conflicting rollback owner.');
@@ -92,7 +91,7 @@ class TrainingBlockRestore {
   String _pendingKey(String? owner) =>
       'training_restore_pending_${_ownerKey(owner)}';
   String snapshotPath(String? owner) =>
-      '${File(Hive.box<WorkoutSession>(HiveService.sessionsBox).path!).parent.path}/training-restore-${_ownerKey(owner)}.json';
+      TrainingRecoverySnapshots.path('restore', _ownerKey(owner));
 
   /// Only known, owner-scoped recovery artifacts; never scan arbitrary files.
   Future<void> removeOwnerRecovery(String? ownerId) async {
@@ -102,8 +101,7 @@ class TrainingBlockRestore {
       TrainingBlockMigration().snapshotPath(ownerId),
     ]) {
       for (final candidate in [path, '$path.pending']) {
-        final file = File(candidate);
-        if (await file.exists()) await file.delete();
+        await TrainingRecoverySnapshots.remove(candidate);
       }
     }
     await prefs.remove(_pendingKey(ownerId));
@@ -168,10 +166,10 @@ class TrainingBlockRestore {
       throw StateError('The account changed before replacement.');
     }
     final id = operationId ?? const Uuid().v4();
-    final file = File(snapshotPath(owner));
-    if (await file.exists()) {
+    final path = snapshotPath(owner);
+    if (await TrainingRecoverySnapshots.exists(path)) {
       final saved = Map<String, dynamic>.from(
-        jsonDecode(await file.readAsString()) as Map,
+        jsonDecode(await TrainingRecoverySnapshots.read(path)) as Map,
       );
       if (saved['operationId'] == id) {
         if (saved['ownerId'] != owner) {
@@ -311,7 +309,7 @@ class TrainingBlockRestore {
     final payload = <String, dynamic>{
       'ownerId': owner,
       'operationId': id,
-      'path': file.path,
+      'path': path,
       'original': original.toJson(),
       'desired': desired.toJson(),
       'settings': settings,
@@ -341,10 +339,7 @@ class TrainingBlockRestore {
           key: prefs.get(key),
       },
     };
-    await File(
-      '${file.path}.pending',
-    ).writeAsString(jsonEncode(payload), flush: true);
-    await File('${file.path}.pending').rename(file.path);
+    await TrainingRecoverySnapshots.write(path, jsonEncode(payload));
     await checkpoint(payload, 'snapshot');
     await _apply(payload);
   }
@@ -359,7 +354,8 @@ class TrainingBlockRestore {
       throw StateError('Conflicting replacement recovery scope.');
     }
     final payload = Map<String, dynamic>.from(
-      jsonDecode(await File(snapshotPath(ownerId)).readAsString()) as Map,
+      jsonDecode(await TrainingRecoverySnapshots.read(snapshotPath(ownerId)))
+          as Map,
     );
     if (payload['ownerId'] != ownerId ||
         payload['operationId'] != journal['operationId']) {

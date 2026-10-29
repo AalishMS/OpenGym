@@ -62,8 +62,9 @@ For a separately authorized rollout:
   including old persisted notification snapshots. Profile the large-data fixture
   on the project's Android device for frame spikes. These checks are pending by
   user choice; host widget timings and native JVM tests do not replace them.
-- Establish browser workout interaction separately; web compilation/hot restart
-  alone has passed, with no connected browser client certified.
+- Establish full browser workout interaction separately. Web compilation/hot
+  restart and targeted real-Chrome storage/recovery/export tests pass; these do
+  not certify end-to-end workout interaction.
 
 Activation is an irreversible per-account writer boundary. After activation,
 use forward fixes or stop new activations; do not downgrade data to an old

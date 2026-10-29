@@ -952,10 +952,35 @@ class HiveService {
       }
       session.userId = split.userId;
     }
+    int? canonicalWeekNumber;
+    final weekId = session.trainingWeekId;
+    if (weekId != null) {
+      final week = getTrainingWeekById(weekId);
+      final block = week == null ? null : getTrainingBlockById(week.blockId);
+      if (week == null ||
+          block == null ||
+          week.deletedAt != null ||
+          block.deletedAt != null ||
+          week.splitId != session.splitId ||
+          block.splitId != session.splitId ||
+          week.userId != session.userId ||
+          block.userId != session.userId) {
+        throw StateError('The workout week is unavailable in this account.');
+      }
+      canonicalWeekNumber = week.number;
+    }
     session.id ??= _uuid.v4();
     session.updatedAt = DateTime.now();
     session.dirty = true;
-    await _sessionsBox.put(session.id, session);
+    // Read the canonical label and enqueue this write without an intervening
+    // await. The relabel writer likewise re-reads each row before its put, so
+    // either ordering preserves the latest entered values and the stable link.
+    await _sessionsBox.put(
+      session.id,
+      canonicalWeekNumber == null || canonicalWeekNumber == session.weekNumber
+          ? session
+          : session.copyWith(weekNumber: canonicalWeekNumber),
+    );
   }
 
   static Future<void> softDeleteSession(String id) async {

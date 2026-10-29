@@ -318,6 +318,11 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         await provider.upsertSession(session);
         if (revision == _draftRevision) {
           _hasUnsavedChanges = false;
+          // A structural reload may have been deferred while this edit was
+          // unsaved. Rebuild from the canonical row after persisting its values.
+          if (!identical(_weekById, _training.weekById)) {
+            _loadStructure();
+          }
           return true;
         }
         // Edits made during that write must be flushed before navigation.

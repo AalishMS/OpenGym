@@ -161,15 +161,20 @@ expected progress state, so interruption between the log and progress writes
 cannot log twice or advance an unrelated later visit. An already-started
 nonactive draft can finish by exact session ID without advancing progress.
 Completed logs are read-only in the logger; History retains explicit editing.
+Session writes resolve the current label from the durable week ID, so a
+structural rebase cannot make an in-progress edit restore an obsolete label.
 
 ## Local Persistence
 
 `HiveService` owns plans, sessions, splits and preferences plus typed
 `training_blocks`, `training_weeks` and `workout_progress` boxes. A small
-`training_operations` box holds fixed structural recovery intents. UI reads
+`training_operations` box holds fixed structural recovery intents. Browser-only
+`training_recovery_snapshots` holds safety/replacement JSON artifacts in
+IndexedDB; native targets retain flushed files with atomic pending-file rename.
+These artifacts are separate from the live graph and operation intents. UI reads
 hide tombstones; raw reads retain them for synchronization.
 
-Normalization writes an owner-scoped safety file before changing links. Legacy
+Normalization durably writes an owner-scoped safety artifact before changing links. Legacy
 weeks use deterministic split/number IDs inside one Block 1, preserving gaps,
 all session IDs/values/timers, and orphan history. Explicit new structure uses
 UUID4. Empty splits receive Block 1 / Week 1. Bootstrap metadata has a neutral
@@ -178,10 +183,12 @@ rows reserve their original labels; colliding new weeks rebase under the same
 ID with a journaled label update to linked session snapshots.
 
 Replacement operations validate the full graph before writing, save an
-owner-scoped safety graph and fixed desired graph, then roll forward after
+owner-scoped safety graph and fixed desired graph through the platform snapshot
+store, then roll forward after
 interruption. Caught installer failures restore the safety graph under the
 exclusive mutation gate. Recovery failure hides the logger behind an export/
-retry flow. Account handover clears the previous owner's boxes, cursors,
+retry flow. Export reads the artifact as JSON bytes on either platform.
+Account handover clears the previous owner's boxes, cursors,
 intents, safety artifacts and route/native state before showing another cache.
 
 ## Cloud Sync

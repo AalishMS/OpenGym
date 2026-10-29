@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -8,6 +7,7 @@ import '../models/training_block.dart';
 import '../models/training_week.dart';
 import '../models/workout_progress.dart';
 import '../models/workout_session.dart';
+import 'training_recovery_snapshots.dart';
 import '../utils/training_block_identity.dart';
 import 'hive_service.dart';
 import 'training_block_graph.dart';
@@ -31,11 +31,8 @@ class TrainingBlockMigration {
   String _ownerKey(String? ownerId) =>
       ownerId == null ? 'offline' : Uri.encodeComponent(ownerId);
 
-  String snapshotPath(String? ownerId) {
-    final root =
-        File(Hive.box<WorkoutSession>(HiveService.sessionsBox).path!).parent;
-    return '${root.path}/training-safety-${_ownerKey(ownerId)}.json';
-  }
+  String snapshotPath(String? ownerId) =>
+      TrainingRecoverySnapshots.path('safety', _ownerKey(ownerId));
 
   Future<void> normalize({required String? ownerId}) => SyncService.instance
       .runExclusiveLocalMutation(() => normalizeUnderGate(ownerId: ownerId));
@@ -54,16 +51,15 @@ class TrainingBlockMigration {
           saved == null
               ? <String, dynamic>{'path': path}
               : Map<String, dynamic>.from(jsonDecode(saved) as Map);
-      final file = File(path);
       // A completed normalization may be followed by late legacy inputs.
       // Snapshot those before touching them; pending recovery keeps its original.
       final needsLinks = HiveService.getAllSessionsRaw().any(
         (s) => s.trainingWeekId == null,
       );
-      if (!await file.exists() ||
+      if (!await TrainingRecoverySnapshots.exists(path) ||
           (journal['phase'] == 'complete' && needsLinks)) {
-        final temporary = File('$path.pending');
-        await temporary.writeAsString(
+        await TrainingRecoverySnapshots.write(
+          path,
           jsonEncode({
             'ownerId': ownerId,
             'splits':
@@ -112,9 +108,7 @@ class TrainingBlockMigration {
               HiveService.trainingOperationsBox,
             ).toMap().map((key, value) => MapEntry(key.toString(), value)),
           }),
-          flush: true,
         );
-        await temporary.rename(path);
       }
       await checkpoint(_ownerKey(ownerId), journal, 'snapshot');
       await HiveService.recoverTrainingOperations(ownerId: ownerId);

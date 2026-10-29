@@ -2,7 +2,7 @@
 
 Tasks 1–7 are locally implemented and verified in the existing
 `feature/training-blocks` checkout. The independent final whole-branch review
-against base `358894a` remains required. Use `superpowers:executing-plans` and
+against base `358894a` is complete and all three Important findings are fixed. Use `superpowers:executing-plans` and
 [the plan](implementation-plan.md). No deploy, release, push, merge, tag or
 version bump is authorized.
 
@@ -18,7 +18,7 @@ version bump is authorized.
 | Independent Task 4 review fixes | `e2d7fa9` |
 | Task 5: ID navigation, management and boundary/start UI | `41e52c8`, `dd992f3` |
 | Task 6: exact destinations, history/timer context and Coach starts | `2c708af` |
-| Task 7: isolated replica/scale proof, pull-first append repair and docs | local commit following `2c708af` |
+| Task 7: isolated replica/scale proof, pull-first append repair and docs | `b6127ff` |
 
 The intermediate review gates are cleared with no deferred minor findings.
 Completed tasks must not be reimplemented. Task 6 re-fetches stable destinations
@@ -33,7 +33,7 @@ an observed failing-then-passing regression as well as the real API trial.
 
 ## Verification and limits
 
-- Full Flutter suite: **835 passed, 3 skipped**. The additional skip is the
+- Full Flutter suite: **838 passed, 3 skipped**. The additional skip is the
   opt-in independent-replica SDK trial; the other skips are the transport SDK
   trial and update-preview rendering. Both SDK trials pass when enabled.
 - Analyzer: **no issues**. Build runner succeeded; generated adapters have no diff.
@@ -45,6 +45,9 @@ an observed failing-then-passing regression as well as the real API trial.
 - The 100 × 52 week / 10,000 session host fixture passed and constructed only
   52 week controls, with zero reloads over five timer seconds. Timing observations
   and profiling limits are in [verification.md](verification.md).
+- Four real headless-Chrome recovery cases pass: preparation/export/reopen,
+  interrupted replacement recovery, rollback, and owner-scoped cleanup. These
+  test browser IndexedDB storage and JSON export, not complete workout UI.
 - Task 5 actual-font light/dark workout previews were checked. Web compilation
   and hot restart pass, but no connected browser client's workout interaction
   is certified.
@@ -59,12 +62,25 @@ records RED→GREEN evidence, exact commands, rulings and review results. Local
 proof services live under `/tmp/opengym-training-proof`; they are temporary test
 infrastructure, not project runtime dependencies.
 
-## Remaining local work
+## Final review
 
-Dispatch the final independent read-only reviewer for `358894a..HEAD`, evaluate
-all findings and declined judgments, then fix Important/Critical findings with
-observed RED→GREEN tests and a passing full suite. Record Minor findings and
-pending external checks honestly; do not merge or publish.
+The review of `358894a..b6127ff` continued with GPT-6.1 Sol after the earlier
+reviewer hit a usage limit. It confirmed three Important findings and no
+Critical/Minor findings. One correction pass reproduced and fixed each:
+
+- Public session writes now derive their display label from the current stable
+  week ID. Deferred structural refresh after autosave retains entered values.
+- Browser recovery uses durable owner-scoped Hive/IndexedDB safety artifacts;
+  native file paths and atomic writes stay intact. Recovery, rollback, cleanup
+  and export are covered in real Chrome, including reopen.
+- Pristine default reuse recognizes both local-null and neutral server-epoch
+  stamps, while rejecting genuinely edited structure.
+
+The fix pass has a passing full suite and analyzer. No second review was
+requested; regression tests and full verification are the completion gate.
+There is no remaining authorized local implementation work. Device checks,
+full browser workout interaction, production configuration and release remain
+separate pending work; nothing was pushed, merged, tagged or deployed.
 
 ## Workspace ownership
 

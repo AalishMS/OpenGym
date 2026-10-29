@@ -6,7 +6,16 @@ production account, publish a client or certify a device release.
 
 ## Automated checks
 
-- The normal Flutter suite includes storage, migration, backup ownership,
+Final full Flutter suite: **838 passed, 3 optional skips**. Analyzer: **no issues**.
+
+The final independent whole-branch review of `358894a..b6127ff` was completed
+with GPT-6.1 Sol after the earlier reviewer hit a usage limit. Three Important
+findings were reproduced and corrected in one test-verified pass: stale labels
+from unsaved edits during rebase, browser filesystem-only recovery storage,
+and neutral epoch stamps preventing pristine default-split reuse after sync.
+No Critical or Minor findings were reported; no second review was dispatched.
+
+- The normal Flutter suite includes the final review regressions plus storage, migration, backup ownership,
   interrupted-write/reopen recovery, account invalidation, progression,
   inheritance, exact routes, notification deferral, boundary/start controls,
   History, date-based analytics and Coach selection.
@@ -29,6 +38,11 @@ production account, publish a client or certify a device release.
   Flutter SDK requires a newer Gradle than the repository pin, so local tests
   used `-PskipDependencyChecks=true`. No version files were changed. This is
   unit-test evidence, not supported release-toolchain certification.
+- Four headless-Chrome tests pass using real Hive IndexedDB: preparation and
+  export after reopen, interrupted replacement/reopen recovery, explicit
+  rollback, and owner-scoped cleanup. Native file paths/protocol remain intact.
+  The dedicated browser safety box keeps full snapshots out of settings and
+  operation intents. This verifies recovery storage, not end-to-end workout UI.
 - Hive build runner completed and generated adapters match the committed files.
   Its older analyzer dependency reports an SDK language-version warning; the
   generated files compile and `flutter analyze` remains the final lint gate.
@@ -39,6 +53,8 @@ Run the SQL suite before the SDK trials to seed their two isolated accounts:
 python3 supabase/tests/training_blocks/test_api.py
 flutter test --dart-define=OPENGYM_LOCAL_API_TESTS=true test/integration/training_blocks_api_test.dart test/integration/training_blocks_replicas_test.dart
 flutter test test/training_block_scale_test.dart
+# Set CHROME_EXECUTABLE to an installed Chrome/Chromium when needed.
+flutter test --platform chrome test/training_recovery_web_test.dart
 ./android/gradlew -p android -PskipDependencyChecks=true :app:testDebugUnitTest
 flutter analyze
 flutter test
@@ -71,7 +87,9 @@ also pending; independent local cache/API trials cover persistence/convergence.
 
 Web debug compilation and hot restart completed. The server reported no
 connected debug client; browser workout interaction remains unverified.
-Actual-font light/dark workout previews were checked at the Task 5 checkpoint.
+Separate real headless-Chrome recovery tests pass as listed above. Full browser
+workout interaction remains unverified. Actual-font light/dark workout previews
+were checked at the Task 5 checkpoint.
 
 Before a separately authorized rollout, verify the target API's pre-request
 hook, exposed-table grants and RLS, migration history, old-client rejection and
