@@ -9,6 +9,7 @@ import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import '../../utils/statistics_format.dart';
+import '../../utils/workout_context.dart';
 import '../read_only_value.dart';
 import '../readable_table_viewport.dart';
 
@@ -45,7 +46,7 @@ class WorkoutDetailsSummary extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          '${formatStatisticsDate(session.date)} · Week ${session.weekNumber}',
+          '${formatStatisticsDate(session.date)} · ${workoutContext(session)}',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: AppSpacing.lg),

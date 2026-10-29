@@ -69,12 +69,17 @@ class CoachApplier {
   Future<CoachApplyOutcome> apply(
     ValidatedProposal proposal, {
     required String userId,
+    Map<String, String> startingWeekIds = const {},
   }) async {
     final outcome = await SyncService.instance.runExclusiveLocalMutation(() {
       final stale = staleReason(proposal.snapshot, userId: userId);
       if (stale != null) return Future.value(CoachApplyStale(stale));
       return switch (proposal.target) {
-        CoachTarget.activeSplit => _applyToActiveSplit(proposal, userId),
+        CoachTarget.activeSplit => _applyToActiveSplit(
+          proposal,
+          userId,
+          startingWeekIds,
+        ),
         CoachTarget.newSplit => _applyToNewSplit(proposal, userId),
       };
     });
@@ -108,6 +113,7 @@ class CoachApplier {
   Future<CoachApplyOutcome> _applyToActiveSplit(
     ValidatedProposal proposal,
     String userId,
+    Map<String, String> startingWeekIds,
   ) async {
     final splitId = proposal.snapshot.splitId;
     final now = DateTime.now();
@@ -117,6 +123,7 @@ class CoachApplier {
     // Copies, not the live objects: Hive hands out the same instances the
     // snapshot holds, and rollback must put back exactly what was there.
     final written = <String, WorkoutPlan>{};
+    final starts = <String, String>{};
 
     var nextPosition = _nextPosition(live);
     final usedSlots = {
@@ -150,6 +157,7 @@ class CoachApplier {
       usedSlots.add(slot);
       planCount++;
       final id = _uuid.v4();
+      if (startingWeekIds[coachPlan.name] case final start?) starts[id] = start;
       written[id] = WorkoutPlan(
         id: id,
         userId: userId,
@@ -177,6 +185,7 @@ class CoachApplier {
     await installTrainingPlansUnderGate(
       ownerId: userId,
       plans: {...written, ...tombstones},
+      startingWeekIds: starts,
       onPhase: (phase) async {
         if (phase == 'plans') {
           await applyHook?.call(CoachApplyStage.plansWritten);

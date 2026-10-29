@@ -22,6 +22,18 @@ class WorkoutTimerStateTest {
     )
 
     @Test
+    fun optionalBlockTextDoesNotChangeSessionIdentity() {
+        val old = runningState()
+        assertNull(old.blockName)
+        assertEquals("Strength · Week 2", old.title())
+        val labeled = old.copy(blockName = "Hypertrophy")
+        assertEquals("Strength · Hypertrophy · Week 2", labeled.title())
+        val resumed = labeled.paused(6_000L).resumed(10_000L)
+        assertEquals("session", resumed.toMap()["sessionId"])
+        assertEquals("Hypertrophy", resumed.toMap()["blockName"])
+    }
+
+    @Test
     fun elapsedCombinesAccumulatedTimeAndClampsBackwardClock() {
         val state = runningState()
         assertEquals(35, state.elapsedSeconds(6_000L))

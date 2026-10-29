@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart' as gym;
 import 'package:gymapp/models/set_template.dart';
-import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/training_week.dart';
+import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
@@ -23,6 +18,10 @@ import 'package:gymapp/services/workout_session_initializer.dart';
 import 'package:gymapp/services/workout_timer_notification_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/workout/training_block_strip.dart';
+import 'package:hive/hive.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
@@ -125,9 +124,30 @@ void main() {
       'pendingStop': false,
     });
 
+    expect(snapshot.blockName, isNull);
     expect(snapshot.isRunning, isTrue);
     expect(snapshot.elapsedSeconds(DateTime(2026, 9, 5, 10, 1, 10)), 100);
   });
+
+  test(
+    'notification optional block context round trips without becoming identity',
+    () {
+      final snapshot = WorkoutTimerNotificationSnapshot.fromMap({
+        'sessionId': 'exact-old-draft',
+        'planId': 'p',
+        'splitId': 's',
+        'planName': 'Push',
+        'weekNumber': 1,
+        'blockName': 'Strength',
+        'accumulatedSeconds': 90,
+        'running': false,
+        'actionRevision': 44,
+      });
+      expect(snapshot.blockName, 'Strength');
+      expect(snapshot.sessionId, 'exact-old-draft');
+      expect(snapshot.elapsedSeconds(), 90);
+    },
+  );
 
   test('notification stop event opens the workout and requests logging', () {
     final event = WorkoutTimerNotificationEvent.fromMap({
@@ -464,7 +484,7 @@ void main() {
       );
       await tester.tap(find.text('Start'));
       await waitForTimerConflict(tester);
-      expect(find.textContaining('Push Day, Week 6'), findsOneWidget);
+      expect(find.textContaining('Push Day, Block 1 · Week 6'), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await pumpWithStorage(tester);
       expect(HiveService.getSessionById('old-running')!.isTimerRunning, isTrue);
@@ -539,9 +559,15 @@ void main() {
       });
       await open(tester);
       await tester.tap(find.text('Start'));
-      await waitForTimerConflict(tester, planLabel: 'Pull Day, Week 6');
+      await waitForTimerConflict(
+        tester,
+        planLabel: 'Pull Day, Block 1 · Week 6',
+      );
       await tester.tap(find.text('Pause and start'));
-      await waitForTimerConflict(tester, planLabel: 'Push Day, Week 6');
+      await waitForTimerConflict(
+        tester,
+        planLabel: 'Push Day, Block 1 · Week 6',
+      );
       await tester.tap(find.text('Pause and start'));
       await pumpWithStorage(tester);
       expect(

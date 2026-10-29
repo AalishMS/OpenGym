@@ -1,26 +1,26 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
-
-import '../navigation/app_navigation_observer.dart';
 
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
 import '../models/workout_session.dart';
+import '../navigation/app_navigation_observer.dart';
 import '../providers/settings_provider.dart';
 import '../providers/workout_session_provider.dart';
+import '../services/hive_service.dart';
 import '../services/statistics_analytics_service.dart';
+import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/set_history.dart';
 import '../utils/statistics_format.dart';
+import '../widgets/action_progress.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_header.dart';
-import '../widgets/action_progress.dart';
 import '../widgets/history/history_journal_data.dart';
 import '../widgets/history/history_journal_widgets.dart';
 import '../widgets/history/workout_details_widgets.dart';
@@ -199,7 +199,13 @@ class WorkoutDetailsScreen extends StatelessWidget {
     for (final session in provider.sessions) {
       if (historySessionIdentity(session) == sessionIdentity) return session;
     }
-    return null;
+    final saved = HiveService.getSessionById(sessionIdentity);
+    return saved != null &&
+            !saved.isCompleted &&
+            saved.deletedAt == null &&
+            saved.userId == SupabaseService.currentUserId
+        ? saved
+        : null;
   }
 
   Future<void> _edit(BuildContext context, WorkoutSession session) async {
@@ -320,13 +326,13 @@ class WorkoutDetailsScreen extends StatelessWidget {
         leading: AppBackButton(onPressed: () => Navigator.pop(context)),
         title: const Text('Workout details'),
         actions: [
-          if (session != null)
+          if (session != null && session.isCompleted)
             AppIconButton(
               label: 'Edit workout',
               icon: LucideIcons.pencil,
               onPressed: () => _edit(context, session),
             ),
-          if (session != null)
+          if (session != null && session.isCompleted)
             PopupMenuButton<String>(
               tooltip: 'Workout actions',
               icon: Icon(

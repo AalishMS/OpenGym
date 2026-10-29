@@ -5,20 +5,19 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import 'models/workout_session.dart';
-import 'navigation/app_navigation_observer.dart';
+import 'navigation/open_workout.dart';
+import 'navigation/workout_destination.dart';
 import 'providers/coach_provider.dart';
-import 'providers/split_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/workout_plan_provider.dart';
 import 'providers/workout_session_provider.dart';
 import 'screens/coach_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/intro_screen.dart';
-import 'screens/stats_screen.dart';
 import 'screens/settings_screen.dart';
-import 'screens/history_screen.dart';
-import 'screens/workout_screen.dart';
+import 'screens/stats_screen.dart';
 import 'services/hive_service.dart';
 import 'services/tutorial_preferences.dart';
 import 'services/workout_timer_notification_service.dart';
@@ -376,70 +375,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (_tourActive) _closeTutorial();
     _handledTimerIntentRevision = event.snapshot.actionRevision;
 
-    final navigation = AppNavigationObserver.maybeOf(context);
-    if (session.id != null && navigation != null) {
-      await navigation.openWorkout(
-        session.id!,
-        requestLogConfirmation: event.requestLogConfirmation,
-        openIfMissing:
-            (confirm) =>
-                _pushTimerWorkout(session, requestLogConfirmation: confirm),
-      );
-    } else {
-      await _pushTimerWorkout(
-        session,
-        requestLogConfirmation: event.requestLogConfirmation,
-      );
-    }
-  }
-
-  Future<void> _pushTimerWorkout(
-    WorkoutSession session, {
-    required bool requestLogConfirmation,
-  }) async {
-    if (!mounted) return;
-    // A deferred intent may outlive a delete/completion in the blocking flow.
-    final current =
-        session.id == null ? null : HiveService.getSessionById(session.id!);
-    if (current == null || current.isCompleted || current.deletedAt != null) {
-      await WorkoutTimerNotificationService.instance.dismiss();
-      return;
-    }
-
-    final planId = current.planId;
-    final plan = planId == null ? null : HiveService.getPlanById(planId);
-    if (plan == null || plan.deletedAt != null) {
-      await WorkoutTimerNotificationService.instance.dismiss();
-      return;
-    }
-    final splitId = plan.splitId;
-    final splitProvider = context.read<SplitProvider>();
-    if (splitId != null && splitProvider.activeSplitId != splitId) {
-      try {
-        await splitProvider.setActiveSplit(splitId);
-      } catch (_) {
-        // The workout can still be opened directly if an offline account does
-        // not currently permit changing the saved split preference.
-      }
-    }
-    if (!mounted) return;
-    final plans = HiveService.getPlans(splitId: splitId);
-    final planIndex = plans.indexWhere((candidate) => candidate.id == plan.id);
-    unawaited(
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder:
-              (_) => WorkoutScreen(
-                plan: plan,
-                planIndex: planIndex < 0 ? 0 : planIndex,
-                initialWeekNumber: current.weekNumber,
-                initialSession: current,
-                showLogConfirmationOnOpen: requestLogConfirmation,
-              ),
-        ),
-      ),
+    await openWorkoutDestination(
+      context,
+      WorkoutDestination.session(session.id!),
+      requestLogConfirmation: event.requestLogConfirmation,
+      requireIncomplete: true,
     );
-    await WidgetsBinding.instance.endOfFrame;
   }
 
   Future<void> _checkForUpdate() async {

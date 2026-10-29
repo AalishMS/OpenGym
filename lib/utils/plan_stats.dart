@@ -38,6 +38,7 @@ class PlanStat {
               .where(
                 (session) =>
                     session.isCompleted &&
+                    session.deletedAt == null &&
                     (session.planId != null && plan.id != null
                         ? session.planId == plan.id
                         : session.planName.toLowerCase() ==

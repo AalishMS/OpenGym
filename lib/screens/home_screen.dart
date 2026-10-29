@@ -2,35 +2,36 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
-import '../providers/workout_plan_provider.dart';
-import '../providers/workout_session_provider.dart';
-import '../providers/split_provider.dart';
-import '../models/workout_plan.dart';
-import '../services/hive_service.dart';
-import '../widgets/workout/training_block_dialogs.dart';
-import '../models/workout_session.dart';
+import '../data/plan_colors.dart';
 import '../models/exercise_template.dart';
 import '../models/set_template.dart';
-import '../data/plan_colors.dart';
+import '../models/workout_plan.dart';
+import '../models/workout_session.dart';
+import '../navigation/open_workout.dart';
+import '../navigation/workout_destination.dart';
+import '../providers/split_provider.dart';
+import '../providers/workout_plan_provider.dart';
+import '../providers/workout_session_provider.dart';
+import '../services/hive_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../utils/plan_stats.dart';
-import '../widgets/splits/split_switcher.dart';
-import '../widgets/coach/coach_button.dart';
-import '../widgets/app_button.dart';
 import '../widgets/action_progress.dart';
-import '../widgets/persistence_dialog.dart';
+import '../widgets/app_button.dart';
 import '../widgets/app_wordmark.dart';
-import '../widgets/home/plan_grid.dart';
+import '../widgets/coach/coach_button.dart';
 import '../widgets/home/home_plan_row.dart';
-import '../widgets/home/up_next_card.dart';
+import '../widgets/home/plan_grid.dart';
 import '../widgets/home/training_snapshot.dart';
-import 'plan_editor_screen.dart';
-import 'workout_screen.dart';
+import '../widgets/home/up_next_card.dart';
+import '../widgets/persistence_dialog.dart';
 import '../widgets/splits/preset_browser_dialog.dart';
+import '../widgets/splits/split_switcher.dart';
+import '../widgets/workout/training_block_dialogs.dart';
+import 'plan_editor_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final VoidCallback? onOpenWeeklyTraining;
@@ -482,12 +483,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _openWorkout(BuildContext context, WorkoutPlan plan, int index) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WorkoutScreen(plan: plan, planIndex: index),
-      ),
-    );
+    openWorkoutDestination(context, WorkoutDestination.active(plan.id!));
   }
 
   /// `4 exercises · last trained yesterday`, for the plan menu's header.

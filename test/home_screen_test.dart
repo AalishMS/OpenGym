@@ -1,40 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:gymapp/models/exercise_template.dart';
+import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/models/exercise.dart';
+import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/navigation/workout_destination.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
-import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/screens/home_screen.dart';
-import 'package:gymapp/widgets/home/home_plan_row.dart';
 import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
-import 'package:gymapp/widgets/workout/exercise_card.dart';
-
-import 'support/hive_test_harness.dart';
-import 'support/pump_with_storage.dart';
-import 'support/test_fonts.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/spacing.dart';
 import 'package:gymapp/utils/format.dart';
 import 'package:gymapp/utils/plan_stats.dart';
+import 'package:gymapp/utils/training_block_identity.dart';
+import 'package:gymapp/widgets/home/home_plan_row.dart';
 import 'package:gymapp/widgets/home/training_snapshot.dart';
+import 'package:gymapp/widgets/workout/exercise_card.dart';
 import 'package:gymapp/widgets/workout/training_block_strip.dart';
+import 'package:hive/hive.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'support/hive_test_harness.dart';
+import 'support/pump_with_storage.dart';
+import 'support/test_fonts.dart';
 
 void main() {
   final hiveHarness = HiveTestHarness();
 
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
+    await Supabase.initialize(
+      url: 'https://example.supabase.co',
+      publishableKey: 'test',
+    );
     await loadTestFonts();
     await hiveHarness.open();
   });
@@ -711,7 +717,14 @@ void main() {
         ],
         child: MaterialApp(
           theme: buildTheme(const Color(0xFF00A8FF), Brightness.dark),
-          home: WorkoutScreen(plan: plan, planIndex: 0, initialWeekNumber: 1),
+          home: WorkoutScreen(
+            plan: plan,
+            planIndex: 0,
+            destination: WorkoutDestination.week(
+              plan.id!,
+              legacyTrainingWeekId(plan.splitId!, 1),
+            ),
+          ),
         ),
       ),
     );

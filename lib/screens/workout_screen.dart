@@ -4,26 +4,24 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
-import '../navigation/app_navigation_observer.dart';
 import '../data/plan_colors.dart';
-import '../models/workout_plan.dart';
-import '../models/training_block.dart';
-import '../models/training_week.dart';
-import '../models/workout_progress.dart';
-import '../providers/training_block_provider.dart';
-import '../repositories/training_block_repository.dart';
-import '../services/workout_progression_service.dart';
-import '../services/sync_service.dart';
-import '../utils/training_block_identity.dart';
-import '../widgets/workout/training_block_strip.dart';
-import '../widgets/workout/training_block_dialogs.dart';
-import '../models/workout_session.dart';
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
+import '../models/training_block.dart';
+import '../models/training_week.dart';
+import '../models/workout_plan.dart';
+import '../models/workout_progress.dart';
+import '../models/workout_session.dart';
+import '../navigation/app_navigation_observer.dart';
+import '../navigation/workout_destination.dart';
+import '../providers/training_block_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
+import '../repositories/training_block_repository.dart';
 import '../services/hive_service.dart';
 import '../services/pr_tracking_service.dart';
+import '../services/sync_service.dart';
+import '../services/workout_progression_service.dart';
 import '../services/workout_session_initializer.dart';
 import '../services/workout_timer_notification_service.dart';
 import '../theme/app_theme.dart';
@@ -32,30 +30,29 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../utils/set_history.dart';
-import '../widgets/app_header.dart';
-import '../widgets/underline_tab_strip.dart';
-import '../widgets/exercise_picker_sheet.dart';
+import '../utils/workout_context.dart';
 import '../widgets/action_progress.dart';
+import '../widgets/app_header.dart';
+import '../widgets/exercise_picker_sheet.dart';
+import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
 import '../widgets/workout/plan_swipe_region.dart';
 import '../widgets/workout/set_entry_table.dart';
+import '../widgets/workout/training_block_dialogs.dart';
+import '../widgets/workout/training_block_strip.dart';
 import '../widgets/workout/workout_dialogs.dart';
 
 class WorkoutScreen extends StatefulWidget {
   final WorkoutPlan plan;
   final int planIndex;
-  final int? initialWeekNumber;
-  final String? initialWeekId;
-  final WorkoutSession? initialSession;
+  final WorkoutDestination? destination;
   final bool showLogConfirmationOnOpen;
 
   const WorkoutScreen({
     super.key,
     required this.plan,
     required this.planIndex,
-    this.initialWeekNumber,
-    this.initialWeekId,
-    this.initialSession,
+    this.destination,
     this.showLogConfirmationOnOpen = false,
   });
 
@@ -197,25 +194,13 @@ class _WorkoutScreenState extends State<WorkoutScreen>
             HiveService.getSessionById(session.id!) == null,
       );
     }
-    final initialSession = widget.initialSession;
+    final intent = widget.destination;
     final exact =
-        initialSession?.id == null
+        intent?.sessionId == null
             ? null
-            : HiveService.getSessionById(initialSession!.id!);
-    final legacy =
-        widget.initialWeekNumber == null || widget.plan.splitId == null
-            ? null
-            : legacyTrainingWeekId(
-              widget.plan.splitId!,
-              widget.initialWeekNumber!,
-            );
+            : HiveService.getSessionById(intent!.sessionId!);
     final requested =
-        initial
-            ? exact?.trainingWeekId ??
-                initialSession?.trainingWeekId ??
-                widget.initialWeekId ??
-                legacy
-            : selected;
+        initial ? exact?.trainingWeekId ?? intent?.weekId : selected;
     final destination =
         requested != null && _weeks.contains(requested)
             ? requested
@@ -496,7 +481,10 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   String get _contextLabel =>
       '${_blocks.firstWhere((b) => b.id == _selectedWeek.blockId).name} · Week ${_selectedWeek.number}';
   bool _canUseTimer(WorkoutSession session) =>
-      _activeSlot || widget.initialSession != null && session.hasStarted;
+      _activeSlot ||
+      (widget.destination?.sessionId == session.id &&
+          session.id != null &&
+          session.hasStarted);
 
   WorkoutSession _getOrCreateSession() {
     if (_weekSessions[_currentWeek] case final session?) return session;
@@ -592,7 +580,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
             (dialogContext) => AlertDialog(
               title: const Text('Start this workout?'),
               content: Text(
-                '${conflict.planName}, Week ${conflict.weekNumber} still has a saved '
+                '${conflict.planName}, ${workoutContext(conflict)} still has a saved '
                 'running timer. Pause it and start this workout? '
                 'Its sets will be kept.',
               ),
@@ -1044,9 +1032,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       _loadStructure(initial: true);
       setState(() => _progressError = false);
       if (!widget.showLogConfirmationOnOpen &&
-          widget.initialSession == null &&
-          widget.initialWeekId == null &&
-          widget.initialWeekNumber == null) {
+          (widget.destination?.isActive ?? true)) {
         await _maybeBoundaryPrompt();
       }
     } catch (_) {

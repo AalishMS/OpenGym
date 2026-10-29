@@ -1,10 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
-
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/statistics.dart';
+import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/services/statistics_analytics_service.dart';
+import 'package:gymapp/utils/plan_stats.dart';
 import 'package:gymapp/utils/statistics_format.dart';
 
 void main() {
@@ -28,6 +29,44 @@ void main() {
     deletedAt: deletedAt,
     durationSeconds: durationSeconds,
     exercises: [Exercise(name: exerciseName, sets: sets)],
+  );
+
+  test(
+    'same-number weeks and duplicate slot logs all count; drafts and tombstones do not',
+    () {
+      final rows = [
+        for (final id in ['b1-w1-log1', 'b1-w1-log2', 'b2-w1-log'])
+          session(
+            id: id,
+            date: DateTime(2026, 9, 1),
+            sets: [Set(weight: 100, reps: 5)],
+          ).copyWith(
+            planId: 'p',
+            trainingWeekId: id.startsWith('b1') ? 'b1-w1' : 'b2-w1',
+          ),
+        session(id: 'draft', date: DateTime(2026, 9, 2), completed: false),
+        session(
+          id: 'deleted',
+          date: DateTime(2026, 9, 3),
+          deletedAt: DateTime(2026, 9, 4),
+        ).copyWith(planId: 'p'),
+      ];
+      expect(analytics.eligibleSessions(rows), hasLength(3));
+      expect(
+        analytics
+            .weeklyVolume(rows, now: DateTime(2026, 9, 1))
+            .single
+            .volumeLoad,
+        1500,
+      );
+      final stat =
+          PlanStat.compute([
+            WorkoutPlan(id: 'p', name: 'Push Day', exercises: []),
+          ], rows).single;
+      expect(stat.sessionCount, 3);
+      expect(stat.lastTrained, DateTime(2026, 9, 1));
+      expect(stat.volumeKg, 1500);
+    },
   );
 
   group('session calculations', () {

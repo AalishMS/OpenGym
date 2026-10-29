@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
+import '../../utils/workout_context.dart';
 import '../app_button.dart';
 import 'history_journal_data.dart';
 
@@ -202,7 +203,7 @@ class _WorkoutSummaryContent extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Week ${session.weekNumber}',
+          workoutContext(session),
           style: Theme.of(context).textTheme.labelSmall,
         ),
         const SizedBox(height: AppSpacing.xs),

@@ -2,14 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../models/coach_proposal.dart';
 import '../providers/coach_provider.dart';
 import '../services/coach/coach_applier.dart';
+import '../services/coach/proposal_diff.dart';
+import '../services/hive_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
 import '../theme/spacing.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_header.dart';
 import '../widgets/coach/coach_diff_card.dart';
+import '../widgets/workout/training_block_dialogs.dart';
 
 /// The diff for one proposal. Every change has a checkbox, so the user can
 /// apply some changes and skip the rest, or `Discard` the lot.
@@ -24,6 +28,53 @@ class CoachReviewScreen extends StatefulWidget {
 
 class _CoachReviewScreenState extends State<CoachReviewScreen> {
   CoachEntry get entry => widget.entry;
+  final Map<String, String> _starts = {};
+
+  Widget _startingSlot(String name, bool enabled) {
+    final proposal = entry.proposal!.proposal;
+    if (proposal.target == CoachTarget.newSplit) {
+      return const Padding(
+        padding: EdgeInsets.all(AppSpacing.sm),
+        child: Text('Starts at Block 1 · Week 1'),
+      );
+    }
+    final blocks = HiveService.blocksForSplit(proposal.snapshot.splitId);
+    final weeks = {
+      for (final b in blocks)
+        b.id: HiveService.weeksForBlock(proposal.snapshot.splitId, b.id),
+    };
+    final firstWeek = weeks.values.expand((w) => w).firstOrNull?.id;
+    if (firstWeek != null) _starts.putIfAbsent(name, () => firstWeek);
+    final selected = _starts[name];
+    final week =
+        weeks.values
+            .expand((w) => w)
+            .where((w) => w.id == selected)
+            .firstOrNull;
+    final block = blocks.where((b) => b.id == week?.blockId).firstOrNull;
+    return TextButton(
+      key: ValueKey('coach-start-$name'),
+      onPressed:
+          !enabled || week == null
+              ? null
+              : () async {
+                final chosen = await TrainingBlockDialogs.startingWeek(
+                  context,
+                  blocks: blocks,
+                  weeksByBlock: weeks,
+                  selectedWeekId: selected,
+                );
+                if (chosen != null && mounted) {
+                  setState(() => _starts[name] = chosen);
+                }
+              },
+      child: Text(
+        week == null
+            ? 'Starting week unavailable'
+            : 'Starts at ${block!.name} · Week ${week.number}',
+      ),
+    );
+  }
 
   Future<void> _apply() async {
     final coach = context.read<CoachProvider>();
@@ -31,7 +82,7 @@ class _CoachReviewScreenState extends State<CoachReviewScreen> {
     final messenger = ScaffoldMessenger.of(context);
     final CoachApplyOutcome outcome;
     try {
-      outcome = await coach.apply(entry);
+      outcome = await coach.apply(entry, startingWeekIds: _starts);
     } catch (_) {
       if (!mounted) return;
       final ground = errorColor(context);
@@ -116,6 +167,11 @@ class _CoachReviewScreenState extends State<CoachReviewScreen> {
                     selection: selection,
                     onChanged: applying ? null : () => setState(() {}),
                   ),
+                  if (plan.kind == DiffKind.added)
+                    _startingSlot(
+                      plan.name,
+                      !applying && selection.planState(plan) != false,
+                    ),
                   const SizedBox(height: AppSpacing.md),
                 ],
               ],

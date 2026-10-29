@@ -3,27 +3,27 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'package:gymapp/app_shell.dart';
-import 'package:gymapp/navigation/app_navigation_observer.dart';
-import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/exercise.dart';
+import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart' as gym;
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/navigation/app_navigation_observer.dart';
 import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/providers/split_provider.dart';
 import 'package:gymapp/providers/update_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
+import 'package:gymapp/repositories/training_block_repository.dart';
 import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:hive/hive.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
@@ -192,6 +192,38 @@ void main() {
       },
     );
   }
+
+  workoutTest(
+    'deferred timer open ignores a session completed while modal saves',
+    (tester) async {
+      await openShell(tester);
+      final context = tester.element(find.byType(AppShell));
+      showDialog<void>(
+        context: context,
+        builder:
+            (dialogContext) => AlertDialog(
+              title: const Text('Saving'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Done'),
+                ),
+              ],
+            ),
+      );
+      await tester.pumpAndSettle();
+      await notify(tester, 1);
+      await tester.runAsync(
+        () => HiveService.putSessionRaw(
+          HiveService.getSessionById('draft')!.copyWith(isCompleted: true),
+        ),
+      );
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(allWorkouts(), findsNothing);
+      expect(find.text('Workout details'), findsNothing);
+    },
+  );
 
   workoutTest('stop confirmation waits for the visible workout autosave', (
     tester,
@@ -363,6 +395,40 @@ void main() {
     expect(find.text('Log workout?'), findsOneWidget);
   });
 
+  workoutTest(
+    'old native snapshot finishes exact nonactive Week 1 without moving progress',
+    (tester) async {
+      await openShell(tester);
+      final before = HiveService.progressForPlan(plan.splitId!, plan.id!)!;
+      await tester.runAsync(() async {
+        final repository = TrainingBlockRepository(ownerId: () => null);
+        final block = await repository.createBlock(
+          splitId: plan.splitId!,
+          name: 'Strength',
+          weekCount: 1,
+        );
+        final week = repository.weeksForBlock(plan.splitId!, block.id).single;
+        session = session.copyWith(trainingWeekId: week.id, weekNumber: 1);
+        await HiveService.putSessionRaw(session);
+      });
+      await tester.runAsync(
+        () => HiveService.putPlanRaw(plan.copyWith(name: 'Renamed push')),
+      );
+      // notify deliberately supplies the pre-block native snapshot shape.
+      await notify(tester, 1, stop: true);
+      expect(find.text('Strength · Week 1'), findsOneWidget);
+      expect(find.text('Renamed push').first, findsOneWidget);
+      expect(find.text('Log workout?'), findsOneWidget);
+      await tester.tap(find.text('Log workout'));
+      await pumpWithStorage(tester);
+      expect(HiveService.getSessionById(session.id!)!.isCompleted, isTrue);
+      final after = HiveService.progressForPlan(plan.splitId!, plan.id!)!;
+      expect(after.activeWeekId, before.activeWeekId);
+      expect(after.revision, before.revision);
+      expect(after.state, before.state);
+    },
+  );
+
   workoutTest('notification opens the exact session identity', (tester) async {
     final other = session.copyWith(id: 'other-draft', date: DateTime(2026, 2));
     await tester.runAsync(() => HiveService.putSessionRaw(other));
@@ -376,8 +442,8 @@ void main() {
     expect(
       tester
           .widget<WorkoutScreen>(find.byType(WorkoutScreen))
-          .initialSession
-          ?.id,
+          .destination
+          ?.sessionId,
       'draft',
     );
   });

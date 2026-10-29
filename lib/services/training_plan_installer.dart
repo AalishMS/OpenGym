@@ -1,5 +1,6 @@
 import '../models/split.dart';
 import '../models/workout_plan.dart';
+import '../models/workout_progress.dart';
 import 'hive_service.dart';
 import 'training_block_migration.dart';
 import 'training_block_restore.dart';
@@ -9,6 +10,7 @@ import 'training_block_restore.dart';
 Future<void> installTrainingPlansUnderGate({
   required String ownerId,
   required Map<String, WorkoutPlan> plans,
+  Map<String, String> startingWeekIds = const {},
   Split? split,
   String? activeSplitId,
   Future<void> Function(String phase)? onPhase,
@@ -30,11 +32,41 @@ Future<void> installTrainingPlansUnderGate({
   for (final p in plans.values.where((p) => p.deletedAt == null)) {
     input = input.ensureNewStructure(p.splitId!);
   }
-  final desired = TrainingBlockMigration.prepareGraph(
+  var desired = TrainingBlockMigration.prepareGraph(
     input,
   ).explicitPlanRevisions(
     plans.keys.where((id) => !current.plans.any((p) => p.id == id)).toSet(),
   );
+  for (final entry in startingWeekIds.entries) {
+    final plan = plans[entry.key];
+    if (plan == null || current.plans.any((p) => p.id == entry.key)) {
+      throw StateError('Only added plans can choose a starting week.');
+    }
+    final week =
+        desired.weeks
+            .where(
+              (w) =>
+                  w.id == entry.value &&
+                  w.splitId == plan.splitId &&
+                  w.deletedAt == null,
+            )
+            .singleOrNull;
+    if (week == null ||
+        !desired.blocks.any(
+          (b) => b.id == week.blockId && b.deletedAt == null,
+        )) {
+      throw StateError('The starting week is unavailable.');
+    }
+    desired = desired.copyWith(
+      progress: [
+        for (final p in desired.progress)
+          if (p.planId == plan.id)
+            p.copyWith(activeWeekId: week.id, state: WorkoutProgressState.ready)
+          else
+            p,
+      ],
+    );
+  }
   var started = false;
   final writer = TrainingBlockRestore(
     onPhase: (phase) async {

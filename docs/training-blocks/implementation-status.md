@@ -1,7 +1,7 @@
 # Training blocks implementation checkpoint
 
-Paused after Task 5 at the user's request. Continue sequentially with Task 6
-when instructed. Use `superpowers:executing-plans`, one main implementer, and
+Resumed in the existing `feature/training-blocks` checkout. Tasks 1–6 are
+implemented; continue sequentially with Task 7 and final review. Use `superpowers:executing-plans`, one main implementer, and
 [the implementation plan](implementation-plan.md). Do not deploy, release,
 push, tag, or bump the version.
 
@@ -15,7 +15,8 @@ push, tag, or bump the version.
 | Task 3: backups, ownership, lifecycle recovery | `e8193a8` |
 | Task 4: independent progression and inheritance | `b80c1f3` |
 | Independent Task 4 review fixes | `e2d7fa9` |
-| Task 5: ID navigation, management, boundary/start UI | `41e52c8` plus this checkpoint commit |
+| Task 5: ID navigation, management, boundary/start UI | `41e52c8`, `dd992f3` |
+| Task 6: exact destinations, history/timer context, Coach starts | local commit following `dd992f3` |
 
 Both requested intermediate review gates are cleared. No deferred minor
 findings were reported. The final whole-branch review is still required after
@@ -31,7 +32,10 @@ race, mutation-guard, and layout tests remain covered.
 
 ## Verification
 
-- Final full Flutter suite after the header refinement: 820 passed, 2 skipped.
+- Task 6 full Flutter suite: 833 passed, 2 skipped.
+- Native Gradle `:app:testDebugUnitTest`: 4 passed. The installed Flutter SDK
+  required `-PskipDependencyChecks=true` with the existing Gradle pin; this is
+  unit-test evidence, not a supported-release toolchain certification.
 - Final header refinement: six workout-log tests passed; actual-Manrope preview
   test passed in both themes. The selected block/week label remains readable at
   normal phone size; timer width is bounded on narrow/large-text layouts.
@@ -43,7 +47,8 @@ race, mutation-guard, and layout tests remain covered.
 - Web debug compilation and hot restart completed, but the browser fallback
   remained blank and reported no connected debug client. No browser workout
   interaction is certified.
-- No Android device or configured emulator is available. The user explicitly
+- No Android device is running. A configured emulator is now discoverable but
+  was not launched; the user’s chosen pending device scope is retained. The user explicitly
   chose to record Android restart, native-device timer interaction, and device
   profiling checks as pending.
 
@@ -54,16 +59,11 @@ and temporary logs are not durable project dependencies.
 
 ## Remaining
 
-1. Task 6: introduce `WorkoutDestination.active/week/session`, remove the
-   temporary `initialWeekNumber` screen route, re-fetch destinations at delivery,
-   add block context to History/resume/native timer, audit date-based analytics,
-   and add Coach review starting-slot selection. Run its focused Flutter suites
-   and discover/run the existing native Gradle timer tests.
-2. Task 7: final full verification, isolated multi-replica/account trials,
+1. Task 7: final full verification, isolated multi-replica/account trials,
    100 × 52 weeks plus 10,000 sessions measurement, and update DESIGN.md,
    docs/splits.md, docs/coach.md, docs/online_support_verification.md. Android
    manual checks remain pending unless a device becomes available.
-3. Independent final review of the whole branch from base `358894a`; fix
+2. Independent final review of the whole branch from base `358894a`; fix
    Important/Critical findings with observed failing-then-passing regressions
    and a passing full suite before finishing.
 

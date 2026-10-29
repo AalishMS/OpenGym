@@ -1,31 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:gymapp/models/exercise.dart';
+import 'package:gymapp/models/exercise_template.dart';
+import 'package:gymapp/models/set.dart' as gym_set;
 import 'package:gymapp/models/split.dart' as gym;
+import 'package:gymapp/models/training_block.dart';
+import 'package:gymapp/models/training_week.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
-import 'package:gymapp/models/exercise_template.dart';
-import 'package:gymapp/models/exercise.dart';
-import 'package:gymapp/models/set.dart' as gym_set;
-import 'package:gymapp/widgets/workout/exercise_card.dart';
-import 'package:gymapp/providers/workout_plan_provider.dart';
+import 'package:gymapp/navigation/workout_destination.dart';
 import 'package:gymapp/providers/split_provider.dart';
-import 'package:gymapp/screens/plan_editor_screen.dart';
+import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/repositories/training_block_repository.dart';
+import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/training_block_migration.dart';
+import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/widgets/workout/exercise_card.dart';
+import 'package:gymapp/widgets/workout/training_block_dialogs.dart';
+import 'package:gymapp/widgets/workout/training_block_strip.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
-
-import 'package:gymapp/models/training_block.dart';
-import 'package:gymapp/models/training_week.dart';
-import 'package:gymapp/theme/app_theme.dart';
-import 'package:gymapp/widgets/workout/training_block_strip.dart';
-import 'package:gymapp/widgets/workout/training_block_dialogs.dart';
 import 'support/test_fonts.dart';
 
 void main() {
@@ -259,7 +260,8 @@ void main() {
             home: WorkoutScreen(
               plan: plan,
               planIndex: 0,
-              initialSession: exact,
+              destination:
+                  exact == null ? null : WorkoutDestination.session(exact.id!),
             ),
           ),
         ),
@@ -443,6 +445,49 @@ void main() {
         await tester.tap(find.text('Use this week'));
         await tester.pumpAndSettle();
         expect(find.text('Strength · Week 3'), findsOneWidget);
+      },
+    );
+
+    locationTest(
+      'exact timer permission does not follow browsing to another started draft',
+      (tester) async {
+        final rows = await tester.runAsync(() async {
+          await TrainingBlockMigration().normalize(ownerId: null);
+          final repo = TrainingBlockRepository(ownerId: () => null);
+          final first =
+              repo
+                  .weeksForBlock('s', repo.blocksForSplit('s').single.id)
+                  .single;
+          final second = await repo.appendWeek('s', first.blockId);
+          final exact = WorkoutSession(
+            id: 'exact',
+            splitId: 's',
+            planId: 'p',
+            planName: 'Push',
+            date: now,
+            trainingWeekId: first.id,
+            exercises: [],
+            isCompleted: false,
+            startedAt: now,
+          );
+          await HiveService.putSessionRaw(exact);
+          await HiveService.putSessionRaw(
+            exact.copyWith(
+              id: 'other-started',
+              trainingWeekId: second.id,
+              weekNumber: 2,
+            ),
+          );
+          return (exact, second.id);
+        });
+        await open(tester, exact: rows!.$1);
+        await tester.tap(find.byKey(ValueKey('training-week-${rows.$2}')));
+        await pumpWithStorage(tester);
+        final button = find.descendant(
+          of: find.byType(AppBar),
+          matching: find.byType(TextButton),
+        );
+        expect(tester.widget<TextButton>(button).onPressed, isNull);
       },
     );
 

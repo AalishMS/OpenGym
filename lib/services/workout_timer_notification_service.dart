@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import '../models/workout_session.dart';
+import '../services/hive_service.dart';
 
 enum WorkoutTimerNotificationState { running, paused }
 
@@ -13,6 +14,7 @@ class WorkoutTimerNotificationSnapshot {
   final String? splitId;
   final String planName;
   final int weekNumber;
+  final String? blockName;
   final int accumulatedSeconds;
   final DateTime? runningSince;
   final WorkoutTimerNotificationState state;
@@ -25,6 +27,7 @@ class WorkoutTimerNotificationSnapshot {
     required this.splitId,
     required this.planName,
     required this.weekNumber,
+    this.blockName,
     required this.accumulatedSeconds,
     required this.runningSince,
     required this.state,
@@ -48,6 +51,7 @@ class WorkoutTimerNotificationSnapshot {
       splitId: map['splitId'] as String?,
       planName: map['planName']! as String,
       weekNumber: map['weekNumber']! as int,
+      blockName: map['blockName'] as String?,
       accumulatedSeconds: map['accumulatedSeconds']! as int,
       runningSince:
           runningSinceMillis == null
@@ -169,8 +173,23 @@ class WorkoutTimerNotificationService {
     'splitId': session.splitId,
     'planName': session.planName,
     'weekNumber': session.weekNumber,
+    'blockName': _blockName(session),
     'accumulatedSeconds': session.durationSeconds ?? 0,
     'runningSinceMillis': session.timerStartedAt?.millisecondsSinceEpoch,
     'running': session.isTimerRunning,
   };
+  String? _blockName(WorkoutSession session) {
+    final id = session.trainingWeekId;
+    if (id == null) return null;
+    final week = HiveService.getTrainingWeekById(id);
+    if (week == null ||
+        week.splitId != session.splitId ||
+        week.userId != session.userId) {
+      return null;
+    }
+    final block = HiveService.getTrainingBlockById(week.blockId);
+    return block?.splitId == session.splitId && block?.userId == session.userId
+        ? block?.name
+        : null;
+  }
 }

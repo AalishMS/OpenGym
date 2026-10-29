@@ -6,12 +6,10 @@ Branch: `feature/training-blocks`
 
 Reviewed against: `b675c01`
 
-Status: paused at the Task 5 checkpoint on the user's request. Tasks 1–5 are
-implemented; Tasks 6–7 and the final whole-branch review remain. Independent
-reviews after Tasks 2 and 4 are complete and their findings are fixed. No
-deployment or release is authorized. Android device checks are explicitly
-pending. See [implementation-status.md](implementation-status.md) for evidence
-and resume instructions.
+Status: Tasks 1–6 are implemented. Task 7 and the final whole-branch review
+remain. Independent reviews after Tasks 2 and 4 are complete and their findings
+are fixed. No deployment or release is authorized. Android device checks are
+explicitly pending. See [implementation-status.md](implementation-status.md).
 
 > For implementation, use `superpowers:executing-plans` task by task. Each task
 > ends with its focused tests, `flutter analyze`, and an explicitly staged commit.
@@ -581,17 +579,17 @@ coach_review_screen}.dart`, relevant Home/History widgets,
 replace `initialWeekNumber`. Re-fetch at route delivery in the current account;
 exact session ID wins. Notification block text is optional display context only.
 
-- [ ] Preserve deferred navigation behind sheets/autosaves, exact route reuse,
+- [x] Preserve deferred navigation behind sheets/autosaves, exact route reuse,
   orphan detail routes, notification Stop confirmation and account invalidation.
   Test two Week 1s, duplicate logs, renamed/deleted plans and old native snapshots.
-- [ ] Show block context in history/resume/timer surfaces; unresolved/tombstoned
+- [x] Show block context in history/resume/timer surfaces; unresolved/tombstoned
   context uses retained labels/legacy Week N, never drops a history row.
-- [ ] Audit analytics to count every distinct completed session once across all
+- [x] Audit analytics to count every distinct completed session once across all
   blocks and remain date-based. Exclude drafts/tombstones; no block filters.
-- [ ] Coach retains its shared-template contract and date-based history context.
+- [x] Coach retains its shared-template contract and date-based history context.
   Review UI selects starts for added plans; removal tombstones progress, edits
   retain progress. No Edge Function deployment or response-contract expansion.
-- [ ] Run notification/navigation, Home, History, statistics and Coach test suites,
+- [x] Run notification/navigation, Home, History, statistics and Coach test suites,
   plus existing native timer tests after discovering the Gradle task. Analyze,
   hot reload/restart and commit.
 
