@@ -1,5 +1,7 @@
 import '../models/set.dart' as gym;
 import '../models/statistics.dart';
+import '../models/training_block.dart';
+import '../models/training_week.dart';
 import '../models/workout_session.dart';
 
 class StatisticsAnalyticsService {
@@ -296,6 +298,136 @@ class StatisticsAnalyticsService {
       bestSetReps: overallBestReps,
       sessionCount: points.length,
     );
+  }
+
+  /// One summary per block, in block order. Sessions find their block through
+  /// their training week; ones whose week is gone stay out of every block.
+  List<BlockStatistics> blockStatistics(
+    Iterable<WorkoutSession> sessions, {
+    required List<TrainingBlock> blocks,
+    required Map<String, List<TrainingWeek>> weeksByBlock,
+  }) {
+    final eligible = eligibleSessions(sessions);
+    final recordsBySession = Map<WorkoutSession, int>.identity();
+    for (final event in recordEvents(eligible)) {
+      recordsBySession.update(
+        event.session,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    final byWeek = <String, List<WorkoutSession>>{};
+    for (final session in eligible.reversed) {
+      final weekId = session.trainingWeekId;
+      if (weekId != null) byWeek.putIfAbsent(weekId, () => []).add(session);
+    }
+    return List.unmodifiable([
+      for (final block in blocks)
+        _blockStatistics(
+          block,
+          weeksByBlock[block.id] ?? const [],
+          byWeek,
+          recordsBySession,
+        ),
+    ]);
+  }
+
+  BlockStatistics _blockStatistics(
+    TrainingBlock block,
+    List<TrainingWeek> weeks,
+    Map<String, List<WorkoutSession>> byWeek,
+    Map<WorkoutSession, int> recordsBySession,
+  ) {
+    final weekStats = <BlockWeekStatistics>[];
+    final ordered = <WorkoutSession>[];
+    for (final week in weeks) {
+      final sessions = byWeek[week.id] ?? const <WorkoutSession>[];
+      ordered.addAll(sessions);
+      var sets = 0;
+      var volume = 0.0;
+      for (final session in sessions) {
+        final stats = sessionStatistics(session);
+        sets += stats.totalSets;
+        volume += stats.volumeLoad;
+      }
+      weekStats.add(
+        BlockWeekStatistics(
+          weekId: week.id,
+          number: week.number,
+          workouts: sessions.length,
+          sets: sets,
+          volumeLoad: volume,
+        ),
+      );
+    }
+    final last = weeks.isEmpty ? 0 : weeks.last.number;
+    for (var n = last + 1; n <= (block.plannedWeekCount ?? 0); n++) {
+      weekStats.add(BlockWeekStatistics(weekId: null, number: n));
+    }
+    ordered.sort((a, b) => a.date.compareTo(b.date));
+    return BlockStatistics(
+      block: block,
+      weeks: List.unmodifiable(weekStats),
+      workouts: ordered.length,
+      sets: weekStats.fold(0, (sum, week) => sum + week.sets),
+      volumeLoad: weekStats.fold(0, (sum, week) => sum + week.volumeLoad),
+      records: ordered.fold(
+        0,
+        (sum, session) => sum + (recordsBySession[session] ?? 0),
+      ),
+      firstDate: ordered.firstOrNull?.date,
+      lastDate: ordered.lastOrNull?.date,
+      latestWeekId: ordered.lastOrNull?.trainingWeekId,
+      gains: _gains(ordered),
+    );
+  }
+
+  /// Lifts whose best estimated 1RM rose from their first to their latest
+  /// workout in [ordered] (oldest first), biggest relative gain first.
+  List<LiftGain> _gains(List<WorkoutSession> ordered) {
+    final firsts = <String, (String, double)>{};
+    final lasts = <String, double>{};
+    for (final session in ordered) {
+      for (final exercise in session.exercises) {
+        var best = 0.0;
+        for (final set in exercise.sets) {
+          final e1rm = estimatedOneRepMax(set);
+          if (e1rm > best) best = e1rm;
+        }
+        if (best == 0) continue;
+        final key = exercise.name.trim().toLowerCase();
+        firsts.putIfAbsent(key, () => (exercise.name.trim(), best));
+        lasts[key] = best;
+      }
+    }
+    final gains = [
+      for (final MapEntry(:key, value: (name, start)) in firsts.entries)
+        if (lasts[key]! > start)
+          LiftGain(exerciseName: name, start: start, end: lasts[key]!),
+    ]..sort((a, b) => b.percent.compareTo(a.percent));
+    return List.unmodifiable(gains);
+  }
+
+  /// Every lift trained in [sessions], most recently trained first.
+  List<LiftSummary> liftSummaries(
+    Iterable<WorkoutSession> sessions,
+    ExerciseMetric metric,
+  ) {
+    final summaries = [
+      for (final name in exerciseNames(sessions))
+        LiftSummary(
+          exerciseName: name,
+          progress: exerciseProgress(sessions, name, metric),
+        ),
+    ].where((lift) => lift.progress.points.isNotEmpty).toList()..sort((a, b) {
+      final date = b.progress.points.last.session.date.compareTo(
+        a.progress.points.last.session.date,
+      );
+      return date != 0
+          ? date
+          : a.exerciseName.toLowerCase().compareTo(b.exerciseName.toLowerCase());
+    });
+    return List.unmodifiable(summaries);
   }
 
   static DateTime startOfWeek(DateTime date) {

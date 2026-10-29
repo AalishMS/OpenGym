@@ -397,6 +397,19 @@ signature:
   in. Danger zone is always last. *Load sample data* replaces the active
   split's workouts, so it is a development tool. It only appears in debug
   builds (`SettingsScreen.showSampleData`, which defaults to `kDebugMode`).
+- Stats runs Training blocks, Weekly training, Activity, Exercise progress,
+  and Recent records. Training blocks opens on the block of the latest
+  workout. It shows workouts, sets, volume, and records for that block. Its
+  arrows compare an average trained week with the previous block that has
+  workouts. Below them are sets for each week of the block (unreached planned
+  weeks are empty outlines) and the three biggest estimated-1RM gains. With
+  two or more trained blocks, chips switch blocks and *Compare blocks* ranks
+  them per trained week. Sessions reach a block only through their training
+  week. Exercise progress uses chips for the time range and measure, gives
+  each measure a one-line plain explanation, and lists every lift with its
+  latest value, sparkline, and change. Tapping a lift opens it in the detailed
+  chart. Weekly charts label weeks by date, never by ISO week number. The
+  weekly-training shortcut lands on Weekly training, below the blocks.
 - Home labels the rotation bar with “Workout N of M”. The same workout
   numbers appear in the plan list's coloured markers. Muscle groups sit on
   their own line in the launcher; exercise, set, and duration values wrap as

@@ -431,10 +431,9 @@ void main() {
           .initialValue,
       '',
     );
+    expect(selectors, findsOneWidget);
     expect(
-      tester
-          .widget<DropdownButtonFormField<String>>(selectors.last)
-          .initialValue,
+      tester.widget<Text>(find.byKey(const ValueKey('progress-exercise'))).data,
       'Bench press',
     );
     expect(find.text('800 kg'), findsOneWidget);

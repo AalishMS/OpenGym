@@ -86,8 +86,10 @@ but was not yet executable without further product and recovery design.
   Add week may extend beyond 52. Do not impose a new limit on migrated numbers.
 - Block actions: Create block, Rename, Reorder. Add week belongs to a specific
   block. No individual block/week deletion, week renaming/reordering, archiving,
-  skipping, calendar scheduling, block prescriptions, block duplication, block
-  analytics, or Coach block-editing contract in V1.
+  skipping, calendar scheduling, block prescriptions, block duplication, or
+  Coach block-editing contract in V1. Read-only block statistics were added
+  later on the Stats screen (see DESIGN.md); they derive from the existing
+  records and change no data.
 - Existing split deletion, plan deletion, session deletion, Clear All Data,
   sample replacement and backup restore remain supported. Deleting a historical
   log does not rewind progress. All completed logs remain eligible for existing

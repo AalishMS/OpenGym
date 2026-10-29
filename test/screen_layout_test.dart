@@ -358,28 +358,37 @@ void main() {
       await tester.pumpWidget(host(const StatsScreen(), sessions: [session]));
       await tester.pump();
 
-      final control = find.byType(DropdownButtonFormField<StatisticsPeriod>);
-      await tester.ensureVisible(control);
-      await tester.pumpAndSettle();
-      expect(tester.getSize(control).height, greaterThanOrEqualTo(48));
-      expect(
-        tester
-            .widget<DropdownButtonFormField<StatisticsPeriod>>(control)
-            .initialValue,
-        StatisticsPeriod.fourWeeks,
+      Finder chip(StatisticsPeriod period) => find.descendant(
+        of: find.byKey(ValueKey('progress-period-$period')),
+        matching: find.byType(ChoiceChip),
       );
-      await tester.tap(control);
+      bool selected(StatisticsPeriod period) =>
+          tester.widget<ChoiceChip>(chip(period)).selected;
+      await tester.ensureVisible(chip(StatisticsPeriod.twelveWeeks));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('12 weeks').last);
-      await tester.pumpAndSettle();
+      for (final period in StatisticsPeriod.values) {
+        expect(tester.getSize(chip(period)).height, greaterThanOrEqualTo(48));
+      }
+      expect(selected(StatisticsPeriod.fourWeeks), isTrue);
       expect(
-        tester
-            .widget<DropdownButtonFormField<StatisticsPeriod>>(control)
-            .initialValue,
-        StatisticsPeriod.twelveWeeks,
+        tester.getSemantics(chip(StatisticsPeriod.fourWeeks)),
+        matchesSemantics(
+          label: '4 weeks',
+          isButton: true,
+          hasSelectedState: true,
+          isSelected: true,
+          hasEnabledState: true,
+          isEnabled: true,
+          hasTapAction: true,
+          isFocusable: true,
+          hasFocusAction: true,
+        ),
       );
+      await tester.tap(chip(StatisticsPeriod.twelveWeeks));
+      await tester.pumpAndSettle();
+      expect(selected(StatisticsPeriod.twelveWeeks), isTrue);
+      expect(selected(StatisticsPeriod.fourWeeks), isFalse);
       expect(find.text('Recent sessions'), findsNothing);
-      expect(find.byType(ChoiceChip), findsNothing);
       semantics.dispose();
     },
   );
