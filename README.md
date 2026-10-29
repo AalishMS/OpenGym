@@ -58,17 +58,39 @@ workspaces, and workout progress.
   </tr>
   <tr>
     <td align="center">
-      <strong>Weekly training</strong><br>
-      <img src="screenshots/statistics.png" width="300" alt="OpenGym training statistics screen">
+      <strong>Workout history</strong><br>
+      <img src="screenshots/history.png" width="300" alt="OpenGym workout history with personal records">
     </td>
     <td align="center">
+      <strong>Weekly training</strong><br>
+      <img src="screenshots/statistics.png" width="300" alt="OpenGym weekly training volume chart">
+    </td>
+    <td align="center">
+      <strong>Consistency</strong><br>
+      <img src="screenshots/statistics_2.png" width="300" alt="OpenGym workout heatmap and exercise progress list">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
       <strong>Exercise progress</strong><br>
-      <img src="screenshots/statistics_2.png" width="300" alt="OpenGym exercise progress chart">
+      <img src="screenshots/statistics_3.png" width="300" alt="OpenGym exercise progress chart">
     </td>
     <td align="center">
       <strong>Appearance and preferences</strong><br>
       <img src="screenshots/settings.png" width="300" alt="OpenGym settings screen">
     </td>
+    <td align="center">
+      <strong>Training blocks</strong><br>
+      <img src="screenshots/block_menu.png" width="300" alt="OpenGym training block menu for switching, creating and reordering blocks">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <strong>Create a block</strong><br>
+      <img src="screenshots/block_create.png" width="300" alt="OpenGym create block dialog with name and week count">
+    </td>
+    <td></td>
+    <td></td>
   </tr>
 </table>
 
@@ -88,6 +110,14 @@ workspaces, and workout progress.
     <td align="center">
       <strong>Statistics</strong><br>
       <img src="screenshots/statistics_dark.png" width="200" alt="OpenGym statistics screen in dark mode">
+    </td>
+    <td align="center">
+      <strong>Training blocks</strong><br>
+      <img src="screenshots/block_menu_dark.png" width="200" alt="OpenGym training block menu in dark mode">
+    </td>
+    <td align="center">
+      <strong>Create a block</strong><br>
+      <img src="screenshots/block_create_dark.png" width="200" alt="OpenGym create block dialog in dark mode">
     </td>
     <td align="center">
       <strong>Settings</strong><br>
