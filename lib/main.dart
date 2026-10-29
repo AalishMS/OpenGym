@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'auth/auth_gate.dart';
+import 'auth/data_preparation_failure.dart';
+import 'auth/training_data_gate.dart';
+import 'services/training_block_migration.dart';
 import 'navigation/app_navigation_observer.dart';
 import 'providers/coach_provider.dart';
 import 'providers/workout_plan_provider.dart';
@@ -9,6 +12,7 @@ import 'providers/workout_session_provider.dart';
 import 'providers/settings_provider.dart';
 import 'providers/update_provider.dart';
 import 'providers/split_provider.dart';
+import 'providers/training_block_provider.dart';
 import 'services/hive_service.dart';
 import 'services/adopt_local_data.dart';
 import 'services/supabase_service.dart';
@@ -27,6 +31,24 @@ void main() async {
     await AdoptLocalData.prepareLocal();
   } catch (e) {
     debugPrint('Local startup error: $e');
+    runApp(
+      MaterialApp(
+        home: DataPreparationFailure(
+          onRetry:
+              e is TrainingPreparationException
+                  ? () async {
+                    await AdoptLocalData.prepareLocal();
+                    runApp(MyApp(showIntro: showIntro));
+                  }
+                  : () async => main(),
+          onExport:
+              () => exportTrainingSafetyCopy(
+                e is TrainingPreparationException ? e.safetySnapshotPath : null,
+              ),
+        ),
+      ),
+    );
+    return;
   }
 
   runApp(MyApp(showIntro: showIntro));
@@ -54,6 +76,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   late SplitProvider _splitProvider;
   late CoachProvider _coachProvider;
   late bool _showIntro;
+  late final TrainingBlockProvider _trainingBlockProvider;
   GlobalKey<NavigatorState> _accountNavigatorKey = GlobalKey<NavigatorState>();
   String? _navigatorUserId = SupabaseService.currentUserId;
 
@@ -65,6 +88,9 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     _splitProvider = SplitProvider();
     _workoutPlanProvider = WorkoutPlanProvider(_splitProvider);
     _workoutSessionProvider = WorkoutSessionProvider(_splitProvider);
+    _trainingBlockProvider = TrainingBlockProvider(
+      splitProvider: _splitProvider,
+    );
     _settingsProvider = SettingsProvider();
     _coachProvider = CoachProvider(
       splitProvider: _splitProvider,
@@ -81,6 +107,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _settingsProvider.removeListener(_syncCoachEnabled);
+    _trainingBlockProvider.dispose();
     super.dispose();
   }
 
@@ -111,6 +138,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: _splitProvider),
+        ChangeNotifierProvider.value(value: _trainingBlockProvider),
         ChangeNotifierProvider.value(value: _workoutPlanProvider),
         ChangeNotifierProvider.value(value: _workoutSessionProvider),
         ChangeNotifierProvider.value(value: _settingsProvider),
@@ -141,7 +169,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                         ? navigator!
                         : AuthGate(
                           onAccountChanged: _onAccountChanged,
-                          child: navigator!,
+                          child: TrainingDataGate(child: navigator!),
                         ),
             home:
                 _showIntro

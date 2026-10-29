@@ -1,10 +1,6 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/models/coach_proposal.dart';
 import 'package:gymapp/models/exercise_template.dart';
@@ -15,9 +11,15 @@ import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/split_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
+import 'package:gymapp/repositories/training_block_repository.dart';
 import 'package:gymapp/services/coach/coach_applier.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/services/training_block_migration.dart';
+import 'package:gymapp/services/training_block_restore.dart';
 import 'package:gymapp/utils/split_identity.dart';
+import 'package:hive/hive.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'support/coach_fixtures.dart';
 import 'support/hive_test_harness.dart';
@@ -38,6 +40,8 @@ void main() {
   });
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    await HiveService.clearTrainingData();
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
     await Hive.box<Split>(HiveService.splitsBox).clear();
@@ -49,6 +53,118 @@ void main() {
   });
 
   group('active split', () {
+    test(
+      'Coach added plan uses selected durable start and edits keep progress',
+      () async {
+        await _seedSplit([
+          _owned(
+            plan('a', 'Push', [
+              template('Bench Press', [(8, 60)]),
+            ]),
+            color: 0,
+          ),
+        ]);
+        await TrainingBlockMigration().normalize(ownerId: _userId);
+        final repo = TrainingBlockRepository(ownerId: () => _userId);
+        final block = await repo.createBlock(
+          splitId: kSplitId,
+          name: 'Strength',
+          weekCount: 2,
+        );
+        final start = repo.weeksForBlock(kSplitId, block.id).last.id;
+        final oldProgress = HiveService.progressForPlan(kSplitId, 'a')!;
+        final snap = _snapshot();
+        final proposal = _proposal(
+          snap,
+          plans: [
+            CoachPlan(
+              existing: snap.plans.single,
+              name: 'Push',
+              exercises: [
+                CoachExercise(
+                  name: 'Bench Press',
+                  sets: const [CoachSet(reps: 10, kg: 65)],
+                  note: null,
+                ),
+              ],
+            ),
+            CoachPlan(
+              existing: null,
+              name: 'Legs',
+              exercises: [
+                CoachExercise(
+                  name: 'Squat',
+                  sets: const [CoachSet(reps: 5, kg: 100)],
+                  note: null,
+                ),
+              ],
+            ),
+          ],
+        );
+        await const CoachApplier().apply(
+          proposal,
+          userId: _userId,
+          startingWeekIds: {'Legs': start},
+        );
+        final added = HiveService.getPlans(
+          splitId: kSplitId,
+        ).singleWhere((p) => p.name == 'Legs');
+        expect(
+          HiveService.progressForPlan(kSplitId, added.id!)!.activeWeekId,
+          start,
+        );
+        expect(
+          HiveService.progressForPlan(kSplitId, 'a')!.revision,
+          oldProgress.revision,
+        );
+        expect(
+          HiveService.progressForPlan(kSplitId, 'a')!.activeWeekId,
+          oldProgress.activeWeekId,
+        );
+        expect(HiveService.getAllSessionsRaw(), isEmpty);
+      },
+    );
+    test(
+      'unavailable Coach starting week fails before writing plans',
+      () async {
+        await _seedSplit([
+          _owned(
+            plan('a', 'Push', [
+              template('Bench Press', [(8, 60)]),
+            ]),
+            color: 0,
+          ),
+        ]);
+        final proposal = _proposal(
+          _snapshot(),
+          plans: [
+            CoachPlan(
+              existing: null,
+              name: 'Legs',
+              exercises: [
+                CoachExercise(
+                  name: 'Squat',
+                  sets: const [CoachSet(reps: 5, kg: 100)],
+                  note: null,
+                ),
+              ],
+            ),
+          ],
+        );
+        await expectLater(
+          const CoachApplier().apply(
+            proposal,
+            userId: _userId,
+            startingWeekIds: {'Legs': 'deleted-week'},
+          ),
+          throwsStateError,
+        );
+        expect(HiveService.getPlans(splitId: kSplitId).map((p) => p.name), [
+          'Push',
+        ]);
+      },
+    );
+
     test('note-only Coach changes retain user effort targets', () async {
       await _seedSplit([
         _owned(
@@ -289,6 +405,12 @@ void main() {
         session(DateTime(2026, 9, 2), {
           'Bench Press': [(5, 80)],
         }),
+      );
+      await TrainingBlockRestore().replace(
+        graph: TrainingBlockMigration.prepareGraph(
+          HiveService.readTrainingGraph(ownerId: _userId).ownedBy(_userId),
+        ),
+        stampRecords: false,
       );
       final before = _sessionsFingerprint();
       final snap = _snapshot();

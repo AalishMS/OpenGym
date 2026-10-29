@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
+import '../../utils/workout_context.dart';
 
 /// Summary of the most recent session, paired with a Resume action in the
 /// enclosing panel's header.
@@ -40,7 +41,7 @@ class LastSessionTile extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Week ${session.weekNumber}  ·  '
+          '${workoutContext(session)}  ·  '
           '${session.exercises.length} exercises  ·  '
           '$sets sets  ·  '
           '${formatVolume(volume)} kg  ·  '

@@ -12,6 +12,17 @@ It proposes changes; the user reviews a diff, picks the changes to keep, and
 applies them or discards the lot. Nothing is written to Hive until the user
 applies.
 
+The Coach edits shared plan templates across training blocks. Its context remains
+date-based completed history from the active split; it has no block-editing
+response contract. Review shows a starting block/week for each added plan,
+defaulting visibly to Week 1 of the first block. The picker includes the block's
+intended future weeks; selecting one allocates no structure or sessions until
+the added plan is applied. The shown ID is retained through reorder and
+revalidated on apply. A new split has the sole
+Block 1 / Week 1 choice. Existing plan edits retain progress; removal tombstones
+progress and keeps historical sessions. These local changes do not deploy or
+expand the Edge Function contract.
+
 ## Settled direction
 
 - An in-app Coach, with no MCP server.
@@ -262,7 +273,8 @@ the same stale check and rollback.
 
 `CoachApplier` writes a validated proposal inside
 `SyncService.runExclusiveLocalMutation`. It uses the same compensating rollback
-as `WorkoutPresetInstaller`.
+as `WorkoutPresetInstaller`, including the fixed replacement journal and
+owner-scoped safety graph for interrupted-write recovery.
 
 - **Stale check first.** The snapshot records the active split and the
   `updatedAt` of every plan in it. If any of those changed between the request
@@ -273,9 +285,9 @@ as `WorkoutPresetInstaller`.
   marked out of date. Last-write-wins never silently overwrites the newer
   plans.
 - **Edited plans** keep their `id`, `position`, `planColor`, `splitId`, and
-  `userId`. Only `name` and `exercises` change.
+  `userId`, plus their active-week/state/revision. Only `name` and `exercises` change.
 - **New plans** get:
-  - a UUID
+  - a UUID and progress pointing at the reviewed durable starting week
   - the target `splitId` and the user's ID
   - the next `position` after the split's highest, or `0` in an empty split.
     If any plan in the split has no position (legacy order), new plans get
@@ -284,7 +296,8 @@ as `WorkoutPresetInstaller`.
     every slot is taken
 - **Removed plans** become tombstones with the same fields
   `HiveService.softDeletePlan` sets (`deletedAt`, `updatedAt`, `dirty`). They
-  are written as copies, so rollback can put the originals back.
+  also tombstone their progress and retain historical sessions. Copies and the
+  replacement safety graph allow rollback without losing the originals.
 - **A new split** follows `WorkoutPresetInstaller.install`. The applier
   creates the split, writes its plans with positions 0 to n−1, and makes the
   split active. The "reuse an untouched default split" rule and the 24-character

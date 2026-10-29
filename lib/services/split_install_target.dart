@@ -4,6 +4,8 @@ import '../models/split.dart';
 import '../models/split_preference.dart';
 import '../utils/split_identity.dart';
 import 'hive_service.dart';
+import '../utils/training_block_identity.dart';
+import 'package:hive/hive.dart';
 
 /// The split a batch of generated plans is installed into, shared by the
 /// preset installer and the Coach: the user's untouched default split, reused
@@ -101,6 +103,8 @@ class SplitInstallTarget {
     );
   }
 
+  Split get split => _split;
+
   Future<void> writeSplit() => HiveService.putSplitRaw(_split);
 
   Future<void> writePreference() => HiveService.putSplitPreferenceRaw(
@@ -136,9 +140,42 @@ class SplitInstallTarget {
         split.name != 'My Split') {
       return false;
     }
-    return HiveService.getPlans(splitId: split.id).isEmpty &&
-        HiveService.getSessions(splitId: split.id).isEmpty;
+    if (HiveService.getAllPlansRaw().any((p) => p.splitId == split.id) ||
+        HiveService.getAllSessionsRaw().any((s) => s.splitId == split.id) ||
+        HiveService.getAllWorkoutProgressRaw().any(
+          (p) => p.splitId == split.id,
+        ) ||
+        Hive.box<dynamic>(HiveService.trainingOperationsBox).isNotEmpty) {
+      return false;
+    }
+    final blocks =
+        HiveService.getAllTrainingBlocksRaw()
+            .where((b) => b.splitId == split.id)
+            .toList();
+    final weeks =
+        HiveService.getAllTrainingWeeksRaw()
+            .where((w) => w.splitId == split.id)
+            .toList();
+    if (blocks.isEmpty && weeks.isEmpty) {
+      return true; // Legacy, before preparation.
+    }
+    return blocks.length == 1 &&
+        weeks.length == 1 &&
+        blocks.single.id == legacyTrainingBlockId(split.id) &&
+        blocks.single.name == 'Block 1' &&
+        blocks.single.position == 0 &&
+        _neutralBootstrapStamp(blocks.single.updatedAt) &&
+        blocks.single.deletedAt == null &&
+        weeks.single.id == legacyTrainingWeekId(split.id, 1) &&
+        weeks.single.number == 1 &&
+        _neutralBootstrapStamp(weeks.single.updatedAt) &&
+        weeks.single.deletedAt == null;
   }
+
+  // Local synthesis has no edit stamp; SQL represents the same absence as
+  // epoch. Genuine structural changes receive a current mutation timestamp.
+  static bool _neutralBootstrapStamp(DateTime? stamp) =>
+      stamp == null || stamp.microsecondsSinceEpoch == 0;
 
   /// [requested], or a ` (n)`-suffixed form of it that fits in
   /// [maxNameLength] and no other split uses.

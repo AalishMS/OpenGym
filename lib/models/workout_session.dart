@@ -1,5 +1,6 @@
 import 'package:hive/hive.dart';
 import 'exercise.dart';
+import 'completion_transition.dart';
 
 part 'workout_session.g.dart';
 
@@ -53,6 +54,12 @@ class WorkoutSession extends HiveObject {
   @HiveField(14)
   final int? durationSeconds;
 
+  @HiveField(15)
+  final String? trainingWeekId;
+
+  @HiveField(16)
+  final Map<String, dynamic>? completionTransition;
+
   WorkoutSession({
     required this.date,
     required this.planName,
@@ -69,6 +76,8 @@ class WorkoutSession extends HiveObject {
     this.startedAt,
     this.timerStartedAt,
     this.durationSeconds,
+    this.trainingWeekId,
+    this.completionTransition,
   });
 
   bool get isTimerRunning => !isCompleted && timerStartedAt != null;
@@ -84,6 +93,9 @@ class WorkoutSession extends HiveObject {
   }
 
   Map<String, dynamic> toJson() => {
+    'trainingSchemaVersion': 1,
+    'trainingWeekId': trainingWeekId,
+    'completionTransition': completionTransition,
     'id': id,
     'date': date.toIso8601String(),
     'planName': planName,
@@ -99,66 +111,100 @@ class WorkoutSession extends HiveObject {
     'durationSeconds': durationSeconds,
   };
 
-  factory WorkoutSession.fromJson(Map<String, dynamic> json) => WorkoutSession(
-    id: json['id'] as String?,
-    date: DateTime.parse(json['date'] as String),
-    planName: json['planName'] as String,
-    planId: json['planId'] as String?,
-    weekNumber: json['weekNumber'] as int? ?? 1,
-    exercises:
-        (json['exercises'] as List)
-            .map((e) => Exercise.fromJson(e as Map<String, dynamic>))
-            .toList(),
-    updatedAt:
-        json['updatedAt'] != null
-            ? DateTime.parse(json['updatedAt'] as String)
-            : null,
-    deletedAt:
-        json['deletedAt'] != null
-            ? DateTime.parse(json['deletedAt'] as String)
-            : null,
-    splitId: json['splitId'] as String?,
-    isCompleted: json['isCompleted'] as bool? ?? true,
-    startedAt:
-        json['startedAt'] == null
-            ? null
-            : DateTime.parse(json['startedAt'] as String),
-    timerStartedAt:
-        json['timerStartedAt'] == null
-            ? null
-            : DateTime.parse(json['timerStartedAt'] as String),
-    durationSeconds: json['durationSeconds'] as int?,
-  );
+  factory WorkoutSession.fromJson(Map<String, dynamic> json) {
+    final version = json['trainingSchemaVersion'];
+    if (version != null && version != 1) {
+      throw const FormatException('Unsupported training schema version.');
+    }
+    final transition = json['completionTransition'];
+    if (transition != null) {
+      CompletionTransition.fromJson(
+        Map<String, dynamic>.from(transition as Map),
+      );
+    }
+    return WorkoutSession(
+      trainingWeekId: json['trainingWeekId'] as String?,
+      completionTransition:
+          transition == null
+              ? null
+              : Map<String, dynamic>.from(transition as Map),
+      id: json['id'] as String?,
+      date: DateTime.parse(json['date'] as String),
+      planName: json['planName'] as String,
+      planId: json['planId'] as String?,
+      weekNumber: json['weekNumber'] as int? ?? 1,
+      exercises:
+          (json['exercises'] as List)
+              .map((e) => Exercise.fromJson(e as Map<String, dynamic>))
+              .toList(),
+      updatedAt:
+          json['updatedAt'] != null
+              ? DateTime.parse(json['updatedAt'] as String)
+              : null,
+      deletedAt:
+          json['deletedAt'] != null
+              ? DateTime.parse(json['deletedAt'] as String)
+              : null,
+      splitId: json['splitId'] as String?,
+      isCompleted: json['isCompleted'] as bool? ?? true,
+      startedAt:
+          json['startedAt'] == null
+              ? null
+              : DateTime.parse(json['startedAt'] as String),
+      timerStartedAt:
+          json['timerStartedAt'] == null
+              ? null
+              : DateTime.parse(json['timerStartedAt'] as String),
+      durationSeconds: json['durationSeconds'] as int?,
+    );
+  }
 
   WorkoutSession copyWith({
     DateTime? date,
     String? planName,
     List<Exercise>? exercises,
     int? weekNumber,
-    String? id,
-    String? userId,
-    String? planId,
-    DateTime? updatedAt,
-    DateTime? deletedAt,
-    bool? dirty,
-    String? splitId,
+    Object? id = _notProvided,
+    Object? userId = _notProvided,
+    Object? planId = _notProvided,
+    Object? updatedAt = _notProvided,
+    Object? deletedAt = _notProvided,
+    Object? dirty = _notProvided,
+    Object? splitId = _notProvided,
     bool? isCompleted,
+    Object? trainingWeekId = _notProvided,
+    Object? completionTransition = _notProvided,
     Object? startedAt = _notProvided,
     Object? timerStartedAt = _notProvided,
     Object? durationSeconds = _notProvided,
   }) {
     return WorkoutSession(
+      trainingWeekId:
+          identical(trainingWeekId, _notProvided)
+              ? this.trainingWeekId
+              : trainingWeekId as String?,
+      completionTransition:
+          identical(completionTransition, _notProvided)
+              ? this.completionTransition
+              : completionTransition as Map<String, dynamic>?,
       date: date ?? this.date,
       planName: planName ?? this.planName,
       exercises: exercises ?? this.exercises,
       weekNumber: weekNumber ?? this.weekNumber,
-      id: id ?? this.id,
-      userId: userId ?? this.userId,
-      planId: planId ?? this.planId,
-      updatedAt: updatedAt ?? this.updatedAt,
-      deletedAt: deletedAt ?? this.deletedAt,
-      dirty: dirty ?? this.dirty,
-      splitId: splitId ?? this.splitId,
+      id: identical(id, _notProvided) ? this.id : id as String?,
+      userId: identical(userId, _notProvided) ? this.userId : userId as String?,
+      planId: identical(planId, _notProvided) ? this.planId : planId as String?,
+      updatedAt:
+          identical(updatedAt, _notProvided)
+              ? this.updatedAt
+              : updatedAt as DateTime?,
+      deletedAt:
+          identical(deletedAt, _notProvided)
+              ? this.deletedAt
+              : deletedAt as DateTime?,
+      dirty: identical(dirty, _notProvided) ? this.dirty : dirty as bool?,
+      splitId:
+          identical(splitId, _notProvided) ? this.splitId : splitId as String?,
       isCompleted: isCompleted ?? this.isCompleted,
       startedAt:
           identical(startedAt, _notProvided)

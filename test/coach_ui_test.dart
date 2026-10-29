@@ -4,12 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart' hide Split;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'package:gymapp/app_shell.dart';
 import 'package:gymapp/models/coach_proposal.dart';
 import 'package:gymapp/models/split.dart';
@@ -22,6 +16,7 @@ import 'package:gymapp/providers/split_provider.dart';
 import 'package:gymapp/providers/update_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
+import 'package:gymapp/repositories/training_block_repository.dart';
 import 'package:gymapp/screens/coach_screen.dart';
 import 'package:gymapp/screens/settings_screen.dart';
 import 'package:gymapp/services/coach/coach_applier.dart';
@@ -29,10 +24,16 @@ import 'package:gymapp/services/coach/coach_client.dart';
 import 'package:gymapp/services/coach/coach_disclosure.dart';
 import 'package:gymapp/services/coach/coach_status_store.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/services/training_block_migration.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/tones.dart';
 import 'package:gymapp/widgets/app_bottom_nav.dart';
 import 'package:gymapp/widgets/coach/coach_button.dart';
+import 'package:hive/hive.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'support/coach_fixtures.dart';
 import 'support/hive_test_harness.dart';
@@ -142,20 +143,27 @@ Future<void> _seed() async {
 /// leave the box unable to close.
 class _DeferredApplier extends CoachApplier {
   ValidatedProposal? proposal;
+  Map<String, String> starts = {};
   Completer<CoachApplyOutcome> result = Completer();
 
   @override
   Future<CoachApplyOutcome> apply(
     ValidatedProposal proposal, {
     required String userId,
+    Map<String, String> startingWeekIds = const {},
   }) {
     this.proposal = proposal;
+    starts = startingWeekIds;
     return result.future;
   }
 
   Future<void> complete(WidgetTester tester) async {
     final outcome = await tester.runAsync(
-      () => const CoachApplier().apply(proposal!, userId: _userId),
+      () => const CoachApplier().apply(
+        proposal!,
+        userId: _userId,
+        startingWeekIds: starts,
+      ),
     );
     result.complete(outcome);
   }
@@ -244,6 +252,7 @@ void main() {
   });
 
   setUp(() async {
+    await HiveService.clearTrainingData();
     SharedPreferences.setMockInitialValues({});
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
@@ -862,7 +871,9 @@ void main() {
       // Back from another tab lands on normal Home, not a hidden Coach layer.
       await tester.tap(find.byKey(const ValueKey('coach-button')));
       await pumpWithStorage(tester);
-      await tester.tap(find.descendant(of: nav, matching: find.text('History')));
+      await tester.tap(
+        find.descendant(of: nav, matching: find.text('History')),
+      );
       await pumpWithStorage(tester);
       await tester.binding.handlePopRoute();
       await pumpWithStorage(tester);
@@ -872,6 +883,98 @@ void main() {
   });
 
   group('proposals', () {
+    testWidgets(
+      'added plan review visibly defaults and selects a starting slot',
+      (tester) async {
+        final start = await tester.runAsync(() async {
+          await TrainingBlockMigration().normalize(ownerId: _userId);
+          final repo = TrainingBlockRepository(ownerId: () => _userId);
+          final block = await repo.createBlock(
+            splitId: kSplitId,
+            name: 'Strength',
+            weekCount: 2,
+          );
+          return HiveService.startingWeeksForBlock(kSplitId, block.id).last.id;
+        });
+        final fixture = await _openChat(tester);
+        fixture.client.answer(_validProposal);
+        await _send(tester, 'Add legs');
+        await tester.tap(find.text('Review'));
+        await pumpWithStorage(tester);
+        await tester.scrollUntilVisible(
+          find.byKey(const ValueKey('coach-start-Legs')),
+          240,
+          scrollable: find.byType(Scrollable).last,
+        );
+        expect(find.text('Starts at Block 1 · Week 1'), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('coach-start-Legs')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Strength').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Week 2').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Use this week'));
+        await tester.pumpAndSettle();
+        expect(find.text('Starts at Strength · Week 2'), findsOneWidget);
+        await tester.tap(find.byKey(const ValueKey('coach-apply')));
+        await tester.pump();
+        await fixture.applier.complete(tester);
+        await pumpWithStorage(tester);
+        final added = HiveService.getPlans(
+          splitId: kSplitId,
+        ).singleWhere((p) => p.name == 'Legs');
+        expect(
+          HiveService.progressForPlan(kSplitId, added.id!)!.activeWeekId,
+          start,
+        );
+      },
+    );
+
+    testWidgets(
+      'reviewed default start survives a block reorder before apply',
+      (tester) async {
+        final ids = await tester.runAsync(() async {
+          await TrainingBlockMigration().normalize(ownerId: _userId);
+          final repo = TrainingBlockRepository(ownerId: () => _userId);
+          final original = repo.blocksForSplit(kSplitId).single;
+          final firstWeek = repo.weeksForBlock(kSplitId, original.id).single.id;
+          final second = await repo.createBlock(
+            splitId: kSplitId,
+            name: 'Strength',
+            weekCount: 1,
+          );
+          return (original.id, second.id, firstWeek);
+        });
+        final fixture = await _openChat(tester);
+        fixture.client.answer(_validProposal);
+        await _send(tester, 'Add legs');
+        await tester.tap(find.text('Review'));
+        await pumpWithStorage(tester);
+        await tester.scrollUntilVisible(
+          find.byKey(const ValueKey('coach-start-Legs')),
+          240,
+          scrollable: find.byType(Scrollable).last,
+        );
+        expect(find.text('Starts at Block 1 · Week 1'), findsOneWidget);
+        await tester.runAsync(
+          () => TrainingBlockRepository(
+            ownerId: () => _userId,
+          ).reorderBlocks(kSplitId, [ids!.$2, ids.$1]),
+        );
+        await tester.tap(find.byKey(const ValueKey('coach-apply')));
+        await tester.pump();
+        await fixture.applier.complete(tester);
+        await pumpWithStorage(tester);
+        final added = HiveService.getPlans(
+          splitId: kSplitId,
+        ).singleWhere((p) => p.name == 'Legs');
+        expect(
+          HiveService.progressForPlan(kSplitId, added.id!)!.activeWeekId,
+          ids!.$3,
+        );
+      },
+    );
+
     testWidgets('review shows the diff and apply writes it', (tester) async {
       final fixture = await _openChat(tester);
       fixture.client.answer(_validProposal);

@@ -1,10 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart' as gym;
@@ -27,6 +22,10 @@ import 'package:gymapp/widgets/history/workout_details_widgets.dart';
 import 'package:gymapp/widgets/home/home_plan_row.dart';
 import 'package:gymapp/widgets/statistics/statistics_widgets.dart';
 import 'package:gymapp/widgets/workout/workout_dialogs.dart';
+import 'package:hive/hive.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/test_fonts.dart';
@@ -84,6 +83,23 @@ void main() {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = size;
     addTearDown(tester.view.reset);
+    if (sessions.isNotEmpty) {
+      await tester.runAsync(() async {
+        for (final row in sessions) {
+          await HiveService.putSessionRaw(row);
+        }
+      });
+    }
+    if (screen is WorkoutScreen ||
+        plans.isNotEmpty ||
+        HiveService.getAllSessionsRaw().isNotEmpty) {
+      await tester.runAsync(
+        () => harness.prepareTraining([
+          ...plans,
+          if (screen is WorkoutScreen) screen.plan,
+        ]),
+      );
+    }
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -214,10 +230,16 @@ void main() {
         );
         await tester.tap(find.text('Resume'));
         await tester.pumpAndSettle();
+        if (kind == 'deleted') {
+          expect(find.byType(WorkoutDetailsScreen), findsOneWidget);
+          expect(find.text('Selected exercise'), findsOneWidget);
+          expect(find.text('Wrong exercise'), findsNothing);
+          return;
+        }
         final workout = tester.widget<WorkoutScreen>(
           find.byType(WorkoutScreen),
         );
-        expect(workout.initialSession?.id, 'selected');
+        expect(workout.destination?.sessionId, 'selected');
         expect(find.text('Selected exercise'), findsOneWidget);
         expect(find.text('Wrong exercise'), findsNothing);
         provider.notifyListeners();

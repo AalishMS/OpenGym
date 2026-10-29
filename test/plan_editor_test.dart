@@ -120,6 +120,28 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('closing the exercise picker does not refocus the plan name', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    final nameField = find.byType(TextField).first;
+    await tester.tap(nameField);
+    await tester.enterText(nameField, 'Push');
+    await tester.pumpAndSettle();
+    expect(tester.testTextInput.isVisible, isTrue);
+
+    await openExerciseGroup(tester);
+    await tester.tap(find.text('Bench Press').first);
+    await tester.pumpAndSettle();
+    await closeExercisePicker(tester);
+
+    final editable = tester.widget<EditableText>(
+      find.descendant(of: nameField, matching: find.byType(EditableText)),
+    );
+    expect(editable.focusNode.hasFocus, isFalse);
+    expect(tester.testTextInput.isVisible, isFalse);
+  });
+
   testWidgets('picker opens on a two-column muscle group browser', (
     tester,
   ) async {

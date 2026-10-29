@@ -383,13 +383,19 @@ class CoachProvider with ChangeNotifier {
 
   /// Writes the changes kept in [entry]'s review. Throws when the write
   /// fails; a stale proposal writes nothing and is marked out of date.
-  Future<CoachApplyOutcome> apply(CoachEntry entry) async {
+  Future<CoachApplyOutcome> apply(
+    CoachEntry entry, {
+    Map<String, String> startingWeekIds = const {},
+  }) async {
     final item = entry.proposal!;
     final selection = item.selection;
     _applying = true;
     notifyListeners();
     try {
-      final outcome = await _splits.applyCoachProposal(selection.resolve());
+      final outcome = await _splits.applyCoachProposal(
+        selection.resolve(),
+        startingWeekIds: startingWeekIds,
+      );
       item.status = switch (outcome) {
         CoachApplied() => CoachProposalStatus.applied,
         CoachApplyStale() => CoachProposalStatus.stale,

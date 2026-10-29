@@ -1,38 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:provider/provider.dart';
-
-import 'package:gymapp/models/exercise_template.dart';
+import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/models/exercise.dart';
+import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/navigation/workout_destination.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
-import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/screens/home_screen.dart';
-import 'package:gymapp/widgets/home/home_plan_row.dart';
 import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
-import 'package:gymapp/widgets/workout/exercise_card.dart';
-
-import 'support/hive_test_harness.dart';
-import 'support/pump_with_storage.dart';
-import 'support/test_fonts.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/spacing.dart';
 import 'package:gymapp/utils/format.dart';
 import 'package:gymapp/utils/plan_stats.dart';
+import 'package:gymapp/utils/training_block_identity.dart';
+import 'package:gymapp/widgets/home/home_plan_row.dart';
 import 'package:gymapp/widgets/home/training_snapshot.dart';
-import 'package:gymapp/widgets/underline_tab_strip.dart';
+import 'package:gymapp/widgets/workout/exercise_card.dart';
+import 'package:gymapp/widgets/workout/training_block_strip.dart';
+import 'package:hive/hive.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'support/hive_test_harness.dart';
+import 'support/pump_with_storage.dart';
+import 'support/test_fonts.dart';
 
 void main() {
   final hiveHarness = HiveTestHarness();
 
   setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await Supabase.initialize(
+      url: 'https://example.supabase.co',
+      publishableKey: 'test',
+    );
     await loadTestFonts();
     await hiveHarness.open();
   });
@@ -109,8 +117,40 @@ void main() {
     return (plan: plan, session: session);
   }
 
+  Future<void> pumpHome(
+    WidgetTester tester, {
+    Size size = const Size(390, 800),
+    double textScale = 1,
+    Brightness brightness = Brightness.dark,
+    List<WorkoutPlan> plans = const [],
+    List<WorkoutSession> sessions = const [],
+    List<NavigatorObserver> observers = const [],
+  }) async {
+    if (plans.isNotEmpty || sessions.isNotEmpty) {
+      await tester.runAsync(() async {
+        for (final session in sessions) {
+          session.splitId ??=
+              plans.where((p) => p.id == session.planId).firstOrNull?.splitId ??
+              'test-split';
+          await HiveService.putSessionRaw(session);
+        }
+        await hiveHarness.prepareTraining(plans);
+      });
+    }
+    await tester.pumpWidget(
+      homeHost(
+        size: size,
+        textScale: textScale,
+        brightness: brightness,
+        plans: plans,
+        sessions: sessions,
+        observers: observers,
+      ),
+    );
+  }
+
   testWidgets('system Back leaves Manage before leaving Home', (tester) async {
-    await tester.pumpWidget(homeHost(plans: [populatedPlan()]));
+    await pumpHome(tester, plans: [populatedPlan()]);
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
     expect(find.text('Start workout'), findsNothing);
@@ -121,7 +161,7 @@ void main() {
   });
 
   testWidgets('plan actions close before Back leaves Manage', (tester) async {
-    await tester.pumpWidget(homeHost(plans: [populatedPlan()]));
+    await pumpHome(tester, plans: [populatedPlan()]);
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Plan actions'));
@@ -137,9 +177,7 @@ void main() {
 
   testWidgets('plan card exposes only its overflow action', (tester) async {
     final data = populatedData();
-    await tester.pumpWidget(
-      homeHost(plans: [data.plan], sessions: [data.session]),
-    );
+    await pumpHome(tester, plans: [data.plan], sessions: [data.session]);
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
     expect(find.text('[START]'), findsNothing);
@@ -155,9 +193,7 @@ void main() {
     tester.view.physicalSize = const Size(390, 800);
     addTearDown(tester.view.reset);
     for (final brightness in Brightness.values) {
-      await tester.pumpWidget(
-        homeHost(brightness: brightness, plans: [populatedPlan()]),
-      );
+      await pumpHome(tester, brightness: brightness, plans: [populatedPlan()]);
       expect(find.byType(FloatingActionButton), findsNothing);
       final action = find.text('New plan');
       await tester.scrollUntilVisible(
@@ -177,9 +213,7 @@ void main() {
 
   testWidgets('plan overflow hit region stays inside the card', (tester) async {
     final data = populatedData();
-    await tester.pumpWidget(
-      homeHost(plans: [data.plan], sessions: [data.session]),
-    );
+    await pumpHome(tester, plans: [data.plan], sessions: [data.session]);
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
 
@@ -203,9 +237,7 @@ void main() {
 
   testWidgets('plan card exposes summary and overflow actions', (tester) async {
     final data = populatedData();
-    await tester.pumpWidget(
-      homeHost(plans: [data.plan], sessions: [data.session]),
-    );
+    await pumpHome(tester, plans: [data.plan], sessions: [data.session]);
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
     expect(find.text('Push Day'), findsOneWidget);
@@ -230,9 +262,7 @@ void main() {
       populatedPlan().copyWith(id: 'plan-2', name: 'Pull Day'),
       populatedPlan().copyWith(id: 'plan-3', name: 'Leg Day'),
     ];
-    await tester.pumpWidget(
-      homeHost(size: const Size(1200, 800), plans: plans),
-    );
+    await pumpHome(tester, size: const Size(1200, 800), plans: plans);
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
 
@@ -264,7 +294,7 @@ void main() {
       populatedPlan(),
       populatedPlan().copyWith(id: 'plan-2', name: 'Pull Day'),
     ];
-    await tester.pumpWidget(homeHost(plans: plans));
+    await pumpHome(tester, plans: plans);
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Plan actions').first);
@@ -284,7 +314,7 @@ void main() {
     tester,
   ) async {
     final plan = populatedPlan().copyWith(name: 'push day');
-    await tester.pumpWidget(homeHost(plans: [plan]));
+    await pumpHome(tester, plans: [plan]);
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
 
@@ -300,9 +330,7 @@ void main() {
 
   testWidgets('plan action menu rows have 48px tap targets', (tester) async {
     final data = populatedData();
-    await tester.pumpWidget(
-      homeHost(plans: [data.plan], sessions: [data.session]),
-    );
+    await pumpHome(tester, plans: [data.plan], sessions: [data.session]);
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Plan actions'));
@@ -340,9 +368,7 @@ void main() {
     addTearDown(tester.view.reset);
     for (final height in [800.0, 420.0]) {
       tester.view.physicalSize = Size(390, height);
-      await tester.pumpWidget(
-        homeHost(size: Size(390, height), plans: [populatedPlan()]),
-      );
+      await pumpHome(tester, size: Size(390, height), plans: [populatedPlan()]);
       await tester.tap(find.text('Manage'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Plan actions'));
@@ -367,9 +393,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     final data = populatedData();
-    await tester.pumpWidget(
-      homeHost(plans: [data.plan], sessions: [data.session]),
-    );
+    await pumpHome(tester, plans: [data.plan], sessions: [data.session]);
     await tester.ensureVisible(find.text('Push Day').last);
     await tester.tap(find.text('Push Day').last);
     await tester.pumpAndSettle();
@@ -385,7 +409,7 @@ void main() {
 
   testWidgets('plan color is limited to identity markers', (tester) async {
     final plan = populatedPlan();
-    await tester.pumpWidget(homeHost(plans: [plan]));
+    await pumpHome(tester, plans: [plan]);
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
 
@@ -443,7 +467,7 @@ void main() {
 
     for (final brightness in Brightness.values) {
       final plan = populatedPlan();
-      await tester.pumpWidget(homeHost(brightness: brightness, plans: [plan]));
+      await pumpHome(tester, brightness: brightness, plans: [plan]);
       await tester.ensureVisible(find.text('Push Day').last);
       await tester.tap(find.text('Push Day').last);
       await tester.pumpAndSettle();
@@ -484,7 +508,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     final plan = populatedPlan();
-    await tester.pumpWidget(homeHost(plans: [plan]));
+    await pumpHome(tester, plans: [plan]);
     await tester.ensureVisible(find.text('Push Day').last);
     await tester.tap(find.text('Push Day').last);
     await tester.pumpAndSettle();
@@ -493,7 +517,7 @@ void main() {
     expect(handle, findsOneWidget);
     final dragItems = find.byWidgetPredicate(
       (widget) =>
-          widget is Container && widget.key is ValueKey<(int, int, String)>,
+          widget is Container && widget.key is ValueKey<(String, int, String)>,
     );
     expect(dragItems, findsWidgets);
 
@@ -533,6 +557,7 @@ void main() {
     ];
     final planProvider = _PlanProvider(plans);
 
+    await tester.runAsync(() => hiveHarness.prepareTraining(plans));
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -601,6 +626,7 @@ void main() {
         }
       });
 
+      await tester.runAsync(() => hiveHarness.prepareTraining([plan]));
       await tester.pumpWidget(
         MultiProvider(
           providers: [
@@ -619,16 +645,16 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      int selectedWeek() =>
-          tester
-              .widget<UnderlineTabStrip>(
-                find.byWidgetPredicate(
-                  (widget) =>
-                      widget is UnderlineTabStrip &&
-                      widget.rule == StripRule.top,
-                ),
-              )
-              .selectedIndex;
+      int selectedWeek() {
+        final strip = tester.widget<TrainingBlockStrip>(
+          find.byType(TrainingBlockStrip),
+        );
+        return strip.weeksByBlock.values
+                .expand((weeks) => weeks)
+                .firstWhere((week) => week.id == strip.selectedWeekId)
+                .number -
+            1;
+      }
 
       expect(selectedWeek(), 2);
       for (final delta in [100.0, -100.0]) {
@@ -678,6 +704,7 @@ void main() {
       }
     });
 
+    await tester.runAsync(() => hiveHarness.prepareTraining([plan]));
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -690,18 +717,29 @@ void main() {
         ],
         child: MaterialApp(
           theme: buildTheme(const Color(0xFF00A8FF), Brightness.dark),
-          home: WorkoutScreen(plan: plan, planIndex: 0, initialWeekNumber: 1),
+          home: WorkoutScreen(
+            plan: plan,
+            planIndex: 0,
+            destination: WorkoutDestination.week(
+              plan.id!,
+              legacyTrainingWeekId(plan.splitId!, 1),
+            ),
+          ),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
-    final tabs = tester.widget<UnderlineTabStrip>(
-      find.byWidgetPredicate(
-        (widget) => widget is UnderlineTabStrip && widget.rule == StripRule.top,
-      ),
+    final strip = tester.widget<TrainingBlockStrip>(
+      find.byType(TrainingBlockStrip),
     );
-    expect(tabs.selectedIndex, 0);
+    expect(
+      strip.weeksByBlock.values
+          .expand((weeks) => weeks)
+          .firstWhere((week) => week.id == strip.selectedWeekId)
+          .number,
+      1,
+    );
   });
 
   testWidgets('long workout title stays clear of the timer below it', (
@@ -712,6 +750,7 @@ void main() {
     addTearDown(tester.view.reset);
     final plan = populatedPlan().copyWith(name: 'UPPER BODY');
 
+    await tester.runAsync(() => hiveHarness.prepareTraining([plan]));
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -748,9 +787,7 @@ void main() {
   ) async {
     final semantics = tester.ensureSemantics();
     final data = populatedData();
-    await tester.pumpWidget(
-      homeHost(plans: [data.plan], sessions: [data.session]),
-    );
+    await pumpHome(tester, plans: [data.plan], sessions: [data.session]);
     await tester.tap(find.text('Manage'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Plan actions'));
@@ -789,8 +826,11 @@ void main() {
   ) async {
     final data = populatedData();
     for (final size in [const Size(320, 700), const Size(1200, 800)]) {
-      await tester.pumpWidget(
-        homeHost(size: size, plans: [data.plan], sessions: [data.session]),
+      await pumpHome(
+        tester,
+        size: size,
+        plans: [data.plan],
+        sessions: [data.session],
       );
       await tester.pump();
       expect(tester.takeException(), isNull, reason: '$size');
@@ -823,11 +863,10 @@ void main() {
     tester,
   ) async {
     final data = populatedData();
-    await tester.pumpWidget(
-      homeHost(
-        plans: [data.plan],
-        sessions: [data.session.copyWith(date: DateTime.now())],
-      ),
+    await pumpHome(
+      tester,
+      plans: [data.plan],
+      sessions: [data.session.copyWith(date: DateTime.now())],
     );
     expect(find.text('Next up'), findsOneWidget);
     expect(find.text('Start workout'), findsOneWidget);
@@ -860,7 +899,7 @@ void main() {
       exercises: const [],
       isCompleted: false,
     );
-    await tester.pumpWidget(homeHost(plans: plans, sessions: [draft]));
+    await pumpHome(tester, plans: plans, sessions: [draft]);
 
     expect(find.textContaining('Workout 1 of 3'), findsOneWidget);
     expect(find.text('0 workouts'), findsOneWidget);
@@ -885,9 +924,7 @@ void main() {
         ),
     ];
     for (final brightness in Brightness.values) {
-      await tester.pumpWidget(
-        homeHost(size: size, brightness: brightness, plans: plans),
-      );
+      await pumpHome(tester, size: size, brightness: brightness, plans: plans);
       await tester.pump();
 
       expect(find.text('0 workouts'), findsOneWidget);
@@ -912,8 +949,10 @@ void main() {
     tester,
   ) async {
     final yesterday = DateTime.now().subtract(const Duration(days: 1));
-    await tester.pumpWidget(
-      homeHost(plans: rotationPlans(), sessions: [pullSession(yesterday)]),
+    await pumpHome(
+      tester,
+      plans: rotationPlans(),
+      sessions: [pullSession(yesterday)],
     );
 
     expect(find.text('Next up'), findsOneWidget);
@@ -936,11 +975,10 @@ void main() {
   testWidgets(
     'weekly activity exposes trained days without repeated status labels',
     (tester) async {
-      await tester.pumpWidget(
-        homeHost(
-          plans: rotationPlans(),
-          sessions: [pullSession(DateTime.now())],
-        ),
+      await pumpHome(
+        tester,
+        plans: rotationPlans(),
+        sessions: [pullSession(DateTime.now())],
       );
       expect(find.text('1 workout · 0 sets'), findsOneWidget);
       expect(find.text('Pull Day · Today'), findsNothing);
@@ -1058,14 +1096,13 @@ void main() {
     for (final brightness in Brightness.values) {
       for (final size in [const Size(320, 700), const Size(1200, 800)]) {
         for (final scale in [1.0, 2.0]) {
-          await tester.pumpWidget(
-            homeHost(
-              size: size,
-              textScale: scale,
-              brightness: brightness,
-              plans: rotationPlans(),
-              sessions: [pullSession(yesterday)],
-            ),
+          await pumpHome(
+            tester,
+            size: size,
+            textScale: scale,
+            brightness: brightness,
+            plans: rotationPlans(),
+            sessions: [pullSession(yesterday)],
           );
           await tester.pump();
           expect(find.text('Next up'), findsOneWidget);

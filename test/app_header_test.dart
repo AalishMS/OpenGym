@@ -1,16 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:hive/hive.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart' as gym;
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/navigation/workout_destination.dart';
 import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/providers/split_provider.dart';
 import 'package:gymapp/providers/update_provider.dart';
@@ -22,9 +17,13 @@ import 'package:gymapp/screens/settings_screen.dart';
 import 'package:gymapp/screens/stats_screen.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
-
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/app_header.dart';
+import 'package:hive/hive.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
@@ -75,6 +74,7 @@ void main() {
     for (final session in sessions) {
       await box.put(session.id, session);
     }
+    await harness.prepareTraining([plan]);
   });
 
   tearDownAll(() async {
@@ -183,7 +183,11 @@ void main() {
     ),
     'Plan editor': (const PlanEditorScreen.create(), true),
     'Workout': (
-      WorkoutScreen(plan: plan, planIndex: 0, initialWeekNumber: 8),
+      WorkoutScreen(
+        plan: plan,
+        planIndex: 0,
+        destination: WorkoutDestination.active(plan.id!),
+      ),
       true,
     ),
   };

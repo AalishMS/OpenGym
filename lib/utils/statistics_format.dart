@@ -63,22 +63,38 @@ String formatStatisticsDuration(int totalSeconds) {
   return minutes == 0 ? '${hours}h' : '${hours}h ${minutes}m';
 }
 
-String formatStatisticsDate(DateTime date) {
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-  return '${date.day} ${months[date.month - 1]} ${date.year}';
+const _months = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+String formatStatisticsDate(DateTime date) =>
+    '${date.day} ${_months[date.month - 1]} ${date.year}';
+
+/// `19 Oct`: a date inside a span whose year is already clear.
+String formatDayMonth(DateTime date) =>
+    '${date.day} ${_months[date.month - 1]}';
+
+/// `13 – 29 Oct 2026`, `28 Sep – 12 Oct 2026`, or both years when they differ.
+String formatDateSpan(DateTime start, DateTime end) {
+  if (start.year != end.year) {
+    return '${formatStatisticsDate(start)} – ${formatStatisticsDate(end)}';
+  }
+  if (start.month != end.month) {
+    return '${formatDayMonth(start)} – ${formatStatisticsDate(end)}';
+  }
+  if (start.day == end.day) return formatStatisticsDate(end);
+  return '${start.day} – ${formatStatisticsDate(end)}';
 }
 
 String formatWeekLabel(DateTime date) => '${date.day}/${date.month}';
@@ -96,11 +112,8 @@ String formatWeekLabel(DateTime date) => '${date.day}/${date.month}';
 
 String formatIsoWeek(DateTime date) => 'W${isoWeek(date).week}';
 
-String formatWeekRange(DateTime start) {
-  final end = DateTime(start.year, start.month, start.day + 6);
-  return '${formatIsoWeek(start)} · ${isoWeek(start).year} · '
-      '${formatStatisticsDate(start)} – ${formatStatisticsDate(end)}';
-}
+String formatWeekRange(DateTime start) =>
+    formatDateSpan(start, DateTime(start.year, start.month, start.day + 6));
 
 String formatChartNumber(double value) {
   final magnitude = value.abs();

@@ -24,6 +24,7 @@ import 'package:gymapp/screens/history_screen.dart';
 import 'package:gymapp/screens/stats_screen.dart';
 import 'package:gymapp/screens/settings_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/services/training_block_migration.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
@@ -357,28 +358,28 @@ void main() {
       await tester.pumpWidget(host(const StatsScreen(), sessions: [session]));
       await tester.pump();
 
-      final control = find.byType(DropdownButtonFormField<StatisticsPeriod>);
-      await tester.ensureVisible(control);
+      Finder chip(StatisticsPeriod period) =>
+          find.byKey(ValueKey('progress-period-$period'));
+      bool selected(StatisticsPeriod period) => isSemantics(
+        isSelected: true,
+      ).matches(tester.getSemantics(chip(period)), {});
+      await tester.ensureVisible(chip(StatisticsPeriod.twelveWeeks));
       await tester.pumpAndSettle();
-      expect(tester.getSize(control).height, greaterThanOrEqualTo(48));
+      for (final period in StatisticsPeriod.values) {
+        expect(tester.getSize(chip(period)).height, greaterThanOrEqualTo(48));
+      }
+      expect(selected(StatisticsPeriod.fourWeeks), isTrue);
+      // The visible label is `4W`; a screen reader hears the whole period.
+      expect(find.text('4W'), findsOneWidget);
       expect(
-        tester
-            .widget<DropdownButtonFormField<StatisticsPeriod>>(control)
-            .initialValue,
-        StatisticsPeriod.fourWeeks,
+        tester.getSemantics(chip(StatisticsPeriod.fourWeeks)).label,
+        '4 weeks',
       );
-      await tester.tap(control);
+      await tester.tap(chip(StatisticsPeriod.twelveWeeks));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('12 weeks').last);
-      await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<DropdownButtonFormField<StatisticsPeriod>>(control)
-            .initialValue,
-        StatisticsPeriod.twelveWeeks,
-      );
+      expect(selected(StatisticsPeriod.twelveWeeks), isTrue);
+      expect(selected(StatisticsPeriod.fourWeeks), isFalse);
       expect(find.text('Recent sessions'), findsNothing);
-      expect(find.byType(ChoiceChip), findsNothing);
       semantics.dispose();
     },
   );
@@ -747,6 +748,9 @@ void main() {
         );
       }
     });
+    await tester.runAsync(
+      () => TrainingBlockMigration().normalize(ownerId: null),
+    );
     final otherPlan = HiveService.getPlanById('other-plan')!.toJson();
     final otherSession = HiveService.getSessionById('other-session')!.toJson();
     await tester.pumpWidget(

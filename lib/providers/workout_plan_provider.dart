@@ -24,9 +24,9 @@ class WorkoutPlanProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> addPlan(WorkoutPlan plan) async {
+  Future<void> addPlan(WorkoutPlan plan, {String? startingWeekId}) async {
     if (_splitProvider != null) plan.splitId ??= _requireActiveSplit();
-    await HiveService.upsertPlan(plan);
+    await HiveService.createPlan(plan, startingWeekId: startingWeekId);
     loadPlans();
     SyncService.instance.scheduleSync();
   }

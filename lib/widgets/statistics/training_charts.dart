@@ -53,8 +53,7 @@ class _WeeklyVolumeChartState extends State<WeeklyVolumeChart> {
           label: switch (current - index) {
             0 => 'This week · In progress',
             1 => 'Last week',
-            _ =>
-              '${formatIsoWeek(week.weekStart)} · ${isoWeek(week.weekStart).year}',
+            _ => 'Week of ${formatDayMonth(week.weekStart)}',
           },
           detail: formatWeekRange(week.weekStart),
           // A week in progress would always read as a drop, so only complete
@@ -163,7 +162,7 @@ class _WeeklyVolumeChartState extends State<WeeklyVolumeChart> {
                                   ),
                                   const SizedBox(height: 12),
                                   Text(
-                                    formatIsoWeek(weeks[i].weekStart),
+                                    formatDayMonth(weeks[i].weekStart),
                                     style: Theme.of(
                                       context,
                                     ).textTheme.labelMedium?.copyWith(

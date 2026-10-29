@@ -46,7 +46,7 @@ recognizable details rather than a theme that users need to understand. The
 ```text
 main.dart
   -> HiveService.init() + SupabaseService.init()   (in parallel)
-  -> AdoptLocalData.prepareLocal()                 (offline-only cache handover)
+  -> AdoptLocalData.prepareLocal()                 (owner handover + recovery/normalization)
   -> MultiProvider
   -> IntroScreen (first run) or AuthGate
   -> AppShell
@@ -66,7 +66,7 @@ The app is split into small layers:
 | --- | --- | --- |
 | Models | `lib/models/` | Hive objects and JSON serialization |
 | Providers | `lib/providers/` | UI-facing state and `notifyListeners()` |
-| Repositories | `lib/repositories/` | Thin data-access wrappers around services (currently splits only) |
+| Repositories | `lib/repositories/` | Thin split and training-structure data access |
 | Services | `lib/services/` | Storage, sync, backup, PR tracking, seeding |
 | Screens | `lib/screens/` | Page-level UI |
 | Widgets | `lib/widgets/` | Reusable UI components |
@@ -80,7 +80,8 @@ Provider is the only app-wide state pattern.
 | --- | --- |
 | `SplitProvider` | Available splits, the active split, split CRUD and preset installs |
 | `WorkoutPlanProvider` | Workout plan list and plan CRUD for the active split |
-| `WorkoutSessionProvider` | Session list, current week, session mutations for the active split |
+| `WorkoutSessionProvider` | Completed-session list and session mutations for the active split |
+| `TrainingBlockProvider` | Split structure, per-plan progress and session indexes |
 | `SettingsProvider` | Theme mode, accent color, units, auto-fill |
 | `UpdateProvider` | Self-update check against GitHub Releases |
 
@@ -107,11 +108,14 @@ The core model is intentionally small.
 | `SetTemplate` | One target set in a plan: reps, weight, and optional RPE |
 | `ExerciseTemplate` | Exercise entry with targets and optional workout guidance |
 | `WorkoutPlan` | Named plan with exercises, optional color, explicit order, and `splitId` |
-| `WorkoutSession` | Logged workout for a plan, date, week, exercises, and `splitId` |
+| `WorkoutSession` | Draft/log with stable ID, date, exercises, timer, `trainingWeekId`, retained week label and optional completion evidence |
+| `TrainingBlock` | Split-wide named block with explicit order and intended week count |
+| `TrainingWeek` | Durable slot allocated when needed; labels are not identity |
+| `WorkoutProgress` | A plan’s active week, available week IDs, ready/boundary state and revision |
 | `Split` | An independent training workspace that owns plans and sessions |
 | `SplitPreference` | The account's active split, keyed by user ID |
 
-Splits, plans, and sessions also carry sync metadata. `SplitPreference` keeps
+Splits, plans, sessions, blocks, weeks and progress carry sync metadata. `SplitPreference` keeps
 only `updatedAt` and `dirty`: it is keyed by `userId` and is never deleted.
 
 | Field | Purpose |
@@ -123,67 +127,142 @@ only `updatedAt` and `dirty`: it is keyed by `userId` and is never deleted.
 | `dirty` | Marks local changes that still need to be pushed |
 
 Hive adapters are generated in `*.g.dart`; those files are not edited by hand.
-Plan targets initialize the first workout week, including optional RPE. Later
-weeks copy the previous session, with empty sets when no previous data exists.
-Older plans without RPE remain valid. Targets use the plan's existing JSON
-payload for backup and sync, and survive duplication and Coach preservation.
+Plans are shared prescription templates across all blocks. A saved destination
+always wins over initialization. The first week of the first block uses targets.
+Week 1 of a later block copies Week 1 of the immediately preceding live block
+for the same plan. Every later week copies the preceding supplied week's
+completed values within its own block. Missing sources use current targets.
+Exercises match by normalized name and occurrence; current order/guidance wins,
+set values/RPE/count are deep-copied, and past set notes are not inherited.
+Untouched previews never create logs. Previous-set references instead follow
+earlier structural slots; plan-editor Last and analytics remain date-based.
+
+## Training blocks and progress
+
+Blocks and durable week IDs are shared within a split; available week tabs and
+active progress belong to each workout. Creating a four-week block stores an
+intended length of four but allocates only Week 1. Completing Push Week 1
+allocates/reuses Week 2 and reveals it only for Push; Pull keeps its current
+week and values. Available IDs persist across blocks, restarts and history
+editing. Existing pre-created rows remain stored, while unused future tabs are
+hidden separately for each plan.
+
+Logging an active week advances automatically while its number is below the
+intended length. Completing the intended final week records a pending boundary
+without allocating another week. On the next ordinary entry, choose Add week,
+Move to the next block, or Create block when none follows. The choices are
+option cards in a sheet, each with a line saying what it does; the natural next
+step (Add week, or a week that already exists) carries the accent. Dismissal
+preserves the completed result, and a *Block complete* notice above the log
+offers Choose next week. The strip's Add week control also gains an accent
+ground at that point. Add week extends the shared
+intended length by one and moves/reveals only the choosing workout. Browsing,
+time, draft discard and another plan's completion never advance progress.
+
+New and duplicated plans and Coach additions visibly choose a starting slot,
+defaulting to Week 1 of the first block. The plan editor shows it as a
+*Starting week* field under the name, and Coach as a one-line *Starts at* row.
+Both open one bottom sheet: each block is a selectable row, and the chosen
+block expands to show its weeks as chips, so block and week read as one
+decision. Pickers include intended future week
+numbers without allocating them; saving the new plan allocates/reuses only its
+chosen slot. Existing plan edits retain progress. Create block accepts an
+intended length of 1–52 weeks and a 1–40 character trimmed name; explicit
+extensions can go beyond 52. Blocks can be renamed/reordered.
+Individual week/block deletion, week rename/reorder, Skip, Repeat, block
+prescriptions and block-based analytics are outside V1.
+
+The workout's bottom navigation always fills the available width. The selected
+week's block name stays at the left and Add week (+) stays at the right; only
+that block's week tabs scroll between them. The selected week keeps its accent
+underline and scrolls into view. The block name sits on a quiet ground, since a
+ground means tappable, and opens a compact menu above it, shaped like the
+split switcher. It lists every block in saved order with its intended length,
+marks the current one with a radio-style check, and then shows Create block,
+Rename block and Reorder blocks under a rule. Reorder is disabled until there
+are two blocks. The block list scrolls while the commands stay pinned, unless
+the text is too large for both to fit; then the whole menu scrolls. It closes
+on selection, outside tap or Back. There is no separate block overflow menu or
+collapse state.
+Switching blocks restores the last week viewed in that block during this screen
+visit, or its first supplied week on the first visit. Navigation saves pending
+edits before changing selection. The plus control is disabled until the active
+workout's final week is completed and selected; it then opens the same boundary
+sheet. Creating a block opens its first week for browsing without moving active
+progress. Only an explicit boundary choice moves into another block.
+
+A completed session carries revision-bound completion evidence with a fixed
+commit time and resulting revision. Recovery applies it only to the exact
+expected progress state, so interruption between the log and progress writes
+cannot log twice or advance an unrelated later visit. An already-started
+nonactive draft can finish by exact session ID without advancing progress.
+Completed logs are read-only in the logger; History retains explicit editing.
+Session writes resolve the current label from the durable week ID, so a
+structural rebase cannot make an in-progress edit restore an obsolete label.
 
 ## Local Persistence
 
-`HiveService` owns local persistence. It opens four boxes:
+`HiveService` owns plans, sessions, splits and preferences plus typed
+`training_blocks`, `training_weeks` and `workout_progress` boxes. A small
+`training_operations` box holds fixed structural recovery intents. Browser-only
+`training_recovery_snapshots` holds safety/replacement JSON artifacts in
+IndexedDB; native targets retain flushed files with atomic pending-file rename.
+These artifacts are separate from the live graph and operation intents. UI reads
+hide tombstones; raw reads retain them for synchronization.
 
-| Box | Records |
-| --- | --- |
-| `workout_plans` | `WorkoutPlan` |
-| `workout_sessions` | `WorkoutSession` |
-| `splits` | `Split` |
-| `split_preferences` | `SplitPreference` |
+Normalization durably writes an owner-scoped safety artifact before changing links. Legacy
+weeks use deterministic split/number IDs inside one Block 1, preserving gaps,
+all session IDs/values/timers, and orphan history. Explicit new structure uses
+UUID4. Empty splits receive Block 1 / Week 1. Bootstrap metadata has a neutral
+edit timestamp and cannot overwrite real structure/progress edits. Late legacy
+rows reserve their original labels; colliding new weeks rebase under the same
+ID with a journaled label update to linked session snapshots.
 
-UI-facing reads hide tombstoned records. Raw reads include tombstones so sync can
-push deletes.
-
-`HiveService` also runs one-shot migrations. The first re-keys records from old
-integer Hive keys to stable IDs, after writing a JSON safety backup to
-SharedPreferences. The second, `ensureSplitWorkspace`, creates a default split
-when none exists and assigns any plan or session without a `splitId` to the
-active split.
+Replacement operations validate the full graph before writing, save an
+owner-scoped safety graph and fixed desired graph through the platform snapshot
+store, then roll forward after
+interruption. Caught installer failures restore the safety graph under the
+exclusive mutation gate. Recovery failure hides the logger behind an export/
+retry flow. Export reads the artifact as JSON bytes on either platform.
+Account handover clears the previous owner's boxes, cursors,
+intents, safety artifacts and route/native state before showing another cache.
 
 ## Cloud Sync
 
 `SyncService` implements a small last-write-wins sync loop between Hive and
 Supabase Postgres.
 
-```text
-local mutation
-  -> mark record dirty
-  -> debounce sync
-  -> pull splits + split preference   (best effort; may fail offline)
-  -> ensure a local split workspace exists
-  -> push live splits
-  -> push dirty plans
-  -> push dirty sessions
-  -> push split preference
-  -> push deleted splits
-  -> pull splits, split preference, plans, sessions
-```
+The capable client sends `x-opengym-training-schema: 1`. After a successful
+local safety copy and preparation, the additive SQL RPC activates an irreversible
+per-account schema boundary. Activated accounts reject old reads and writes
+through the API pre-request guard; unactivated accounts retain legacy access.
+RLS and grants remain separate required deployment checks. Local tests do not
+certify production configuration or authorize activation/deployment.
 
-Parents are pushed before children. Deleted splits are pushed last because a
-server trigger tombstones their plans and sessions, and every child mutation
-has to land first. Each table keeps its own pull cursor in SharedPreferences.
+Sync pulls/normalizes before migrated uploads, pushes parents before children,
+then pulls again and replays completion evidence. Deleted splits normally upload
+last; capacity/name reuse may require uploading a pending parent tombstone first.
+Schema 2 activation backfills intended duration and per-plan availability
+without rewinding progress, then rejects schema 1 clients for that account.
+Installing the migration alone does not activate an account. Session JSON
+remains schema 1 because its representation has not changed.
+Blocks, weeks, plans, sessions, progress and the active preference sync as rows.
+Sessions retain duplicate slot logs under distinct IDs. Conflict resolution is
+whole-row LWW, with durable tombstone precedence and live-progress revision
+ordering on equal timestamps. Intended block length takes the greater value
+because creation/extension can only grow it; concurrent renames and partially
+uploaded legacy structure cannot shorten it. There is no set-level merge.
 
-Sync uses whole aggregate rows: one plan or one session is stored as promoted
-columns plus a JSON `data` payload. Deletes are represented by `deletedAt`, not
-hard deletion.
-
-Conflict resolution is timestamp based:
-
-- Remote wins when the remote `updatedAt` is newer than or equal to local.
-- Local wins when the local `updatedAt` is newer; the dirty push carries it to
-  the server later.
-- Sync errors are swallowed and retried on the next trigger.
-- Concurrent sync calls share the same active future.
-- Sync runs after local mutations and whenever the app returns to the
-  foreground.
+Pulls paginate in explicit ascending timestamp/ID order. Server timestamps are
+not commit order, so startup/manual/account recovery and periodic full sweeps
+repair late commits; absence from a partial pull never implies deletion.
+New lazy slots use a block/number UUIDv5 identity, so independent offline
+allocations reuse one Week 2. Legacy random-ID append collisions preserve both
+IDs, rebasing the conflicting week and session labels, with three push attempts. Retry exhaustion leaves local
+data dirty. Errors remain visible as retryable/upgrade-required sync state,
+while Hive remains available for local training after successful preparation.
+Concurrent sync calls share an active future; account-generation checks reject
+old-account results, and structural mutations serialize with sync.
 
 Supabase auth gates the app when online support is configured. The Supabase URL
 and publishable key are compiled in as `--dart-define` defaults
@@ -220,6 +299,14 @@ details to the catalog; another Back closes the flow. Picker Done intentionally
 steps back in the same way, while Close, outside taps, and dragging the picker
 down close it directly. Preset browsing retains the goal and catalog position.
 Saving, deleting, or installing blocks dismissal until success or failure.
+
+`WorkoutDestination.active(planId)`, `.week(planId, weekId)` and
+`.session(sessionId)` carry route intent. Delivery re-fetches the exact current
+records and rejects account changes, deleted sessions and missing explicit
+slots. Exact IDs win over same-number weeks and duplicate logs. Orphan sessions
+keep the detail route and retained display labels. History, resume and native
+timer text includes block context when resolvable; optional notification text
+never becomes identity.
 
 `AppNavigationObserver` owns account-scoped route tracking. Workout and editor
 states register their normal asynchronous leave flows with it. Timer intents
@@ -310,6 +397,25 @@ signature:
   in. Danger zone is always last. *Load sample data* replaces the active
   split's workouts, so it is a development tool. It only appears in debug
   builds (`SettingsScreen.showSampleData`, which defaults to `kDebugMode`).
+- Stats runs Training blocks, Weekly training, Activity, Exercise progress,
+  and Recent records. Training blocks opens on the block of the latest
+  workout. It shows workouts, sets, volume, and records for that block. Its
+  arrows compare an average trained week with the previous block that has
+  workouts. Below them are sets for each week of the block (unreached planned
+  weeks are empty outlines) and the three biggest estimated-1RM gains. With
+  two or more trained blocks, a scrolling pill row switches blocks and
+  *Compare blocks* ranks them per trained week. Sessions reach a block only
+  through their training week. Stats selectors come in two shapes
+  (`statistics_controls.dart`). A short, fixed set, such as the time range
+  (`4W`, `12W`, `6M`, `1Y`, `All`, read aloud in full) or the compare
+  measure, is a `SegmentedPills` track of equal-width segments. A longer or
+  open-ended set, such as blocks or the exercise measures, is a
+  `ScrollingPills` row that fades at whichever edge hides more pills. Both
+  keep a 48px tap target around compact pills. Exercise progress gives each
+  measure a one-line plain explanation and lists every lift with its latest
+  value, sparkline, and change. Tapping a lift opens it in the detailed
+  chart. Weekly charts label weeks by date, never by ISO week number. The
+  weekly-training shortcut lands on Weekly training, below the blocks.
 - Home labels the rotation bar with “Workout N of M”. The same workout
   numbers appear in the plan list's coloured markers. Muscle groups sit on
   their own line in the launcher; exercise, set, and duration values wrap as
@@ -337,13 +443,25 @@ whole app means editing the six scale constants in that one file.
 
 ## Backup And Import
 
-`BackupService` exports all splits, plans, sessions, and settings into a
-versioned JSON file (currently version 3). Imports validate JSON shape and
-supported versions before replacing local data.
+`BackupService` exports format v5: all splits/plans/sessions, intended block
+lengths, allocated weeks, each plan's available/active weeks, settings and
+source-account provenance. Imports validate the complete graph before replacing
+local data. Versions 1–4 reuse normalization; unsupported future versions and v5
+backups missing duration/availability fail explicitly.
 
-Version 1 backups without stable IDs are upgraded on import by assigning IDs and
-marking records dirty so they can sync upward. Backups older than version 3
-import into a single `My Split`.
+Same-account restore preserves identities unless live restored rows would
+resurrect known tombstones. Foreign/unknown-provenance backups and those
+resurrection cases copy the full graph to new identities, including progress
+and completion references. Restoring a shorter schedule or removing a lazy
+slot from a retained block also uses new identities, so its next deterministic
+week ID cannot be stranded behind a deletion marker. Activation state is never copied. Restores tombstone
+omitted records and use the same recoverable replacement writer as installers.
+
+Deleting a plan tombstones progress and retains history. Split deletion cascades
+the entire graph after saving the replacement preference. Clear All Data retains
+split profiles and gives each a fresh Block 1 / Week 1. Sample replacement affects
+only the active split. A pristine default split can be reused by installers;
+renamed/extended/reordered empty structure counts as user content.
 
 ## Development Constraints
 

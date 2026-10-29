@@ -31,7 +31,10 @@ data class WorkoutTimerState(
     val running: Boolean,
     val actionRevision: Long,
     val pendingStop: Boolean,
+    val blockName: String? = null,
 ) {
+    fun title(): String = listOfNotNull(planName, blockName?.takeIf { it.isNotBlank() }, "Week $weekNumber").joinToString(" · ")
+
     fun elapsedSeconds(nowMillis: Long = System.currentTimeMillis()): Int {
         if (!running || runningSinceMillis == null) return accumulatedSeconds
         val delta = ((nowMillis - runningSinceMillis) / 1000L).coerceAtLeast(0L)
@@ -44,6 +47,7 @@ data class WorkoutTimerState(
         "splitId" to splitId,
         "planName" to planName,
         "weekNumber" to weekNumber,
+        "blockName" to blockName,
         "accumulatedSeconds" to accumulatedSeconds,
         "runningSinceMillis" to runningSinceMillis,
         "running" to running,
@@ -83,6 +87,7 @@ object WorkoutTimerNotification {
             splitId = prefs.getString("splitId", null),
             planName = prefs.getString("planName", "Workout") ?: "Workout",
             weekNumber = prefs.getInt("weekNumber", 1),
+            blockName = prefs.getString("blockName", null),
             accumulatedSeconds = prefs.getInt("accumulatedSeconds", 0),
             runningSinceMillis = if (prefs.contains("runningSinceMillis")) prefs.getLong("runningSinceMillis", 0L) else null,
             running = prefs.getBoolean("running", false),
@@ -99,6 +104,7 @@ object WorkoutTimerNotification {
             splitId = arguments["splitId"] as String?,
             planName = arguments["planName"] as String,
             weekNumber = (arguments["weekNumber"] as Number).toInt(),
+            blockName = arguments["blockName"] as String?,
             accumulatedSeconds = (arguments["accumulatedSeconds"] as Number).toInt(),
             runningSinceMillis = (arguments["runningSinceMillis"] as Number?)?.toLong(),
             running = arguments["running"] as Boolean,
@@ -155,6 +161,7 @@ object WorkoutTimerNotification {
             .putString("splitId", state.splitId)
             .putString("planName", state.planName)
             .putInt("weekNumber", state.weekNumber)
+            .putString("blockName", state.blockName)
             .putInt("accumulatedSeconds", state.accumulatedSeconds)
             .putBoolean("running", state.running)
             .putLong("actionRevision", state.actionRevision)
@@ -209,7 +216,7 @@ object WorkoutTimerNotification {
         }
         builder
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
-            .setContentTitle("${state.planName} · Week ${state.weekNumber}")
+            .setContentTitle(state.title())
             .setContentText(if (state.running) "Workout in progress" else "${formatDuration(state.accumulatedSeconds)} · Workout paused")
             .setContentIntent(PendingIntent.getActivity(context, 4100, openIntent, immutable))
             .setOngoing(true)

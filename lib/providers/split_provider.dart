@@ -3,15 +3,15 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
+import '../data/workout_presets.dart';
 import '../models/coach_proposal.dart';
 import '../models/split.dart';
 import '../repositories/split_repository.dart';
 import '../services/coach/coach_applier.dart';
+import '../services/split_install_target.dart';
 import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
 import '../services/workout_preset_installer.dart';
-import '../data/workout_presets.dart';
-import '../utils/split_identity.dart';
 
 class SplitProvider with ChangeNotifier {
   static const int maxSplits = 5;
@@ -56,12 +56,7 @@ class SplitProvider with ChangeNotifier {
     final userId = _userIdProvider();
     final active = activeSplit;
     final reusable =
-        userId != null &&
-        active != null &&
-        active.id == defaultSplitIdForUser(userId) &&
-        active.name == 'My Split' &&
-        usageFor(active.id).plans == 0 &&
-        usageFor(active.id).sessions == 0;
+        userId != null && SplitInstallTarget.isUntouchedDefault(active, userId);
     if (reusable || canCreate) return null;
     return 'You can have at most five splits. Delete one in Manage splits.';
   }
@@ -166,10 +161,15 @@ class SplitProvider with ChangeNotifier {
   /// Writes a Coach proposal, then reloads splits, which also reloads the
   /// plans of whichever split is now active. A stale proposal writes nothing.
   Future<CoachApplyOutcome> applyCoachProposal(
-    ValidatedProposal proposal,
-  ) async {
+    ValidatedProposal proposal, {
+    Map<String, String> startingWeekIds = const {},
+  }) async {
     try {
-      return await _coachApplier.apply(proposal, userId: _requireUser());
+      return await _coachApplier.apply(
+        proposal,
+        userId: _requireUser(),
+        startingWeekIds: startingWeekIds,
+      );
     } finally {
       loadSplits();
     }

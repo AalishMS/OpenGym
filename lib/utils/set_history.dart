@@ -1,9 +1,10 @@
 import '../models/set.dart' as gym;
+import '../models/training_block.dart';
+import '../models/training_week.dart';
 import '../models/workout_session.dart';
+import '../services/training_week_session_resolver.dart';
 
-/// Most recent earlier occurrence of an exercise, preserving set positions.
-/// Workout callers scope this to the active plan and weeks before the selected
-/// week; plan editors can consult the exercise's history across plans.
+/// Workout Previous follows structural slots; plan-editor Last stays date-based.
 List<gym.Set> previousExerciseSets(
   Iterable<WorkoutSession> sessions,
   String exerciseName, {
@@ -11,28 +12,60 @@ List<gym.Set> previousExerciseSets(
   String? planName,
   String? splitId,
   int? beforeWeek,
+  String? beforeWeekId,
+  String? excludingSessionId,
+  Iterable<TrainingBlock> blocks = const [],
+  Iterable<TrainingWeek> weeks = const [],
   bool includeDrafts = false,
 }) {
+  if (beforeWeekId != null) {
+    if (planId == null || splitId == null) {
+      throw ArgumentError('Structural history requires plan and split IDs.');
+    }
+    sessions = TrainingWeekSessionResolver.earlierSessions(
+      splitId: splitId,
+      planId: planId,
+      weekId: beforeWeekId,
+      blocks: blocks,
+      weeks: weeks,
+      sessions: sessions,
+      excludingSessionId: excludingSessionId,
+    );
+  }
   final eligible =
       sessions.where((session) {
-          if (session.deletedAt != null) return false;
-          if (!includeDrafts && !session.isCompleted) return false;
-          if (splitId != null && session.splitId != splitId) return false;
-          if (planName != null &&
-              (planId != null && session.planId != null
-                  ? session.planId != planId
-                  : session.planName != planName)) {
-            return false;
-          }
-          return beforeWeek == null || session.weekNumber < beforeWeek;
-        }).toList()
-        ..sort(
-          (a, b) =>
-              beforeWeek != null
-                  ? b.weekNumber.compareTo(a.weekNumber)
-                  : b.date.compareTo(a.date),
-        );
-  for (final session in eligible) {
+        if (session.deletedAt != null ||
+            (excludingSessionId != null && session.id == excludingSessionId)) {
+          return false;
+        }
+        if (!includeDrafts && !session.isCompleted) return false;
+        if (splitId != null && session.splitId != splitId) return false;
+        if (planId != null && session.planId != planId) return false;
+        if (planId == null &&
+            planName != null &&
+            session.planName != planName) {
+          return false;
+        }
+        return beforeWeek == null || session.weekNumber < beforeWeek;
+      }).toList();
+  if (beforeWeekId == null) {
+    eligible.sort((a, b) {
+      if (beforeWeek != null) {
+        final number = b.weekNumber.compareTo(a.weekNumber);
+        if (number != 0) return number;
+      }
+      final date = b.date.compareTo(a.date);
+      return date == 0 ? (b.id ?? '').compareTo(a.id ?? '') : date;
+    });
+  }
+  return exerciseSetsFromOrderedHistory(eligible, exerciseName);
+}
+
+List<gym.Set> exerciseSetsFromOrderedHistory(
+  Iterable<WorkoutSession> sessions,
+  String exerciseName,
+) {
+  for (final session in sessions) {
     for (final exercise in session.exercises) {
       if (exercise.name.trim().toLowerCase() ==
               exerciseName.trim().toLowerCase() &&

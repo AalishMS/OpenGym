@@ -5,6 +5,28 @@ import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/utils/set_history.dart';
 
 void main() {
+  test('plan ID filters history even without a plan name', () {
+    final rows = [
+      for (final id in ['wanted', 'other'])
+        WorkoutSession(
+          id: id,
+          planId: id,
+          planName: 'Renamed',
+          date: DateTime(2026),
+          exercises: [
+            Exercise(
+              name: 'Bench',
+              sets: [gym.Set(reps: 5, weight: id == 'wanted' ? 50 : 100)],
+            ),
+          ],
+        ),
+    ];
+    expect(
+      previousExerciseSets(rows, 'Bench', planId: 'wanted').single.weight,
+      50,
+    );
+  });
+
   WorkoutSession session(
     int week, {
     String plan = 'Push',

@@ -7,6 +7,7 @@ import '../../models/workout_plan.dart';
 import '../hive_service.dart';
 import '../split_install_target.dart';
 import '../sync_service.dart';
+import '../training_plan_installer.dart';
 
 /// Points between writes where a test can inject a failure.
 enum CoachApplyStage {
@@ -68,12 +69,17 @@ class CoachApplier {
   Future<CoachApplyOutcome> apply(
     ValidatedProposal proposal, {
     required String userId,
+    Map<String, String> startingWeekIds = const {},
   }) async {
     final outcome = await SyncService.instance.runExclusiveLocalMutation(() {
       final stale = staleReason(proposal.snapshot, userId: userId);
       if (stale != null) return Future.value(CoachApplyStale(stale));
       return switch (proposal.target) {
-        CoachTarget.activeSplit => _applyToActiveSplit(proposal, userId),
+        CoachTarget.activeSplit => _applyToActiveSplit(
+          proposal,
+          userId,
+          startingWeekIds,
+        ),
         CoachTarget.newSplit => _applyToNewSplit(proposal, userId),
       };
     });
@@ -107,6 +113,7 @@ class CoachApplier {
   Future<CoachApplyOutcome> _applyToActiveSplit(
     ValidatedProposal proposal,
     String userId,
+    Map<String, String> startingWeekIds,
   ) async {
     final splitId = proposal.snapshot.splitId;
     final now = DateTime.now();
@@ -115,9 +122,8 @@ class CoachApplier {
 
     // Copies, not the live objects: Hive hands out the same instances the
     // snapshot holds, and rollback must put back exactly what was there.
-    final originals = <String, WorkoutPlan>{};
     final written = <String, WorkoutPlan>{};
-    final newIds = <String>[];
+    final starts = <String, String>{};
 
     var nextPosition = _nextPosition(live);
     final usedSlots = {
@@ -141,7 +147,6 @@ class CoachApplier {
       ];
       if (existing != null) {
         final current = HiveService.getPlanById(existing.id!)!;
-        originals[current.id!] = current.copyWith();
         written[current.id!] =
             current.copyWith(name: coachPlan.name, exercises: exercises)
               ..updatedAt = now
@@ -152,7 +157,7 @@ class CoachApplier {
       usedSlots.add(slot);
       planCount++;
       final id = _uuid.v4();
-      newIds.add(id);
+      if (startingWeekIds[coachPlan.name] case final start?) starts[id] = start;
       written[id] = WorkoutPlan(
         id: id,
         userId: userId,
@@ -170,7 +175,6 @@ class CoachApplier {
     final tombstones = <String, WorkoutPlan>{};
     for (final id in removedIds) {
       final current = HiveService.getPlanById(id)!;
-      originals[id] = current.copyWith();
       tombstones[id] =
           current.copyWith()
             ..deletedAt = now
@@ -178,16 +182,19 @@ class CoachApplier {
             ..dirty = true;
     }
 
-    try {
-      await HiveService.putPlansRaw(written);
-      await applyHook?.call(CoachApplyStage.plansWritten);
-      await HiveService.putPlansRaw(tombstones);
-      await applyHook?.call(CoachApplyStage.tombstonesWritten);
-    } catch (error) {
-      await HiveService.deletePlansRaw(newIds);
-      await HiveService.putPlansRaw(originals);
-      rethrow;
-    }
+    await installTrainingPlansUnderGate(
+      ownerId: userId,
+      plans: {...written, ...tombstones},
+      startingWeekIds: starts,
+      onPhase: (phase) async {
+        if (phase == 'plans') {
+          await applyHook?.call(CoachApplyStage.plansWritten);
+        }
+        if (phase == 'progress') {
+          await applyHook?.call(CoachApplyStage.tombstonesWritten);
+        }
+      },
+    );
 
     return CoachApplied(
       splitId: splitId,
@@ -230,18 +237,23 @@ class CoachApplier {
       );
     }
 
-    try {
-      await HiveService.putPlansRaw(planMap);
-      await applyHook?.call(CoachApplyStage.plansWritten);
-      await target.writeSplit();
-      await applyHook?.call(CoachApplyStage.splitWritten);
-      await target.writePreference();
-      await applyHook?.call(CoachApplyStage.preferenceWritten);
-    } catch (error) {
-      await HiveService.deletePlansRaw(planMap.keys);
-      await target.rollback();
-      rethrow;
-    }
+    await installTrainingPlansUnderGate(
+      ownerId: userId,
+      plans: planMap,
+      split: target.split,
+      activeSplitId: target.splitId,
+      onPhase: (phase) async {
+        if (phase == 'plans') {
+          await applyHook?.call(CoachApplyStage.plansWritten);
+        }
+        if (phase == 'progress') {
+          await applyHook?.call(CoachApplyStage.splitWritten);
+        }
+        if (phase == 'settings') {
+          await applyHook?.call(CoachApplyStage.preferenceWritten);
+        }
+      },
+    );
 
     return CoachApplied(
       splitId: target.splitId,

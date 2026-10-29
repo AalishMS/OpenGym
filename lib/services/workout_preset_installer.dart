@@ -4,9 +4,9 @@ import '../data/exercise_library.dart';
 import '../data/plan_colors.dart';
 import '../data/workout_presets.dart';
 import '../models/workout_plan.dart';
-import 'hive_service.dart';
 import 'split_install_target.dart';
 import 'sync_service.dart';
+import 'training_plan_installer.dart';
 
 enum PresetInstallStage { plansWritten, splitWritten, preferenceWritten }
 
@@ -67,18 +67,23 @@ class WorkoutPresetInstaller {
           );
         }
 
-        try {
-          await HiveService.putPlansRaw(planMap);
-          await installHook?.call(PresetInstallStage.plansWritten);
-          await target.writeSplit();
-          await installHook?.call(PresetInstallStage.splitWritten);
-          await target.writePreference();
-          await installHook?.call(PresetInstallStage.preferenceWritten);
-        } catch (error) {
-          await HiveService.deletePlansRaw(planMap.keys);
-          await target.rollback();
-          rethrow;
-        }
+        await installTrainingPlansUnderGate(
+          ownerId: userId,
+          plans: planMap,
+          split: target.split,
+          activeSplitId: target.splitId,
+          onPhase: (phase) async {
+            if (phase == 'plans') {
+              await installHook?.call(PresetInstallStage.plansWritten);
+            }
+            if (phase == 'progress') {
+              await installHook?.call(PresetInstallStage.splitWritten);
+            }
+            if (phase == 'settings') {
+              await installHook?.call(PresetInstallStage.preferenceWritten);
+            }
+          },
+        );
 
         return PresetInstallResult(
           splitId: splitId,

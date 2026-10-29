@@ -1,16 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
+import '../navigation/open_workout.dart';
+import '../navigation/workout_destination.dart';
+import '../providers/split_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
-import '../providers/split_provider.dart';
 import '../services/hive_service.dart';
-import '../widgets/splits/preset_browser_dialog.dart';
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
 import '../theme/spacing.dart';
 import '../utils/plan_stats.dart';
+import '../widgets/app_button.dart';
+import '../widgets/app_header.dart';
 import '../widgets/dashboard/dashboard_panel.dart';
 import '../widgets/dashboard/frequency_heatmap.dart';
 import '../widgets/dashboard/last_session_tile.dart';
@@ -18,12 +22,8 @@ import '../widgets/dashboard/plan_status_tile.dart';
 import '../widgets/dashboard/progression_sparkline.dart';
 import '../widgets/dashboard/recent_prs_tile.dart';
 import '../widgets/dashboard/stat_tile.dart';
-import '../widgets/app_button.dart';
-import '../widgets/app_header.dart';
-import '../widgets/history/history_journal_data.dart';
-import 'history_screen.dart';
+import '../widgets/splits/preset_browser_dialog.dart';
 import 'plan_editor_screen.dart';
-import 'workout_screen.dart';
 
 /// Desktop overview: everything the phone spreads across four tabs, on one
 /// screen. Reachable from the sidebar only — the phone bottom bar has no room
@@ -185,43 +185,12 @@ class DashboardScreen extends StatelessWidget {
     WorkoutSession last,
     List<WorkoutPlan> plans,
   ) {
-    final index = plans.indexWhere(
-      (plan) =>
-          plan.splitId == last.splitId &&
-          (last.planId != null
-              ? plan.id == last.planId
-              : plan.name.toLowerCase() == last.planName.toLowerCase()),
-    );
-
     return DashboardPanel(
       title: 'LAST SESSION',
       action: AppButton.secondary(
         label: last.isCompleted ? 'View workout' : 'Resume',
         onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute<void>(
-              builder:
-                  (_) =>
-                      last.isCompleted
-                          ? WorkoutDetailsScreen(
-                            sessionIdentity: historySessionIdentity(last),
-                          )
-                          : WorkoutScreen(
-                            plan:
-                                index >= 0
-                                    ? plans[index]
-                                    : WorkoutPlan(
-                                      name: last.planName,
-                                      id: last.planId,
-                                      splitId: last.splitId,
-                                      exercises: const [],
-                                    ),
-                            planIndex: index,
-                            initialSession: last,
-                          ),
-            ),
-          );
+          openWorkoutDestination(context, WorkoutDestination.session(last.id!));
         },
       ),
       child: LastSessionTile(session: last),
@@ -288,12 +257,7 @@ class DashboardScreen extends StatelessWidget {
   }
 
   void _openPlan(BuildContext context, int index, WorkoutPlan plan) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => WorkoutScreen(plan: plan, planIndex: index),
-      ),
-    );
+    openWorkoutDestination(context, WorkoutDestination.active(plan.id!));
   }
 }
 

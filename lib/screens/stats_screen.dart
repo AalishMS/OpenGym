@@ -4,13 +4,18 @@ import 'package:provider/provider.dart';
 import '../models/statistics.dart';
 import '../providers/settings_provider.dart';
 import '../providers/split_provider.dart';
+import '../providers/training_block_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../services/statistics_analytics_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../theme/radii.dart';
+import '../theme/spacing.dart';
 import '../utils/statistics_format.dart';
 import '../widgets/app_header.dart';
+import '../widgets/statistics/block_statistics.dart';
+import '../widgets/statistics/lift_list.dart';
+import '../widgets/statistics/statistics_controls.dart';
 import '../widgets/statistics/statistics_widgets.dart';
 import '../widgets/statistics/training_charts.dart';
 import '../widgets/statistics/workout_heatmap.dart';
@@ -35,11 +40,15 @@ class StatsScreen extends StatefulWidget {
 class _StatsScreenState extends State<StatsScreen> {
   static const _analytics = StatisticsAnalyticsService();
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _weeklyKey = GlobalKey();
   StatisticsPeriod _period = StatisticsPeriod.fourWeeks;
   ExerciseMetric _metric = ExerciseMetric.estimatedOneRepMax;
+  BlockMeasure _blockMeasure = BlockMeasure.sets;
+  String? _blockId;
   String? _weeklyExercise;
   String? _progressExercise;
   bool _allExercises = true;
+  bool _showsBlocks = false;
   String? _lastSplit;
 
   @override
@@ -50,7 +59,14 @@ class _StatsScreenState extends State<StatsScreen> {
     if (!weekly && widget.visitRequest == oldWidget.visitRequest) return;
     if (weekly) _allExercises = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _scrollController.hasClients) _scrollController.jumpTo(0);
+      if (!mounted || !_scrollController.hasClients) return;
+      _scrollController.jumpTo(0);
+      // The weekly summary on Home links to this week's training, which sits
+      // below the block overview.
+      final section = _weeklyKey.currentContext;
+      if (weekly && _showsBlocks && section != null) {
+        Scrollable.ensureVisible(section, duration: Duration.zero);
+      }
     });
   }
 
@@ -64,12 +80,14 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget build(BuildContext context) {
     final splitId = context.watch<SplitProvider?>()?.activeSplitId;
     final unit = context.watch<SettingsProvider?>()?.weightUnit ?? 'kg';
+    final training = context.watch<TrainingBlockProvider?>();
     final sessions = _analytics.eligibleSessions(
       context.watch<WorkoutSessionProvider>().sessions,
       splitId: splitId,
     );
     if (_lastSplit != splitId) {
       _lastSplit = splitId;
+      _blockId = null;
       _weeklyExercise = null;
       _progressExercise = null;
       _allExercises = true;
@@ -78,21 +96,41 @@ class _StatsScreenState extends State<StatsScreen> {
     final defaultExercise = _analytics.latestExercise(sessions);
     final weekly =
         names.contains(_weeklyExercise) ? _weeklyExercise : defaultExercise;
-    final exercise =
-        names.contains(_progressExercise) ? _progressExercise : defaultExercise;
     final weeks = _analytics.weeklyVolume(
       sessions,
       exerciseName: _allExercises ? null : weekly,
     );
-    final progress =
-        exercise == null
-            ? null
-            : _analytics.exerciseProgress(
-              _analytics.sessionsInPeriod(sessions, _period),
-              exercise,
-              _metric,
-            );
+    final lifts = _analytics.liftSummaries(
+      _analytics.sessionsInPeriod(sessions, _period),
+      _metric,
+    );
+    final lift =
+        lifts
+            .where((lift) => lift.exerciseName == _progressExercise)
+            .firstOrNull ??
+        lifts.firstOrNull;
     final records = _analytics.recordEvents(sessions).take(8).toList();
+
+    final blocks =
+        training == null
+            ? const <BlockStatistics>[]
+            : _analytics
+                .blockStatistics(
+                  sessions,
+                  blocks: training.blocks,
+                  weeksByBlock: training.weeksByBlock,
+                )
+                .where((block) => block.workouts > 0)
+                .toList();
+    final latestWeekId = sessions.firstOrNull?.trainingWeekId;
+    final currentBlockId =
+        latestWeekId == null ? null : training?.weekById[latestWeekId]?.blockId;
+    final selectedBlock =
+        blocks.where((b) => b.block.id == _blockId).firstOrNull ??
+        blocks.where((b) => b.block.id == currentBlockId).firstOrNull ??
+        blocks.lastOrNull;
+    _showsBlocks = selectedBlock != null;
+    void selectBlock(String id) => setState(() => _blockId = id);
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -102,55 +140,77 @@ class _StatsScreenState extends State<StatsScreen> {
       ),
       body:
           sessions.isEmpty
-              ? const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'No completed workouts',
-                        textAlign: TextAlign.center,
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Statistics appear after you finish and log a workout.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              )
+              ? const _EmptyStatistics()
               : SingleChildScrollView(
                 key: const ValueKey('statistics-scroll'),
                 controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                  AppSpacing.lg,
+                  40,
+                ),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 880),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const StatisticsSectionHeader(title: 'Weekly training'),
-                        const SizedBox(height: 12),
+                        if (selectedBlock != null) ...[
+                          const StatisticsSectionHeader(
+                            title: 'Training blocks',
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          _ChartPanel(
+                            child: BlockOverview(
+                              blocks: blocks,
+                              selected: selectedBlock,
+                              currentBlockId: currentBlockId,
+                              onSelect: selectBlock,
+                              weightUnit: unit,
+                            ),
+                          ),
+                          if (blocks.length > 1) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            _ChartPanel(
+                              child: BlockComparison(
+                                blocks: blocks,
+                                selectedId: selectedBlock.block.id,
+                                currentBlockId: currentBlockId,
+                                measure: _blockMeasure,
+                                onMeasure:
+                                    (measure) =>
+                                        setState(() => _blockMeasure = measure),
+                                onSelect: selectBlock,
+                                weightUnit: unit,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: AppSpacing.xxl),
+                        ],
+                        StatisticsSectionHeader(
+                          key: _weeklyKey,
+                          title: 'Weekly training',
+                        ),
+                        const SizedBox(height: AppSpacing.md),
                         _ChartPanel(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Volume load',
+                                'Weight lifted',
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: AppSpacing.xs),
                               Text(
-                                'Weight × reps · All history',
+                                'Weight × reps for every set, added up by week',
                                 style: Theme.of(
                                   context,
                                 ).textTheme.bodySmall?.copyWith(
                                   color: textSecondaryColor(context),
                                 ),
                               ),
-                              const SizedBox(height: 20),
+                              const SizedBox(height: AppSpacing.lg),
                               _Selector<String>(
                                 fieldKey: 'weekly-exercise',
                                 label: 'Exercise',
@@ -168,7 +228,7 @@ class _StatsScreenState extends State<StatsScreen> {
                                         size: 18,
                                         color: accentColor(context),
                                       ),
-                                      const SizedBox(width: 8),
+                                      const SizedBox(width: AppSpacing.sm),
                                       Expanded(
                                         child: Text(
                                           'All exercises',
@@ -190,7 +250,7 @@ class _StatsScreenState extends State<StatsScreen> {
                                           value.isEmpty ? null : value;
                                     }),
                               ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: AppSpacing.xl),
                               WeeklyVolumeChart(
                                 key: ValueKey(
                                   'weekly-$splitId-${_allExercises ? "all" : weekly}',
@@ -201,9 +261,9 @@ class _StatsScreenState extends State<StatsScreen> {
                             ],
                           ),
                         ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: AppSpacing.xxl),
                         const StatisticsSectionHeader(title: 'Activity'),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: AppSpacing.md),
                         _ChartPanel(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,117 +272,136 @@ class _StatsScreenState extends State<StatsScreen> {
                                 'Workouts',
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
-                              const SizedBox(height: 4),
+                              const SizedBox(height: AppSpacing.xs),
                               // Captions itself with the weeks that fit.
                               WorkoutHeatmap(sessions: sessions),
                             ],
                           ),
                         ),
-                        const SizedBox(height: 32),
+                        const SizedBox(height: AppSpacing.xxl),
                         const StatisticsSectionHeader(
                           title: 'Exercise progress',
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: AppSpacing.md),
                         _ChartPanel(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (exercise == null)
-                                const Text(
-                                  'Log performed sets to see exercise progress.',
+                              Semantics(
+                                container: true,
+                                label: 'Time range',
+                                child: SegmentedPills<StatisticsPeriod>(
+                                  keyPrefix: 'progress-period',
+                                  values: StatisticsPeriod.values,
+                                  selected: _period,
+                                  labelFor: (period) => period.shortLabel,
+                                  semanticLabelFor: (period) => period.label,
+                                  onSelected:
+                                      (value) =>
+                                          setState(() => _period = value),
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              Semantics(
+                                container: true,
+                                label: 'Measure',
+                                child: ScrollingPills<ExerciseMetric>(
+                                  keyPrefix: 'progress-metric',
+                                  values: ExerciseMetric.values,
+                                  selected: _metric,
+                                  labelFor: (metric) => metric.shortLabel,
+                                  onSelected:
+                                      (value) =>
+                                          setState(() => _metric = value),
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              Text(
+                                _metric.description,
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(
+                                  color: textSecondaryColor(context),
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              if (lifts.isEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: AppSpacing.md,
+                                  ),
+                                  child: Text(
+                                    _period == StatisticsPeriod.allTime
+                                        ? 'Log performed sets to see exercise progress.'
+                                        : 'No lifts logged in the last ${_period.label}. Try a longer time range.',
+                                  ),
                                 )
-                              else ...[
-                                _Selector<String>(
-                                  fieldKey: 'progress-exercise',
-                                  label: 'Exercise',
-                                  value: exercise,
-                                  values: names,
-                                  labelFor: (name) => name,
-                                  onChanged:
-                                      (value) => setState(
-                                        () => _progressExercise = value,
+                              else
+                                LiftList(
+                                  key: ValueKey('lifts-$splitId-$_period'),
+                                  lifts: lifts,
+                                  selected: lift?.exerciseName,
+                                  metric: _metric,
+                                  weightUnit: unit,
+                                  onSelect:
+                                      (name) => setState(
+                                        () => _progressExercise = name,
                                       ),
                                 ),
-                                const SizedBox(height: 12),
-                                LayoutBuilder(
-                                  builder: (context, constraints) {
-                                    final metric = _Selector<ExerciseMetric>(
-                                      fieldKey: 'progress-metric',
-                                      label: 'Metric',
-                                      value: _metric,
-                                      values: ExerciseMetric.values,
-                                      labelFor: (metric) => metric.label,
-                                      onChanged:
-                                          (value) =>
-                                              setState(() => _metric = value),
-                                    );
-                                    final period = _Selector<StatisticsPeriod>(
-                                      fieldKey: 'progress-period',
-                                      label: 'Period',
-                                      value: _period,
-                                      values: StatisticsPeriod.values,
-                                      labelFor: (period) => period.label,
-                                      onChanged:
-                                          (value) =>
-                                              setState(() => _period = value),
-                                    );
-                                    if (constraints.maxWidth < 300 ||
-                                        MediaQuery.textScalerOf(
-                                              context,
-                                            ).scale(1) >
-                                            1.3) {
-                                      return Column(
-                                        children: [
-                                          metric,
-                                          const SizedBox(height: 12),
-                                          period,
-                                        ],
-                                      );
-                                    }
-                                    return Row(
-                                      children: [
-                                        Expanded(flex: 3, child: metric),
-                                        const SizedBox(width: 12),
-                                        Expanded(flex: 2, child: period),
-                                      ],
-                                    );
-                                  },
+                            ],
+                          ),
+                        ),
+                        if (lift != null) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          _ChartPanel(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Semantics(
+                                  header: true,
+                                  child: Text(
+                                    lift.exerciseName,
+                                    key: const ValueKey('progress-exercise'),
+                                    style:
+                                        Theme.of(context).textTheme.titleMedium,
+                                  ),
                                 ),
-                                const SizedBox(height: 24),
-                                if (progress!.points.isNotEmpty) ...[
-                                  _ProgressSummary(
-                                    progress: progress,
-                                    metric: _metric,
-                                    unit: unit,
+                                const SizedBox(height: AppSpacing.xs),
+                                Text(
+                                  '${_metric.label} · ${_period.label}',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.bodySmall?.copyWith(
+                                    color: textSecondaryColor(context),
                                   ),
-                                  const SizedBox(height: 20),
-                                  Text(
-                                    'Per workout',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.labelMedium?.copyWith(
-                                      color: textSecondaryColor(context),
-                                    ),
-                                  ),
-                                ],
+                                ),
+                                const SizedBox(height: AppSpacing.lg),
+                                _ProgressSummary(
+                                  progress: lift.progress,
+                                  metric: _metric,
+                                  unit: unit,
+                                ),
+                                const SizedBox(height: AppSpacing.lg),
                                 ExerciseTrendChart(
                                   key: ValueKey(
-                                    'progress-$splitId-$exercise-$_period-$_metric',
+                                    'progress-$splitId-${lift.exerciseName}-$_period-$_metric',
                                   ),
-                                  progress: progress,
+                                  progress: lift.progress,
                                   metric: _metric,
                                   weightUnit: unit,
                                 ),
                               ],
-                            ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 32),
+                        ],
+                        const SizedBox(height: AppSpacing.xxl),
                         const StatisticsSectionHeader(title: 'Recent records'),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: AppSpacing.sm),
                         if (records.isEmpty)
                           Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: AppSpacing.lg,
+                            ),
                             child: Text(
                               'New personal records will appear here as you train.',
                               style: Theme.of(
@@ -350,6 +429,36 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 }
 
+class _EmptyStatistics extends StatelessWidget {
+  const _EmptyStatistics();
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder:
+        (context, constraints) => SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: const Center(
+              child: Padding(
+                padding: EdgeInsets.all(AppSpacing.xxl),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('No completed workouts', textAlign: TextAlign.center),
+                    SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'Statistics appear after you finish and log a workout.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+  );
+}
+
 class _ChartPanel extends StatelessWidget {
   final Widget child;
   const _ChartPanel({required this.child});
@@ -357,7 +466,7 @@ class _ChartPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     width: double.infinity,
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(AppSpacing.lg),
     decoration: BoxDecoration(
       color: surfaceColor(context),
       borderRadius: AppRadius.card,

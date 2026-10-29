@@ -17,6 +17,7 @@ class AppNavigationObserver extends NavigatorObserver {
   String? _pendingSessionId;
   bool _pendingLogConfirmation = false;
   Future<void> Function(bool)? _pendingOpen;
+  bool Function()? _pendingValid;
   Route<dynamic>? _blockedLeaveRoute;
   bool _returning = false;
   bool _deliveryScheduled = false;
@@ -74,12 +75,14 @@ class AppNavigationObserver extends NavigatorObserver {
     String sessionId, {
     required bool requestLogConfirmation,
     required Future<void> Function(bool requestLogConfirmation) openIfMissing,
+    bool Function()? isStillValid,
   }) async {
     _pendingLogConfirmation =
         requestLogConfirmation ||
         (_pendingSessionId == sessionId && _pendingLogConfirmation);
     _pendingSessionId = sessionId;
     _pendingOpen = openIfMissing;
+    _pendingValid = isStillValid;
     _blockedLeaveRoute = null;
     await _resumePending();
   }
@@ -87,6 +90,10 @@ class AppNavigationObserver extends NavigatorObserver {
   Future<void> _resumePending() async {
     final id = _pendingSessionId;
     if (id == null || _returning || _routes.isEmpty) return;
+    if (_pendingValid?.call() == false) {
+      _clearPending();
+      return;
+    }
     // Cancel means stay here. Closing that prompt must not immediately ask
     // again; only a new intent or leaving the guarded route can retry.
     if (_blockedLeaveRoute != null && _routes.contains(_blockedLeaveRoute)) {
@@ -121,6 +128,10 @@ class AppNavigationObserver extends NavigatorObserver {
         }
       }
       if (_pendingSessionId != id || _routes.isEmpty) return;
+      if (_pendingValid?.call() == false) {
+        _clearPending();
+        return;
+      }
       if (targetRoute == null) {
         final open = _pendingOpen;
         final confirm = _pendingLogConfirmation;
@@ -172,6 +183,7 @@ class AppNavigationObserver extends NavigatorObserver {
     _pendingSessionId = null;
     _pendingLogConfirmation = false;
     _pendingOpen = null;
+    _pendingValid = null;
     _blockedLeaveRoute = null;
   }
 }
