@@ -96,12 +96,20 @@ class TrainingBlockProvider with ChangeNotifier {
       for (final s in sessionById.values)
         if (s.planId == planId && s.trainingWeekId != null) s.trainingWeekId!,
     };
+    final reachedBlocks = {
+      for (final id in reached)
+        if (weekById[id] case final week?) week.blockId,
+    };
     return Map.unmodifiable({
       for (final entry in weeksByBlock.entries)
         entry.key: List<TrainingWeek>.unmodifiable(
           entry.value.where(
             (w) =>
-                w.id == entry.value.firstOrNull?.id || reached.contains(w.id),
+                reached.contains(w.id) ||
+                // Unvisited blocks need an entry point for browsing. Once a
+                // workout has supplied weeks, its own availability wins.
+                (!reachedBlocks.contains(entry.key) &&
+                    w.id == entry.value.firstOrNull?.id),
           ),
         ),
     });

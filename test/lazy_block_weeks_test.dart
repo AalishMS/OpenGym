@@ -292,13 +292,78 @@ void main() {
         3,
       ]);
       expect(progress('legs').activeWeekId, third);
-      expect(progress('legs').availableWeekIds, contains(third));
+      expect(progress('legs').availableWeekIds, [third]);
       expect(progress('push').toJson(), pushBefore);
       expect(HiveService.getAllSessionsRaw(), isEmpty);
+      await TrainingBlockMigration().normalize(ownerId: null);
+      await Hive.box<WorkoutProgress>(HiveService.workoutProgressBox).close();
+      await Hive.openBox<WorkoutProgress>(HiveService.workoutProgressBox);
+      expect(progress('legs').activeWeekId, third);
+      expect(progress('legs').availableWeekIds, [third]);
+      final provider = TrainingBlockProvider(
+        splitIdProvider: () => splitId,
+        ownerId: () => null,
+      );
+      addTearDown(provider.dispose);
+      expect(
+        provider.weeksByBlockForPlan('legs')[block.id]!.map((w) => w.number),
+        [3],
+      );
+      expect(
+        provider.weeksByBlockForPlan('push')[block.id]!.map((w) => w.number),
+        [1],
+      );
+      await logWeek('legs', 'legs-3');
+      provider.reload();
+      expect(
+        provider.weeksByBlockForPlan('legs')[block.id]!.map((w) => w.number),
+        [3, 4],
+      );
+      expect(
+        HiveService.getTrainingWeekById(progress('legs').activeWeekId)!.number,
+        4,
+      );
       await logWeek('push', 'push-1');
       expect(
         HiveService.getTrainingWeekById(progress('push').activeWeekId)!.number,
         2,
+      );
+    },
+  );
+
+  test(
+    'a new workout starts with only its chosen week in a later block',
+    () async {
+      final first = await setupBlock();
+      final later = await repo.createBlock(
+        splitId: splitId,
+        name: 'Strength',
+        weekCount: 4,
+      );
+      final third = lazyTrainingWeekId(splitId, later.id, 3);
+      await HiveService.createPlan(
+        WorkoutPlan(id: 'legs', name: 'Legs', splitId: splitId, exercises: []),
+        startingWeekId: third,
+      );
+      expect(progress('legs').activeWeekId, third);
+      expect(progress('legs').availableWeekIds, [third]);
+      final provider = TrainingBlockProvider(
+        splitIdProvider: () => splitId,
+        ownerId: () => null,
+      );
+      addTearDown(provider.dispose);
+      expect(
+        provider.weeksByBlockForPlan('legs')[later.id]!.map((w) => w.number),
+        [3],
+      );
+      // Unvisited blocks retain an entry point for explicit browsing.
+      expect(
+        provider.weeksByBlockForPlan('legs')[first.id]!.map((w) => w.number),
+        [1],
+      );
+      expect(
+        progress('push').activeWeekId,
+        repo.weeksForBlock(splitId, first.id).first.id,
       );
     },
   );

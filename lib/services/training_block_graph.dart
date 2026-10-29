@@ -90,6 +90,7 @@ class TrainingBlockGraph {
     );
   }
 
+  /// Initializes a new plan at its chosen slot, replacing the bootstrap start.
   TrainingBlockGraph withStartingWeek(String planId, String weekId) {
     final plan =
         plans.where((p) => p.id == planId && p.deletedAt == null).single;
@@ -127,7 +128,7 @@ class TrainingBlockGraph {
             p.copyWith(
               activeWeekId: week.id,
               state: WorkoutProgressState.ready,
-              availableWeekIds: {...?p.availableWeekIds, week.id}.toList(),
+              availableWeekIds: [week.id],
             )
           else
             p,
