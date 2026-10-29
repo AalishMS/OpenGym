@@ -1,80 +1,73 @@
 # Training blocks implementation checkpoint
 
-Resumed in the existing `feature/training-blocks` checkout. Tasks 1–6 are
-implemented; continue sequentially with Task 7 and final review. Use `superpowers:executing-plans`, one main implementer, and
-[the implementation plan](implementation-plan.md). Do not deploy, release,
-push, tag, or bump the version.
+Tasks 1–7 are locally implemented and verified in the existing
+`feature/training-blocks` checkout. The independent final whole-branch review
+against base `358894a` remains required. Use `superpowers:executing-plans` and
+[the plan](implementation-plan.md). No deploy, release, push, merge, tag or
+version bump is authorized.
 
-## Completed
+## Completed work
 
 | Work | Commit |
 | --- | --- |
-| Task 1: durable records, repository, local migration | `6e5d2df` |
+| Task 1: records and resumable migration | `6e5d2df` |
 | Task 2: compatibility gate and graph sync | `e497dd7` |
 | Independent Task 2 review fixes | `1602596` |
-| Task 3: backups, ownership, lifecycle recovery | `e8193a8` |
-| Task 4: independent progression and inheritance | `b80c1f3` |
+| Task 3: backups, ownership and lifecycle | `e8193a8` |
+| Task 4: independent progression/inheritance | `b80c1f3` |
 | Independent Task 4 review fixes | `e2d7fa9` |
-| Task 5: ID navigation, management, boundary/start UI | `41e52c8`, `dd992f3` |
-| Task 6: exact destinations, history/timer context, Coach starts | local commit following `dd992f3` |
+| Task 5: ID navigation, management and boundary/start UI | `41e52c8`, `dd992f3` |
+| Task 6: exact destinations, history/timer context and Coach starts | `2c708af` |
+| Task 7: isolated replica/scale proof, pull-first append repair and docs | local commit following `2c708af` |
 
-Both requested intermediate review gates are cleared. No deferred minor
-findings were reported. The final whole-branch review is still required after
-Tasks 6–7. Task 5 has no additional independent review gate in the agreed
-workflow.
+The intermediate review gates are cleared with no deferred minor findings.
+Completed tasks must not be reimplemented. Task 6 re-fetches stable destinations
+at delivery, retains duplicate logs/orphan details, drops stale timer intents,
+and preserves the reviewed Coach starting ID through block reorder.
 
-Task 5 adds the inline block/week strip, management forms, starting-slot
-selection for new and duplicated plans, next-entry boundary choices, durable
-boundary retries, and ID-based workout selection. Exact duplicate sessions
-remain selected after reload. Untouched previews do not create logs; individual
-week deletion/rename and automatic max+1 allocation are removed. Save/timer
-race, mutation-guard, and layout tests remain covered.
+Task 7's real two-cache trial exposed a pull-before-upload append collision.
+Normalization now settles it before strict validation, retaining the canonical
+server label and rebasing the pending local week with the existing recovery
+journal. Both IDs/logs and independent progress survive. The ordinary suite has
+an observed failing-then-passing regression as well as the real API trial.
 
-## Verification
+## Verification and limits
 
-- Task 6 full Flutter suite: 833 passed, 2 skipped.
-- Native Gradle `:app:testDebugUnitTest`: 4 passed. The installed Flutter SDK
-  required `-PskipDependencyChecks=true` with the existing Gradle pin; this is
-  unit-test evidence, not a supported-release toolchain certification.
-- Final header refinement: six workout-log tests passed; actual-Manrope preview
-  test passed in both themes. The selected block/week label remains readable at
-  normal phone size; timer width is bounded on narrow/large-text layouts.
-- Analyzer: no issues. The final task completion and full-suite outputs are
-  recorded in `.superpowers/sdd/implementation-plan/progress.md` (gitignored).
-- Widget tests cover 100 blocks with 52 supplied weeks each and construct only
-  the expanded block's week controls. The Task 7 10,000-session/device profile
-  is still outstanding.
-- Web debug compilation and hot restart completed, but the browser fallback
-  remained blank and reported no connected debug client. No browser workout
-  interaction is certified.
-- No Android device is running. A configured emulator is now discoverable but
-  was not launched; the user’s chosen pending device scope is retained. The user explicitly
-  chose to record Android restart, native-device timer interaction, and device
-  profiling checks as pending.
+- Full Flutter suite: **835 passed, 3 skipped**. The additional skip is the
+  opt-in independent-replica SDK trial; the other skips are the transport SDK
+  trial and update-preview rendering. Both SDK trials pass when enabled.
+- Analyzer: **no issues**. Build runner succeeded; generated adapters have no diff.
+- Real isolated PostgreSQL/PostgREST: **13 passed**. Installed-SDK transport and
+  two-independent-cache trials: **2 passed** together, using separate accounts.
+- Native Gradle timer tests: **4 passed** with `-PskipDependencyChecks=true` for
+  the installed Flutter SDK versus the existing Gradle pin. No version changes;
+  this does not certify a supported Android release toolchain.
+- The 100 × 52 week / 10,000 session host fixture passed and constructed only
+  52 week controls, with zero reloads over five timer seconds. Timing observations
+  and profiling limits are in [verification.md](verification.md).
+- Task 5 actual-font light/dark workout previews were checked. Web compilation
+  and hot restart pass, but no connected browser client's workout interaction
+  is certified.
+- Android restart, native-device interaction, physical two-device trials and
+  device frame profiling remain pending by user choice. No Android device was
+  running; a configured emulator became discoverable but was not launched.
+- SQL/API trials use loopback only. Production configuration, migrations,
+  activation and release remain untouched and require separate authorization.
 
-SQL/API and installed-SDK loopback trials passed during Tasks 2–3. They used
-isolated PostgreSQL/PostgREST, with no remote deployment. Recheck process state
-before using `/tmp/opengym-training-proof` in a resumed session; those processes
-and temporary logs are not durable project dependencies.
+The gitignored ledger at `.superpowers/sdd/implementation-plan/progress.md`
+records RED→GREEN evidence, exact commands, rulings and review results. Local
+proof services live under `/tmp/opengym-training-proof`; they are temporary test
+infrastructure, not project runtime dependencies.
 
-## Remaining
+## Remaining local work
 
-1. Task 7: final full verification, isolated multi-replica/account trials,
-   100 × 52 weeks plus 10,000 sessions measurement, and update DESIGN.md,
-   docs/splits.md, docs/coach.md, docs/online_support_verification.md. Android
-   manual checks remain pending unless a device becomes available.
-2. Independent final review of the whole branch from base `358894a`; fix
-   Important/Critical findings with observed failing-then-passing regressions
-   and a passing full suite before finishing.
+Dispatch the final independent read-only reviewer for `358894a..HEAD`, evaluate
+all findings and declined judgments, then fix Important/Critical findings with
+observed RED→GREEN tests and a passing full suite. Record Minor findings and
+pending external checks honestly; do not merge or publish.
 
-The gitignored ledger is the detailed execution record and holds every ruling.
-Keep it until final review is complete. Already completed tasks must not be
-reimplemented.
+## Workspace ownership
 
-## Workspace notes
-
-`analysis_options.yaml` and `pubspec.lock` were already dirty at resume and are
-preserved outside the task commits. They contain analyzer exclusions and local
-Flutter SDK dependency-resolution changes. Do not sweep them into a feature
-commit or discard them without determining ownership. All training-block task
-changes are committed at this checkpoint.
+Pre-existing unstaged `analysis_options.yaml` and `pubspec.lock` are preserved
+outside task commits. Their SHA-256 values remained unchanged through Task 7
+code generation. Keep unrelated changes out of feature commits.

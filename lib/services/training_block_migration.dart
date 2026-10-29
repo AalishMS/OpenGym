@@ -346,6 +346,49 @@ class TrainingBlockMigration {
         );
       }
     }
+    // A pull can deliver the server's accepted append while another replica's
+    // unsent append still carries the same number. Settle these before strict
+    // graph validation, using the journaled writer below for persisted relabels.
+    for (final block in blocks.values.where((b) => b.deletedAt == null)) {
+      final live =
+          weeks.values
+              .where((w) => w.blockId == block.id && w.deletedAt == null)
+              .toList();
+      var highest = live.fold<int>(
+        0,
+        (max, w) => w.number > max ? w.number : max,
+      );
+      final byNumber = <int, List<TrainingWeek>>{};
+      for (final week in live) {
+        byNumber.putIfAbsent(week.number, () => []).add(week);
+      }
+      for (final number in byNumber.keys.toList()..sort()) {
+        final collisions = byNumber[number]!;
+        if (collisions.length < 2) continue;
+        collisions.sort((a, b) {
+          bool legacy(TrainingWeek w) =>
+              w.id == legacyTrainingWeekId(w.splitId, w.number);
+          if (legacy(a) != legacy(b)) return legacy(a) ? -1 : 1;
+          if ((a.dirty == true) != (b.dirty == true)) {
+            return a.dirty == true ? 1 : -1;
+          }
+          return a.id.compareTo(b.id);
+        });
+        for (final week in collisions.skip(1)) {
+          final rebased = week.copyWith(number: ++highest, dirty: true);
+          weeks[week.id] = rebased;
+          for (final row
+              in sessions.values
+                  .where((s) => s.trainingWeekId == week.id)
+                  .toList()) {
+            sessions[row.id!] = row.copyWith(
+              weekNumber: rebased.number,
+              dirty: true,
+            );
+          }
+        }
+      }
+    }
     for (final s in sessions.values.toList()) {
       if (s.trainingWeekId != null) continue;
       var planId = s.planId;

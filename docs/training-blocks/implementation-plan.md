@@ -6,10 +6,11 @@ Branch: `feature/training-blocks`
 
 Reviewed against: `b675c01`
 
-Status: Tasks 1–6 are implemented. Task 7 and the final whole-branch review
-remain. Independent reviews after Tasks 2 and 4 are complete and their findings
-are fixed. No deployment or release is authorized. Android device checks are
-explicitly pending. See [implementation-status.md](implementation-status.md).
+Status: Tasks 1–7 are locally implemented and verified. The independent final
+whole-branch review remains required against base `358894a`. Intermediate
+reviews after Tasks 2 and 4 are cleared. Deployment/release is unauthorized;
+Android/device/browser checks remain explicitly pending as documented in
+[implementation-status.md](implementation-status.md).
 
 > For implementation, use `superpowers:executing-plans` task by task. Each task
 > ends with its focused tests, `flutter analyze`, and an explicitly staged commit.
@@ -597,26 +598,29 @@ exact session ID wins. Notification block text is optional display context only.
 
 ### Task 7 — full verification and release preparation
 
-- [ ] Run `flutter analyze` and `flutter test`. After Hive model edits run
-  `flutter pub run build_runner build --delete-conflicting-outputs` and fully
-  restart; generated files must match. Follow required analysis after changes.
-- [ ] Perform two-device isolated account trials: independent offline completion,
-  matching-week inheritance, competing append, late legacy upgrade, account switch,
-  failed import/restart, native resume and pending boundary dismissal.
-- [ ] Measure a fixture with 100 blocks × 52 weeks plus 10,000 sessions: one
-  index-build per reload, no full-history scans during chip builds/timer ticks,
-  bounded visible strip construction, and no rebuild-induced frame spikes on
-  the project's Android test device. Record profile observations; do not add a
-  benchmark framework or claim a universal device timing guarantee.
-- [ ] Update DESIGN.md, docs/splits.md, docs/coach.md and
-  docs/online_support_verification.md to describe implemented behavior and actual
-  compatibility checks. Keep initialization.md as historical discovery context.
-- [ ] Deploy additive server changes only through the authorized release workflow;
-  validate with isolated accounts, then release the capable client. Activation
-  follows successful backup/preparation. Roll back via forward fixes or stopping
-  new activations; never downgrade activated data to an old writer.
-- [ ] Follow AGENTS.md for a release: bump version name and increasing +build,
-  exact tag match, same signing key, one universal APK, non-draft/non-prerelease.
+Local scope follows the user's explicit deferral of device checks and prohibition
+on deployment/release. [verification.md](verification.md) records the actual
+checks and pending external work.
+
+- [x] Run `flutter analyze` and the full Flutter suite. Regenerate Hive adapters
+  and confirm no diff; compile/hot restart the web target. Android restart stays
+  pending. Full suite: 835 passed, 3 intentionally skipped optional checks.
+- [x] Run real loopback SQL/API and installed-SDK trials, including two independent
+  Hive directories for offline completion, matching-week inheritance, competing
+  append and return-to-first-cache convergence. Re-run automated late-legacy,
+  account-switch, interrupted replacement, native intent and boundary checks.
+  Physical two-device lifecycle/network interaction stays pending.
+- [x] Measure 100 blocks × 52 weeks plus 10,000 sessions on the host VM: stable
+  indexes during timer ticks and only the expanded 52 week controls constructed.
+  Record measurements and their limits. Android frame profiling stays pending.
+- [x] Update DESIGN.md, docs/splits.md, docs/coach.md and
+  docs/online_support_verification.md. Keep initialization.md unchanged.
+- [ ] Deferred, unauthorized: deploy additive SQL, verify the target API hook,
+  grants/RLS and live isolated accounts, then release the capable client.
+  Activate only after successful backup/preparation. Use forward fixes or stop
+  new activations rather than downgrading an activated account.
+- [ ] Deferred, unauthorized: release version/build increment, exact tag,
+  signing and universal-APK publication under AGENTS.md.
 
 ## Review focus and readiness limits
 

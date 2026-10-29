@@ -76,3 +76,17 @@ insert), and the client inserts them only when absent. Existing server structure
 wins over synthetic defaults, while explicit local edits use normal LWW. Local
 week relabels also flush a fixed-week recovery intent before changing the week or
 session labels; startup and sync finish that intent before graph validation.
+
+A second opt-in SDK trial uses the other fixture account and two independent
+Hive directories:
+
+```bash
+flutter test --dart-define=OPENGYM_LOCAL_API_TESTS=true test/integration/training_blocks_replicas_test.dart
+```
+
+It performs independent offline completions, creates competing appended weeks,
+syncs each cache in turn, and checks both stable IDs/logs, independent progress
+and matching-week initialization. It cleans up its own temporary split through
+the loopback API. This reproduces a pull-before-upload collision that push-only
+retry tests cannot exercise; client normalization must reconcile the accepted
+remote label with the pending local append before strict graph validation.

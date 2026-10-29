@@ -459,6 +459,50 @@ void main() {
   );
 
   test(
+    'a pulled append collision rebases a pending local week before normalization',
+    () async {
+      await SyncService.instance.syncNow();
+      final block = HiveService.getAllTrainingBlocksRaw().single;
+      final local = await TrainingBlockRepository(
+        ownerId: () => owner,
+      ).appendWeek(splitId, block.id);
+      await HiveService.putSessionRaw(
+        WorkoutSession(
+          id: 'local-draft',
+          planId: planId,
+          splitId: splitId,
+          userId: owner,
+          planName: 'Push',
+          trainingWeekId: local.id,
+          weekNumber: 2,
+          date: stamp,
+          exercises: [],
+          isCompleted: false,
+          startedAt: stamp,
+          durationSeconds: 75,
+          updatedAt: stamp,
+          dirty: true,
+        ),
+      );
+      api.tables['training_weeks']!.add({
+        ...api.tables['training_weeks']!.first,
+        'id': 'remote-append',
+        'number': 2,
+        'updated_at': stamp.toIso8601String(),
+      });
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(HiveService.getTrainingWeekById(local.id)!.number, 3);
+      expect(HiveService.getTrainingWeekById('remote-append')!.number, 2);
+      final draft = HiveService.getSessionById('local-draft')!;
+      expect(draft.trainingWeekId, local.id);
+      expect(draft.weekNumber, 3);
+      expect(draft.startedAt, stamp);
+      expect(draft.durationSeconds, 75);
+    },
+  );
+
+  test(
     'append collisions rebase the same week and snapshots with three total attempts',
     () async {
       await SyncService.instance.syncNow();
