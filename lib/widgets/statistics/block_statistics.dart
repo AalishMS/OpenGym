@@ -9,6 +9,7 @@ import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
+import 'statistics_controls.dart';
 
 /// The selected block at a glance: what was done, how it compares with the
 /// block before it, how each week went, and which lifts got stronger.
@@ -44,11 +45,18 @@ class BlockOverview extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (blocks.length > 1) ...[
-          _BlockChips(
-            blocks: blocks,
-            selectedId: selected.block.id,
-            currentBlockId: currentBlockId,
-            onSelect: onSelect,
+          // Blocks run oldest to newest, so the current one starts in view.
+          ScrollingPills<String>(
+            keyPrefix: 'block-chip',
+            startAtEnd: true,
+            values: [for (final stats in blocks) stats.block.id],
+            selected: selected.block.id,
+            labelFor: (id) {
+              final name =
+                  blocks.firstWhere((stats) => stats.block.id == id).block.name;
+              return id == currentBlockId ? '$name · Now' : name;
+            },
+            onSelected: onSelect,
           ),
           const SizedBox(height: AppSpacing.lg),
         ],
@@ -103,77 +111,6 @@ class BlockOverview extends StatelessWidget {
       ],
     );
   }
-}
-
-class _BlockChips extends StatelessWidget {
-  final List<BlockStatistics> blocks;
-  final String selectedId;
-  final String? currentBlockId;
-  final ValueChanged<String> onSelect;
-
-  const _BlockChips({
-    required this.blocks,
-    required this.selectedId,
-    required this.currentBlockId,
-    required this.onSelect,
-  });
-
-  @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    // Blocks run oldest to newest, so the current one starts in view.
-    reverse: true,
-    child: Row(
-      children: [
-        for (final stats in blocks)
-          Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.sm),
-            child: StatisticsChip(
-              key: ValueKey('block-chip-${stats.block.id}'),
-              label:
-                  stats.block.id == currentBlockId
-                      ? '${stats.block.name} · Now'
-                      : stats.block.name,
-              selected: stats.block.id == selectedId,
-              onSelected: () => onSelect(stats.block.id),
-            ),
-          ),
-      ],
-    ),
-  );
-}
-
-/// A single-choice chip on the solved accent ground, shared by every
-/// selector on the statistics screen.
-class StatisticsChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onSelected;
-
-  const StatisticsChip({
-    super.key,
-    required this.label,
-    required this.selected,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) => ChoiceChip(
-    label: Text(label),
-    selected: selected,
-    showCheckmark: false,
-    onSelected: (_) => onSelected(),
-    labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
-      color: selected ? onAccentColor(context) : textPrimaryColor(context),
-    ),
-    side: BorderSide(
-      color: selected ? accentFillColor(context) : borderColor(context),
-    ),
-    padding: const EdgeInsets.symmetric(
-      horizontal: AppSpacing.xs,
-      vertical: AppSpacing.xs,
-    ),
-  );
 }
 
 class _BlockTiles extends StatelessWidget {
@@ -596,20 +533,14 @@ class BlockComparison extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.xs,
-          children: [
-            for (final option in BlockMeasure.values)
-              StatisticsChip(
-                key: ValueKey('block-measure-${option.name}'),
-                label: option.label,
-                selected: option == measure,
-                onSelected: () => onMeasure(option),
-              ),
-          ],
+        SegmentedPills<BlockMeasure>(
+          keyPrefix: 'block-measure',
+          values: BlockMeasure.values,
+          selected: measure,
+          labelFor: (option) => option.label,
+          onSelected: onMeasure,
         ),
-        const SizedBox(height: AppSpacing.sm),
+        const SizedBox(height: AppSpacing.md),
         for (final stats in blocks)
           _ComparisonRow(
             key: ValueKey('block-compare-${stats.block.id}'),

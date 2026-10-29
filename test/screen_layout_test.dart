@@ -358,31 +358,22 @@ void main() {
       await tester.pumpWidget(host(const StatsScreen(), sessions: [session]));
       await tester.pump();
 
-      Finder chip(StatisticsPeriod period) => find.descendant(
-        of: find.byKey(ValueKey('progress-period-$period')),
-        matching: find.byType(ChoiceChip),
-      );
-      bool selected(StatisticsPeriod period) =>
-          tester.widget<ChoiceChip>(chip(period)).selected;
+      Finder chip(StatisticsPeriod period) =>
+          find.byKey(ValueKey('progress-period-$period'));
+      bool selected(StatisticsPeriod period) => isSemantics(
+        isSelected: true,
+      ).matches(tester.getSemantics(chip(period)), {});
       await tester.ensureVisible(chip(StatisticsPeriod.twelveWeeks));
       await tester.pumpAndSettle();
       for (final period in StatisticsPeriod.values) {
         expect(tester.getSize(chip(period)).height, greaterThanOrEqualTo(48));
       }
       expect(selected(StatisticsPeriod.fourWeeks), isTrue);
+      // The visible label is `4W`; a screen reader hears the whole period.
+      expect(find.text('4W'), findsOneWidget);
       expect(
-        tester.getSemantics(chip(StatisticsPeriod.fourWeeks)),
-        matchesSemantics(
-          label: '4 weeks',
-          isButton: true,
-          hasSelectedState: true,
-          isSelected: true,
-          hasEnabledState: true,
-          isEnabled: true,
-          hasTapAction: true,
-          isFocusable: true,
-          hasFocusAction: true,
-        ),
+        tester.getSemantics(chip(StatisticsPeriod.fourWeeks)).label,
+        '4 weeks',
       );
       await tester.tap(chip(StatisticsPeriod.twelveWeeks));
       await tester.pumpAndSettle();

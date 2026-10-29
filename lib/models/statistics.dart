@@ -12,6 +12,15 @@ extension StatisticsPeriodLabel on StatisticsPeriod {
     StatisticsPeriod.allTime => 'All time',
   };
 
+  /// Fits an equal-width segment; [label] is what a screen reader says.
+  String get shortLabel => switch (this) {
+    StatisticsPeriod.fourWeeks => '4W',
+    StatisticsPeriod.twelveWeeks => '12W',
+    StatisticsPeriod.sixMonths => '6M',
+    StatisticsPeriod.oneYear => '1Y',
+    StatisticsPeriod.allTime => 'All',
+  };
+
   int? get weekCount => switch (this) {
     StatisticsPeriod.fourWeeks => 4,
     StatisticsPeriod.twelveWeeks => 12,

@@ -15,6 +15,7 @@ import '../utils/statistics_format.dart';
 import '../widgets/app_header.dart';
 import '../widgets/statistics/block_statistics.dart';
 import '../widgets/statistics/lift_list.dart';
+import '../widgets/statistics/statistics_controls.dart';
 import '../widgets/statistics/statistics_widgets.dart';
 import '../widgets/statistics/training_charts.dart';
 import '../widgets/statistics/workout_heatmap.dart';
@@ -286,24 +287,33 @@ class _StatsScreenState extends State<StatsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _ChipGroup<StatisticsPeriod>(
+                              Semantics(
+                                container: true,
                                 label: 'Time range',
-                                keyPrefix: 'progress-period',
-                                values: StatisticsPeriod.values,
-                                selected: _period,
-                                labelFor: (period) => period.label,
-                                onSelected:
-                                    (value) => setState(() => _period = value),
+                                child: SegmentedPills<StatisticsPeriod>(
+                                  keyPrefix: 'progress-period',
+                                  values: StatisticsPeriod.values,
+                                  selected: _period,
+                                  labelFor: (period) => period.shortLabel,
+                                  semanticLabelFor: (period) => period.label,
+                                  onSelected:
+                                      (value) =>
+                                          setState(() => _period = value),
+                                ),
                               ),
-                              const SizedBox(height: AppSpacing.lg),
-                              _ChipGroup<ExerciseMetric>(
+                              const SizedBox(height: AppSpacing.sm),
+                              Semantics(
+                                container: true,
                                 label: 'Measure',
-                                keyPrefix: 'progress-metric',
-                                values: ExerciseMetric.values,
-                                selected: _metric,
-                                labelFor: (metric) => metric.shortLabel,
-                                onSelected:
-                                    (value) => setState(() => _metric = value),
+                                child: ScrollingPills<ExerciseMetric>(
+                                  keyPrefix: 'progress-metric',
+                                  values: ExerciseMetric.values,
+                                  selected: _metric,
+                                  labelFor: (metric) => metric.shortLabel,
+                                  onSelected:
+                                      (value) =>
+                                          setState(() => _metric = value),
+                                ),
                               ),
                               const SizedBox(height: AppSpacing.sm),
                               Text(
@@ -446,56 +456,6 @@ class _EmptyStatistics extends StatelessWidget {
             ),
           ),
         ),
-  );
-}
-
-/// A labelled row of single-choice chips. Every option stays in view, so
-/// nothing has to be opened to see what can be chosen.
-class _ChipGroup<T> extends StatelessWidget {
-  final String label;
-  final String keyPrefix;
-  final List<T> values;
-  final T selected;
-  final String Function(T) labelFor;
-  final ValueChanged<T> onSelected;
-
-  const _ChipGroup({
-    required this.label,
-    required this.keyPrefix,
-    required this.values,
-    required this.selected,
-    required this.labelFor,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    container: true,
-    label: label,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: Theme.of(
-            context,
-          ).textTheme.labelMedium?.copyWith(color: textSecondaryColor(context)),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Wrap(
-          spacing: AppSpacing.sm,
-          children: [
-            for (final value in values)
-              StatisticsChip(
-                key: ValueKey('$keyPrefix-$value'),
-                label: labelFor(value),
-                selected: value == selected,
-                onSelected: () => onSelected(value),
-              ),
-          ],
-        ),
-      ],
-    ),
   );
 }
 

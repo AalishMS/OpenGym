@@ -250,7 +250,9 @@ void main() {
       expect(find.textContaining('Arrows compare'), findsNothing);
 
       await tester.ensureVisible(find.text('Compare blocks'));
-      await tester.tap(find.byKey(const ValueKey('block-measure-workouts')));
+      await tester.tap(
+        find.byKey(ValueKey('block-measure-${BlockMeasure.workouts}')),
+      );
       await tester.pump();
       expect(find.text('1.3 workouts'), findsOneWidget);
       expect(find.text('1 workouts'), findsNothing);

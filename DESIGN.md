@@ -403,11 +403,17 @@ signature:
   arrows compare an average trained week with the previous block that has
   workouts. Below them are sets for each week of the block (unreached planned
   weeks are empty outlines) and the three biggest estimated-1RM gains. With
-  two or more trained blocks, chips switch blocks and *Compare blocks* ranks
-  them per trained week. Sessions reach a block only through their training
-  week. Exercise progress uses chips for the time range and measure, gives
-  each measure a one-line plain explanation, and lists every lift with its
-  latest value, sparkline, and change. Tapping a lift opens it in the detailed
+  two or more trained blocks, a scrolling pill row switches blocks and
+  *Compare blocks* ranks them per trained week. Sessions reach a block only
+  through their training week. Stats selectors come in two shapes
+  (`statistics_controls.dart`). A short, fixed set, such as the time range
+  (`4W`, `12W`, `6M`, `1Y`, `All`, read aloud in full) or the compare
+  measure, is a `SegmentedPills` track of equal-width segments. A longer or
+  open-ended set, such as blocks or the exercise measures, is a
+  `ScrollingPills` row that fades at whichever edge hides more pills. Both
+  keep a 48px tap target around compact pills. Exercise progress gives each
+  measure a one-line plain explanation and lists every lift with its latest
+  value, sparkline, and change. Tapping a lift opens it in the detailed
   chart. Weekly charts label weeks by date, never by ISO week number. The
   weekly-training shortcut lands on Weekly training, below the blocks.
 - Home labels the rotation bar with “Workout N of M”. The same workout
