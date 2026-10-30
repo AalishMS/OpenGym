@@ -71,10 +71,10 @@ jobs:
 
       # Pinned, not 'stable'. The updater's dependencies need Dart >=3.7, and an
       # unpinned channel would silently change the toolchain under the release.
-      - name: Set up Flutter 3.44.1
+      - name: Set up Flutter 3.47.8
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.44.1'
+          flutter-version: '3.47.8'
           channel: stable
           cache: true
 
