@@ -328,10 +328,14 @@ positions so their schedule order survives synchronization. Installation is an
 exclusive local mutation with compensating rollback across split, plan, and
 active-preference boxes.
 
-The Home split menu opens a responsive program browser. Its colored schedule
-strip represents workout/rest rhythm using the existing solved plan colors;
-details expose complete prescriptions, RIR, rest, substitutions, and shared
-guidance before the user creates a copy.
+The Home split menu opens a responsive program browser. A segmented goal
+track filters the catalog, and each program card shows its workout/rest rhythm
+as accent squares beside its days and session length. Details lead with the
+program's name, a figure sheet (days, minutes per session, exercises, who it
+suits) and a labelled schedule whose training cells use the same solved plan
+tints and numbers as the foldable workout-day list and Home's plan markers.
+Folded days expose complete prescriptions, RIR, rest and substitutions; shared
+guidance closes the page before the user creates a copy.
 
 ## UI Design
 
