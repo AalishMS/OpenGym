@@ -1,12 +1,10 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../models/exercise.dart';
 import '../../models/statistics.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
@@ -44,66 +42,35 @@ class WorkoutDetailsSummary extends StatelessWidget {
       children: [
         Text(
           session.planName,
-          style: Theme.of(context).textTheme.displaySmall?.copyWith(
-            fontWeight: FontWeight.w700,
-            height: 1.2,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: [
-            Icon(
-              LucideIcons.calendarDays,
-              size: 15,
-              color: textSecondaryColor(context),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Flexible(
-              child: Text(
-                formatStatisticsDate(session.date),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ],
+          style: Theme.of(context).textTheme.headlineSmall,
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          workoutContext(session),
+          '${formatStatisticsDate(session.date)} · ${workoutContext(session)}',
           style: Theme.of(context).textTheme.bodySmall,
         ),
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.lg),
         _SessionReadout(
           items: [
             _SummaryData(
-              label: 'Volume load',
-              value: formatVolumeLoad(statistics.volumeLoad, weightUnit),
-              icon: LucideIcons.weight,
+              label: 'Exercises',
+              value: session.exercises.length.toString(),
+            ),
+            _SummaryData(
+              label: 'Performed sets',
+              value: statistics.totalSets.toString(),
             ),
             if (duration != null)
               _SummaryData(
                 label: 'Duration',
                 value: formatStatisticsDuration(duration),
-                icon: LucideIcons.timer,
               ),
             _SummaryData(
-              label: 'Exercises',
-              value: session.exercises.length.toString(),
-              icon: LucideIcons.dumbbell,
-            ),
-            _SummaryData(
-              label: 'Performed sets',
-              value: statistics.totalSets.toString(),
-              icon: LucideIcons.layers,
+              label: 'Volume load',
+              value: formatVolumeLoad(statistics.volumeLoad, weightUnit),
             ),
           ],
         ),
-        if (statistics.totalSets == 0) ...[
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'No performed sets in this workout.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
       ],
     );
   }
@@ -112,13 +79,8 @@ class WorkoutDetailsSummary extends StatelessWidget {
 class _SummaryData {
   final String label;
   final String value;
-  final IconData icon;
 
-  const _SummaryData({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
+  const _SummaryData({required this.label, required this.value});
 }
 
 class _SessionReadout extends StatelessWidget {
@@ -128,33 +90,76 @@ class _SessionReadout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
+    return Container(
       key: const ValueKey('workout-details-readout'),
-      color: surfaceColor(context),
-      shape: const RoundedRectangleBorder(borderRadius: AppRadius.card),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final scale = MediaQuery.textScalerOf(context).scale(1);
-            final columns =
-                constraints.maxWidth >= 560 * scale
-                    ? items.length
-                    : constraints.maxWidth < 240 * scale
-                    ? 1
-                    : 2;
-            final width =
-                (constraints.maxWidth - (columns - 1) * AppSpacing.lg) /
-                columns;
-            return Wrap(
-              spacing: AppSpacing.lg,
-              runSpacing: AppSpacing.lg,
-              children: [
-                for (final data in items)
-                  SizedBox(width: width, child: _SummaryItem(data: data)),
-              ],
-            );
-          },
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: borderColor(context))),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final textScale = MediaQuery.textScalerOf(context).scale(1);
+          final columnCount = constraints.maxWidth >= 640 * textScale ? 4 : 2;
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (var start = 0; start < items.length; start += columnCount)
+                _SummaryRow(
+                  items: items.sublist(
+                    start,
+                    (start + columnCount).clamp(0, items.length),
+                  ),
+                  columnCount: columnCount,
+                  showTopRule: start > 0,
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  final List<_SummaryData> items;
+  final int columnCount;
+  final bool showTopRule;
+
+  const _SummaryRow({
+    required this.items,
+    required this.columnCount,
+    required this.showTopRule,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IntrinsicHeight(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border:
+              showTopRule
+                  ? Border(top: BorderSide(color: borderColor(context)))
+                  : null,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (final entry in items.indexed)
+              Expanded(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    border:
+                        entry.$1 == 0
+                            ? null
+                            : Border(
+                              left: BorderSide(color: borderColor(context)),
+                            ),
+                  ),
+                  child: _SummaryItem(data: entry.$2),
+                ),
+              ),
+            for (var index = items.length; index < columnCount; index++)
+              const Spacer(),
+          ],
         ),
       ),
     );
@@ -168,38 +173,36 @@ class _SummaryItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(data.icon, size: 13, color: textSecondaryColor(context)),
-            const SizedBox(width: AppSpacing.xs),
-            Flexible(
-              child: Text(
-                data.label,
-                style: Theme.of(context).textTheme.labelSmall,
-              ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.md,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            data.value,
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              color: textPrimaryColor(context),
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          data.value,
-          style: AppTypography.figures(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            color: textPrimaryColor(context),
-            height: 1.2,
           ),
-        ),
-      ],
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            data.label,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: textSecondaryColor(context),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// A bounded exercise record with a numbered heading and read-only set table.
+/// A saved exercise in the same continuous log layout as an active workout.
 class WorkoutExerciseDetails extends StatelessWidget {
   final Exercise exercise;
   final String weightUnit;
@@ -221,154 +224,122 @@ class WorkoutExerciseDetails extends StatelessWidget {
       0,
       (sum, set) => sum + set.weight * set.reps,
     );
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-      child: Material(
-        color: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Semantics(
-                header: true,
-                label:
-                    exerciseNumber == null ? null : 'Exercise $exerciseNumber',
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (exerciseNumber != null) ...[
-                      ExcludeSemantics(
-                        child: Text(
-                          exerciseNumber.toString().padLeft(2, '0'),
-                          style: AppTypography.figures(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700,
-                            color: accentColor(context),
-                            height: 1.6,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.md),
-                    ],
-                    Expanded(
-                      child: Text(
-                        exercise.name,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          height: 1.4,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: borderColor(context))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            header: true,
+            label: exerciseNumber == null ? null : 'Exercise $exerciseNumber',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+              child: Text(
+                exercise.name,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                '${performed.length} performed set${performed.length == 1 ? '' : 's'} · $totalReps reps',
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Text(
+              '${performed.length} performed set${performed.length == 1 ? '' : 's'} · $totalReps reps',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          if (note != null && note.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _WorkoutNote(note: note, label: 'Exercise note'),
+            ),
+          if (exercise.sets.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Text(
+                'No sets recorded',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-              const SizedBox(height: AppSpacing.lg),
-              if (note != null && note.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: _WorkoutNote(note: note, label: 'Exercise note'),
-                ),
-              if (exercise.sets.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  child: Text(
-                    'No sets recorded',
+            )
+          else
+            ReadableTableViewport(
+              minimumWidth: _minimumSavedTableWidth(
+                context,
+                exercise,
+                weightUnit,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                    child: _SetHeader(weightUnit: weightUnit),
+                  ),
+                  for (final entry in exercise.sets.indexed)
+                    Container(
+                      key: ValueKey('saved-set-row-${entry.$1}'),
+                      // Ruled rows: a square hairline over each set, so the
+                      // header and every set are separated by one rule.
+                      padding: const EdgeInsets.symmetric(
+                        vertical: AppSpacing.xxs,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          top: BorderSide(color: borderColor(context)),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _SetValues(
+                            index: entry.$1,
+                            weightUnit: weightUnit,
+                            weight: displayWeight(entry.$2.weight, weightUnit),
+                            reps: entry.$2.reps,
+                            rpe: entry.$2.rpe,
+                            isPrAttempt: _isPrMarker(entry.$2.note),
+                          ),
+                          if ((entry.$2.note?.trim().isNotEmpty ?? false) &&
+                              !_isPrMarker(entry.$2.note))
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                left: 40,
+                                top: AppSpacing.xs,
+                                bottom: AppSpacing.xs,
+                              ),
+                              child: _WorkoutNote(
+                                note: entry.$2.note!.trim(),
+                                label: 'Set ${entry.$1 + 1} note',
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          if (performed.length > 1)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    'Volume load',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                )
-              else
-                ReadableTableViewport(
-                  minimumWidth: _minimumSavedTableWidth(
-                    context,
-                    exercise,
-                    weightUnit,
+                  Text(
+                    formatVolumeLoad(volume, weightUnit),
+                    style: Theme.of(context).textTheme.titleSmall,
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: _SetHeader(weightUnit: weightUnit),
-                      ),
-                      for (final entry in exercise.sets.indexed)
-                        Container(
-                          key: ValueKey('saved-set-row-${entry.$1}'),
-                          // Ruled rows: a square hairline over each set, so the
-                          // header and every set are separated by one rule.
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppSpacing.xxs,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: borderColor(context)),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _SetValues(
-                                index: entry.$1,
-                                weightUnit: weightUnit,
-                                weight: displayWeight(
-                                  entry.$2.weight,
-                                  weightUnit,
-                                ),
-                                reps: entry.$2.reps,
-                                rpe: entry.$2.rpe,
-                                isPrAttempt: _isPrMarker(entry.$2.note),
-                              ),
-                              if ((entry.$2.note?.trim().isNotEmpty ?? false) &&
-                                  !_isPrMarker(entry.$2.note))
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    left: 40,
-                                    top: AppSpacing.xs,
-                                    bottom: AppSpacing.xs,
-                                  ),
-                                  child: _WorkoutNote(
-                                    note: entry.$2.note!.trim(),
-                                    label: 'Set ${entry.$1 + 1} note',
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              if (performed.length > 1)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-                  child: Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.xs,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      Text(
-                        'Volume load',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      Text(
-                        formatVolumeLoad(volume, weightUnit),
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -383,20 +354,7 @@ class _WorkoutNote extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Semantics(
     label: label,
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          LucideIcons.messageSquare,
-          size: 13,
-          color: textSecondaryColor(context),
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        Expanded(
-          child: Text(note, style: Theme.of(context).textTheme.bodySmall),
-        ),
-      ],
-    ),
+    child: Text(note, style: Theme.of(context).textTheme.bodySmall),
   );
 }
 

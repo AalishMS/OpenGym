@@ -381,26 +381,16 @@ signature:
   tooltip, including the steps back inside the exercise picker and preset
   browser. Header actions keep the accent. Plan colours stay on Home, so the
   plan editor's Save and Add exercise use the accent too.
-- Individual value grounds mean editable controls. Read-only values, such as
-  saved sets in Workout details, use `ReadOnlyValue`: a bold `figures` value
-  with no ground or border of its own. Exercise records may share a bounded
-  surface to establish grouping; their set rows use single-edge hairlines
-  and plain figures so they read as a record. Only the live set table draws
-  individually boxed cells.
+- A ground means tappable. Read-only values, such as the saved sets in Workout
+  details, use `ReadOnlyValue`: a bold `figures` value in the primary text
+  colour with no ground and no border. The table rows are separated by square
+  single-edge hairlines, so the values read as a record and not as editable
+  cells. Only the live set table draws boxed cells.
 - Unknown data is left out rather than given a placeholder. A session
   duration that is null or under a minute counts as unknown
   (`knownDurationSeconds`), so History and Workout details never show "0m".
-- History uses a date rail beside quiet session cards, with dates moving above
-  cards at narrow widths or large text sizes. Workout names lead, followed by
-  training context and compact metrics; a small trophy badge marks records.
-  Sessions with no performed sets say *No sets logged* instead of emphasizing
-  a zero volume. The card is the tap target, and search stays available while
-  browsing.
-- Workout details separates the workout title/date, a grouped session readout,
-  and an *Exercise breakdown*. Numbered exercise panels contain their own
-  headings, notes, ruled set tables and volume totals. Saved zero-rep sets
-  remain visible, and an empty workout explicitly says it has no performed
-  sets. Tables scroll horizontally when needed to preserve large text.
+- Don't nest a ground inside a card. The History row's date sits directly on
+  the card, which is the tap target.
 - A plan's menu (long press, or *Plan actions* in Manage) is a modal bottom
   sheet with a drag handle, not a dialog. *Delete plan* is always the last
   row, set apart by a rule and the error colour. In Manage, the drag grip
