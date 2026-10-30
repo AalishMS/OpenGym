@@ -624,26 +624,58 @@ void main() {
       expect(failing.attempts, greaterThanOrEqualTo(2));
     });
     locationTest(
-      'boundary appears on ordinary entry; dismissal retains saved result and explicit action',
+      'four-week block prompts only after Week 4; dismissal retains saved result',
       (tester) async {
-        await tester.runAsync(
-          () => HiveService.putSessionRaw(
+        final service = WorkoutProgressionService(ownerId: () => null);
+        Future<void> logWeek(int number) async {
+          final progress = HiveService.progressForPlan('s', 'p')!;
+          await HiveService.putSessionRaw(
             WorkoutSession(
-              id: 'done',
+              id: 'done-$number',
               splitId: 's',
               planId: 'p',
               planName: 'Push',
+              trainingWeekId: progress.activeWeekId,
+              weekNumber: number,
               date: now,
+              isCompleted: false,
+              startedAt: now,
+              durationSeconds: 60,
               exercises: [],
             ),
-          ),
-        );
+          );
+          await service.complete('done-$number');
+        }
+
+        await tester.runAsync(() async {
+          await TrainingBlockRepository(
+            ownerId: () => null,
+          ).createBlock(splitId: 's', name: 'Block 1', weekCount: 4);
+          await TrainingBlockMigration().normalize(ownerId: null);
+          for (var number = 1; number <= 3; number++) {
+            await logWeek(number);
+          }
+        });
+        await open(tester);
+        expect(find.text('Block 1 · Week 4'), findsOneWidget);
+        expect(find.byType(BottomSheet), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        await tester.runAsync(() => logWeek(4));
         await open(tester);
         expect(find.text('Choose next week'), findsWidgets);
+        expect(find.text('Add week'), findsOneWidget);
+        expect(find.text('Create block'), findsOneWidget);
+        expect(
+          find.text(
+            'You finished Week 4 of Block 1. Choose where Push goes next.',
+          ),
+          findsOneWidget,
+        );
         await tester.tap(find.text('Not now'));
         await tester.pumpAndSettle();
         expect(find.text('Choose next week'), findsOneWidget);
-        expect(HiveService.getAllTrainingWeeksRaw(), hasLength(1));
+        expect(HiveService.getAllTrainingWeeksRaw(), hasLength(4));
+        expect(HiveService.getAllSessionsRaw(), hasLength(4));
       },
     );
     locationTest('browsing an untouched supplied week never saves a preview', (

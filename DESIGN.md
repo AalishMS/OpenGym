@@ -324,7 +324,12 @@ Navigator when the account changes.
 The app compiles a read-only catalog of workout programs from the reviewed
 preset research. Catalog metadata is never written to Hive or Supabase. Choosing
 a program copies its workout days into ordinary user-owned plans, with explicit
-positions so their schedule order survives synchronization. Installation is an
+positions so their schedule order survives synchronization. Every preset starts
+in Block 1 with an intended length of four weeks, allocating only Week 1 at
+installation. This also applies when reusing the untouched default split.
+Each workout advances independently through Week 4, then uses the block boundary
+prompt on its next ordinary entry to add a week or create a new block.
+Installation is an
 exclusive local mutation with compensating rollback across split, plan, and
 active-preference boxes.
 
