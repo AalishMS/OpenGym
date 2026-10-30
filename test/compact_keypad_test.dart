@@ -324,6 +324,108 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final continuousLog in [false, true]) {
+    testWidgets(
+      '${continuousLog ? 'workout' : 'plan editor'} keeps the keypad stationary between exercises',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(600, 900);
+        addTearDown(tester.view.reset);
+        var first = const SetEntry(weight: 70, reps: 10);
+        var second = const SetEntry(weight: 60, reps: 8);
+        var finishes = 0;
+        final heights = <double>[];
+        void recordHeight() => heights.add(SetEntryTable.keyboardHeight.value);
+        SetEntryTable.keyboardHeight.addListener(recordHeight);
+        addTearDown(
+          () => SetEntryTable.keyboardHeight.removeListener(recordHeight),
+        );
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: StatefulBuilder(
+                builder:
+                    (context, update) => ListView(
+                      children: [
+                        SetEntryTable(
+                          continuousLog: continuousLog,
+                          hostReservesSpace: true,
+                          sets: [first],
+                          onChanged:
+                              (_, weight, reps) => update(
+                                () =>
+                                    first = SetEntry(
+                                      weight: weight,
+                                      reps: reps,
+                                    ),
+                              ),
+                          onEntryFinished: () => finishes++,
+                        ),
+                        SetEntryTable(
+                          continuousLog: continuousLog,
+                          hostReservesSpace: true,
+                          sets: [second],
+                          onChanged:
+                              (_, weight, reps) => update(
+                                () =>
+                                    second = SetEntry(
+                                      weight: weight,
+                                      reps: reps,
+                                    ),
+                              ),
+                          onEntryFinished: () => finishes++,
+                        ),
+                      ],
+                    ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.bySemanticsLabel('Set 1 Kg').first);
+        await tester.pumpAndSettle();
+        await tester.tap(find.widgetWithText(TextButton, '5'));
+        await tester.pumpAndSettle();
+        final sheet = tester.state(find.byType(BottomSheet));
+        final bounds = tester.getRect(find.byType(BottomSheet));
+        heights.clear();
+
+        Future<void> switchTo(Finder field) async {
+          await tester.tap(field);
+          await tester.pump();
+          expect(tester.state(find.byType(BottomSheet)), same(sheet));
+          expect(tester.getRect(find.byType(BottomSheet)), bounds);
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(tester.getRect(find.byType(BottomSheet)), bounds);
+          await tester.pumpAndSettle();
+        }
+
+        await switchTo(find.bySemanticsLabel('Set 1 Reps').last);
+        expect(finishes, 1);
+        await tester.tap(find.widgetWithText(TextButton, '4'));
+        await tester.pumpAndSettle();
+        expect(first.weight, 5);
+        expect(first.reps, 10);
+        expect(second.weight, 60);
+        expect(second.reps, 4);
+
+        await switchTo(find.bySemanticsLabel('Set 1 Kg').first);
+        expect(finishes, 2);
+        await tester.sendKeyEvent(LogicalKeyboardKey.digit9);
+        await tester.pumpAndSettle();
+        expect(first.weight, 9);
+        expect(second.reps, 4);
+        expect(heights, isNot(contains(0)));
+
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.byType(BottomSheet), findsNothing);
+        expect(SetEntryTable.keyboardHeight.value, 0);
+        expect(finishes, 3);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
+
   testWidgets(
     'switching exercises leaves one keypad and structural edits close it',
     (tester) async {

@@ -225,14 +225,25 @@ class SetEntryTable extends StatefulWidget {
   State<SetEntryTable> createState() => _SetEntryTableState();
 }
 
+/// Keeps the sheet and its back entry alive while another table takes over.
+class _SetKeypadSession {
+  _SetEntryTableState owner;
+  int index;
+  _SetField field;
+  late final OverlayEntry overlay;
+  late final OverlayEntry dismissOverlay;
+  late final LocalHistoryEntry history;
+
+  _SetKeypadSession(this.owner, this.index, this.field);
+}
+
 class _SetEntryTableState extends State<SetEntryTable> {
   static _SetEntryTableState? _activeKeyboard;
   final _keyboardKey = GlobalKey<_SetKeyboardState>();
-  OverlayEntry? _overlay;
-  OverlayEntry? _dismissOverlay;
+  _SetKeypadSession? _keypad;
+  OverlayEntry? get _overlay => _keypad?.overlay;
   Offset? _tapStart;
   int? _tapPointer;
-  LocalHistoryEntry? _history;
   bool _changed = false;
   bool _disposing = false;
   final Map<int, GlobalKey> _rowKeys = {};
@@ -248,7 +259,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
   double get _keyboardSpace =>
       _keypadSheetHeight(Overlay.of(context).context) + 12;
 
-  void _close() => _history?.remove();
+  void _close() => _keypad?.history.remove();
 
   @override
   void didUpdateWidget(SetEntryTable oldWidget) {
@@ -275,7 +286,6 @@ class _SetEntryTableState extends State<SetEntryTable> {
       }
     }
     _removeOverlays();
-    _history = null;
     if (mounted && !_disposing) {
       setState(() {});
       if (_changed) widget.onEntryFinished?.call();
@@ -283,12 +293,11 @@ class _SetEntryTableState extends State<SetEntryTable> {
   }
 
   void _removeOverlays() {
-    for (final entry in [_dismissOverlay, _overlay]) {
+    for (final entry in [_keypad?.dismissOverlay, _overlay]) {
       entry?.remove();
       entry?.dispose();
     }
-    _dismissOverlay = null;
-    _overlay = null;
+    _keypad = null;
   }
 
   // A tap is a pointer that goes down and up without travelling. It closes the
@@ -342,8 +351,9 @@ class _SetEntryTableState extends State<SetEntryTable> {
   void dispose() {
     _disposing = true;
     // Remove the overlay before its owning row disappears.
+    final history = _keypad?.history;
     _removeOverlays();
-    _history?.remove();
+    history?.remove();
     super.dispose();
   }
 
@@ -352,86 +362,114 @@ class _SetEntryTableState extends State<SetEntryTable> {
       _keyboardKey.currentState?._select(index, field);
       return;
     }
+    final previous = _activeKeyboard;
+    if (previous != null &&
+        ModalRoute.of(previous.context) == ModalRoute.of(context) &&
+        Overlay.of(previous.context) == Overlay.of(context)) {
+      final session = previous._keypad!;
+      previous.setState(() => previous._keypad = null);
+      session.owner = this;
+      session.index = index;
+      session.field = field;
+      _keypad = session;
+      _activeKeyboard = this;
+      _changed = false;
+      SetEntryTable._keyboardHeight.value = _hostReserves ? _keyboardSpace : 0;
+      session.overlay.markNeedsBuild();
+      _refreshKeyboard(index);
+      if (previous._changed) previous.widget.onEntryFinished?.call();
+      return;
+    }
     _activeKeyboard?._close();
     _activeKeyboard = this;
     SetEntryTable._keyboardHeight.value = _hostReserves ? _keyboardSpace : 0;
     FocusManager.instance.primaryFocus?.unfocus();
     _changed = false;
-    _history = LocalHistoryEntry(onRemove: _removeKeyboard);
-    ModalRoute.of(context)!.addLocalHistoryEntry(_history!);
-    _dismissOverlay = OverlayEntry(
+    final session = _keypad = _SetKeypadSession(this, index, field);
+    session.history = LocalHistoryEntry(
+      onRemove: () => session.owner._removeKeyboard(),
+    );
+    ModalRoute.of(context)!.addLocalHistoryEntry(session.history);
+    session.dismissOverlay = OverlayEntry(
       builder:
           (_) => Positioned.fill(
             child: Listener(
               behavior: HitTestBehavior.translucent,
-              onPointerDown: _trackPointer,
-              onPointerMove: _trackPointer,
-              onPointerUp: _trackPointer,
-              onPointerCancel: _trackPointer,
+              onPointerDown: (event) => session.owner._trackPointer(event),
+              onPointerMove: (event) => session.owner._trackPointer(event),
+              onPointerUp: (event) => session.owner._trackPointer(event),
+              onPointerCancel: (event) => session.owner._trackPointer(event),
             ),
           ),
     );
-    _overlay = OverlayEntry(
-      builder:
-          (overlayContext) => Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Theme(
-              data: Theme.of(context),
-              // Slides up once on open; switching fields reuses the sheet.
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 1, end: 0),
-                duration:
-                    MediaQuery.disableAnimationsOf(overlayContext)
-                        ? Duration.zero
-                        : const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
-                builder:
-                    (_, offset, child) => FractionalTranslation(
-                      translation: Offset(0, offset),
-                      child: child,
-                    ),
-                child: BottomSheet(
-                  onClosing: _close,
-                  backgroundColor: _keypadTrayColor(context),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: AppRadius.sheet,
-                    side: BorderSide(color: borderColor(context)),
+    session.overlay = OverlayEntry(
+      builder: (overlayContext) {
+        final owner = session.owner;
+        final context = owner.context;
+        return Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: Theme(
+            data: Theme.of(context),
+            // Slides up once on open; all tables reuse the same sheet.
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 1, end: 0),
+              duration:
+                  MediaQuery.disableAnimationsOf(overlayContext)
+                      ? Duration.zero
+                      : const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              builder:
+                  (_, offset, child) => FractionalTranslation(
+                    translation: Offset(0, offset),
+                    child: child,
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  enableDrag: false,
-                  builder:
-                      (_) => _SetKeyboard(
-                        key: _keyboardKey,
-                        sets: List.of(sets),
-                        initialIndex: index,
-                        initialField: field,
-                        onClose: _close,
-                        onEditingChanged: () {
-                          if (mounted) {
-                            setState(() {});
-                          }
-                        },
-                        onSelectionChanged: _revealRow,
-                        onChanged: (index, weight, reps) {
-                          _changed = true;
-                          onChanged(index, weight, reps);
-                        },
-                        onRpeChanged:
-                            onRpeChanged == null
-                                ? null
-                                : (index, rpe) {
-                                  _changed = true;
-                                  onRpeChanged!(index, rpe);
-                                },
-                      ),
+              child: BottomSheet(
+                onClosing: () => session.owner._close(),
+                backgroundColor: _keypadTrayColor(context),
+                shape: RoundedRectangleBorder(
+                  borderRadius: AppRadius.sheet,
+                  side: BorderSide(color: borderColor(context)),
                 ),
+                clipBehavior: Clip.antiAlias,
+                enableDrag: false,
+                builder:
+                    (_) => _SetKeyboard(
+                      key: owner._keyboardKey,
+                      sets: List.of(owner.sets),
+                      initialIndex: session.index,
+                      initialField: session.field,
+                      onClose: owner._close,
+                      onEditingChanged: () {
+                        if (owner.mounted) {
+                          owner.setState(() {});
+                        }
+                      },
+                      onSelectionChanged: owner._revealRow,
+                      onChanged: (index, weight, reps) {
+                        owner._changed = true;
+                        owner.onChanged(index, weight, reps);
+                      },
+                      onRpeChanged:
+                          owner.onRpeChanged == null
+                              ? null
+                              : (index, rpe) {
+                                owner._changed = true;
+                                owner.onRpeChanged!(index, rpe);
+                              },
+                    ),
               ),
             ),
           ),
+        );
+      },
     );
-    Overlay.of(context).insertAll([_dismissOverlay!, _overlay!]);
+    Overlay.of(context).insertAll([session.dismissOverlay, session.overlay]);
+    _refreshKeyboard(index);
+  }
+
+  void _refreshKeyboard(int index) {
     setState(() {});
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _overlay != null) {
