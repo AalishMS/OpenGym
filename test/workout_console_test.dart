@@ -57,11 +57,6 @@ void main() {
       ),
       (context) =>
           WorkoutDialogs.showExerciseNoteDialog(context, onSave: (_) {}),
-      (context) => WorkoutDialogs.showRenameWeekDialog(
-        context,
-        currentWeek: 12,
-        onRename: (_) {},
-      ),
       (context) => WorkoutDialogs.showDeleteWeekDialog(context, week: 12),
       (context) => WorkoutDialogs.showDeleteExerciseDialog(
         context,

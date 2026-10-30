@@ -21,7 +21,6 @@ import 'package:gymapp/widgets/history/history_journal_widgets.dart';
 import 'package:gymapp/widgets/history/workout_details_widgets.dart';
 import 'package:gymapp/widgets/home/home_plan_row.dart';
 import 'package:gymapp/widgets/statistics/statistics_widgets.dart';
-import 'package:gymapp/widgets/workout/workout_dialogs.dart';
 import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -269,50 +268,6 @@ void main() {
       find.ancestor(of: finish, matching: find.byType(AppBar)),
       findsOneWidget,
     );
-  });
-
-  testWidgets('week rename reports invalid input and submits with Done', (
-    tester,
-  ) async {
-    int? renamed;
-    await pumpScreen(
-      tester,
-      Builder(
-        builder:
-            (context) => Scaffold(
-              body: TextButton(
-                onPressed:
-                    () => WorkoutDialogs.showRenameWeekDialog(
-                      context,
-                      currentWeek: 7,
-                      onRename: (value) => renamed = value,
-                    ),
-                child: const Text('Open rename'),
-              ),
-            ),
-      ),
-    );
-    await tester.tap(find.text('Open rename'));
-    await tester.pumpAndSettle();
-    for (final invalid in ['', '0', 'abc']) {
-      await tester.enterText(find.byType(TextField), invalid);
-      await tester.testTextInput.receiveAction(TextInputAction.done);
-      await tester.pump();
-      expect(
-        find.text('Enter a whole number greater than zero.'),
-        findsOneWidget,
-      );
-      expect(
-        tester.widget<TextField>(find.byType(TextField)).decoration!.errorText,
-        isNotNull,
-      );
-      expect(renamed, isNull);
-    }
-    await tester.enterText(find.byType(TextField), '12');
-    await tester.testTextInput.receiveAction(TextInputAction.done);
-    await tester.pumpAndSettle();
-    expect(renamed, 12);
-    expect(find.text('Rename week'), findsNothing);
   });
 
   testWidgets('sparkline exposes rise and fall in session order', (

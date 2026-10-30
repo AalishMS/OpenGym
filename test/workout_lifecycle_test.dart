@@ -626,7 +626,7 @@ void main() {
     }
 
     workoutTest(
-      'empty supplied weeks remain available without per-week deletion',
+      'empty supplied weeks remain available and the block menu has no week actions',
       (tester) async {
         await tester.runAsync(() => seed(1, completed: true));
         await open(tester);

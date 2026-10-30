@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -554,18 +553,6 @@ class WorkoutDialogs {
     );
   }
 
-  static Future<void> showRenameWeekDialog(
-    BuildContext context, {
-    required int currentWeek,
-    required void Function(int newWeek) onRename,
-  }) async {
-    final newWeek = await showDialog<int>(
-      context: context,
-      builder: (_) => _RenameWeekDialog(currentWeek: currentWeek),
-    );
-    if (newWeek != null && context.mounted) onRename(newWeek);
-  }
-
   /// [logged] picks the wording: a logged workout also leaves History and
   /// records, while an unlogged one only loses the sets entered so far.
   static Future<bool> showDeleteWeekDialog(
@@ -866,65 +853,5 @@ class _DialogSetEntryState extends State<_DialogSetEntry> {
           widget.weightController.text = entryWeight(weight);
           widget.repsController.text = '$reps';
         }),
-  );
-}
-
-class _RenameWeekDialog extends StatefulWidget {
-  final int currentWeek;
-
-  const _RenameWeekDialog({required this.currentWeek});
-
-  @override
-  State<_RenameWeekDialog> createState() => _RenameWeekDialogState();
-}
-
-class _RenameWeekDialogState extends State<_RenameWeekDialog> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.currentWeek.toString(),
-  );
-  String? _error;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final week = int.tryParse(_controller.text);
-    if (week == null || week <= 0) {
-      setState(() => _error = 'Enter a whole number greater than zero.');
-      return;
-    }
-    Navigator.pop(context, week);
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Rename week'),
-    scrollable: true,
-    content: TextField(
-      controller: _controller,
-      decoration: InputDecoration(
-        labelText: 'Week number',
-        hintText: 'e.g., 1',
-        errorText: _error,
-      ),
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      textInputAction: TextInputAction.done,
-      onSubmitted: (_) => _submit(),
-      onChanged: (_) {
-        if (_error != null) setState(() => _error = null);
-      },
-      autofocus: true,
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      ElevatedButton(onPressed: _submit, child: const Text('Rename')),
-    ],
   );
 }
