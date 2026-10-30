@@ -1046,11 +1046,14 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     }
   }
 
-  Future<T> _structureMutation<T>(Future<T> Function() write) async {
+  Future<T> _structureMutation<T>(
+    Future<T> Function() write, {
+    String label = 'Saving blocks',
+  }) async {
     if (_timerAction != null || !await _autoSave() || !mounted) {
       throw StateError('Save the workout before changing blocks.');
     }
-    setState(() => _timerAction = 'Saving blocks');
+    setState(() => _timerAction = label);
     try {
       final result = await write();
       if (!mounted) return result;
@@ -1120,6 +1123,82 @@ class _WorkoutScreenState extends State<WorkoutScreen>
           () => _structure.reorderBlocks(widget.plan.splitId!, ids),
         ),
   );
+
+  void _showWeekActions(String weekId) {
+    final week = _weekById[weekId];
+    if (week == null) return;
+    WorkoutDialogs.showWeekActions(
+      context,
+      week: week.number,
+      blockName: _blocks.firstWhere((b) => b.id == week.blockId).name,
+      onDelete: () => _deleteWeek(weekId),
+    );
+  }
+
+  void _showWeekMessage(String message) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(message)));
+
+  /// Deletes this workout's logs in a week and hides its tab. The week itself
+  /// is shared across the split, so other workouts keep theirs.
+  Future<void> _deleteWeek(String weekId) async {
+    final planId = widget.plan.id;
+    if (planId == null || _timerAction != null || _isNavigating) return;
+    // An autosave still in flight would write the week back after the delete.
+    final pendingSave = _saveFuture;
+    if (pendingSave != null) await pendingSave;
+    if (!mounted) return;
+    _training.reload();
+    final week = _training.weekById[weekId];
+    if (week == null) return;
+    final reached = _training.reachedWeekIds(planId);
+    if (!reached.contains(weekId)) {
+      _showWeekMessage('Week ${week.number} has no workout to delete.');
+      return;
+    }
+    if (reached.length == 1) {
+      _showWeekMessage("You can't delete the only week.");
+      return;
+    }
+    final sessions = _training.sessionsForSlot(planId, weekId);
+    final unsavedEdits = weekId == _currentWeek && _hasUnsavedChanges;
+    // An empty week has nothing to lose, so it goes without a dialog.
+    if (sessions.isNotEmpty || unsavedEdits) {
+      final confirmed = await WorkoutDialogs.showDeleteWeekDialog(
+        context,
+        week: week.number,
+        logged: sessions.any((s) => s.isCompleted),
+      );
+      if (!confirmed || !mounted) return;
+    }
+    if (weekId == _currentWeek) {
+      // Drop the deleted draft's edits so they can't be saved back.
+      setState(() {
+        _hasUnsavedChanges = false;
+        _draftRevision++;
+        _saveError = null;
+      });
+    }
+    try {
+      await _structureMutation(() async {
+        await _progression.removeWeek(planId: planId, weekId: weekId);
+        _weekSessions.remove(weekId);
+      }, label: 'Deleting week');
+    } catch (_) {
+      if (mounted) _showWeekMessage("Couldn't delete the week. Try again.");
+      return;
+    }
+    if (!mounted) return;
+    context.read<WorkoutSessionProvider>().loadSessions();
+    // Only an unfinished draft can own the running timer notification.
+    final drafts = sessions.where((s) => !s.isCompleted).map((s) => s.id);
+    if (drafts.isEmpty) return;
+    final notification =
+        await WorkoutTimerNotificationService.instance.snapshot();
+    if (drafts.contains(notification?.sessionId)) {
+      await WorkoutTimerNotificationService.instance.dismiss();
+    }
+  }
 
   void _selectProgress() {
     if (!mounted) return;
@@ -1857,6 +1936,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       onRenameBlock: _renameBlock,
       onReorderBlocks: _reorderBlocks,
       onAddWeek: _addWeek,
+      onDeleteWeek: widget.plan.id == null ? null : _showWeekActions,
       onCreateBlock: _createBlock,
     ),
   );

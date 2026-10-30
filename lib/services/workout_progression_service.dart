@@ -321,6 +321,99 @@ class WorkoutProgressionService {
     );
   });
 
+  /// The weeks a workout has reached: supplied, active, or holding one of
+  /// [sessions] (the plan's live logs and drafts).
+  static Set<String> reachedWeekIds(
+    WorkoutProgress? progress,
+    Iterable<WorkoutSession> sessions,
+  ) => {
+    ...?progress?.availableWeekIds,
+    if (progress != null) progress.activeWeekId,
+    for (final s in sessions)
+      if (s.trainingWeekId != null) s.trainingWeekId!,
+  };
+
+  /// Removes [weekId] from one workout: its logs and drafts there are
+  /// tombstoned and the tab is no longer supplied. The shared week row stays,
+  /// since other workouts may use it, so reaching the slot again reuses it.
+  /// Deleting the active week moves progress to the nearest earlier reached
+  /// week, else the nearest later one, at a fresh revision so no older
+  /// completion evidence can replay over the choice.
+  Future<void> removeWeek({required String planId, required String weekId}) =>
+      SyncService.instance.runExclusiveLocalMutation(() async {
+        await replayUnderGate();
+        final plan = HiveService.getPlanById(planId);
+        if (plan == null ||
+            plan.deletedAt != null ||
+            plan.userId != _owner() ||
+            plan.splitId == null) {
+          throw StateError('The plan is unavailable.');
+        }
+        final splitId = plan.splitId!;
+        HiveService.validateTrainingSplit(splitId, _owner());
+        final order = [
+          for (final block in HiveService.blocksForSplit(splitId))
+            for (final week in HiveService.weeksForBlock(splitId, block.id))
+              week.id,
+        ];
+        final progress = HiveService.progressForPlan(splitId, planId);
+        final sessions =
+            HiveService.sessionsForPlanWeek(
+              splitId,
+              planId,
+              weekId,
+            ).where((s) => s.userId == _owner()).toList();
+        final reached =
+            reachedWeekIds(
+              progress,
+              HiveService.getSessions(
+                splitId: splitId,
+              ).where((s) => s.planId == planId && s.userId == _owner()),
+            ).where(order.contains).toSet();
+        if (!reached.contains(weekId)) {
+          throw StateError('The week has nothing to delete.');
+        }
+        final remaining = order.where(
+          (id) => id != weekId && reached.contains(id),
+        );
+        if (remaining.isEmpty) {
+          throw StateError("The workout's only week cannot be deleted.");
+        }
+        for (final session in sessions) {
+          await HiveService.softDeleteSession(session.id!);
+        }
+        if (progress == null ||
+            (progress.activeWeekId != weekId &&
+                !(progress.availableWeekIds?.contains(weekId) ?? false))) {
+          return;
+        }
+        final index = order.indexOf(weekId);
+        final active =
+            progress.activeWeekId != weekId
+                ? progress.activeWeekId
+                : remaining.lastWhere(
+                  (id) => order.indexOf(id) < index,
+                  orElse: () => remaining.first,
+                );
+        final moved = active != progress.activeWeekId;
+        await _writeProgress(
+          progress.copyWith(
+            activeWeekId: active,
+            availableWeekIds:
+                progress.availableWeekIds == null
+                    ? null
+                    : {
+                      ...progress.availableWeekIds!.where((id) => id != weekId),
+                      active,
+                    }.toList(),
+            state: moved ? WorkoutProgressState.ready : progress.state,
+            revision: _uuid.v4(),
+            updatedAt: _clock(),
+            dirty: true,
+          ),
+        );
+      });
+
   Future<void> chooseBoundary({
     required String planId,
     required String expectedRevision,

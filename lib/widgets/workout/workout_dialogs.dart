@@ -465,41 +465,90 @@ class WorkoutDialogs {
     );
   }
 
-  static void showWeekOptionsMenu(
+  /// A held week tab's menu, shaped like a plan's: a header naming the week,
+  /// then Delete week under a rule in the error colour.
+  static void showWeekActions(
     BuildContext context, {
-    required void Function() onRename,
-    required void Function() onDelete,
+    required int week,
+    required String blockName,
+    required VoidCallback onDelete,
   }) {
-    final accent = accentColor(context);
-    showModalBottomSheet(
+    final error = errorColor(context);
+    showModalBottomSheet<void>(
       context: context,
-      backgroundColor: surfaceColor(context),
-      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
       builder:
-          (context) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: Icon(LucideIcons.pencil, color: accent),
-                  title: const Text('Rename week'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    onRename();
-                  },
-                ),
-                ListTile(
-                  leading: Icon(LucideIcons.trash2, color: errorColor(context)),
-                  title: Text(
-                    'Delete week',
-                    style: TextStyle(color: errorColor(context)),
+          (sheet) => SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.paddingOf(sheet).bottom + AppSpacing.md,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      0,
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Week $week',
+                          style: Theme.of(sheet).textTheme.titleSmall?.copyWith(
+                            color: textPrimaryColor(sheet),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          blockName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(sheet).textTheme.bodySmall?.copyWith(
+                            color: textSecondaryColor(sheet),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    onDelete();
-                  },
-                ),
-              ],
+                  Divider(height: 1, thickness: 1, color: borderColor(sheet)),
+                  InkWell(
+                    onTap: () {
+                      Navigator.pop(sheet);
+                      onDelete();
+                    },
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 48),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.md,
+                          horizontal: AppSpacing.lg,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(LucideIcons.trash2, size: 16, color: error),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Text(
+                                'Delete week',
+                                style: Theme.of(
+                                  sheet,
+                                ).textTheme.bodyMedium?.copyWith(color: error),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
     );

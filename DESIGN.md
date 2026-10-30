@@ -169,8 +169,16 @@ numbers without allocating them; saving the new plan allocates/reuses only its
 chosen slot. Existing plan edits retain progress. Create block accepts an
 intended length of 1–52 weeks and a 1–40 character trimmed name; explicit
 extensions can go beyond 52. Blocks can be renamed/reordered.
-Individual week/block deletion, week rename/reorder, Skip, Repeat, block
-prescriptions and block-based analytics are outside V1.
+Holding a week tab opens a sheet with *Delete week*. It deletes that week for
+the open workout only: its logs and drafts there are tombstoned and the tab is
+no longer supplied, while the shared week row stays for the split's other
+workouts. Logged or edited weeks confirm first; an empty one goes without a
+dialog. A workout's only reached week can't be deleted. Deleting the active
+week moves progress to the nearest earlier reached week (else the nearest
+later one) at a fresh revision, so a completed slot shows *Continue* and
+reaching the deleted number again reuses the same week ID. Block deletion,
+week rename/reorder, Skip, Repeat, block prescriptions and block-based
+analytics are outside V1.
 
 The workout's bottom navigation always fills the available width. The selected
 week's block name stays at the left and Add week (+) stays at the right; only

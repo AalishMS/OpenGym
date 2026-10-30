@@ -433,6 +433,67 @@ void main() {
       },
     );
 
+    locationTest('holding a week tab deletes that week for this workout only', (
+      tester,
+    ) async {
+      final ids = await tester.runAsync(() async {
+        final repo = TrainingBlockRepository(ownerId: () => null);
+        final block = await repo.createBlock(
+          splitId: 's',
+          name: 'Build',
+          weekCount: 4,
+        );
+        await TrainingBlockMigration().normalize(ownerId: null);
+        final first = repo.weeksForBlock('s', block.id).single;
+        await HiveService.putSessionRaw(
+          WorkoutSession(
+            id: 'push-done',
+            splitId: 's',
+            planId: 'p',
+            planName: 'Push',
+            trainingWeekId: first.id,
+            date: now,
+            isCompleted: false,
+            startedAt: now,
+            durationSeconds: 60,
+            exercises: [],
+          ),
+        );
+        await WorkoutProgressionService(
+          ownerId: () => null,
+        ).complete('push-done');
+        return [first.id, repo.weeksForBlock('s', block.id).last.id];
+      });
+      await open(tester);
+      expect(find.text('Build · Week 2'), findsOneWidget);
+
+      await tester.longPress(find.byKey(ValueKey('training-week-${ids![0]}')));
+      await tester.pumpAndSettle();
+      expect(find.text('Build'), findsWidgets);
+      await tester.tap(find.text('Delete week'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete week?'), findsOneWidget);
+      await tester.tap(find.text('Delete'));
+      await pumpWithStorage(tester);
+
+      expect(HiveService.getSessionById('push-done')!.deletedAt, isNotNull);
+      expect(find.byKey(ValueKey('training-week-${ids[0]}')), findsNothing);
+      expect(find.text('Build · Week 2'), findsOneWidget);
+      final progress = HiveService.progressForPlan('s', 'p')!;
+      expect(progress.activeWeekId, ids[1]);
+      expect(progress.availableWeekIds, [ids[1]]);
+      // The shared week row stays for the split's other workouts.
+      expect(HiveService.getTrainingWeekById(ids[0])!.deletedAt, isNull);
+
+      await tester.longPress(find.byKey(ValueKey('training-week-${ids[1]}')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete week'));
+      await pumpWithStorage(tester);
+      expect(find.text("You can't delete the only week."), findsOneWidget);
+      expect(find.byKey(ValueKey('training-week-${ids[1]}')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     locationTest(
       'block switching remembers reached weeks and cannot append while browsing',
       (tester) async {
