@@ -321,7 +321,7 @@ void main() {
     final before = tester.widget<ListView>(listFinder).controller!.offset;
     expect(before, greaterThan(0));
 
-    await tester.tap(find.byType(HistoryWorkoutRow).first);
+    await tester.tap(find.byType(HistoryWorkoutRow).hitTestable().first);
     await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
@@ -523,9 +523,7 @@ void main() {
     }
   });
 
-  testWidgets('journal date sits on the card with no ground of its own', (
-    tester,
-  ) async {
+  testWidgets('journal date rail has no ground of its own', (tester) async {
     final provider = _Sessions([
       session(id: 'one', name: 'Push Day', date: DateTime(2026, 9, 11)),
     ]);

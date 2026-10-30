@@ -135,6 +135,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         : ListView.builder(
                           key: const PageStorageKey('history-journal-list'),
                           controller: _scrollController,
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
                           padding: const EdgeInsets.fromLTRB(
                             AppSpacing.lg,
                             AppSpacing.lg,
@@ -391,7 +393,7 @@ class WorkoutDetailsScreen extends StatelessWidget {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.lg,
-                      AppSpacing.sm,
+                      AppSpacing.xl,
                       AppSpacing.lg,
                       AppSpacing.xl,
                     ),
@@ -401,7 +403,18 @@ class WorkoutDetailsScreen extends StatelessWidget {
                             .sessionStatistics(session),
                         weightUnit: weightUnit,
                       ),
-                      const SizedBox(height: AppSpacing.sm),
+                      const SizedBox(height: AppSpacing.xl),
+                      if (session.exercises.isNotEmpty) ...[
+                        Semantics(
+                          header: true,
+                          child: Text(
+                            'Exercise breakdown',
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                      ],
                       if (session.exercises.isEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(
