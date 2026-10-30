@@ -396,7 +396,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.textContaining('Could not change the timer'), findsOneWidget);
       expect(find.text('Start'), findsOneWidget);
-      expect(find.text('Pause'), findsNothing);
+      expect(find.byTooltip('Pause workout'), findsNothing);
       sessions.pending = Completer<void>();
       await tester.tap(find.text('Start'));
       await tester.pump();
@@ -404,16 +404,16 @@ void main() {
       expect(sessions.writes.last.isTimerRunning, isTrue);
       sessions.pending.complete();
       await tester.pumpAndSettle();
-      expect(find.text('Pause'), findsOneWidget);
+      expect(find.byTooltip('Pause workout'), findsOneWidget);
 
       sessions.pending = Completer<void>();
-      await tester.tap(find.text('Pause'));
+      await tester.tap(find.byTooltip('Pause workout'));
       await tester.pump();
       expect(sessions.writes.last.isTimerRunning, isFalse);
       sessions.pending.completeError(StateError('disk full'));
       await tester.pumpAndSettle();
-      expect(find.text('Pause'), findsOneWidget);
-      expect(find.text('Start'), findsNothing);
+      expect(find.byTooltip('Pause workout'), findsOneWidget);
+      expect(find.byTooltip('Resume workout'), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     },

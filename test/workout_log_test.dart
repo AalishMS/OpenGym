@@ -190,7 +190,8 @@ void main() {
     (tester) async {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      await tester.runAsync(() => seed());
+      // Started, so the header carries its fullest set: clock, Finish, menu.
+      await tester.runAsync(() => seed(started: true));
       for (final brightness in Brightness.values) {
         for (final width in [320.0, 390.0]) {
           for (final scale in [1.0, 2.0]) {
@@ -478,10 +479,8 @@ void main() {
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
       final finish = find.widgetWithIcon(IconButton, LucideIcons.check);
-      expect(tester.widget<IconButton>(finish).onPressed, isNull);
-      await tester.tap(finish);
-      await tester.pumpAndSettle();
-      expect(find.text('Log workout?'), findsNothing);
+      // Nothing to finish before Start, so the header leaves Finish out.
+      expect(finish, findsNothing);
       expect(find.textContaining('Tap Start in the toolbar'), findsNothing);
       await tester.tap(find.byTooltip('Workout actions'));
       await tester.pumpAndSettle();

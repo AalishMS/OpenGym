@@ -459,7 +459,7 @@ void main() {
         await pumpWithStorage(tester);
 
         expect(find.text('Pause and start'), findsNothing);
-        expect(find.text('Pause'), findsOneWidget);
+        expect(find.byTooltip('Pause workout'), findsOneWidget);
         final old = HiveService.getSessionById('old-running')!;
         expect(old.isTimerRunning, isFalse);
         expect(old.durationSeconds, 600);
@@ -519,7 +519,7 @@ void main() {
       );
       expect(HiveService.getRunningSession()!.planName, plan.name);
       expect(calls, containsAllInOrder(['pause', 'show']));
-      expect(find.text('Pause'), findsOneWidget);
+      expect(find.byTooltip('Pause workout'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
       await releaseSessions(tester);
     });

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -1511,9 +1512,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final timerBase = Theme.of(context).textTheme.bodySmall!;
     final timerStyle = AppTypography.figures(
       fontSize: timerBase.fontSize,
-      fontWeight: timerBase.fontWeight,
+      fontWeight: FontWeight.w600,
       height: timerBase.height,
-      color: textPrimaryColor(context),
     );
     final titleStyle = Theme.of(context).textTheme.headlineSmall!;
     final textScaler = MediaQuery.textScalerOf(context);
@@ -1560,124 +1560,52 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                LayoutBuilder(
-                  builder:
-                      (context, constraints) => Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _contextLabel,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          ConstrainedBox(
-                            constraints: BoxConstraints(
-                              maxWidth: constraints.maxWidth * .45,
-                            ),
-                            child: ValueListenableBuilder<DateTime>(
-                              valueListenable: _now,
-                              builder: (context, now, _) {
-                                final elapsed = formatDuration(
-                                  session.elapsedSeconds(now),
-                                );
-                                return Semantics(
-                                  label:
-                                      session.isCompleted
-                                          ? 'Recorded duration $elapsed'
-                                          : 'Elapsed time $elapsed',
-                                  child: FittedBox(
-                                    fit: BoxFit.scaleDown,
-                                    child: Text(
-                                      elapsed,
-                                      key: const ValueKey(
-                                        'workout_elapsed_time',
-                                      ),
-                                      style: timerStyle,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
+                _SessionMeta(
+                  label: _contextLabel,
+                  session: session,
+                  now: _now,
+                  timerStyle: timerStyle,
                 ),
               ],
             ),
             actions: [
               if (!session.isCompleted) ...[
-                if (MediaQuery.sizeOf(context).width < 400 &&
-                    textScaler.scale(1) > 1.5)
+                _TimerButton(
+                  running: session.isTimerRunning,
+                  // Once the clock has run, the header drops to icons so the
+                  // clock, Finish and the title can share one row; large text
+                  // on a narrow phone needs the room before that.
+                  compact:
+                      session.hasStarted ||
+                      (MediaQuery.sizeOf(context).width < 400 &&
+                          textScaler.scale(1) > 1.5),
+                  onPressed:
+                      _isSaving ||
+                              _timerAction != null ||
+                              !_canUseTimer(session)
+                          ? null
+                          : _toggleTimer,
+                ),
+                // Nothing to finish before Start, so Finish waits for it.
+                if (session.hasStarted)
                   IconButton(
-                    tooltip:
-                        session.isTimerRunning
-                            ? 'Pause workout'
-                            : 'Start workout',
+                    tooltip: 'Finish workout',
                     onPressed:
-                        _isSaving ||
-                                _timerAction != null ||
-                                !_canUseTimer(session)
-                            ? null
-                            : _toggleTimer,
+                        !_isSaving &&
+                                _timerAction == null &&
+                                _canUseTimer(session)
+                            ? _stopWorkout
+                            : null,
                     color: accent,
+                    disabledColor: textSecondaryColor(context),
                     constraints: const BoxConstraints(
                       minWidth: 48,
                       minHeight: 48,
                     ),
-                    icon: Icon(
-                      session.isTimerRunning
-                          ? LucideIcons.pause
-                          : LucideIcons.play,
-                      size: 22,
-                    ),
+                    icon: const Icon(LucideIcons.check, size: 22),
                   )
                 else
-                  Semantics(
-                    button: true,
-                    label:
-                        session.isTimerRunning
-                            ? 'Pause workout'
-                            : 'Start workout',
-                    child: TextButton(
-                      onPressed:
-                          _isSaving ||
-                                  _timerAction != null ||
-                                  !_canUseTimer(session)
-                              ? null
-                              : _toggleTimer,
-                      style: TextButton.styleFrom(
-                        foregroundColor: accent,
-                        minimumSize: const Size(64, 48),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                        ),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: AppRadius.button,
-                        ),
-                      ),
-                      child: Text(session.isTimerRunning ? 'Pause' : 'Start'),
-                    ),
-                  ),
-                IconButton(
-                  tooltip: 'Finish workout',
-                  onPressed:
-                      session.hasStarted &&
-                              !_isSaving &&
-                              _timerAction == null &&
-                              _canUseTimer(session)
-                          ? _stopWorkout
-                          : null,
-                  color: accent,
-                  disabledColor: textSecondaryColor(context),
-                  constraints: const BoxConstraints(
-                    minWidth: 48,
-                    minHeight: 48,
-                  ),
-                  icon: const Icon(LucideIcons.check, size: 22),
-                ),
+                  const SizedBox(width: AppSpacing.xs),
                 PopupMenuButton<String>(
                   tooltip: 'Workout actions',
                   icon: Icon(
@@ -1699,7 +1627,9 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                         ),
                       ],
                 ),
-              ],
+              ] else
+                // Nothing to act on once finished; keep the title off the edge.
+                const SizedBox(width: AppSpacing.lg),
             ],
             bottom: _buildPlanTabBar(accent, plans, currentPlanIndex),
           ),
@@ -1978,6 +1908,208 @@ class _PlanHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Start, pause or resume the session clock. A fresh log gets the one
+/// labelled, filled action in the header, since Start is what it is waiting
+/// for. Once the clock has run the control shrinks to a square: filled to
+/// resume, outlined to pause, so Finish reads as the next move.
+class _TimerButton extends StatelessWidget {
+  final bool running;
+  final bool compact;
+  final VoidCallback? onPressed;
+
+  const _TimerButton({
+    required this.running,
+    required this.compact,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final filled = !running;
+    final style = TextButton.styleFrom(
+      foregroundColor: filled ? onAccentColor(context) : accentColor(context),
+      backgroundColor: filled ? accentFillColor(context) : null,
+      disabledForegroundColor: textSecondaryColor(context),
+      disabledBackgroundColor: filled ? surfaceColor(context) : null,
+      side: filled ? null : BorderSide(color: borderColor(context)),
+      minimumSize: compact ? const Size.square(40) : const Size(64, 36),
+      tapTargetSize: MaterialTapTargetSize.padded,
+      visualDensity: VisualDensity.standard,
+      padding:
+          compact
+              ? EdgeInsets.zero
+              : const EdgeInsets.only(
+                left: AppSpacing.md - AppSpacing.xxs,
+                right: AppSpacing.md + AppSpacing.xxs,
+              ),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
+    );
+    final icon = Icon(
+      running ? LucideIcons.pause : LucideIcons.play,
+      size: compact ? 18 : 16,
+    );
+    final label =
+        running
+            ? 'Pause workout'
+            : compact
+            ? 'Resume workout'
+            : 'Start workout';
+    if (compact) {
+      return Tooltip(
+        message: label,
+        child: Semantics(
+          button: true,
+          label: label,
+          excludeSemantics: true,
+          child: TextButton(onPressed: onPressed, style: style, child: icon),
+        ),
+      );
+    }
+    return Semantics(
+      button: true,
+      label: label,
+      child: TextButton.icon(
+        onPressed: onPressed,
+        style: style,
+        icon: icon,
+        label: const Text('Start'),
+      ),
+    );
+  }
+}
+
+/// The header's second line: where this log sits in the training block, then
+/// the session clock. Before Start there is nothing to time, so the clock is
+/// left out rather than reading 00:00 next to an untouched log.
+class _SessionMeta extends StatelessWidget {
+  final String label;
+  final WorkoutSession session;
+  final ValueListenable<DateTime> now;
+  final TextStyle timerStyle;
+
+  const _SessionMeta({
+    required this.label,
+    required this.session,
+    required this.now,
+    required this.timerStyle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    final where = Text(
+      label,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+    final hasTime = session.hasStarted || (session.durationSeconds ?? 0) > 0;
+    if (!hasTime) return where;
+    const gap = AppSpacing.sm;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // The block and week come first: on a narrow phone the clock scales
+        // down a touch rather than cutting the week number off.
+        final painter = TextPainter(
+          text: TextSpan(text: label, style: style),
+          textScaler: MediaQuery.textScalerOf(context),
+          textDirection: Directionality.of(context),
+          maxLines: 1,
+        )..layout();
+        final labelWidth = painter.width;
+        painter.dispose();
+        final clockWidth = (constraints.maxWidth - labelWidth - gap).clamp(
+          constraints.maxWidth * .25,
+          constraints.maxWidth,
+        );
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Flexible(child: where),
+            const SizedBox(width: gap),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: clockWidth),
+              child: ValueListenableBuilder<DateTime>(
+                valueListenable: now,
+                builder:
+                    (context, now, _) => _SessionClock(
+                      elapsed: formatDuration(session.elapsedSeconds(now)),
+                      session: session,
+                      style: timerStyle,
+                    ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// The session clock, set inline after the block and week. It is read-only, so
+/// it gets no ground: a running clock leads with an accent dot in primary ink,
+/// a paused one with the pause glyph and a finished log with a timer, both in
+/// secondary ink.
+class _SessionClock extends StatelessWidget {
+  final String elapsed;
+  final WorkoutSession session;
+  final TextStyle style;
+
+  const _SessionClock({
+    required this.elapsed,
+    required this.session,
+    required this.style,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final running = session.isTimerRunning;
+    final accent = accentColor(context);
+    final ink =
+        running ? textPrimaryColor(context) : textSecondaryColor(context);
+    final glyphSize = MediaQuery.textScalerOf(context).scale(12);
+    final Widget glyph =
+        running
+            ? Container(
+              width: glyphSize / 2,
+              height: glyphSize / 2,
+              decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+            )
+            : Icon(
+              session.isCompleted ? LucideIcons.timer : LucideIcons.pause,
+              size: glyphSize,
+              color: ink,
+            );
+    return Semantics(
+      label:
+          session.isCompleted
+              ? 'Recorded duration $elapsed'
+              : running
+              ? 'Elapsed time $elapsed'
+              : 'Paused at $elapsed',
+      // One text run, so the time sits on the subtitle's baseline.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text.rich(
+          TextSpan(
+            children: [
+              WidgetSpan(alignment: PlaceholderAlignment.middle, child: glyph),
+              const WidgetSpan(
+                child: SizedBox(width: AppSpacing.xs + AppSpacing.xxs),
+              ),
+              TextSpan(text: elapsed),
+            ],
+          ),
+          key: const ValueKey('workout_elapsed_time'),
+          maxLines: 1,
+          style: style.copyWith(color: ink),
+        ),
+      ),
     );
   }
 }
