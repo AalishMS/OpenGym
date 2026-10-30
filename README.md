@@ -41,6 +41,9 @@ workspaces, and workout progress.
 
 ## Screenshots
 
+These refreshed screenshots show the current app with example workout data. They
+were captured from the web build, without mobile status or navigation bars.
+
 <table>
   <tr>
     <td align="center">
