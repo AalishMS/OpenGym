@@ -236,7 +236,7 @@ void main() {
         final context = tester.element(pillFinder);
         final decoration =
             tester.widget<DecoratedBox>(pillFinder).decoration as BoxDecoration;
-        final label = tester.widget<Text>(find.text('Personal record'));
+        final label = tester.widget<Text>(find.text('PR'));
         final variant = '${accent.name} / ${brightness.name}';
 
         expect(
@@ -359,7 +359,7 @@ void main() {
       );
       expect(find.text('Duration'), findsNothing);
       expect(find.text('Not recorded'), findsNothing);
-      expect(find.text('Performed sets'), findsOneWidget);
+      expect(find.text('Sets'), findsOneWidget);
       expect(find.text('0'), findsWidgets);
       expect(find.text('Weight (lbs)'), findsOneWidget);
       expect(find.text('27.0'), findsOneWidget);
@@ -604,12 +604,11 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('2 performed sets · 13 reps'), findsOneWidget);
+    expect(find.text('2 sets · 13 reps'), findsOneWidget);
     expect(find.text('200 kg'), findsOneWidget);
     expect(find.text('100'), findsOneWidget);
     expect(find.text('Pause at the bottom.'), findsOneWidget);
-    expect(find.text('0 performed sets · 0 reps'), findsOneWidget);
-    expect(find.text('No sets recorded'), findsOneWidget);
+        expect(find.text('No sets recorded'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

@@ -389,8 +389,21 @@ signature:
 - Unknown data is left out rather than given a placeholder. A session
   duration that is null or under a minute counts as unknown
   (`knownDurationSeconds`), so History and Workout details never show "0m".
-- Don't nest a ground inside a card. The History row's date sits directly on
-  the card, which is the tap target.
+- Don't nest a ground inside a card. History is a timeline: each month heads
+  its workouts with a count and volume tally, and the date sits on a rail
+  beside the card (above it at narrow widths or large text). A hairline runs
+  down the rail to the next workout in the month, and a second workout on the
+  same day hangs off the same line without repeating the date. The card leads
+  with the workout name, its block and week and known duration, then a ruled
+  row of Exercises / Sets / Volume in `figures`, and the exercise names. A
+  session with no performed sets says *No sets logged* instead of zeros.
+- Workout details opens with the long date, the workout name, its block and
+  week, and how many exercises set a record (accent ink). A bounded readout
+  puts Volume load and Duration large, over Exercises / Sets / Reps. Each
+  exercise is its own numbered card: the accent number sits in the set-number
+  gutter, volume trails the name (or joins the summary line when narrow), the
+  note hangs off an accent rule, and sets below in the ruled table. Sets saved
+  at zero reps stay on the record in the secondary ink.
 - A plan's menu (long press, or *Plan actions* in Manage) is a modal bottom
   sheet with a drag handle, not a dialog. *Delete plan* is always the last
   row, set apart by a rule and the error colour. In Manage, the drag grip

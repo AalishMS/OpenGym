@@ -23,11 +23,16 @@ class ReadOnlyValue extends StatelessWidget {
   /// Drawn after the figure, for example a PR badge.
   final Widget? trailing;
 
+  /// Drawn in the secondary ink, for a value that was logged but not
+  /// performed, such as a set left at zero reps.
+  final bool muted;
+
   const ReadOnlyValue(
     this.text, {
     this.semanticsLabel,
     this.semanticsValue,
     this.trailing,
+    this.muted = false,
     super.key,
   });
 
@@ -39,7 +44,13 @@ class ReadOnlyValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final figure = Text(text, style: style(context));
+    final figure = Text(
+      text,
+      style:
+          muted
+              ? style(context).copyWith(color: textSecondaryColor(context))
+              : style(context),
+    );
     return Semantics(
       label: semanticsLabel,
       value: semanticsValue ?? text,
