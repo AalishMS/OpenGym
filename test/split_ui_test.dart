@@ -212,7 +212,9 @@ void main() {
     expect(find.text('Workout presets'), findsOneWidget);
     expect(find.text('Hypertrophy'), findsOneWidget);
     expect(find.text('Full-body hypertrophy'), findsOneWidget);
-    expect(find.text('55–75 min · New or busy lifter'), findsOneWidget);
+    expect(find.text('New or busy lifter'), findsOneWidget);
+    expect(find.text('3 days  ·  55–75 min'), findsOneWidget);
+    expect(find.text('Hybrid'), findsOneWidget);
     expect(find.text('HYP-FB-3'), findsNothing);
     expect(find.text('Full-body strength'), findsNothing);
 
@@ -229,13 +231,28 @@ void main() {
       find.byKey(const ValueKey('preset-details-HYP-FB-3')),
       findsOneWidget,
     );
+    expect(find.text('days a week'), findsOneWidget);
+    expect(find.text('Weekly'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Full body A'),
+      200,
+      scrollable:
+          find
+              .descendant(
+                of: find.byKey(const ValueKey('preset-details-HYP-FB-3')),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+    );
     expect(find.text('Workout days'), findsOneWidget);
     expect(find.text('Full body A'), findsOneWidget);
+    // Days start folded, so the list reads as the program's shape first.
+    expect(find.text('3 × 6–10'), findsNothing);
     expect(find.byKey(const ValueKey('install-preset-action')), findsOneWidget);
 
     await tester.tap(find.text('Full body A'));
     await tester.pumpAndSettle();
-    expect(find.text('3 × 6-10'), findsOneWidget);
+    expect(find.text('3 × 6–10'), findsOneWidget);
     expect(find.text('Rest 3 min · 2 reps in reserve'), findsOneWidget);
     expect(find.textContaining('Or swap for Front Squat'), findsOneWidget);
 

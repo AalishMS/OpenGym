@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
@@ -465,56 +464,93 @@ class WorkoutDialogs {
     );
   }
 
-  static void showWeekOptionsMenu(
+  /// A held week tab's menu, shaped like a plan's: a header naming the week,
+  /// then Delete week under a rule in the error colour.
+  static void showWeekActions(
     BuildContext context, {
-    required void Function() onRename,
-    required void Function() onDelete,
+    required int week,
+    required String blockName,
+    required VoidCallback onDelete,
   }) {
-    final accent = accentColor(context);
-    showModalBottomSheet(
+    final error = errorColor(context);
+    showModalBottomSheet<void>(
       context: context,
-      backgroundColor: surfaceColor(context),
-      shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
       builder:
-          (context) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: Icon(LucideIcons.pencil, color: accent),
-                  title: const Text('Rename week'),
-                  onTap: () {
-                    Navigator.pop(context);
-                    onRename();
-                  },
-                ),
-                ListTile(
-                  leading: Icon(LucideIcons.trash2, color: errorColor(context)),
-                  title: Text(
-                    'Delete week',
-                    style: TextStyle(color: errorColor(context)),
+          (sheet) => SingleChildScrollView(
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.paddingOf(sheet).bottom + AppSpacing.md,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      0,
+                      AppSpacing.lg,
+                      AppSpacing.md,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Week $week',
+                          style: Theme.of(sheet).textTheme.titleSmall?.copyWith(
+                            color: textPrimaryColor(sheet),
+                          ),
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          blockName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(sheet).textTheme.bodySmall?.copyWith(
+                            color: textSecondaryColor(sheet),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                  onTap: () {
-                    Navigator.pop(context);
-                    onDelete();
-                  },
-                ),
-              ],
+                  Divider(height: 1, thickness: 1, color: borderColor(sheet)),
+                  InkWell(
+                    onTap: () {
+                      Navigator.pop(sheet);
+                      onDelete();
+                    },
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 48),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.md,
+                          horizontal: AppSpacing.lg,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(LucideIcons.trash2, size: 16, color: error),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Text(
+                                'Delete week',
+                                style: Theme.of(
+                                  sheet,
+                                ).textTheme.bodyMedium?.copyWith(color: error),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
     );
-  }
-
-  static Future<void> showRenameWeekDialog(
-    BuildContext context, {
-    required int currentWeek,
-    required void Function(int newWeek) onRename,
-  }) async {
-    final newWeek = await showDialog<int>(
-      context: context,
-      builder: (_) => _RenameWeekDialog(currentWeek: currentWeek),
-    );
-    if (newWeek != null && context.mounted) onRename(newWeek);
   }
 
   /// [logged] picks the wording: a logged workout also leaves History and
@@ -817,65 +853,5 @@ class _DialogSetEntryState extends State<_DialogSetEntry> {
           widget.weightController.text = entryWeight(weight);
           widget.repsController.text = '$reps';
         }),
-  );
-}
-
-class _RenameWeekDialog extends StatefulWidget {
-  final int currentWeek;
-
-  const _RenameWeekDialog({required this.currentWeek});
-
-  @override
-  State<_RenameWeekDialog> createState() => _RenameWeekDialogState();
-}
-
-class _RenameWeekDialogState extends State<_RenameWeekDialog> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.currentWeek.toString(),
-  );
-  String? _error;
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final week = int.tryParse(_controller.text);
-    if (week == null || week <= 0) {
-      setState(() => _error = 'Enter a whole number greater than zero.');
-      return;
-    }
-    Navigator.pop(context, week);
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Rename week'),
-    scrollable: true,
-    content: TextField(
-      controller: _controller,
-      decoration: InputDecoration(
-        labelText: 'Week number',
-        hintText: 'e.g., 1',
-        errorText: _error,
-      ),
-      keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      textInputAction: TextInputAction.done,
-      onSubmitted: (_) => _submit(),
-      onChanged: (_) {
-        if (_error != null) setState(() => _error = null);
-      },
-      autofocus: true,
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
-      ),
-      ElevatedButton(onPressed: _submit, child: const Text('Rename')),
-    ],
   );
 }

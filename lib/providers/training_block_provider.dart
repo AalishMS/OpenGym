@@ -86,16 +86,18 @@ class TrainingBlockProvider with ChangeNotifier {
     excludingSessionId: excludingSessionId,
   );
 
+  /// Live weeks this workout has supplied, is on, or has a log in. Any other
+  /// week it shows is only a block's browsing entry point.
+  Set<String> reachedWeekIds(String planId) =>
+      WorkoutProgressionService.reachedWeekIds(
+        progressByPlan[planId],
+        sessionById.values.where((s) => s.planId == planId),
+      ).where(weekById.containsKey).toSet();
+
   /// Logger navigation is per workout; the full index remains available for
   /// history, exact links and source resolution.
   Map<String, List<TrainingWeek>> weeksByBlockForPlan(String planId) {
-    final progress = progressByPlan[planId];
-    final reached = <String>{
-      ...?progress?.availableWeekIds,
-      if (progress != null) progress.activeWeekId,
-      for (final s in sessionById.values)
-        if (s.planId == planId && s.trainingWeekId != null) s.trainingWeekId!,
-    };
+    final reached = reachedWeekIds(planId);
     final reachedBlocks = {
       for (final id in reached)
         if (weekById[id] case final week?) week.blockId,

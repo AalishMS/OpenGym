@@ -11,11 +11,22 @@ Future<void> installTrainingPlansUnderGate({
   required Map<String, WorkoutPlan> plans,
   Map<String, String> startingWeekIds = const {},
   Split? split,
+  int? initialBlockWeekCount,
   String? activeSplitId,
   Future<void> Function(String phase)? onPhase,
 }) async {
+  if (initialBlockWeekCount != null &&
+      (split == null || initialBlockWeekCount < 1 || initialBlockWeekCount > 52)) {
+    throw ArgumentError('An initial block needs a split and 1–52 weeks.');
+  }
   await HiveService.recoverTrainingOperations(ownerId: ownerId);
   final current = HiveService.readTrainingGraph(ownerId: ownerId);
+  if (initialBlockWeekCount != null &&
+      (current.plans.any((p) => p.splitId == split!.id) ||
+          current.sessions.any((s) => s.splitId == split!.id) ||
+          current.progress.any((p) => p.splitId == split!.id))) {
+    throw StateError('Only an unused split can set its initial block length.');
+  }
   final planMap = {for (final p in current.plans) p.id!: p, ...plans};
   final splitMap = {
     for (final s in current.splits) s.id: s,
@@ -30,6 +41,24 @@ Future<void> installTrainingPlansUnderGate({
       .ownedBy(ownerId);
   for (final p in plans.values.where((p) => p.deletedAt == null)) {
     input = input.ensureNewStructure(p.splitId!);
+  }
+  if (initialBlockWeekCount != null) {
+    final block = input.blocks.singleWhere(
+      (b) => b.splitId == split!.id && b.deletedAt == null,
+    );
+    input = input.copyWith(
+      blocks: [
+        for (final b in input.blocks)
+          if (b.id == block.id)
+            b.copyWith(
+              plannedWeekCount: initialBlockWeekCount,
+              updatedAt: DateTime.now(),
+              dirty: true,
+            )
+          else
+            b,
+      ],
+    );
   }
   var desired = TrainingBlockMigration.prepareGraph(
     input,

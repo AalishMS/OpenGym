@@ -71,6 +71,7 @@ class WorkoutPresetInstaller {
           ownerId: userId,
           plans: planMap,
           split: target.split,
+          initialBlockWeekCount: 4,
           activeSplitId: target.splitId,
           onPhase: (phase) async {
             if (phase == 'plans') {

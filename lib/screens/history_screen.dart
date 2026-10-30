@@ -78,12 +78,26 @@ class _HistoryScreenState extends State<HistoryScreen> {
       splitId: provider.activeSplitId,
     );
     final entries = <Object>[
-      for (final group in journal.groups) ...[group, ...group.workouts],
+      for (final group in journal.groups) ...[
+        group,
+        for (final (index, workout) in group.workouts.indexed)
+          _JournalEntry(
+            summary: workout,
+            showDate:
+                index == 0 ||
+                !DateUtils.isSameDay(
+                  group.workouts[index - 1].session.date,
+                  workout.session.date,
+                ),
+            continuesTimeline: index < group.workouts.length - 1,
+          ),
+      ],
     ];
     final visibleCount = journal.groups.fold<int>(
       0,
       (count, group) => count + group.workouts.length,
     );
+    final searching = _query.trim().isNotEmpty;
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -110,7 +124,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   onClear: _clearSearch,
                 ),
               ),
-              if (journal.eligibleSessions.isNotEmpty)
+              if (searching && !journal.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.lg,
@@ -118,9 +132,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      _query.trim().isEmpty
-                          ? '${journal.eligibleSessions.length} completed workout${journal.eligibleSessions.length == 1 ? '' : 's'}'
-                          : '$visibleCount matching workout${visibleCount == 1 ? '' : 's'}',
+                      '$visibleCount matching workout${visibleCount == 1 ? '' : 's'}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ),
@@ -129,7 +141,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 child:
                     journal.isEmpty
                         ? HistoryEmptyState(
-                          isSearching: _query.trim().isNotEmpty,
+                          isSearching: searching,
                           onClearSearch: _clearSearch,
                         )
                         : ListView.builder(
@@ -137,7 +149,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           controller: _scrollController,
                           padding: const EdgeInsets.fromLTRB(
                             AppSpacing.lg,
-                            AppSpacing.lg,
+                            AppSpacing.md,
                             AppSpacing.lg,
                             AppSpacing.xxl,
                           ),
@@ -148,36 +160,35 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               return Padding(
                                 padding: EdgeInsets.only(
                                   top: index == 0 ? 0 : AppSpacing.xl,
-                                  bottom: AppSpacing.md,
+                                  bottom: AppSpacing.xs,
                                 ),
-                                child: HistoryMonthHeader(group: entry),
+                                child: HistoryMonthHeader(
+                                  group: entry,
+                                  weightUnit: weightUnit,
+                                ),
                               );
                             }
-                            final summary = entry as HistoryWorkoutSummary;
-                            return Padding(
-                              padding: const EdgeInsets.only(
-                                bottom: AppSpacing.md,
+                            final row = entry as _JournalEntry;
+                            final session = row.summary.session;
+                            return HistoryWorkoutRow(
+                              key: ValueKey(
+                                'history-row-${historySessionIdentity(session)}',
                               ),
-                              child: HistoryWorkoutRow(
-                                key: ValueKey(
-                                  'history-row-${historySessionIdentity(summary.session)}',
-                                ),
-                                summary: summary,
-                                weightUnit: weightUnit,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder:
-                                          (_) => WorkoutDetailsScreen(
-                                            sessionIdentity:
-                                                historySessionIdentity(
-                                                  summary.session,
-                                                ),
-                                          ),
-                                    ),
-                                  );
-                                },
-                              ),
+                              summary: row.summary,
+                              weightUnit: weightUnit,
+                              showDate: row.showDate,
+                              continuesTimeline: row.continuesTimeline,
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder:
+                                        (_) => WorkoutDetailsScreen(
+                                          sessionIdentity:
+                                              historySessionIdentity(session),
+                                        ),
+                                  ),
+                                );
+                              },
                             );
                           },
                         ),
@@ -188,6 +199,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
       ),
     );
   }
+}
+
+/// A journal row and where it sits on the month's timeline.
+class _JournalEntry {
+  final HistoryWorkoutSummary summary;
+  final bool showDate;
+  final bool continuesTimeline;
+
+  const _JournalEntry({
+    required this.summary,
+    required this.showDate,
+    required this.continuesTimeline,
+  });
 }
 
 class WorkoutDetailsScreen extends StatelessWidget {
@@ -206,6 +230,23 @@ class WorkoutDetailsScreen extends StatelessWidget {
             saved.userId == SupabaseService.currentUserId
         ? saved
         : null;
+  }
+
+  /// Exercises that set a personal record in [session], by normalised name.
+  /// Uses the same split-scoped record history as the History journal.
+  Set<String> _recordExercises(
+    WorkoutSessionProvider provider,
+    WorkoutSession session,
+  ) {
+    const analytics = StatisticsAnalyticsService();
+    final identity = historySessionIdentity(session);
+    return {
+      for (final event in analytics.recordEvents(
+        analytics.eligibleSessions(provider.sessions, splitId: session.splitId),
+      ))
+        if (historySessionIdentity(event.session) == identity)
+          event.exerciseName.trim().toLowerCase(),
+    };
   }
 
   Future<void> _edit(BuildContext context, WorkoutSession session) async {
@@ -320,6 +361,10 @@ class WorkoutDetailsScreen extends StatelessWidget {
     final provider = context.watch<WorkoutSessionProvider>();
     final session = _session(provider);
     final weightUnit = context.watch<SettingsProvider>().weightUnit;
+    final records =
+        session == null
+            ? const <String>{}
+            : _recordExercises(provider, session);
     return Scaffold(
       backgroundColor: backgroundColor(context),
       appBar: AppHeader(
@@ -391,32 +436,39 @@ class WorkoutDetailsScreen extends StatelessWidget {
                   child: ListView(
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.lg,
-                      AppSpacing.sm,
-                      AppSpacing.lg,
                       AppSpacing.xl,
+                      AppSpacing.lg,
+                      AppSpacing.xxl,
                     ),
                     children: [
                       WorkoutDetailsSummary(
                         statistics: const StatisticsAnalyticsService()
                             .sessionStatistics(session),
                         weightUnit: weightUnit,
+                        recordCount: records.length,
                       ),
-                      const SizedBox(height: AppSpacing.sm),
+                      const SizedBox(height: AppSpacing.xxl),
+                      const WorkoutDetailsSectionHeader(title: 'Exercises'),
+                      const SizedBox(height: AppSpacing.md),
                       if (session.exercises.isEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(
-                            vertical: AppSpacing.xl,
+                            vertical: AppSpacing.md,
                           ),
                           child: Text(
                             'No exercises recorded',
-                            style: Theme.of(context).textTheme.bodyMedium,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: textSecondaryColor(context)),
                           ),
                         ),
-                      for (final entry in session.exercises.indexed)
+                      for (final (index, exercise) in session.exercises.indexed)
                         WorkoutExerciseDetails(
-                          exercise: entry.$2,
-                          exerciseNumber: entry.$1 + 1,
+                          exercise: exercise,
+                          exerciseNumber: index + 1,
                           weightUnit: weightUnit,
+                          isRecord: records.contains(
+                            exercise.name.trim().toLowerCase(),
+                          ),
                         ),
                     ],
                   ),

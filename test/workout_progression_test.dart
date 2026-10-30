@@ -129,6 +129,57 @@ void main() {
   );
 
   test(
+    'deleting the active week moves Push back without touching Pull',
+    () async {
+      await draft();
+      await service.complete('log');
+      await draft(id: 'push-2', week: second);
+      await draft(id: 'pull-2', plan: 'pull', week: second);
+      final before = progress();
+      final pull = progress('pull');
+
+      await service.removeWeek(planId: 'push', weekId: second);
+
+      expect(HiveService.getSessionById('push-2')!.deletedAt, isNotNull);
+      expect(HiveService.getSessionById('pull-2')!.deletedAt, isNull);
+      expect(HiveService.getSessionById('log')!.deletedAt, isNull);
+      expect(progress().activeWeekId, first);
+      expect(progress().availableWeekIds, [first]);
+      expect(progress().state, WorkoutProgressState.ready);
+      expect(progress().revision, isNot(before.revision));
+      expect(progress('pull').revision, pull.revision);
+      expect(HiveService.getTrainingWeekById(second)!.deletedAt, isNull);
+    },
+  );
+
+  test('deleting an earlier week keeps the active week', () async {
+    await draft();
+    await service.complete('log');
+
+    await service.removeWeek(planId: 'push', weekId: first);
+
+    expect(HiveService.getSessionById('log')!.deletedAt, isNotNull);
+    expect(progress().activeWeekId, second);
+    expect(progress().availableWeekIds, [second]);
+    expect(progress().state, WorkoutProgressState.ready);
+  });
+
+  test('the only reached week and unreached weeks cannot be deleted', () async {
+    await draft();
+    final before = progress();
+    await expectLater(
+      service.removeWeek(planId: 'push', weekId: first),
+      throwsStateError,
+    );
+    await expectLater(
+      service.removeWeek(planId: 'push', weekId: second),
+      throwsStateError,
+    );
+    expect(HiveService.getSessionById('log')!.deletedAt, isNull);
+    expect(progress().revision, before.revision);
+  });
+
+  test(
     'completing Push advances only Push and retry creates no new log or PR',
     () async {
       await draft();

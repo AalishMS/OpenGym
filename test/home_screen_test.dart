@@ -771,6 +771,11 @@ void main() {
 
     final title = find.text('UPPER BODY').first;
     final timer = find.byKey(const ValueKey('workout_elapsed_time'));
+    // An untouched log has nothing to time, so the clock waits for Start.
+    expect(timer, findsNothing);
+    await tester.tap(find.text('Start'));
+    await pumpWithStorage(tester);
+    expect(timer, findsOneWidget);
     final appBar = tester.widget<AppBar>(find.byType(AppBar));
 
     expect(appBar.titleSpacing, AppSpacing.sm);

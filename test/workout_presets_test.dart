@@ -10,9 +10,11 @@ import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/split.dart';
 import 'package:gymapp/models/split_preference.dart';
 import 'package:gymapp/models/workout_plan.dart';
+import 'package:gymapp/models/workout_progress.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/training_block_migration.dart';
+import 'package:gymapp/services/workout_progression_service.dart';
 import 'package:gymapp/repositories/training_block_repository.dart';
 
 import 'support/hive_test_harness.dart';
@@ -217,6 +219,139 @@ void main() {
     expect(repo.blocksForSplit(id).single.name, 'Recovery');
   });
 
+  for (final preset in workoutPresets) {
+    test('${preset.id} starts Block 1 with four intended weeks', () async {
+      final result = await const WorkoutPresetInstaller().install(
+        preset: preset,
+        userId: userId,
+        maxSplits: 5,
+      );
+      final repo = TrainingBlockRepository(ownerId: () => userId);
+      final block = repo.blocksForSplit(result.splitId).single;
+      expect(block.name, 'Block 1');
+      expect(block.plannedWeekCount, 4);
+      final first = repo.weeksForBlock(result.splitId, block.id).single;
+      expect(first.number, 1);
+      for (final plan in HiveService.getPlans(splitId: result.splitId)) {
+        final progress = repo.progressForPlan(result.splitId, plan.id!)!;
+        expect(progress.activeWeekId, first.id);
+        expect(progress.availableWeekIds, [first.id]);
+        expect(progress.state, WorkoutProgressState.ready);
+      }
+    });
+  }
+
+  test('reused bootstrap block gets the four-week preset length', () async {
+    final id = await _seedDefault(userId);
+    await TrainingBlockMigration().normalize(ownerId: userId);
+    final original = HiveService.blocksForSplit(id).single;
+    expect(original.plannedWeekCount, 1);
+    final result = await const WorkoutPresetInstaller().install(
+      preset: _preset('HYP-FB-3'),
+      userId: userId,
+      maxSplits: 5,
+    );
+    expect(result.reusedDefaultSplit, isTrue);
+    final block = HiveService.blocksForSplit(id).single;
+    expect(block.id, original.id);
+    expect(block.plannedWeekCount, 4);
+    expect(block.dirty, isTrue);
+    expect(HiveService.weeksForBlock(id, block.id), hasLength(1));
+  });
+
+  for (final createBlock in [false, true]) {
+    test(
+      'preset advances four weeks then ${createBlock ? 'creates a block' : 'adds a week'}',
+      () async {
+        final result = await const WorkoutPresetInstaller().install(
+          preset: _preset('HYP-FB-3'),
+          userId: userId,
+          maxSplits: 5,
+        );
+        final repo = TrainingBlockRepository(ownerId: () => userId);
+        final block = repo.blocksForSplit(result.splitId).single;
+        final plans = HiveService.getPlans(splitId: result.splitId);
+        final plan = plans.first;
+        final otherBefore =
+            repo.progressForPlan(result.splitId, plans.last.id!)!.toJson();
+        final service = WorkoutProgressionService(ownerId: () => userId);
+        for (var number = 1; number <= 4; number++) {
+          final progress = repo.progressForPlan(result.splitId, plan.id!)!;
+          final week = HiveService.getTrainingWeekById(progress.activeWeekId)!;
+          expect(week.number, number);
+          final session = WorkoutSession(
+            id: 'logged-$number',
+            userId: userId,
+            splitId: result.splitId,
+            planId: plan.id,
+            planName: plan.name,
+            trainingWeekId: week.id,
+            weekNumber: number,
+            date: DateTime(2026),
+            isCompleted: false,
+            startedAt: DateTime(2026),
+            durationSeconds: 300,
+            exercises: [],
+          );
+          await HiveService.putSessionRaw(session);
+          await service.complete(session.id!);
+          expect(
+            repo.progressForPlan(result.splitId, plan.id!)!.state,
+            number == 4
+                ? WorkoutProgressState.awaitingBoundary
+                : WorkoutProgressState.ready,
+          );
+          expect(
+            repo.weeksForBlock(result.splitId, block.id),
+            hasLength(number == 4 ? 4 : number + 1),
+          );
+        }
+        final boundary = repo.progressForPlan(result.splitId, plan.id!)!;
+        if (createBlock) {
+          final next = await service.createBoundary(
+            planId: plan.id!,
+            expectedRevision: boundary.revision,
+            name: 'Block 2',
+            weekCount: 4,
+          );
+          final week = repo.weeksForBlock(result.splitId, next.id).single;
+          expect(week.number, 1);
+          expect(
+            repo.progressForPlan(result.splitId, plan.id!)!.activeWeekId,
+            week.id,
+          );
+          expect(
+            HiveService.getTrainingBlockById(block.id)!.plannedWeekCount,
+            4,
+          );
+        } else {
+          final next = await service.extendBoundary(
+            planId: plan.id!,
+            expectedRevision: boundary.revision,
+          );
+          expect(next.number, 5);
+          expect(next.blockId, block.id);
+          expect(
+            repo.progressForPlan(result.splitId, plan.id!)!.activeWeekId,
+            next.id,
+          );
+          expect(
+            HiveService.getTrainingBlockById(block.id)!.plannedWeekCount,
+            5,
+          );
+        }
+        expect(
+          repo.progressForPlan(result.splitId, plan.id!)!.state,
+          WorkoutProgressState.ready,
+        );
+        expect(
+          repo.progressForPlan(result.splitId, plans.last.id!)!.toJson(),
+          otherBefore,
+        );
+      },
+    );
+  }
+
   test('an intentionally created empty split is preserved', () async {
     final now = DateTime(2026);
     final split = Split(
@@ -301,6 +436,9 @@ void main() {
   for (final failureStage in PresetInstallStage.values) {
     test('rollback restores raw state after $failureStage failure', () async {
       final defaultId = await _seedDefault(userId);
+      await TrainingBlockMigration().normalize(ownerId: userId);
+      final originalBlock =
+          HiveService.blocksForSplit(defaultId).single.toJson();
       final originalSplit = HiveService.getSplitById(defaultId)!;
       final originalPreference = HiveService.getSplitPreference(userId)!;
       final installer = WorkoutPresetInstaller(
@@ -329,6 +467,10 @@ void main() {
         originalPreference.activeSplitId,
       );
       expect(restoredPreference.dirty, originalPreference.dirty);
+      expect(
+        HiveService.blocksForSplit(defaultId).single.toJson(),
+        originalBlock,
+      );
     });
   }
 }

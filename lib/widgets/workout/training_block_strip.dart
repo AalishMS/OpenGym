@@ -28,6 +28,9 @@ class TrainingBlockStrip extends StatefulWidget {
   final VoidCallback onReorderBlocks;
   final VoidCallback onCreateBlock;
   final ValueChanged<String> onAddWeek;
+
+  /// Holding a week tab asks to delete that week.
+  final ValueChanged<String>? onDeleteWeek;
   final bool enabled;
   final bool canAddWeek;
 
@@ -42,6 +45,7 @@ class TrainingBlockStrip extends StatefulWidget {
     required this.onReorderBlocks,
     required this.onCreateBlock,
     required this.onAddWeek,
+    this.onDeleteWeek,
     this.enabled = true,
     this.canAddWeek = true,
   });
@@ -254,6 +258,12 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
                                         widget.enabled
                                             ? () => widget.onSelectWeek(week.id)
                                             : null,
+                                    onLongPress:
+                                        widget.enabled &&
+                                                widget.onDeleteWeek != null
+                                            ? () =>
+                                                widget.onDeleteWeek!(week.id)
+                                            : null,
                                   ),
                               ],
                             ),
@@ -395,6 +405,7 @@ class _WeekTab extends StatelessWidget {
   final int number;
   final bool selected;
   final VoidCallback? onPressed;
+  final VoidCallback? onLongPress;
 
   const _WeekTab({
     super.key,
@@ -402,6 +413,7 @@ class _WeekTab extends StatelessWidget {
     required this.number,
     required this.selected,
     required this.onPressed,
+    this.onLongPress,
   });
 
   @override
@@ -409,9 +421,11 @@ class _WeekTab extends StatelessWidget {
     final accent = accentColor(context);
     return Semantics(
       selected: selected,
+      onLongPressHint: onLongPress == null ? null : 'Week actions',
       child: InkWell(
         key: buttonKey,
         onTap: onPressed,
+        onLongPress: onLongPress,
         borderRadius: AppRadius.control,
         splashColor: accent.withAlpha(36),
         highlightColor: accent.withAlpha(18),

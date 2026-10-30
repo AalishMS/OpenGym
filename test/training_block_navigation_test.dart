@@ -433,6 +433,67 @@ void main() {
       },
     );
 
+    locationTest('holding a week tab deletes that week for this workout only', (
+      tester,
+    ) async {
+      final ids = await tester.runAsync(() async {
+        final repo = TrainingBlockRepository(ownerId: () => null);
+        final block = await repo.createBlock(
+          splitId: 's',
+          name: 'Build',
+          weekCount: 4,
+        );
+        await TrainingBlockMigration().normalize(ownerId: null);
+        final first = repo.weeksForBlock('s', block.id).single;
+        await HiveService.putSessionRaw(
+          WorkoutSession(
+            id: 'push-done',
+            splitId: 's',
+            planId: 'p',
+            planName: 'Push',
+            trainingWeekId: first.id,
+            date: now,
+            isCompleted: false,
+            startedAt: now,
+            durationSeconds: 60,
+            exercises: [],
+          ),
+        );
+        await WorkoutProgressionService(
+          ownerId: () => null,
+        ).complete('push-done');
+        return [first.id, repo.weeksForBlock('s', block.id).last.id];
+      });
+      await open(tester);
+      expect(find.text('Build · Week 2'), findsOneWidget);
+
+      await tester.longPress(find.byKey(ValueKey('training-week-${ids![0]}')));
+      await tester.pumpAndSettle();
+      expect(find.text('Build'), findsWidgets);
+      await tester.tap(find.text('Delete week'));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete week?'), findsOneWidget);
+      await tester.tap(find.text('Delete'));
+      await pumpWithStorage(tester);
+
+      expect(HiveService.getSessionById('push-done')!.deletedAt, isNotNull);
+      expect(find.byKey(ValueKey('training-week-${ids[0]}')), findsNothing);
+      expect(find.text('Build · Week 2'), findsOneWidget);
+      final progress = HiveService.progressForPlan('s', 'p')!;
+      expect(progress.activeWeekId, ids[1]);
+      expect(progress.availableWeekIds, [ids[1]]);
+      // The shared week row stays for the split's other workouts.
+      expect(HiveService.getTrainingWeekById(ids[0])!.deletedAt, isNull);
+
+      await tester.longPress(find.byKey(ValueKey('training-week-${ids[1]}')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete week'));
+      await pumpWithStorage(tester);
+      expect(find.text("You can't delete the only week."), findsOneWidget);
+      expect(find.byKey(ValueKey('training-week-${ids[1]}')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     locationTest(
       'block switching remembers reached weeks and cannot append while browsing',
       (tester) async {
@@ -624,26 +685,58 @@ void main() {
       expect(failing.attempts, greaterThanOrEqualTo(2));
     });
     locationTest(
-      'boundary appears on ordinary entry; dismissal retains saved result and explicit action',
+      'four-week block prompts only after Week 4; dismissal retains saved result',
       (tester) async {
-        await tester.runAsync(
-          () => HiveService.putSessionRaw(
+        final service = WorkoutProgressionService(ownerId: () => null);
+        Future<void> logWeek(int number) async {
+          final progress = HiveService.progressForPlan('s', 'p')!;
+          await HiveService.putSessionRaw(
             WorkoutSession(
-              id: 'done',
+              id: 'done-$number',
               splitId: 's',
               planId: 'p',
               planName: 'Push',
+              trainingWeekId: progress.activeWeekId,
+              weekNumber: number,
               date: now,
+              isCompleted: false,
+              startedAt: now,
+              durationSeconds: 60,
               exercises: [],
             ),
-          ),
-        );
+          );
+          await service.complete('done-$number');
+        }
+
+        await tester.runAsync(() async {
+          await TrainingBlockRepository(
+            ownerId: () => null,
+          ).createBlock(splitId: 's', name: 'Block 1', weekCount: 4);
+          await TrainingBlockMigration().normalize(ownerId: null);
+          for (var number = 1; number <= 3; number++) {
+            await logWeek(number);
+          }
+        });
+        await open(tester);
+        expect(find.text('Block 1 · Week 4'), findsOneWidget);
+        expect(find.byType(BottomSheet), findsNothing);
+        await tester.pumpWidget(const SizedBox());
+        await tester.runAsync(() => logWeek(4));
         await open(tester);
         expect(find.text('Choose next week'), findsWidgets);
+        expect(find.text('Add week'), findsOneWidget);
+        expect(find.text('Create block'), findsOneWidget);
+        expect(
+          find.text(
+            'You finished Week 4 of Block 1. Choose where Push goes next.',
+          ),
+          findsOneWidget,
+        );
         await tester.tap(find.text('Not now'));
         await tester.pumpAndSettle();
         expect(find.text('Choose next week'), findsOneWidget);
-        expect(HiveService.getAllTrainingWeeksRaw(), hasLength(1));
+        expect(HiveService.getAllTrainingWeeksRaw(), hasLength(4));
+        expect(HiveService.getAllSessionsRaw(), hasLength(4));
       },
     );
     locationTest('browsing an untouched supplied week never saves a preview', (

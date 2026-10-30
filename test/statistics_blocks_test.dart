@@ -14,6 +14,7 @@ import 'package:gymapp/screens/stats_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/statistics_analytics_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/widgets/statistics/block_statistics.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
@@ -308,5 +309,58 @@ void main() {
           tester.getTopLeft(find.byKey(const ValueKey('statistics-scroll'))).dy;
       expect(heading - viewport, lessThan(24));
     });
+  });
+
+  testWidgets('a long block charts its trained weeks, not the empty tail', (
+    tester,
+  ) async {
+    await loadTestFonts();
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    BlockWeekStatistics week(int n, int sets) => BlockWeekStatistics(
+      weekId: 'w$n',
+      number: n,
+      workouts: sets == 0 ? 0 : 3,
+      sets: sets,
+    );
+    final block = BlockStatistics(
+      block: _block('long', 'Block 1', 0, 57),
+      weeks: [for (var n = 1; n <= 57; n++) week(n, n <= 5 ? 40 + n : 0)],
+      workouts: 15,
+      sets: 215,
+      volumeLoad: 90000,
+      records: 4,
+      firstDate: DateTime(2026, 9, 21),
+      lastDate: DateTime(2026, 10, 24),
+      latestWeekId: 'w5',
+      gains: const [],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(const Color(0xFF41B9B9), Brightness.light),
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: BlockOverview(
+              blocks: [block],
+              selected: block,
+              currentBlockId: 'long',
+              onSelect: (_) {},
+              weightUnit: 'kg',
+            ),
+          ),
+        ),
+      ),
+    );
+    expect(find.textContaining('Week 5 of 57'), findsOneWidget);
+    for (var n = 1; n <= 5; n++) {
+      expect(find.byKey(ValueKey('block-week-bar-$n')), findsOneWidget);
+    }
+    expect(find.byKey(const ValueKey('block-week-bar-6')), findsNothing);
+    expect(find.text('W57'), findsNothing);
+    // The four figures share one row.
+    final workouts = tester.getTopLeft(find.text('Workouts'));
+    expect(tester.getTopLeft(find.text('Records')).dy, workouts.dy);
+    expect(tester.takeException(), isNull);
   });
 }

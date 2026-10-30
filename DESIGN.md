@@ -169,8 +169,16 @@ numbers without allocating them; saving the new plan allocates/reuses only its
 chosen slot. Existing plan edits retain progress. Create block accepts an
 intended length of 1–52 weeks and a 1–40 character trimmed name; explicit
 extensions can go beyond 52. Blocks can be renamed/reordered.
-Individual week/block deletion, week rename/reorder, Skip, Repeat, block
-prescriptions and block-based analytics are outside V1.
+Holding a week tab opens a sheet with *Delete week*. It deletes that week for
+the open workout only: its logs and drafts there are tombstoned and the tab is
+no longer supplied, while the shared week row stays for the split's other
+workouts. Logged or edited weeks confirm first; an empty one goes without a
+dialog. A workout's only reached week can't be deleted. Deleting the active
+week moves progress to the nearest earlier reached week (else the nearest
+later one) at a fresh revision, so a completed slot shows *Continue* and
+reaching the deleted number again reuses the same week ID. Block deletion,
+week rename/reorder, Skip, Repeat, block prescriptions and block-based
+analytics are outside V1.
 
 The workout's bottom navigation always fills the available width. The selected
 week's block name stays at the left and Add week (+) stays at the right; only
@@ -324,14 +332,23 @@ Navigator when the account changes.
 The app compiles a read-only catalog of workout programs from the reviewed
 preset research. Catalog metadata is never written to Hive or Supabase. Choosing
 a program copies its workout days into ordinary user-owned plans, with explicit
-positions so their schedule order survives synchronization. Installation is an
+positions so their schedule order survives synchronization. Every preset starts
+in Block 1 with an intended length of four weeks, allocating only Week 1 at
+installation. This also applies when reusing the untouched default split.
+Each workout advances independently through Week 4, then uses the block boundary
+prompt on its next ordinary entry to add a week or create a new block.
+Installation is an
 exclusive local mutation with compensating rollback across split, plan, and
 active-preference boxes.
 
-The Home split menu opens a responsive program browser. Its colored schedule
-strip represents workout/rest rhythm using the existing solved plan colors;
-details expose complete prescriptions, RIR, rest, substitutions, and shared
-guidance before the user creates a copy.
+The Home split menu opens a responsive program browser. A segmented goal
+track filters the catalog, and each program card shows its workout/rest rhythm
+as accent squares beside its days and session length. Details lead with the
+program's name, a figure sheet (days, minutes per session, exercises, who it
+suits) and a labelled schedule whose training cells use the same solved plan
+tints and numbers as the foldable workout-day list and Home's plan markers.
+Folded days expose complete prescriptions, RIR, rest and substitutions; shared
+guidance closes the page before the user creates a copy.
 
 ## UI Design
 
@@ -372,8 +389,21 @@ signature:
 - Unknown data is left out rather than given a placeholder. A session
   duration that is null or under a minute counts as unknown
   (`knownDurationSeconds`), so History and Workout details never show "0m".
-- Don't nest a ground inside a card. The History row's date sits directly on
-  the card, which is the tap target.
+- Don't nest a ground inside a card. History is a timeline: each month heads
+  its workouts with a count and volume tally, and the date sits on a rail
+  beside the card (above it at narrow widths or large text). A hairline runs
+  down the rail to the next workout in the month, and a second workout on the
+  same day hangs off the same line without repeating the date. The card leads
+  with the workout name, its block and week and known duration, then a ruled
+  row of Exercises / Sets / Volume in `figures`, and the exercise names. A
+  session with no performed sets says *No sets logged* instead of zeros.
+- Workout details opens with the long date, the workout name, its block and
+  week, and how many exercises set a record (accent ink). A bounded readout
+  puts Volume load and Duration large, over Exercises / Sets / Reps. Each
+  exercise is its own numbered card: the accent number sits in the set-number
+  gutter, volume trails the name (or joins the summary line when narrow), the
+  note hangs off an accent rule, and sets below in the ruled table. Sets saved
+  at zero reps stay on the record in the secondary ink.
 - A plan's menu (long press, or *Plan actions* in Manage) is a modal bottom
   sheet with a drag handle, not a dialog. *Delete plan* is always the last
   row, set apart by a rule and the error colour. In Manage, the drag grip
