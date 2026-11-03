@@ -233,6 +233,8 @@ void main() {
       tester,
     ) async {
       await open(tester);
+      await tester.tap(find.byKey(const ValueKey('statistics-tab-Blocks')));
+      await tester.pumpAndSettle();
       expect(find.text('Training blocks'), findsOneWidget);
       expect(overviewName(tester), 'Build');
       expect(find.text('Build · Now'), findsOneWidget);
@@ -250,7 +252,8 @@ void main() {
       // The first block has nothing earlier to compare with.
       expect(find.textContaining('Arrows compare'), findsNothing);
 
-      await tester.ensureVisible(find.text('Compare blocks'));
+      await tester.tap(find.text('Compare blocks'));
+      await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(ValueKey('block-measure-${BlockMeasure.workouts}')),
       );
@@ -259,6 +262,8 @@ void main() {
       expect(find.text('1 workouts'), findsNothing);
       await tester.tap(find.byKey(const ValueKey('block-compare-b')));
       await tester.pump();
+      await tester.tap(find.text('Block overview'));
+      await tester.pumpAndSettle();
       expect(overviewName(tester), 'Build');
       expect(tester.takeException(), isNull);
     });
@@ -267,23 +272,22 @@ void main() {
       tester,
     ) async {
       await open(tester);
+      await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
+      await tester.pumpAndSettle();
       final title = find.byKey(const ValueKey('progress-exercise'));
       final curl = find.byKey(const ValueKey('lift-Curl'));
       expect(tester.widget<Text>(title).data, 'Bench press');
-      expect(
-        find.text(ExerciseMetric.estimatedOneRepMax.description),
-        findsOneWidget,
-      );
+      expect(find.byTooltip('About Estimated 1RM'), findsOneWidget);
       // Fifteen-rep sets have no estimated 1RM, so curls only join the list
       // under a measure that counts them.
       expect(curl, findsNothing);
-      final topWeight = find.byKey(
-        ValueKey('progress-metric-${ExerciseMetric.bestWeight}'),
-      );
-      await tester.ensureVisible(topWeight);
-      await tester.tap(topWeight);
+      await tester.tap(find.byKey(const ValueKey('progress-metric-picker')));
       await tester.pumpAndSettle();
-      expect(find.text(ExerciseMetric.bestWeight.description), findsOneWidget);
+      await tester.tap(find.text('Best weight').last);
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('About Best weight'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('progress-exercise-picker')));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(curl);
       await tester.tap(curl);
       await tester.pumpAndSettle();
@@ -291,24 +295,30 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the weekly link lands on weekly training below the blocks', (
-      tester,
-    ) async {
-      await open(tester);
-      await pumpStats(tester, weeklyRequest: 1);
-      await tester.pump();
-      final scroll =
-          tester
-              .widget<SingleChildScrollView>(
-                find.byKey(const ValueKey('statistics-scroll')),
-              )
-              .controller!;
-      expect(scroll.offset, greaterThan(0));
-      final heading = tester.getTopLeft(find.text('Weekly training')).dy;
-      final viewport =
-          tester.getTopLeft(find.byKey(const ValueKey('statistics-scroll'))).dy;
-      expect(heading - viewport, lessThan(24));
-    });
+    testWidgets(
+      'the weekly link returns from Blocks to the training overview',
+      (tester) async {
+        await open(tester);
+        await tester.tap(find.byKey(const ValueKey('statistics-tab-Blocks')));
+        await tester.pumpAndSettle();
+        await pumpStats(tester, weeklyRequest: 1);
+        await tester.pump();
+        final scroll =
+            tester
+                .widget<SingleChildScrollView>(
+                  find.byKey(const ValueKey('statistics-scroll')),
+                )
+                .controller!;
+        expect(scroll.offset, 0);
+        expect(find.text('Week in progress'), findsOneWidget);
+        final heading = tester.getTopLeft(find.text('Weekly training')).dy;
+        final viewport =
+            tester
+                .getTopLeft(find.byKey(const ValueKey('statistics-scroll')))
+                .dy;
+        expect(heading - viewport, lessThan(24));
+      },
+    );
   });
 
   testWidgets('a long block charts its trained weeks, not the empty tail', (

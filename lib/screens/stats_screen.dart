@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../models/statistics.dart';
@@ -8,23 +9,29 @@ import '../providers/training_block_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../services/statistics_analytics_service.dart';
 import '../theme/app_theme.dart';
-import '../theme/app_typography.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
-import '../utils/statistics_format.dart';
 import '../widgets/app_header.dart';
 import '../widgets/statistics/block_statistics.dart';
 import '../widgets/statistics/lift_list.dart';
 import '../widgets/statistics/statistics_controls.dart';
 import '../widgets/statistics/statistics_widgets.dart';
-import '../widgets/statistics/training_charts.dart';
-import '../widgets/statistics/workout_heatmap.dart';
+import '../widgets/statistics/strength_trend.dart';
+import '../widgets/statistics/training_overview.dart';
+
+enum _StatisticsView { overview, strength, blocks, records }
+
+extension on _StatisticsView {
+  String get label => switch (this) {
+    _StatisticsView.overview => 'Overview',
+    _StatisticsView.strength => 'Strength',
+    _StatisticsView.blocks => 'Blocks',
+    _StatisticsView.records => 'Records',
+  };
+}
 
 class StatsScreen extends StatefulWidget {
   final int weeklyTrainingRequest;
-
-  /// Bumped each time the tab is entered from another tab. The screen lives
-  /// in the shell's IndexedStack, so without this it would keep its offset.
   final int visitRequest;
 
   const StatsScreen({
@@ -40,16 +47,16 @@ class StatsScreen extends StatefulWidget {
 class _StatsScreenState extends State<StatsScreen> {
   static const _analytics = StatisticsAnalyticsService();
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _weeklyKey = GlobalKey();
+  _StatisticsView _view = _StatisticsView.overview;
   StatisticsPeriod _period = StatisticsPeriod.fourWeeks;
   ExerciseMetric _metric = ExerciseMetric.estimatedOneRepMax;
   BlockMeasure _blockMeasure = BlockMeasure.sets;
   String? _blockId;
   String? _weeklyExercise;
   String? _progressExercise;
-  bool _allExercises = true;
-  bool _showsBlocks = false;
   String? _lastSplit;
+  bool _compareBlocks = false;
+  int _recordLimit = 12;
 
   @override
   void didUpdateWidget(covariant StatsScreen oldWidget) {
@@ -57,23 +64,119 @@ class _StatsScreenState extends State<StatsScreen> {
     final weekly =
         widget.weeklyTrainingRequest != oldWidget.weeklyTrainingRequest;
     if (!weekly && widget.visitRequest == oldWidget.visitRequest) return;
-    if (weekly) _allExercises = true;
+    if (weekly) {
+      _view = _StatisticsView.overview;
+      _weeklyExercise = null;
+    }
+    _resetScroll();
+  }
+
+  void _resetScroll() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scrollController.hasClients) return;
-      _scrollController.jumpTo(0);
-      // The weekly summary on Home links to this week's training, which sits
-      // below the block overview.
-      final section = _weeklyKey.currentContext;
-      if (weekly && _showsBlocks && section != null) {
-        Scrollable.ensureVisible(section, duration: Duration.zero);
-      }
+      if (mounted && _scrollController.hasClients) _scrollController.jumpTo(0);
     });
+  }
+
+  void _selectView(_StatisticsView view) {
+    setState(() => _view = view);
+    _resetScroll();
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _choose<T>({
+    required String title,
+    required List<T> values,
+    required T selected,
+    required String Function(T) labelFor,
+    required ValueChanged<T> onSelected,
+  }) async {
+    final value = await showModalBottomSheet<T>(
+      context: context,
+      isScrollControlled: true,
+      builder:
+          (context) => SafeArea(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AppHeader(
+                    leading: AppBackButton(
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    title: Text(title),
+                  ),
+                  Flexible(
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: values.length,
+                      itemBuilder: (context, index) {
+                        final value = values[index];
+                        return ListTile(
+                          title: Text(labelFor(value)),
+                          selected: value == selected,
+                          trailing:
+                              value == selected
+                                  ? const Icon(LucideIcons.check, size: 18)
+                                  : null,
+                          onTap: () => Navigator.pop(context, value),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
+    if (mounted && value != null) onSelected(value);
+  }
+
+  Future<void> _chooseLift(
+    List<LiftSummary> lifts,
+    String selected,
+    String unit,
+  ) async {
+    final value = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder:
+          (context) => SafeArea(
+            child: SizedBox(
+              height: MediaQuery.sizeOf(context).height * 0.75,
+              child: Column(
+                children: [
+                  AppHeader(
+                    leading: AppBackButton(
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                    title: const Text('Choose exercise'),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(AppSpacing.lg),
+                      child: LiftList(
+                        lifts: lifts,
+                        selected: selected,
+                        metric: _metric,
+                        weightUnit: unit,
+                        onSelect: (name) => Navigator.pop(context, name),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+    );
+    if (mounted && value != null) setState(() => _progressExercise = value);
   }
 
   @override
@@ -87,19 +190,17 @@ class _StatsScreenState extends State<StatsScreen> {
     );
     if (_lastSplit != splitId) {
       _lastSplit = splitId;
+      _view = _StatisticsView.overview;
       _blockId = null;
       _weeklyExercise = null;
       _progressExercise = null;
-      _allExercises = true;
+      _compareBlocks = false;
+      _recordLimit = 12;
+      _resetScroll();
     }
     final names = _analytics.exerciseNames(sessions);
-    final defaultExercise = _analytics.latestExercise(sessions);
-    final weekly =
-        names.contains(_weeklyExercise) ? _weeklyExercise : defaultExercise;
-    final weeks = _analytics.weeklyVolume(
-      sessions,
-      exerciseName: _allExercises ? null : weekly,
-    );
+    final weeklyExercise =
+        names.contains(_weeklyExercise) ? _weeklyExercise : null;
     final lifts = _analytics.liftSummaries(
       _analytics.sessionsInPeriod(sessions, _period),
       _metric,
@@ -109,8 +210,6 @@ class _StatsScreenState extends State<StatsScreen> {
             .where((lift) => lift.exerciseName == _progressExercise)
             .firstOrNull ??
         lifts.firstOrNull;
-    final records = _analytics.recordEvents(sessions).take(8).toList();
-
     final blocks =
         training == null
             ? const <BlockStatistics>[]
@@ -129,8 +228,247 @@ class _StatsScreenState extends State<StatsScreen> {
         blocks.where((b) => b.block.id == _blockId).firstOrNull ??
         blocks.where((b) => b.block.id == currentBlockId).firstOrNull ??
         blocks.lastOrNull;
-    _showsBlocks = selectedBlock != null;
     void selectBlock(String id) => setState(() => _blockId = id);
+
+    final Widget content;
+    switch (_view) {
+      case _StatisticsView.overview:
+        content = TrainingOverview(
+          key: ValueKey(
+            'overview-$splitId-$weeklyExercise-${widget.weeklyTrainingRequest}',
+          ),
+          sessions: sessions,
+          showCurrentWeek: widget.weeklyTrainingRequest > 0,
+          weeks: _analytics.weeklyVolume(
+            sessions,
+            exerciseName: weeklyExercise,
+          ),
+          exercise: weeklyExercise,
+          weightUnit: unit,
+          onChooseExercise:
+              () => _choose<String>(
+                title: 'Weekly training',
+                values: ['', ...names],
+                selected: weeklyExercise ?? '',
+                labelFor: (name) => name.isEmpty ? 'All exercises' : name,
+                onSelected:
+                    (name) => setState(
+                      () => _weeklyExercise = name.isEmpty ? null : name,
+                    ),
+              ),
+        );
+      case _StatisticsView.strength:
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Semantics(
+              container: true,
+              label: 'Time range',
+              child: SegmentedPills<StatisticsPeriod>(
+                keyPrefix: 'progress-period',
+                quiet: true,
+                values: StatisticsPeriod.values,
+                selected: _period,
+                labelFor: (period) => period.shortLabel,
+                semanticLabelFor: (period) => period.label,
+                onSelected: (value) => setState(() => _period = value),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            if (lift != null) ...[
+              Semantics(
+                button: true,
+                label: 'Change exercise, ${lift.exerciseName}',
+                excludeSemantics: true,
+                child: InkWell(
+                  key: const ValueKey('progress-exercise-picker'),
+                  borderRadius: AppRadius.control,
+                  onTap: () => _chooseLift(lifts, lift.exerciseName, unit),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.sm,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            lift.exerciseName,
+                            key: const ValueKey('progress-exercise'),
+                            style: Theme.of(context).textTheme.displaySmall,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Icon(
+                          LucideIcons.chevronDown,
+                          size: 20,
+                          color: accentColor(context),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ] else
+              const StatisticsSectionHeader(title: 'Exercise progress'),
+            Row(
+              children: [
+                Flexible(
+                  child: TextButton.icon(
+                    key: const ValueKey('progress-metric-picker'),
+                    onPressed:
+                        () => _choose<ExerciseMetric>(
+                          title: 'Measure',
+                          values: ExerciseMetric.values,
+                          selected: _metric,
+                          labelFor: (metric) => metric.label,
+                          onSelected:
+                              (value) => setState(() => _metric = value),
+                        ),
+                    icon: const Icon(LucideIcons.chevronDown, size: 14),
+                    iconAlignment: IconAlignment.end,
+                    label: Text(_metric.label),
+                  ),
+                ),
+                IconButton(
+                  key: const ValueKey('progress-metric-info'),
+                  tooltip: 'About ${_metric.label}',
+                  icon: Icon(
+                    LucideIcons.info,
+                    size: 16,
+                    color: textSecondaryColor(context),
+                  ),
+                  onPressed:
+                      () => showDialog<void>(
+                        context: context,
+                        builder:
+                            (context) => AlertDialog(
+                              title: Text(_metric.label),
+                              content: Text(_metric.description),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text('Close'),
+                                ),
+                              ],
+                            ),
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            if (lift == null)
+              const _ViewEmpty(
+                title: 'No lifts in this period',
+                message:
+                    'Try a longer time range or another measure. Estimated 1RM uses weighted sets of 1–12 reps.',
+                icon: LucideIcons.chartNoAxesCombined,
+              )
+            else
+              StrengthTrend(
+                key: ValueKey(
+                  'strength-$splitId-${lift.exerciseName}-$_period-$_metric',
+                ),
+                progress: lift.progress,
+                metric: _metric,
+                weightUnit: unit,
+              ),
+          ],
+        );
+      case _StatisticsView.blocks:
+        content =
+            selectedBlock == null
+                ? const _ViewEmpty(
+                  title: 'No training blocks logged',
+                  message:
+                      'Log a workout in a training block to see its weekly workload and strength gains here.',
+                  icon: LucideIcons.layers,
+                )
+                : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: StatisticsSectionHeader(
+                            title: 'Training blocks',
+                          ),
+                        ),
+                        if (blocks.length > 1)
+                          TextButton(
+                            onPressed:
+                                () => setState(
+                                  () => _compareBlocks = !_compareBlocks,
+                                ),
+                            child: Text(
+                              _compareBlocks
+                                  ? 'Block overview'
+                                  : 'Compare blocks',
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    if (_compareBlocks)
+                      BlockComparison(
+                        blocks: blocks,
+                        selectedId: selectedBlock.block.id,
+                        currentBlockId: currentBlockId,
+                        measure: _blockMeasure,
+                        onMeasure:
+                            (measure) =>
+                                setState(() => _blockMeasure = measure),
+                        onSelect: selectBlock,
+                        weightUnit: unit,
+                      )
+                    else
+                      BlockOverview(
+                        blocks: blocks,
+                        selected: selectedBlock,
+                        currentBlockId: currentBlockId,
+                        onSelect: selectBlock,
+                        weightUnit: unit,
+                      ),
+                  ],
+                );
+      case _StatisticsView.records:
+        final records = _analytics.recordEvents(sessions);
+        content = Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Personal bests',
+              style: Theme.of(context).textTheme.displaySmall,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Your best sets, newest first.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            if (records.isEmpty)
+              const _ViewEmpty(
+                title: 'No records yet',
+                message: 'Log performed sets to start your record history.',
+                icon: LucideIcons.trophy,
+              )
+            else ...[
+              for (final event in records.take(_recordLimit))
+                RecordEventRow(
+                  key: ValueKey(
+                    'record-${event.session.id}-${event.exerciseName}',
+                  ),
+                  event: event,
+                  weightUnit: unit,
+                ),
+              if (records.length > _recordLimit)
+                TextButton(
+                  onPressed: () => setState(() => _recordLimit += 12),
+                  child: const Text('Show earlier records'),
+                ),
+            ],
+          ],
+        );
+    }
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -141,292 +479,154 @@ class _StatsScreenState extends State<StatsScreen> {
       body:
           sessions.isEmpty
               ? const _EmptyStatistics()
-              : SingleChildScrollView(
-                key: const ValueKey('statistics-scroll'),
-                controller: _scrollController,
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.md,
-                  AppSpacing.lg,
-                  40,
-                ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 880),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (selectedBlock != null) ...[
-                          const StatisticsSectionHeader(
-                            title: 'Training blocks',
-                          ),
-                          const SizedBox(height: AppSpacing.md),
-                          _ChartPanel(
-                            child: BlockOverview(
-                              blocks: blocks,
-                              selected: selectedBlock,
-                              currentBlockId: currentBlockId,
-                              onSelect: selectBlock,
-                              weightUnit: unit,
-                            ),
-                          ),
-                          if (blocks.length > 1) ...[
-                            const SizedBox(height: AppSpacing.md),
-                            _ChartPanel(
-                              child: BlockComparison(
-                                blocks: blocks,
-                                selectedId: selectedBlock.block.id,
-                                currentBlockId: currentBlockId,
-                                measure: _blockMeasure,
-                                onMeasure:
-                                    (measure) =>
-                                        setState(() => _blockMeasure = measure),
-                                onSelect: selectBlock,
-                                weightUnit: unit,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: AppSpacing.xxl),
-                        ],
-                        StatisticsSectionHeader(
-                          key: _weeklyKey,
-                          title: 'Weekly training',
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        _ChartPanel(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Weight lifted',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: AppSpacing.xs),
-                              Text(
-                                'Weight × reps for every set, added up by week',
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: textSecondaryColor(context),
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.lg),
-                              _Selector<String>(
-                                fieldKey: 'weekly-exercise',
-                                label: 'Exercise',
-                                value: _allExercises ? '' : weekly ?? '',
-                                values: ['', ...names],
-                                labelFor:
-                                    (name) =>
-                                        name.isEmpty ? 'All exercises' : name,
-                                labelBuilder: (name) {
-                                  if (name.isNotEmpty) return null;
-                                  return Row(
-                                    children: [
-                                      Icon(
-                                        Icons.layers_outlined,
-                                        size: 18,
-                                        color: accentColor(context),
-                                      ),
-                                      const SizedBox(width: AppSpacing.sm),
-                                      Expanded(
-                                        child: Text(
-                                          'All exercises',
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            color: accentColor(context),
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                                onChanged:
-                                    (value) => setState(() {
-                                      _allExercises = value.isEmpty;
-                                      _weeklyExercise =
-                                          value.isEmpty ? null : value;
-                                    }),
-                              ),
-                              const SizedBox(height: AppSpacing.xl),
-                              WeeklyVolumeChart(
-                                key: ValueKey(
-                                  'weekly-$splitId-${_allExercises ? "all" : weekly}',
-                                ),
-                                weeks: weeks,
-                                weightUnit: unit,
-                              ),
-                            ],
+              : Column(
+                children: [
+                  _StatisticsNavigation(
+                    selected: _view,
+                    onSelected: _selectView,
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      key: const ValueKey('statistics-scroll'),
+                      controller: _scrollController,
+                      padding: const EdgeInsets.fromLTRB(
+                        AppSpacing.xl,
+                        AppSpacing.lg,
+                        AppSpacing.xl,
+                        AppSpacing.xl,
+                      ),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 832),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: content,
                           ),
                         ),
-                        const SizedBox(height: AppSpacing.xxl),
-                        const StatisticsSectionHeader(title: 'Activity'),
-                        const SizedBox(height: AppSpacing.md),
-                        _ChartPanel(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Workouts',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: AppSpacing.xs),
-                              // Captions itself with the weeks that fit.
-                              WorkoutHeatmap(sessions: sessions),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.xxl),
-                        const StatisticsSectionHeader(
-                          title: 'Exercise progress',
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        _ChartPanel(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Semantics(
-                                container: true,
-                                label: 'Time range',
-                                child: SegmentedPills<StatisticsPeriod>(
-                                  keyPrefix: 'progress-period',
-                                  values: StatisticsPeriod.values,
-                                  selected: _period,
-                                  labelFor: (period) => period.shortLabel,
-                                  semanticLabelFor: (period) => period.label,
-                                  onSelected:
-                                      (value) =>
-                                          setState(() => _period = value),
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.sm),
-                              Semantics(
-                                container: true,
-                                label: 'Measure',
-                                child: ScrollingPills<ExerciseMetric>(
-                                  keyPrefix: 'progress-metric',
-                                  values: ExerciseMetric.values,
-                                  selected: _metric,
-                                  labelFor: (metric) => metric.shortLabel,
-                                  onSelected:
-                                      (value) =>
-                                          setState(() => _metric = value),
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.sm),
-                              Text(
-                                _metric.description,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: textSecondaryColor(context),
-                                ),
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              if (lifts.isEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: AppSpacing.md,
-                                  ),
-                                  child: Text(
-                                    _period == StatisticsPeriod.allTime
-                                        ? 'Log performed sets to see exercise progress.'
-                                        : 'No lifts logged in the last ${_period.label}. Try a longer time range.',
-                                  ),
-                                )
-                              else
-                                LiftList(
-                                  key: ValueKey('lifts-$splitId-$_period'),
-                                  lifts: lifts,
-                                  selected: lift?.exerciseName,
-                                  metric: _metric,
-                                  weightUnit: unit,
-                                  onSelect:
-                                      (name) => setState(
-                                        () => _progressExercise = name,
-                                      ),
-                                ),
-                            ],
-                          ),
-                        ),
-                        if (lift != null) ...[
-                          const SizedBox(height: AppSpacing.md),
-                          _ChartPanel(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Semantics(
-                                  header: true,
-                                  child: Text(
-                                    lift.exerciseName,
-                                    key: const ValueKey('progress-exercise'),
-                                    style:
-                                        Theme.of(context).textTheme.titleMedium,
-                                  ),
-                                ),
-                                const SizedBox(height: AppSpacing.xs),
-                                Text(
-                                  '${_metric.label} · ${_period.label}',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.bodySmall?.copyWith(
-                                    color: textSecondaryColor(context),
-                                  ),
-                                ),
-                                const SizedBox(height: AppSpacing.lg),
-                                _ProgressSummary(
-                                  progress: lift.progress,
-                                  metric: _metric,
-                                  unit: unit,
-                                ),
-                                const SizedBox(height: AppSpacing.lg),
-                                ExerciseTrendChart(
-                                  key: ValueKey(
-                                    'progress-$splitId-${lift.exerciseName}-$_period-$_metric',
-                                  ),
-                                  progress: lift.progress,
-                                  metric: _metric,
-                                  weightUnit: unit,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: AppSpacing.xxl),
-                        const StatisticsSectionHeader(title: 'Recent records'),
-                        const SizedBox(height: AppSpacing.sm),
-                        if (records.isEmpty)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: AppSpacing.lg,
-                            ),
-                            child: Text(
-                              'New personal records will appear here as you train.',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodyMedium?.copyWith(
-                                color: textSecondaryColor(context),
-                              ),
-                            ),
-                          )
-                        else
-                          for (final event in records)
-                            RecordEventRow(
-                              key: ValueKey(
-                                'record-${event.session.id}-${event.exerciseName}',
-                              ),
-                              event: event,
-                              weightUnit: unit,
-                            ),
-                      ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+    );
+  }
+}
+
+class _StatisticsNavigation extends StatelessWidget {
+  final _StatisticsView selected;
+  final ValueChanged<_StatisticsView> onSelected;
+
+  const _StatisticsNavigation({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      border: Border(bottom: BorderSide(color: borderColor(context))),
+    ),
+    child: Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 880),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final scrolls =
+                MediaQuery.textScalerOf(context).scale(1) > 1.3 ||
+                constraints.maxWidth < 350;
+            Widget tab(_StatisticsView view) => Semantics(
+              button: true,
+              selected: view == selected,
+              label: view.label,
+              excludeSemantics: true,
+              child: InkWell(
+                key: ValueKey('statistics-tab-${view.label}'),
+                onTap: () => onSelected(view),
+                child: Container(
+                  constraints: const BoxConstraints(minHeight: 52),
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.md,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color:
+                            view == selected
+                                ? accentColor(context)
+                                : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  child: Text(
+                    view.label,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color:
+                          view == selected
+                              ? textPrimaryColor(context)
+                              : textSecondaryColor(context),
+                      fontWeight:
+                          view == selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
                 ),
               ),
-    );
-  }
+            );
+            if (scrolls) {
+              return SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    for (final view in _StatisticsView.values) tab(view),
+                  ],
+                ),
+              );
+            }
+            return Row(
+              children: [
+                for (final view in _StatisticsView.values)
+                  Expanded(child: tab(view)),
+              ],
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
+
+class _ViewEmpty extends StatelessWidget {
+  final String title;
+  final String message;
+  final IconData icon;
+
+  const _ViewEmpty({
+    required this.title,
+    required this.message,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 32, color: textSecondaryColor(context)),
+        const SizedBox(height: AppSpacing.xl),
+        Text(title, style: Theme.of(context).textTheme.headlineLarge),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          message,
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: textSecondaryColor(context)),
+        ),
+      ],
+    ),
+  );
 }
 
 class _EmptyStatistics extends StatelessWidget {
@@ -438,149 +638,18 @@ class _EmptyStatistics extends StatelessWidget {
         (context, constraints) => SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: const Center(
-              child: Padding(
-                padding: EdgeInsets.all(AppSpacing.xxl),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('No completed workouts', textAlign: TextAlign.center),
-                    SizedBox(height: AppSpacing.sm),
-                    Text(
+            child: const Padding(
+              padding: EdgeInsets.all(AppSpacing.xxl),
+              child: Center(
+                child: _ViewEmpty(
+                  title: 'No completed workouts',
+                  message:
                       'Statistics appear after you finish and log a workout.',
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
+                  icon: LucideIcons.chartNoAxesCombined,
                 ),
               ),
             ),
           ),
         ),
   );
-}
-
-class _ChartPanel extends StatelessWidget {
-  final Widget child;
-  const _ChartPanel({required this.child});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: double.infinity,
-    padding: const EdgeInsets.all(AppSpacing.lg),
-    decoration: BoxDecoration(
-      color: surfaceColor(context),
-      borderRadius: AppRadius.card,
-    ),
-    child: child,
-  );
-}
-
-class _Selector<T> extends StatelessWidget {
-  final String fieldKey;
-  final String label;
-  final T value;
-  final List<T> values;
-  final String Function(T) labelFor;
-  final Widget? Function(T)? labelBuilder;
-  final ValueChanged<T> onChanged;
-  const _Selector({
-    required this.fieldKey,
-    required this.label,
-    required this.value,
-    required this.values,
-    required this.labelFor,
-    this.labelBuilder,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) => DropdownButtonFormField<T>(
-    key: ValueKey('$fieldKey-$value'),
-    initialValue: value,
-    isExpanded: true,
-    itemHeight: null,
-    decoration: InputDecoration(
-      labelText: label,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-    ),
-    selectedItemBuilder:
-        (context) => [
-          for (final item in values)
-            labelBuilder?.call(item) ??
-                Text(
-                  labelFor(item),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-        ],
-    items: [
-      for (final item in values)
-        DropdownMenuItem(
-          value: item,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: labelBuilder?.call(item) ?? Text(labelFor(item)),
-          ),
-        ),
-    ],
-    onChanged: (value) {
-      if (value != null) onChanged(value);
-    },
-  );
-}
-
-class _ProgressSummary extends StatelessWidget {
-  final ExerciseProgress progress;
-  final ExerciseMetric metric;
-  final String unit;
-  const _ProgressSummary({
-    required this.progress,
-    required this.metric,
-    required this.unit,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final best = progress.points
-        .map((point) => point.value)
-        .reduce((a, b) => a > b ? a : b);
-    final change = progress.change;
-    // The latest value is already the readout under the chart.
-    final values = [
-      (
-        'Change',
-        change == null
-            ? 'Need 2 workouts'
-            : '${change > 0 ? '+' : ''}${formatChartExerciseValue(change, metric, unit)}',
-      ),
-      ('Best in period', formatChartExerciseValue(best, metric, unit)),
-    ];
-    return Wrap(
-      spacing: 24,
-      runSpacing: 16,
-      children: [
-        for (final (label, value) in values)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: textSecondaryColor(context),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                value,
-                style: AppTypography.figures(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: textPrimaryColor(context),
-                ),
-              ),
-            ],
-          ),
-      ],
-    );
-  }
 }

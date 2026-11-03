@@ -1,24 +1,33 @@
 # Statistics screen
 
-Reviewed 2026-10-02. Scope: weekly volume, exercise progress, selectors, recent records, chart scrolling/readouts. Old screenshots excluded.
+Reviewed 2026-11-03. Scope: the four focused views, chart selection, compact
+calendar, selectors, records, and entry from Home.
 
-## Findings
+The screen uses Overview, Strength, Blocks, and Records navigation instead of a
+vertical stack of chart panels. Charts and figures share the page ground. The
+active view stays visible while its content scrolls.
 
-- **ST01 · Medium · Unverified layout risk — whole-page empty state cannot scroll.** No-completed-workouts state is a centered non-scrollable column with 32dp padding (`lib/screens/stats_screen.dart:98`, `lib/screens/stats_screen.dart:100`). Short landscape plus 2x text may overflow below the AppBar. Test reduced heights, then use the same scrollable empty-state pattern as Home.
-- **ST02 · Low · Code-confirmed — spacing bypasses existing tokens.** Recurring 16/12/8/24/32dp literals occur in page/panel padding and gaps (`lib/screens/stats_screen.dart:120`, `lib/screens/stats_screen.dart:128`, `lib/screens/stats_screen.dart:186`, `lib/screens/stats_screen.dart:197`, `lib/screens/stats_screen.dart:330`, `lib/screens/stats_screen.dart:365`, `lib/screens/stats_screen.dart:423`). Replace with `AppSpacing.lg/md/sm/xl/xxl`. Explicit chart slots/axis geometry are not automatically spacing defects.
-- **ST03 · Low · Code-confirmed — section headings have no semantic heading role.** `StatisticsSectionHeader` returns plain `Text` (`lib/widgets/statistics/statistics_widgets.dart:16`). Add `Semantics(header: true)` for Weekly training, Exercise progress, and Recent records.
+## Verification
 
-No confirmed high-severity issue found in this screen.
+- `flutter analyze` passes.
+- 183 targeted tests cover analytics, the four views, exact chart readouts,
+  incomplete weeks, performed-set counts, filtering, provider updates, split
+  isolation, block comparisons, navigation, typography, and color contrast.
+- New view-layout checks exercise 320×640 screens, 1×/2× text, and both themes.
+  The existing screen suite also checks 390px and 1200px layouts.
+- Android debug APK builds. Emulator review checks the actual app typography,
+  open-canvas hierarchy, modal pickers, and both light and dark appearances.
 
 ## Six checks
 
-| Check | Assessment and evidence |
+| Check | Current behavior |
 | --- | --- |
-| Visual consistency | Neutral heading roles, solved chart fills/ink, card/bar radius tokens are used (`lib/screens/stats_screen.dart:88`, `lib/screens/stats_screen.dart:331`, `lib/widgets/statistics/training_charts.dart:136`). ST02 is theme-spacing debt. No hardcoded hex colors or raw radii found. |
-| Hierarchy | Weekly training, exercise progress, then records are clear (`lib/screens/stats_screen.dart:127`, `lib/screens/stats_screen.dart:198`, `lib/screens/stats_screen.dart:297`); metric and period are local to progress (`lib/screens/stats_screen.dart:223`). Latest action appears while browsing older chart data (`lib/widgets/statistics/training_charts.dart:531`). No ambiguous primary mutation action. |
-| States | Page, no-performed-sets, no-progress, and no-records states exist (`lib/screens/stats_screen.dart:97`, `lib/screens/stats_screen.dart:206`, `lib/screens/stats_screen.dart:299`, `lib/widgets/statistics/training_charts.dart:32`). Analytics are synchronous local reads; no network loading/error screen is needed. ST01 is the height risk. |
-| Ergonomics | Weekly slots have at least 56dp width and progress slots at least 80dp (`lib/widgets/statistics/training_charts.dart:44`, `lib/widgets/statistics/training_charts.dart:249`); Latest has 48dp height (`lib/widgets/statistics/training_charts.dart:528`). Native dropdowns are labeled and expanded (`lib/screens/stats_screen.dart:358`). No numeric entry. |
-| Accessibility | Each chart data point exposes date/value, selected state, and button role (`lib/widgets/statistics/training_charts.dart:72`, `lib/widgets/statistics/training_charts.dart:295`); changing readout has a live region (`lib/widgets/statistics/training_charts.dart:397`). ST03 improves section navigation. Solved color contrast tests passed; actual screen-reader interaction remains unverified. |
-| Small/large screens | Metric/period stack under 300dp or above 1.3x (`lib/screens/stats_screen.dart:245`); page caps at 880dp (`lib/screens/stats_screen.dart:123`). Chart slots/footer scale; axes measure text, and long history scrolls horizontally (`lib/widgets/statistics/training_charts.dart:494`, `lib/widgets/statistics/training_charts.dart:592`). Existing tests cover 1/1.3/2x and 390/1200dp (`test/screen_layout_test.dart:192`). Very large histories are eagerly built with for-loops (`lib/widgets/statistics/training_charts.dart:71`, `lib/widgets/statistics/training_charts.dart:289`); performance impact is unverified and not ranked as an observed defect. |
+| Visual consistency | Theme-derived colors, Manrope/tabular figures, spacing and radius tokens; no chart-panel backgrounds or decorative shadows. Period controls use a quiet neutral track. |
+| Hierarchy | One dominant chart per analytical view. Weekly selection updates volume and the workout/set/rep strip together. Strength separates the exercise, measure, selected value, and period summary. |
+| States | The whole-page empty state scrolls. Strength explains missing data and offers a period/measure choice. Blocks and Records have explicit empty states. Analytics read local state without a network dependency. |
+| Ergonomics | Navigation and chart selections have at least 48px targets. Weekly history browses horizontally. The exercise directory and measure selection open in sheets; formula help opens through the info control. |
+| Accessibility | Selected controls expose state; chart selections have date, value, and button roles; selected readouts are live regions. Section headings use heading semantics. Actual screen-reader traversal remains a manual check. |
+| Small/large screens | Controls and summaries wrap for larger text; navigation scrolls horizontally when needed; vertical scrolling remains available for short screens. Content caps at 832px. |
 
-See [summary](SUMMARY.md).
+Finished Android captures are in `screenshots/statistics-premium/`. Research and
+design rationale are in [statistics design](../statistics-design.md).

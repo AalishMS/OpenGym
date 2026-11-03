@@ -19,6 +19,7 @@ class SegmentedPills<T> extends StatelessWidget {
   final String Function(T)? semanticLabelFor;
   final ValueChanged<T> onSelected;
   final String keyPrefix;
+  final bool quiet;
 
   const SegmentedPills({
     super.key,
@@ -28,6 +29,7 @@ class SegmentedPills<T> extends StatelessWidget {
     required this.onSelected,
     required this.keyPrefix,
     this.semanticLabelFor,
+    this.quiet = false,
   });
 
   @override
@@ -41,8 +43,8 @@ class SegmentedPills<T> extends StatelessWidget {
       // The border sits outside the segments' own 48px.
       constraints: const BoxConstraints(minHeight: height + 2, maxWidth: 480),
       decoration: BoxDecoration(
-        color: backgroundColor(context),
-        border: Border.all(color: borderColor(context)),
+        color: quiet ? surfaceColor(context) : backgroundColor(context),
+        border: quiet ? null : Border.all(color: borderColor(context)),
         // Concentric with the segments: their radius plus the inset.
         borderRadius: AppRadius.button,
       ),
@@ -73,7 +75,9 @@ class SegmentedPills<T> extends StatelessWidget {
                         decoration: BoxDecoration(
                           color:
                               value == selected
-                                  ? accentFillColor(context)
+                                  ? quiet
+                                      ? backgroundColor(context)
+                                      : accentFillColor(context)
                                   : null,
                           borderRadius: AppRadius.chip,
                         ),
@@ -86,7 +90,9 @@ class SegmentedPills<T> extends StatelessWidget {
                             fontWeight: FontWeight.w600,
                             color:
                                 value == selected
-                                    ? onAccentColor(context)
+                                    ? quiet
+                                        ? textPrimaryColor(context)
+                                        : onAccentColor(context)
                                     : textSecondaryColor(context),
                           ),
                         ),
