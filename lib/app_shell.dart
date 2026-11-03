@@ -43,6 +43,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _weeklyTrainingRequest = 0;
   int _statsVisit = 0;
   int _homeResetRequest = 0;
+  double _tabDragDistance = 0;
   bool _openingHistoryWorkout = false;
   final ScrollController _homeScrollController = ScrollController();
   final GlobalKey _planTourKey = GlobalKey(debugLabel: 'tutorial-plan');
@@ -218,6 +219,27 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       if (index == 3 && showing != 3) _statsVisit++;
       _currentIndex = index;
     });
+  }
+
+  void _finishTabSwipe(DragEndDetails details, {required int showing}) {
+    final distance = _tabDragDistance;
+    _tabDragDistance = 0;
+    final velocity = details.primaryVelocity ?? 0;
+    // Require a deliberate drag, or a short, fast flick. Vertical scrolling
+    // competes with this horizontal recognizer in Flutter's gesture arena.
+    final isDrag = distance.abs() >= 64;
+    final isFlick =
+        distance.abs() >= 20 &&
+        velocity.abs() >= 500 &&
+        velocity.sign == distance.sign;
+    if (!isDrag && !isFlick) return;
+
+    final forward =
+        Directionality.of(context) == TextDirection.ltr
+            ? distance < 0
+            : distance > 0;
+    final next = showing + (forward ? 1 : -1);
+    if (next >= 1 && next <= 4) _selectTab(next, showing: showing);
   }
 
   Widget _withTutorial(
@@ -444,7 +466,23 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     return _withTutorial(
       Scaffold(
-        body: stack,
+        body: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          excludeFromSemantics: true,
+          onHorizontalDragStart:
+              coachInView ? null : (_) => _tabDragDistance = 0,
+          onHorizontalDragUpdate:
+              coachInView
+                  ? null
+                  : (details) => _tabDragDistance += details.primaryDelta ?? 0,
+          onHorizontalDragEnd:
+              coachInView
+                  ? null
+                  : (details) =>
+                      _finishTabSwipe(details, showing: effectiveIndex),
+          onHorizontalDragCancel: () => _tabDragDistance = 0,
+          child: stack,
+        ),
         bottomNavigationBar: AppBottomNav(
           destinationKeys: {
             1: _historyTourKey,

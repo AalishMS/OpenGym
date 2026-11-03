@@ -174,6 +174,86 @@ void main() {
     expect(find.text('Dashboard'), findsNothing);
   });
 
+  testWidgets('horizontal swipes navigate all phone tabs without wrapping', (
+    tester,
+  ) async {
+    await tester.pumpWidget(shellHost(390));
+    await tester.pumpAndSettle();
+
+    int selectedTab() =>
+        tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex;
+
+    Future<void> swipe(double dx) async {
+      await tester.dragFrom(
+        tester.getCenter(find.byType(AppShell)),
+        Offset(dx, 0),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await swipe(250);
+    expect(selectedTab(), 0);
+    for (var index = 1; index <= 3; index++) {
+      await swipe(-250);
+      expect(selectedTab(), index);
+    }
+    await swipe(-250);
+    expect(selectedTab(), 3);
+    for (var index = 2; index >= 0; index--) {
+      await swipe(250);
+      expect(selectedTab(), index);
+    }
+
+    // A tab tap and Back must still work after gesture navigation.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AppBottomNav),
+        matching: find.text('Stats'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(selectedTab(), 2);
+    await swipe(250);
+    expect(selectedTab(), 1);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(selectedTab(), 0);
+  });
+
+  testWidgets('vertical and short drags keep Home; swiping clears Manage', (
+    tester,
+  ) async {
+    await tester.runAsync(seedHomeTraining);
+    await tester.pumpWidget(shellHost(390));
+    await tester.pumpAndSettle();
+    final start = tester.getCenter(find.byType(AppShell));
+
+    await tester.dragFrom(start, const Offset(-25, -200));
+    await tester.pumpAndSettle();
+    await tester.timedDragFrom(
+      start,
+      const Offset(-45, 0),
+      const Duration(milliseconds: 600),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
+      0,
+    );
+
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
+    await tester.dragFrom(start, const Offset(-250, 0));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
+      1,
+    );
+    await tester.dragFrom(start, const Offset(250, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Manage'), findsOneWidget);
+  });
+
   testWidgets(
     'weekly summary opens statistics and resets its scroll on each visit',
     (tester) async {

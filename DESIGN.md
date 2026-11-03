@@ -289,7 +289,12 @@ offline-only: it skips auth and opens the app shell directly.
 ## Navigation
 
 `AppShell` owns the main tab layout using an `IndexedStack` so tabs preserve
-their state.
+their state. In the phone layout, horizontal swipes across the screen select
+the adjacent tab in Home, History, Stats, Settings order and update the bottom
+navigation. The first and last tabs do not wrap. Vertical scrolling stays within
+the current screen, and short accidental drags do not switch tabs. Swipes use
+the same tab-selection behavior as navigation taps. The Coach overlay keeps
+its own gestures; main-tab swiping resumes when it closes.
 
 | Tab | Screen |
 | --- | --- |
