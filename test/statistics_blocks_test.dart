@@ -15,6 +15,7 @@ import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/statistics_analytics_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/statistics/block_statistics.dart';
+import 'package:gymapp/widgets/statistics/block_trend.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
@@ -229,61 +230,71 @@ void main() {
             .widget<Text>(find.byKey(const ValueKey('block-overview-name')))
             .data!;
 
-    testWidgets('leads with the current block and switches between blocks', (
-      tester,
-    ) async {
-      await open(tester);
-      expect(find.text('Training blocks'), findsOneWidget);
-      expect(overviewName(tester), 'Build');
-      expect(find.text('Build · Now'), findsOneWidget);
-      expect(find.textContaining('Week 1 of 4'), findsOneWidget);
-      expect(
-        find.text('Arrows compare an average week with Base.'),
-        findsOneWidget,
-      );
-
-      await tester.tap(find.byKey(const ValueKey('block-chip-a')));
-      await tester.pump();
-      expect(overviewName(tester), 'Base');
-      expect(find.text('Bench press'), findsWidgets);
-      expect(find.textContaining('+9%'), findsOneWidget);
-      // The first block has nothing earlier to compare with.
-      expect(find.textContaining('Arrows compare'), findsNothing);
-
-      await tester.ensureVisible(find.text('Compare blocks'));
-      await tester.tap(
-        find.byKey(ValueKey('block-measure-${BlockMeasure.workouts}')),
-      );
-      await tester.pump();
-      expect(find.text('1.3 workouts'), findsOneWidget);
-      expect(find.text('1 workouts'), findsNothing);
-      await tester.tap(find.byKey(const ValueKey('block-compare-b')));
-      await tester.pump();
-      expect(overviewName(tester), 'Build');
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'block trend selects the detail and switches measures and basis',
+      (tester) async {
+        await open(tester);
+        await tester.tap(find.byKey(const ValueKey('statistics-tab-Blocks')));
+        await tester.pumpAndSettle();
+        expect(overviewName(tester), 'Build');
+        expect(find.text('Compare blocks'), findsNothing);
+        expect(find.textContaining('Arrows compare'), findsNothing);
+        await tester.tap(
+          find.byKey(ValueKey('block-measure-${BlockTrendMeasure.workouts}')),
+        );
+        await tester.pumpAndSettle();
+        final readout = find.byKey(const ValueKey('block-trend-value'));
+        expect(tester.widget<Text>(readout).data, '1');
+        await tester.tap(find.byKey(const ValueKey('block-point-a')));
+        await tester.pumpAndSettle();
+        expect(overviewName(tester), 'Base');
+        expect(tester.widget<Text>(readout).data, '1.3');
+        // Selection changes the below-chart block detail as well.
+        final gain = find.byKey(const ValueKey('block-gain-Bench press'));
+        await tester.ensureVisible(gain);
+        await tester.tap(gain);
+        await tester.pumpAndSettle();
+        expect(find.text('93.3 kg to 102.1 kg'), findsOneWidget);
+        final basis = find.byKey(const ValueKey('block-basis'));
+        await tester.ensureVisible(basis);
+        await tester.tap(basis);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Block total').last);
+        await tester.pumpAndSettle();
+        expect(tester.widget<Text>(readout).data, '4');
+        await tester.ensureVisible(
+          find.byKey(ValueKey('block-measure-${BlockTrendMeasure.records}')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(
+          find.byKey(ValueKey('block-measure-${BlockTrendMeasure.records}')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Records in this block'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('a lift row opens that lift in the progress chart', (
       tester,
     ) async {
       await open(tester);
+      await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
+      await tester.pumpAndSettle();
       final title = find.byKey(const ValueKey('progress-exercise'));
       final curl = find.byKey(const ValueKey('lift-Curl'));
       expect(tester.widget<Text>(title).data, 'Bench press');
-      expect(
-        find.text(ExerciseMetric.estimatedOneRepMax.description),
-        findsOneWidget,
-      );
+      expect(find.byTooltip('About Estimated 1RM'), findsOneWidget);
       // Fifteen-rep sets have no estimated 1RM, so curls only join the list
       // under a measure that counts them.
       expect(curl, findsNothing);
-      final topWeight = find.byKey(
-        ValueKey('progress-metric-${ExerciseMetric.bestWeight}'),
-      );
-      await tester.ensureVisible(topWeight);
-      await tester.tap(topWeight);
+      await tester.tap(find.byKey(const ValueKey('progress-metric-picker')));
       await tester.pumpAndSettle();
-      expect(find.text(ExerciseMetric.bestWeight.description), findsOneWidget);
+      await tester.tap(find.text('Best weight').last);
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('About Best weight'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('progress-exercise-picker')));
+      await tester.pumpAndSettle();
       await tester.ensureVisible(curl);
       await tester.tap(curl);
       await tester.pumpAndSettle();
@@ -291,24 +302,30 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('the weekly link lands on weekly training below the blocks', (
-      tester,
-    ) async {
-      await open(tester);
-      await pumpStats(tester, weeklyRequest: 1);
-      await tester.pump();
-      final scroll =
-          tester
-              .widget<SingleChildScrollView>(
-                find.byKey(const ValueKey('statistics-scroll')),
-              )
-              .controller!;
-      expect(scroll.offset, greaterThan(0));
-      final heading = tester.getTopLeft(find.text('Weekly training')).dy;
-      final viewport =
-          tester.getTopLeft(find.byKey(const ValueKey('statistics-scroll'))).dy;
-      expect(heading - viewport, lessThan(24));
-    });
+    testWidgets(
+      'the weekly link returns from Blocks to the training overview',
+      (tester) async {
+        await open(tester);
+        await tester.tap(find.byKey(const ValueKey('statistics-tab-Blocks')));
+        await tester.pumpAndSettle();
+        await pumpStats(tester, weeklyRequest: 1);
+        await tester.pump();
+        final scroll =
+            tester
+                .widget<SingleChildScrollView>(
+                  find.byKey(const ValueKey('statistics-scroll')),
+                )
+                .controller!;
+        expect(scroll.offset, 0);
+        expect(find.text('Week in progress'), findsOneWidget);
+        final heading = tester.getTopLeft(find.text('Weekly training')).dy;
+        final viewport =
+            tester
+                .getTopLeft(find.byKey(const ValueKey('statistics-scroll')))
+                .dy;
+        expect(heading - viewport, lessThan(24));
+      },
+    );
   });
 
   testWidgets('a long block charts its trained weeks, not the empty tail', (
@@ -358,9 +375,12 @@ void main() {
     }
     expect(find.byKey(const ValueKey('block-week-bar-6')), findsNothing);
     expect(find.text('W57'), findsNothing);
-    // The four figures share one row.
-    final workouts = tester.getTopLeft(find.text('Workouts'));
-    expect(tester.getTopLeft(find.text('Records')).dy, workouts.dy);
+    // Totals breathe in two columns, with the second pair on another row.
+    final workouts = tester.getTopLeft(find.text('Workouts').last);
+    expect(
+      tester.getTopLeft(find.text('Records').last).dy,
+      greaterThan(workouts.dy),
+    );
     expect(tester.takeException(), isNull);
   });
 }

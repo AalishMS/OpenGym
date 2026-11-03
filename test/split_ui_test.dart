@@ -182,6 +182,10 @@ void main() {
 
     await tester.pumpWidget(harness.host(const StatsScreen()));
     await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All'));
+    await tester.pumpAndSettle();
     expect(find.text('UL Only'), findsWidgets);
     expect(find.text('PPL Only'), findsNothing);
   });

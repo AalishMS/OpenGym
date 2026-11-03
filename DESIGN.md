@@ -440,25 +440,33 @@ signature:
   in. Danger zone is always last. *Load sample data* replaces the active
   split's workouts, so it is a development tool. It only appears in debug
   builds (`SettingsScreen.showSampleData`, which defaults to `kDebugMode`).
-- Stats runs Training blocks, Weekly training, Activity, Exercise progress,
-  and Recent records. Training blocks opens on the block of the latest
-  workout. It shows workouts, sets, volume, and records for that block. Its
-  arrows compare an average trained week with the previous block that has
-  workouts. Below them are sets for each week of the block (unreached planned
-  weeks are empty outlines) and the three biggest estimated-1RM gains. With
-  two or more trained blocks, a scrolling pill row switches blocks and
-  *Compare blocks* ranks them per trained week. Sessions reach a block only
-  through their training week. Stats selectors come in two shapes
-  (`statistics_controls.dart`). A short, fixed set, such as the time range
-  (`4W`, `12W`, `6M`, `1Y`, `All`, read aloud in full) or the compare
-  measure, is a `SegmentedPills` track of equal-width segments. A longer or
-  open-ended set, such as blocks or the exercise measures, is a
-  `ScrollingPills` row that fades at whichever edge hides more pills. Both
-  keep a 48px tap target around compact pills. Exercise progress gives each
-  measure a one-line plain explanation and lists every lift with its latest
-  value, sparkline, and change. Tapping a lift opens it in the detailed
-  chart. Weekly charts label weeks by date, never by ISO week number. The
-  weekly-training shortcut lands on Weekly training, below the blocks.
+- Stats uses four persistent views: Overview, Strength, Blocks, and Records.
+  Charts and figures sit directly on the page, without a vertical feed of
+  panels. Overview pairs a weekly volume timeline with the selected week's
+  workout, performed-set and rep totals, then a compact training-day calendar.
+  It opens on the last complete week; the Home weekly shortcut selects the
+  week in progress. Partial weeks are explicitly named and never compared with
+  completed weeks. Exercise filtering applies to the plot and its totals; the
+  calendar always shows all training in the active split. History browses
+  horizontally, with an exact readout and accessible selection for every week.
+  Strength shows one lift at a time, with a period selector, a measure picker,
+  a selectable trend plot, change, and best in period. Its exercise picker
+  opens the lift directory with sparklines in a sheet. The fixed time ranges
+  (`4W`, `12W`, `6M`, `1Y`, `All`, spoken in full) use `SegmentedPills`;
+  measure descriptions explain the calculation. Blocks opens on the block of
+  the latest workout. A horizontally scrollable line chart compares Volume,
+  Sets, Workouts, or Records across logged blocks in saved block order.
+  Selection updates the readout and all detail below. The chart defaults to
+  averages per trained week, with Block total available from the calculation
+  control. A two-column totals layout replaces compressed metrics and repeated
+  rate subtitles. Weekly bars reveal exact values on selection; strength gains
+  expand to show their estimated-1RM endpoints. The page scrolls naturally so
+  its chart, totals, weekly workload, and gains have room to breathe.
+  Sessions belong to blocks through their training week. Records keeps the
+  chronological, expandable achievements and reveals older entries on demand.
+  The four view controls remain visible while content scrolls; text can grow
+  and scroll naturally on small screens. Returning to Stats resets its vertical
+  offset. See [statistics design](docs/statistics-design.md) for references.
 - Home labels the rotation bar with “Workout N of M”. The same workout
   numbers appear in the plan list's coloured markers. Muscle groups sit on
   their own line in the launcher; exercise, set, and duration values wrap as

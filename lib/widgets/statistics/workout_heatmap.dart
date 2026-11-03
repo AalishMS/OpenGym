@@ -19,11 +19,17 @@ import '../../theme/radii.dart';
 class WorkoutHeatmap extends StatelessWidget {
   final List<WorkoutSession> sessions;
   final DateTime? now;
+  final bool compact;
 
   static const minWeeks = 12;
   static const maxWeeks = 52;
 
-  const WorkoutHeatmap({super.key, required this.sessions, this.now});
+  const WorkoutHeatmap({
+    super.key,
+    required this.sessions,
+    this.now,
+    this.compact = false,
+  });
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
@@ -32,6 +38,7 @@ class WorkoutHeatmap extends StatelessWidget {
           sessions: sessions,
           now: now,
           width: constraints.maxWidth,
+          compact: compact,
         ),
   );
 }
@@ -40,11 +47,13 @@ class _HeatmapGrid extends StatelessWidget {
   final List<WorkoutSession> sessions;
   final DateTime? now;
   final double width;
+  final bool compact;
 
   const _HeatmapGrid({
     required this.sessions,
     required this.now,
     required this.width,
+    required this.compact,
   });
 
   static const _dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -78,7 +87,10 @@ class _HeatmapGrid extends StatelessWidget {
     );
     final scale = MediaQuery.textScalerOf(context);
     // Rows keep room for a day label; the weeks share the width that is left.
-    final step = math.max(16.0, scale.scale(11) * 1.5 + 4);
+    final step =
+        compact
+            ? math.max(14.0, scale.scale(11) * 1.25 + 2)
+            : math.max(16.0, scale.scale(11) * 1.5 + 4);
     final labelWidth = scale.scale(12);
     final gridWidth = math.max(0.0, width - labelWidth - 6);
     final weeks = (gridWidth / step).floor().clamp(
@@ -104,15 +116,24 @@ class _HeatmapGrid extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Days you trained · Last $weeks weeks',
-          style: Theme.of(
-            context,
-          ).textTheme.bodySmall?.copyWith(color: textSecondaryColor(context)),
-        ),
-        const SizedBox(height: 20),
-        _Summary(counts: counts, start: start, weeks: weeks),
-        const SizedBox(height: 20),
+        if (compact) ...[
+          Semantics(
+            header: true,
+            child: Text(
+              'Training rhythm',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ] else ...[
+          Text(
+            'Days you trained · Last $weeks weeks',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 20),
+          _Summary(counts: counts, start: start, weeks: weeks),
+          const SizedBox(height: 20),
+        ],
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -168,14 +189,17 @@ class _HeatmapGrid extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: compact ? 8 : 16),
         Wrap(
           spacing: 16,
           runSpacing: 8,
           children: [
             _legendItem(
               _square(context, worked: true, size: 12),
-              'Workout',
+              compact
+                  ? '${counts.length} training ${counts.length == 1 ? 'day' : 'days'} '
+                      'in $weeks weeks'
+                  : 'Workout',
               style,
             ),
             _legendItem(
@@ -191,7 +215,11 @@ class _HeatmapGrid extends StatelessWidget {
 
   Widget _legendItem(Widget key, String label, TextStyle? style) => Row(
     mainAxisSize: MainAxisSize.min,
-    children: [key, const SizedBox(width: 6), Text(label, style: style)],
+    children: [
+      key,
+      const SizedBox(width: 6),
+      Flexible(child: Text(label, style: style)),
+    ],
   );
 
   Widget _monthLabels(
@@ -286,7 +314,12 @@ class _HeatmapGrid extends StatelessWidget {
     decoration: BoxDecoration(
       // The page colour reads as a quiet hole in the card; borderColor was
       // solved for hairlines and made a year of rest days look heavy.
-      color: worked ? accentFillColor(context) : backgroundColor(context),
+      color:
+          worked
+              ? accentFillColor(context)
+              : compact
+              ? surfaceColor(context)
+              : backgroundColor(context),
       borderRadius: AppRadius.micro,
       border:
           today ? Border.all(color: accentColor(context), width: 1.5) : null,

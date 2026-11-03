@@ -396,7 +396,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('screen order and independent exercise selectors', (
+  testWidgets('focused views keep exercise filters independent', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 900);
@@ -410,33 +410,29 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Recent sessions'), findsNothing);
-    final headings = ['Weekly training', 'Exercise progress', 'Recent records'];
-    expect(
-      tester.getTopLeft(find.text(headings[0])).dy,
-      lessThan(tester.getTopLeft(find.text(headings[1])).dy),
-    );
-    expect(
-      tester.getTopLeft(find.text(headings[1])).dy,
-      lessThan(tester.getTopLeft(find.text(headings[2])).dy),
-    );
-    final selectors = find.byType(DropdownButtonFormField<String>);
-    await tester.tap(selectors.first);
+    expect(find.text('Weekly training'), findsOneWidget);
+    expect(find.byKey(const ValueKey('progress-exercise')), findsNothing);
+    expect(find.text('Recent records'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('weekly-exercise-picker')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('All exercises').last);
+    await tester.tap(find.text('Bench press').last);
     await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<DropdownButtonFormField<String>>(selectors.first)
-          .initialValue,
-      '',
-    );
-    expect(selectors, findsOneWidget);
+    expect(find.text('400 kg'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
+    await tester.pumpAndSettle();
     expect(
       tester.widget<Text>(find.byKey(const ValueKey('progress-exercise'))).data,
       'Bench press',
     );
-    expect(find.text('800 kg'), findsOneWidget);
+    expect(find.text('Weekly training'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Overview')));
+    await tester.pumpAndSettle();
+    expect(find.text('Bench press'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('weekly-exercise-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All exercises').last);
+    await tester.pumpAndSettle();
+    expect(find.text('All exercises'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -457,6 +453,8 @@ void main() {
         child: host(const StatsScreen()),
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
     await tester.pumpAndSettle();
     expect(find.text('Change'), findsOneWidget);
     expect(find.text('Best in period'), findsOneWidget);
