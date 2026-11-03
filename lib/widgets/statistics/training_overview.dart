@@ -11,6 +11,7 @@ import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
+import 'trend_line.dart';
 import 'workout_heatmap.dart';
 
 /// One weekly instrument: selecting a bar updates both the volume readout and
@@ -38,14 +39,7 @@ class TrainingOverview extends StatefulWidget {
 }
 
 class _TrainingOverviewState extends State<TrainingOverview> {
-  final ScrollController _history = ScrollController();
   DateTime? _selected;
-
-  @override
-  void dispose() {
-    _history.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -177,13 +171,14 @@ class _TrainingOverviewState extends State<TrainingOverview> {
             // Keep six weeks visible at ordinary phone sizes. Long histories
             // retain generous targets and open at the most recent end.
             final slot = math.max(48 * scale, constraints.maxWidth / 6);
-            final maximum = math.max(
-              1.0,
-              weeks.fold<double>(
-                0,
-                (value, w) => math.max(value, w.volumeLoad),
-              ),
+            final peak = weeks.fold<double>(
+              0,
+              (value, w) => math.max(value, w.volumeLoad),
             );
+            // The top guide is a round figure in the unit it is read in.
+            final ratio = displayWeight(1, widget.weightUnit);
+            final maximum =
+                niceAxisCeiling(math.max(1.0, peak * 1.05) * ratio) / ratio;
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -201,7 +196,7 @@ class _TrainingOverviewState extends State<TrainingOverview> {
                       ),
                     ),
                     Text(
-                      formatVolumeLoad(maximum * 112 / 96, widget.weightUnit),
+                      formatVolumeLoad(maximum, widget.weightUnit),
                       style: AppTypography.figures(
                         fontSize: 10,
                         color: textSecondaryColor(context),
@@ -224,7 +219,6 @@ class _TrainingOverviewState extends State<TrainingOverview> {
                     ),
                     SingleChildScrollView(
                       key: const ValueKey('training-timeline'),
-                      controller: _history,
                       scrollDirection: Axis.horizontal,
                       reverse: true,
                       child: SizedBox(
@@ -243,6 +237,7 @@ class _TrainingOverviewState extends State<TrainingOverview> {
                                     '${formatWeekRange(weeks[i].weekStart)}, '
                                     '${formatExactVolume(weeks[i].volumeLoad, widget.weightUnit)}'
                                     '${i == weeks.length - 1 ? ', week in progress' : ''}',
+                                excludeSemantics: true,
                                 child: InkWell(
                                   key: ValueKey('training-week-$i'),
                                   borderRadius: AppRadius.control,
@@ -264,7 +259,7 @@ class _TrainingOverviewState extends State<TrainingOverview> {
                                                 3,
                                                 weeks[i].volumeLoad /
                                                     maximum *
-                                                    96,
+                                                    112,
                                               ),
                                               decoration: BoxDecoration(
                                                 color:

@@ -79,7 +79,7 @@ class _BlockOverviewState extends State<BlockOverview> {
             },
           ),
         ),
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.lg),
         Row(
           children: [
             Expanded(
@@ -126,7 +126,7 @@ class _BlockOverviewState extends State<BlockOverview> {
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.lg),
+        const SizedBox(height: AppSpacing.sm),
         Semantics(
           liveRegion: true,
           child: Column(
@@ -162,7 +162,7 @@ class _BlockOverviewState extends State<BlockOverview> {
             ],
           ),
         ),
-        const SizedBox(height: AppSpacing.xl),
+        const SizedBox(height: AppSpacing.lg),
         BlockTrendChart(
           blocks: widget.blocks,
           selectedId: block.block.id,
@@ -345,7 +345,7 @@ class _WeekBarsState extends State<_WeekBars> {
                 ? 'Week ${week.number}, not started'
                 : 'Week ${week.number}, ${week.workouts} '
                     '${week.workouts == 1 ? 'workout' : 'workouts'}, '
-                    '${week.sets} sets',
+                    '${week.sets} ${week.sets == 1 ? 'set' : 'sets'}',
         child: ExcludeSemantics(
           child: InkWell(
             key: ValueKey('block-week-${week.number}'),
@@ -405,7 +405,7 @@ class _WeekBarsState extends State<_WeekBars> {
           child: Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.lg),
             child: Text(
-              'Week ${selected.number}  /  ${selected.reached ? '${selected.sets} sets' : 'Not started'}',
+              'Week ${selected.number}  /  ${selected.reached ? '${selected.sets} ${selected.sets == 1 ? 'set' : 'sets'}' : 'Not started'}',
               key: const ValueKey('block-week-readout'),
               style: AppTypography.figures(
                 fontSize: 14,
@@ -489,8 +489,8 @@ class _GainsState extends State<_Gains> {
                     }
                   }),
               child: Container(
-                constraints: const BoxConstraints(minHeight: 64),
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                constraints: const BoxConstraints(minHeight: 56),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [

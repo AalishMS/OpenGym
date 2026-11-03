@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/statistics.dart';
@@ -9,6 +8,7 @@ import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
+import 'trend_line.dart';
 
 /// Presentation measures for the block timeline; persisted models stay unchanged.
 enum BlockTrendMeasure { volume, sets, workouts, records }
@@ -76,7 +76,14 @@ class BlockTrendChart extends StatelessWidget {
       0,
       blocks.indexWhere((block) => block.block.id == selectedId),
     );
-    final maximum = math.max(1.0, values.reduce(math.max) * 1.2);
+    // Round the top guide in the unit it is read in, so lbs gets round too.
+    final ratio =
+        measure == BlockTrendMeasure.volume
+            ? displayWeight(1, weightUnit)
+            : 1.0;
+    final maximum =
+        niceAxisCeiling(math.max(1.0, values.reduce(math.max) * 1.1) * ratio) /
+        ratio;
     final scale = MediaQuery.textScalerOf(context).scale(1);
     final axisStyle = AppTypography.figures(
       fontSize: 11,
@@ -110,14 +117,14 @@ class BlockTrendChart extends StatelessWidget {
               reverse: true,
               child: SizedBox(
                 width: width,
-                height: height + 60 * scale,
+                height: height + 44 * scale,
                 child: Stack(
                   children: [
                     SizedBox(
                       width: width,
                       height: height,
                       child: CustomPaint(
-                        painter: _BlockTrendPainter(
+                        painter: TrendLinePainter(
                           points: offsets,
                           selected: selected,
                           ink: accentColor(context),
@@ -152,7 +159,7 @@ class BlockTrendChart extends StatelessWidget {
                                   AppSpacing.sm,
                                   0,
                                   AppSpacing.sm,
-                                  AppSpacing.md,
+                                  AppSpacing.xs,
                                 ),
                                 child: Text(
                                   blocks[i].block.name,
@@ -196,84 +203,4 @@ class BlockTrendChart extends StatelessWidget {
       },
     );
   }
-}
-
-class _BlockTrendPainter extends CustomPainter {
-  final List<Offset> points;
-  final int selected;
-  final Color ink;
-  final Color wash;
-  final Color ground;
-  final Color guide;
-
-  const _BlockTrendPainter({
-    required this.points,
-    required this.selected,
-    required this.ink,
-    required this.wash,
-    required this.ground,
-    required this.guide,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    for (var i = 0; i < 3; i++) {
-      final y = size.height * i / 2;
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        Paint()..color = guide,
-      );
-    }
-    if (points.length > 1) {
-      final line = Path()..moveTo(points.first.dx, points.first.dy);
-      for (final point in points.skip(1)) {
-        line.lineTo(point.dx, point.dy);
-      }
-      final area =
-          Path.from(line)
-            ..lineTo(points.last.dx, size.height)
-            ..lineTo(points.first.dx, size.height)
-            ..close();
-      canvas.drawPath(
-        area,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [wash, ground],
-          ).createShader(Offset.zero & size),
-      );
-      canvas.drawPath(
-        line,
-        Paint()
-          ..color = ink
-          ..strokeWidth = 2.5
-          ..style = PaintingStyle.stroke
-          ..strokeJoin = StrokeJoin.round
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-    final point = points[selected];
-    canvas.drawLine(
-      Offset(point.dx, point.dy + 8),
-      Offset(point.dx, size.height),
-      Paint()..color = guide,
-    );
-    for (final point in points) {
-      canvas.drawCircle(point, 2.5, Paint()..color = ink);
-    }
-    canvas.drawCircle(point, 7, Paint()..color = ground);
-    canvas.drawCircle(point, 5, Paint()..color = ink);
-    canvas.drawCircle(point, 2, Paint()..color = ground);
-  }
-
-  @override
-  bool shouldRepaint(_BlockTrendPainter old) =>
-      !listEquals(old.points, points) ||
-      old.selected != selected ||
-      old.ink != ink ||
-      old.wash != wash ||
-      old.ground != ground ||
-      old.guide != guide;
 }

@@ -56,6 +56,10 @@ class _StatsScreenState extends State<StatsScreen> {
   String? _lastSplit;
   int _recordLimit = 12;
 
+  /// Home's weekly shortcut asks for the week in progress; any other entry
+  /// into Stats returns the Overview to the last complete week.
+  bool _showCurrentWeek = false;
+
   @override
   void didUpdateWidget(covariant StatsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -66,6 +70,7 @@ class _StatsScreenState extends State<StatsScreen> {
       _view = _StatisticsView.overview;
       _weeklyExercise = null;
     }
+    _showCurrentWeek = weekly;
     _resetScroll();
   }
 
@@ -232,10 +237,11 @@ class _StatsScreenState extends State<StatsScreen> {
       case _StatisticsView.overview:
         content = TrainingOverview(
           key: ValueKey(
-            'overview-$splitId-$weeklyExercise-${widget.weeklyTrainingRequest}',
+            'overview-$splitId-$weeklyExercise-'
+            '${widget.weeklyTrainingRequest}-$_showCurrentWeek',
           ),
           sessions: sessions,
-          showCurrentWeek: widget.weeklyTrainingRequest > 0,
+          showCurrentWeek: _showCurrentWeek,
           weeks: _analytics.weeklyVolume(
             sessions,
             exerciseName: weeklyExercise,
@@ -312,6 +318,11 @@ class _StatsScreenState extends State<StatsScreen> {
                 Flexible(
                   child: TextButton.icon(
                     key: const ValueKey('progress-metric-picker'),
+                    // Flush with the exercise name above, like a form label.
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.only(right: AppSpacing.sm),
+                      alignment: Alignment.centerLeft,
+                    ),
                     onPressed:
                         () => _choose<ExerciseMetric>(
                           title: 'Measure',

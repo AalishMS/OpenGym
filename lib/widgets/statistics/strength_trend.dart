@@ -1,6 +1,5 @@
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../../models/statistics.dart';
@@ -9,6 +8,7 @@ import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
+import 'trend_line.dart';
 import 'training_overview.dart';
 
 /// A lift's selected value, plot and period summary on a single open canvas.
@@ -101,23 +101,14 @@ class _StrengthTrendState extends State<StrengthTrend> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  spacing: AppSpacing.sm,
-                  runSpacing: AppSpacing.xs,
-                  children: [
-                    Text(
-                      widget.metric.label,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                    Text(
-                      value(maximum),
-                      style: AppTypography.figures(
-                        fontSize: 11,
-                        color: textSecondaryColor(context),
-                      ),
-                    ),
-                  ],
+                // The measure is named by its picker above the readout.
+                Text(
+                  value(maximum),
+                  textAlign: TextAlign.right,
+                  style: AppTypography.figures(
+                    fontSize: 11,
+                    color: textSecondaryColor(context),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 SingleChildScrollView(
@@ -133,7 +124,7 @@ class _StrengthTrendState extends State<StrengthTrend> {
                           width: width,
                           height: height,
                           child: CustomPaint(
-                            painter: _StrengthPainter(
+                            painter: TrendLinePainter(
                               points: offsets,
                               selected: selected,
                               ink: accentColor(context),
@@ -154,6 +145,7 @@ class _StrengthTrendState extends State<StrengthTrend> {
                               selected: i == selected,
                               label:
                                   '${formatStatisticsDate(points[i].session.date)}, ${value(points[i].value)}, ${points[i].session.planName}',
+                              excludeSemantics: true,
                               child: InkWell(
                                 key: ValueKey('strength-point-$i'),
                                 borderRadius: AppRadius.control,
@@ -218,84 +210,4 @@ class _StrengthTrendState extends State<StrengthTrend> {
       ],
     );
   }
-}
-
-class _StrengthPainter extends CustomPainter {
-  final List<Offset> points;
-  final int selected;
-  final Color ink;
-  final Color wash;
-  final Color ground;
-  final Color guide;
-
-  const _StrengthPainter({
-    required this.points,
-    required this.selected,
-    required this.ink,
-    required this.wash,
-    required this.ground,
-    required this.guide,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    for (var i = 0; i < 3; i++) {
-      final y = size.height * i / 2;
-      canvas.drawLine(
-        Offset(0, y),
-        Offset(size.width, y),
-        Paint()..color = guide,
-      );
-    }
-    if (points.length > 1) {
-      final line = Path()..moveTo(points.first.dx, points.first.dy);
-      for (final point in points.skip(1)) {
-        line.lineTo(point.dx, point.dy);
-      }
-      final area =
-          Path.from(line)
-            ..lineTo(points.last.dx, size.height)
-            ..lineTo(points.first.dx, size.height)
-            ..close();
-      canvas.drawPath(
-        area,
-        Paint()
-          ..shader = LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [wash, ground],
-          ).createShader(Offset.zero & size),
-      );
-      canvas.drawPath(
-        line,
-        Paint()
-          ..color = ink
-          ..strokeWidth = 2.5
-          ..style = PaintingStyle.stroke
-          ..strokeJoin = StrokeJoin.round
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-    final selectedPoint = points[selected];
-    canvas.drawLine(
-      Offset(selectedPoint.dx, selectedPoint.dy + 8),
-      Offset(selectedPoint.dx, size.height),
-      Paint()..color = guide,
-    );
-    for (final point in points) {
-      canvas.drawCircle(point, 2.5, Paint()..color = ink);
-    }
-    canvas.drawCircle(selectedPoint, 7, Paint()..color = ground);
-    canvas.drawCircle(selectedPoint, 5, Paint()..color = ink);
-    canvas.drawCircle(selectedPoint, 2, Paint()..color = ground);
-  }
-
-  @override
-  bool shouldRepaint(_StrengthPainter old) =>
-      !listEquals(old.points, points) ||
-      old.selected != selected ||
-      old.ink != ink ||
-      old.wash != wash ||
-      old.ground != ground ||
-      old.guide != guide;
 }

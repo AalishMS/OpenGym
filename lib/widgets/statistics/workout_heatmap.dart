@@ -197,7 +197,8 @@ class _HeatmapGrid extends StatelessWidget {
             _legendItem(
               _square(context, worked: true, size: 12),
               compact
-                  ? '${counts.length} training days in $weeks weeks'
+                  ? '${counts.length} training ${counts.length == 1 ? 'day' : 'days'} '
+                      'in $weeks weeks'
                   : 'Workout',
               style,
             ),

@@ -50,7 +50,7 @@ void main() {
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
   });
 
-  Future<void> seedHomeTraining() async {
+  Future<void> seedHomeTraining({bool withLastWeek = false}) async {
     final plan = WorkoutPlan(
       id: 'shell-plan',
       name: 'Push Day',
@@ -69,6 +69,19 @@ void main() {
     await Hive.box<WorkoutSession>(
       HiveService.sessionsBox,
     ).put(session.id, session);
+    if (!withLastWeek) return;
+    final earlier = WorkoutSession(
+      id: 'shell-session-last-week',
+      planId: plan.id,
+      planName: plan.name,
+      date: DateTime.now().subtract(const Duration(days: 7)),
+      exercises: [
+        Exercise(name: 'Bench Press', sets: [Set(reps: 8, weight: 40)]),
+      ],
+    );
+    await Hive.box<WorkoutSession>(
+      HiveService.sessionsBox,
+    ).put(earlier.id, earlier);
   }
 
   Widget shellHost(double width, {double textScale = 1}) {
@@ -257,7 +270,7 @@ void main() {
   testWidgets(
     'weekly summary opens statistics and resets its scroll on each visit',
     (tester) async {
-      await tester.runAsync(seedHomeTraining);
+      await tester.runAsync(() => seedHomeTraining(withLastWeek: true));
       await tester.pumpWidget(shellHost(390));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -309,6 +322,27 @@ void main() {
         tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
         2,
       );
+      // The shortcut opens the week in progress…
+      expect(find.textContaining('This week  /'), findsOneWidget);
+
+      // …but an ordinary visit to Stats returns to the last complete week.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text('Home'),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text('Stats'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.textContaining('Last week  /'), findsOneWidget);
+      expect(find.textContaining('This week  /'), findsNothing);
     },
   );
 
