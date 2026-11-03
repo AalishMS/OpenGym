@@ -407,7 +407,7 @@ void main() {
     expect(find.text('Move up'), findsNothing);
     expect(find.text('Delete set'), findsNothing);
     await tester.tap(find.text('Move down'));
-    await tester.pumpAndSettle();
+    await pumpWithStorage(tester);
     final order = tester.widgetList<ExerciseCard>(find.byType(ExerciseCard));
     expect(order.first.exercise.name, 'Incline dumbbell press');
     expect(order.elementAt(1).exercise.name, 'Bench press');
@@ -541,6 +541,7 @@ class _Sessions extends WorkoutSessionProvider {
 
   @override
   Future<void> upsertSession(WorkoutSession session) async {
+    await super.upsertSession(session);
     writes.add(session);
   }
 }

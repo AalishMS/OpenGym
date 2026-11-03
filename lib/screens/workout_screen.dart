@@ -766,7 +766,9 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         SyncService.instance.scheduleSync();
         _weekSessions[_currentWeek] = result.session;
         _progressError = result.progressPending;
-        _syncTicker(result.session);
+        // The listener defers structural updates while logging is in progress.
+        // Reveal newly available weeks while keeping the completed log selected.
+        _loadStructure();
         await _updateTimerNotification(
           WorkoutTimerNotificationService.instance.dismiss,
         );
@@ -1633,6 +1635,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
             ],
             bottom: _buildPlanTabBar(accent, plans, currentPlanIndex),
           ),
+          bottomNavigationBar: _buildWeekNavBar(accent),
           body: Column(
             children: [
               if (_progressError)
@@ -1799,7 +1802,6 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                   ),
                 ),
               ),
-              _buildWeekNavBar(accent),
             ],
           ),
         ),

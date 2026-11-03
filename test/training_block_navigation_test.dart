@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
@@ -387,6 +388,139 @@ void main() {
       );
       await pumpWithStorage(tester);
     }
+
+    Future<void> waitFor(WidgetTester tester, bool Function() ready) async {
+      for (var attempt = 0; attempt < 100; attempt++) {
+        await pumpWithStorage(tester);
+        if (ready()) return;
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+      }
+      fail('The workout action did not finish.');
+    }
+
+    Future<void> finishWorkout(WidgetTester tester) async {
+      const notifications = MethodChannel(
+        'com.aalishms.opengym/workout_timer_notification',
+      );
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        notifications,
+        (_) async => null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          notifications,
+          null,
+        ),
+      );
+      await tester.tap(find.byTooltip('Finish workout'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Log workout'));
+      await waitFor(
+        tester,
+        () =>
+            tester
+                .widget<TrainingBlockStrip>(find.byType(TrainingBlockStrip))
+                .enabled,
+      );
+    }
+
+    locationTest(
+      'logging reveals the next week without reopening the workout',
+      (tester) async {
+        final first = await tester.runAsync(() async {
+          final repo = TrainingBlockRepository(ownerId: () => null);
+          final block = await repo.createBlock(
+            splitId: 's',
+            name: 'Build',
+            weekCount: 2,
+          );
+          await TrainingBlockMigration().normalize(ownerId: null);
+          final week = repo.weeksForBlock('s', block.id).single;
+          await HiveService.putSessionRaw(
+            WorkoutSession(
+              id: 'in-screen',
+              splitId: 's',
+              planId: 'p',
+              planName: 'Push',
+              trainingWeekId: week.id,
+              date: now,
+              isCompleted: false,
+              startedAt: now,
+              durationSeconds: 60,
+              exercises: [],
+            ),
+          );
+          return week;
+        });
+        await open(tester);
+        await finishWorkout(tester);
+
+        final progress = HiveService.progressForPlan('s', 'p')!;
+        expect(progress.activeWeekId, isNot(first!.id));
+        expect(HiveService.getSessionById('in-screen')!.isCompleted, isTrue);
+        expect(find.text('Build · Week 1'), findsOneWidget);
+        final next = find.byKey(
+          ValueKey('training-week-${progress.activeWeekId}'),
+        );
+        expect(next, findsOneWidget);
+        await tester.tap(next);
+        await waitFor(
+          tester,
+          () => find.text('Build · Week 2').evaluate().isNotEmpty,
+        );
+        expect(find.bySemanticsLabel('Start workout'), findsOneWidget);
+        expect(HiveService.getAllSessionsRaw(), hasLength(1));
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    locationTest('plus adds and selects a week after logging the final week', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        await TrainingBlockMigration().normalize(ownerId: null);
+        final progress = HiveService.progressForPlan('s', 'p')!;
+        await HiveService.putSessionRaw(
+          WorkoutSession(
+            id: 'final-week',
+            splitId: 's',
+            planId: 'p',
+            planName: 'Push',
+            trainingWeekId: progress.activeWeekId,
+            date: now,
+            isCompleted: false,
+            startedAt: now,
+            durationSeconds: 60,
+            exercises: [],
+          ),
+        );
+      });
+      await open(tester);
+      await finishWorkout(tester);
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.text('Choose next week'), findsOneWidget);
+      final add = find.ancestor(
+        of: find.byTooltip('Add week'),
+        matching: find.byType(IconButton),
+      );
+      expect(tester.widget<IconButton>(add).onPressed, isNotNull);
+      await tester.tap(add);
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsOneWidget);
+      await tester.tap(find.text('Add week'));
+      await waitFor(
+        tester,
+        () => find.text('Block 1 · Week 2').evaluate().isNotEmpty,
+      );
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(find.text('Week 2'), findsOneWidget);
+      expect(HiveService.progressForPlan('s', 'p')!.state, 'ready');
+      expect(HiveService.getAllTrainingBlocksRaw().single.plannedWeekCount, 2);
+      expect(HiveService.getAllSessionsRaw(), hasLength(1));
+      expect(tester.takeException(), isNull);
+    });
 
     locationTest(
       'Push reveals Week 2 while Pull shows only Week 1 after reopening',
