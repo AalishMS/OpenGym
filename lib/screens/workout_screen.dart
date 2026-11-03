@@ -1095,14 +1095,66 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     await _onWeekChanged(destination.id);
   }
 
+  /// Add week is the next step from any week once the block is finished: the
+  /// plus goes to the finished week before offering the choices.
   bool get _canAddWeek =>
-      _progress?.state == WorkoutProgressState.awaitingBoundary &&
-      _progress?.activeWeekId == _currentWeek;
+      _progress?.state == WorkoutProgressState.awaitingBoundary;
 
+  /// The plus always answers. At a finished block it opens the boundary
+  /// choices, going to the finished week first if another one is on screen;
+  /// before that it says which log unlocks the next week.
   Future<void> _addWeek(String blockId) async {
-    if (!_canAddWeek || blockId != _selectedWeek.blockId) return;
-    if (!await _autoSave() || !mounted) return;
+    final progress = _progress;
+    final active = progress == null ? null : _weekById[progress.activeWeekId];
+    if (progress == null || active == null || !_weeks.contains(active.id)) {
+      _showWeekMessage('Weeks unlock as you log workouts.');
+      return;
+    }
+    if (progress.state != WorkoutProgressState.awaitingBoundary) {
+      _explainLockedWeeks(active);
+      return;
+    }
+    if (active.id != _currentWeek) {
+      await _onWeekChanged(active.id);
+      if (!mounted || active.id != _currentWeek) return;
+    } else if (!await _autoSave() || !mounted) {
+      return;
+    }
     await _maybeBoundaryPrompt();
+  }
+
+  void _explainLockedWeeks(TrainingWeek active) {
+    final block = _training.blockById[active.blockId];
+    final planned =
+        block?.plannedWeekCount ??
+        _training.weeksByBlock[active.blockId]?.lastOrNull?.number ??
+        active.number;
+    final number = active.number;
+    final inBlock = block == null ? '' : ' in ${block.name}';
+    final logged = _savedSessionForWeek(active.id)?.isCompleted ?? false;
+    final message =
+        logged
+            ? 'Week $number is logged. Tap Continue to unlock the next week.'
+            : number < planned
+            ? 'Week $number of $planned$inBlock. '
+                'Log Week $number to unlock Week ${number + 1}.'
+            : 'Week $number is the last planned week$inBlock. '
+                'Log it to add a week or move on.';
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          action:
+              active.id == _currentWeek
+                  ? null
+                  : SnackBarAction(
+                    label: 'Go to Week $number',
+                    textColor: accentColor(context),
+                    onPressed: () => _onWeekChanged(active.id),
+                  ),
+        ),
+      );
   }
 
   Future<void> _renameBlock(String blockId) async {
@@ -1164,7 +1216,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       return;
     }
     final sessions = _training.sessionsForSlot(planId, weekId);
-    final unsavedEdits = weekId == _currentWeek && _hasUnsavedChanges;
+    final deletingSelected = weekId == _currentWeek;
+    final unsavedEdits = deletingSelected && _hasUnsavedChanges;
     // An empty week has nothing to lose, so it goes without a dialog.
     if (sessions.isNotEmpty || unsavedEdits) {
       final confirmed = await WorkoutDialogs.showDeleteWeekDialog(
@@ -1174,7 +1227,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       );
       if (!confirmed || !mounted) return;
     }
-    if (weekId == _currentWeek) {
+    if (deletingSelected) {
       // Drop the deleted draft's edits so they can't be saved back.
       setState(() {
         _hasUnsavedChanges = false;
@@ -1192,6 +1245,10 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       return;
     }
     if (!mounted) return;
+    // A block left with no reached weeks still offers its first week as a
+    // browsing entry, so the deleted tab can survive the reload. Follow
+    // progress instead of leaving the deleted week on screen.
+    if (deletingSelected) _selectProgress();
     context.read<WorkoutSessionProvider>().loadSessions();
     // Only an unfinished draft can own the running timer notification.
     final drafts = sessions.where((s) => !s.isCompleted).map((s) => s.id);
@@ -1863,6 +1920,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       selectedWeekId: _currentWeek,
       enabled: !_isSaving && !_isNavigating && _timerAction == null,
       canAddWeek: _canAddWeek,
+      activeWeekId: _progress?.activeWeekId,
       onSelectWeek: _onWeekChanged,
       onSelectBlock: _selectBlock,
       onRenameBlock: _renameBlock,

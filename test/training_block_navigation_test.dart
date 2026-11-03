@@ -71,6 +71,7 @@ void main() {
     double scale = 1,
     ValueChanged<String>? onAction,
     bool enabled = true,
+    String? active,
   }) {
     return MaterialApp(
       theme: buildTheme(const Color(0xFF008D8D), Brightness.light),
@@ -94,6 +95,7 @@ void main() {
                   onReorderBlocks: () => onAction?.call('reorder'),
                   onCreateBlock: () => onAction?.call('create'),
                   onAddWeek: (id) => onAction?.call('add:$id'),
+                  activeWeekId: active,
                   enabled: enabled,
                 ),
               ),
@@ -249,6 +251,49 @@ void main() {
       expect(find.text('Create block'), findsNothing);
     },
   );
+  testWidgets('only the active week carries the current-week dot', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      host(structure: blocks(1), slots: weeks(1, 3), active: 'b0-w2'),
+    );
+    await tester.pumpAndSettle();
+    final dot = find.byKey(const ValueKey('active-week-dot'));
+    expect(dot, findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('training-week-b0-w2')),
+        matching: dot,
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'rebuilding the same weeks keeps the strip where it was scrolled',
+    (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(host(structure: blocks(1), slots: weeks(1, 12)));
+      await tester.pumpAndSettle();
+      final scroll = find.descendant(
+        of: find.byType(TrainingBlockStrip),
+        matching: find.byType(SingleChildScrollView),
+      );
+      ScrollController controller() =>
+          tester.widget<SingleChildScrollView>(scroll).controller!;
+      await tester.drag(scroll, const Offset(-300, 0));
+      await tester.pumpAndSettle();
+      final scrolled = controller().offset;
+      expect(scrolled, greaterThan(0));
+      // A provider reload hands the strip equal weeks in new collections.
+      await tester.pumpWidget(host(structure: blocks(1), slots: weeks(1, 12)));
+      await tester.pumpAndSettle();
+      expect(controller().offset, scrolled);
+    },
+  );
+
   testWidgets('a single block cannot be reordered from the menu', (
     tester,
   ) async {
@@ -523,6 +568,108 @@ void main() {
     });
 
     locationTest(
+      'plus at a finished block goes back to its final week from browsing',
+      (tester) async {
+        await tester.runAsync(() async {
+          await TrainingBlockMigration().normalize(ownerId: null);
+          await TrainingBlockRepository(
+            ownerId: () => null,
+          ).createBlock(splitId: 's', name: 'Next', weekCount: 2);
+          final progress = HiveService.progressForPlan('s', 'p')!;
+          await HiveService.putSessionRaw(
+            WorkoutSession(
+              id: 'final-week',
+              splitId: 's',
+              planId: 'p',
+              planName: 'Push',
+              trainingWeekId: progress.activeWeekId,
+              date: now,
+              isCompleted: false,
+              startedAt: now,
+              durationSeconds: 60,
+              exercises: [],
+            ),
+          );
+        });
+        await open(tester);
+        await finishWorkout(tester);
+        await tester.tap(find.text('Block 1'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Next'));
+        await pumpWithStorage(tester);
+        expect(find.text('Next · Week 1'), findsOneWidget);
+
+        await tester.tap(find.byTooltip('Add week'));
+        await pumpWithStorage(tester);
+        expect(find.text('Block 1 · Week 1'), findsOneWidget);
+        expect(find.byType(BottomSheet), findsOneWidget);
+        expect(find.text('Move to Next'), findsOneWidget);
+        expect(
+          HiveService.progressForPlan('s', 'p')!.state,
+          'awaitingBoundary',
+        );
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    locationTest(
+      'deleting the viewed week moves to the active week even when its block still offers it',
+      (tester) async {
+        final ids = await tester.runAsync(() async {
+          await TrainingBlockMigration().normalize(ownerId: null);
+          final repo = TrainingBlockRepository(ownerId: () => null);
+          final first = repo.blocksForSplit('s').single;
+          final next = await repo.createBlock(
+            splitId: 's',
+            name: 'Next',
+            weekCount: 2,
+          );
+          final start = repo.weeksForBlock('s', first.id).single;
+          await HiveService.putSessionRaw(
+            WorkoutSession(
+              id: 'start-log',
+              splitId: 's',
+              planId: 'p',
+              planName: 'Push',
+              trainingWeekId: start.id,
+              date: now,
+              isCompleted: false,
+              startedAt: now,
+              durationSeconds: 60,
+              exercises: [],
+            ),
+          );
+          final service = WorkoutProgressionService(ownerId: () => null);
+          await service.complete('start-log');
+          final entry = repo.weeksForBlock('s', next.id).first;
+          await service.chooseBoundary(
+            planId: 'p',
+            expectedRevision: HiveService.progressForPlan('s', 'p')!.revision,
+            destinationWeekId: entry.id,
+          );
+          return [start.id, entry.id];
+        });
+        await open(tester);
+        expect(find.text('Next · Week 1'), findsOneWidget);
+
+        // Next has no other reached week, so its Week 1 stays listed as the
+        // block's browsing entry after the delete.
+        await tester.longPress(
+          find.byKey(ValueKey('training-week-${ids![1]}')),
+        );
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Delete week'));
+        await pumpWithStorage(tester);
+
+        expect(HiveService.progressForPlan('s', 'p')!.activeWeekId, ids[0]);
+        expect(find.text('Block 1 · Week 1'), findsOneWidget);
+        expect(find.text('Next · Week 1'), findsNothing);
+        expect(find.byKey(ValueKey('training-week-${ids[1]}')), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+
+    locationTest(
       'Push reveals Week 2 while Pull shows only Week 1 after reopening',
       (tester) async {
         final weekId = await tester.runAsync(() async {
@@ -675,15 +822,12 @@ void main() {
         await tester.tap(find.text('Strength'));
         await pumpWithStorage(tester);
         expect(find.text('Strength · Week 3'), findsOneWidget);
-        final add = find.byTooltip('Complete this block to add a week');
-        expect(
-          tester
-              .widget<IconButton>(
-                find.ancestor(of: add, matching: find.byType(IconButton)),
-              )
-              .onPressed,
-          isNull,
-        );
+        // Mid-block, the plus explains how weeks unlock instead of adding one,
+        // and offers a way back to the week being trained.
+        await tester.tap(find.byTooltip('Add week'));
+        await tester.pump();
+        expect(find.textContaining('to unlock Week'), findsOneWidget);
+        expect(find.byType(SnackBarAction), findsOneWidget);
         expect(find.text('Strength · Week 3'), findsOneWidget);
         final repo = TrainingBlockRepository(ownerId: () => null);
         expect(repo.weeksForBlock('s', ids[0]), hasLength(2));
@@ -764,18 +908,9 @@ void main() {
         await tester.pump(const Duration(seconds: 5));
         await tester.pumpAndSettle();
         final attempts = failing.attempts;
-        expect(
-          tester
-              .widget<IconButton>(
-                find.ancestor(
-                  of: find.byTooltip('Complete this block to add a week'),
-                  matching: find.byType(IconButton),
-                ),
-              )
-              .onPressed,
-          isNull,
-        );
+        await tester.tap(find.byTooltip('Add week'));
         await pumpWithStorage(tester);
+        expect(find.textContaining('last planned week'), findsOneWidget);
         expect(find.text('Block 1 · Week 1'), findsOneWidget);
         expect(failing.attempts, attempts);
         expect(HiveService.getAllTrainingWeeksRaw(), hasLength(2));

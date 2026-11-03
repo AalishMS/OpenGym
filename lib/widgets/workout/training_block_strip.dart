@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -31,7 +32,14 @@ class TrainingBlockStrip extends StatefulWidget {
 
   /// Holding a week tab asks to delete that week.
   final ValueChanged<String>? onDeleteWeek;
+
+  /// The week this workout is training now, marked with a dot so it reads
+  /// apart from a week that is only being browsed.
+  final String? activeWeekId;
   final bool enabled;
+
+  /// The block's final week is logged, so Add week is the next step. The plus
+  /// always responds; this only decides whether it carries the accent.
   final bool canAddWeek;
 
   const TrainingBlockStrip({
@@ -46,6 +54,7 @@ class TrainingBlockStrip extends StatefulWidget {
     required this.onCreateBlock,
     required this.onAddWeek,
     this.onDeleteWeek,
+    this.activeWeekId,
     this.enabled = true,
     this.canAddWeek = true,
   });
@@ -62,17 +71,27 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
   bool _fadeStart = false;
   bool _fadeEnd = false;
 
-  TrainingBlock? get _block =>
-      widget.blocks
+  TrainingBlock? get _block => _blockOf(widget);
+
+  static TrainingBlock? _blockOf(TrainingBlockStrip strip) =>
+      strip.blocks
           .where(
             (block) =>
-                widget.weeksByBlock[block.id]?.any(
-                  (week) => week.id == widget.selectedWeekId,
+                strip.weeksByBlock[block.id]?.any(
+                  (week) => week.id == strip.selectedWeekId,
                 ) ??
                 false,
           )
           .firstOrNull ??
-      widget.blocks.firstOrNull;
+      strip.blocks.firstOrNull;
+
+  /// The tabs this strip shows. Compared by value, because the screen rebuilds
+  /// its week maps on every provider reload.
+  static List<String> _shownWeekIds(TrainingBlockStrip strip) => [
+    for (final week
+        in strip.weeksByBlock[_blockOf(strip)?.id] ?? <TrainingWeek>[])
+      week.id,
+  ];
 
   @override
   void initState() {
@@ -84,9 +103,10 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
   @override
   void didUpdateWidget(covariant TrainingBlockStrip oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Only a new selection or a changed row scrolls. A sync that rebuilds the
+    // same weeks must not pull the row back while someone is scrolling it.
     if (oldWidget.selectedWeekId != widget.selectedWeekId ||
-        oldWidget.blocks != widget.blocks ||
-        oldWidget.weeksByBlock != widget.weeksByBlock) {
+        !listEquals(_shownWeekIds(oldWidget), _shownWeekIds(widget))) {
       _reveal();
     }
   }
@@ -171,7 +191,8 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
     );
     final block = _block;
     final weeks = widget.weeksByBlock[block?.id] ?? <TrainingWeek>[];
-    final canAdd = widget.enabled && widget.canAddWeek && block != null;
+    final canPress = widget.enabled && block != null;
+    final ready = canPress && widget.canAddWeek;
     // A Material, not a plain DecoratedBox: the tabs' ink needs a surface of
     // its own, or splashes paint behind the bar's opaque ground.
     return Material(
@@ -254,6 +275,7 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
                                     ),
                                     number: week.number,
                                     selected: week.id == widget.selectedWeekId,
+                                    active: week.id == widget.activeWeekId,
                                     onPressed:
                                         widget.enabled
                                             ? () => widget.onSelectWeek(week.id)
@@ -275,12 +297,14 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
                       padding: const EdgeInsets.only(right: AppSpacing.xs),
                       child: Center(
                         child: IconButton(
-                          tooltip:
-                              widget.canAddWeek
-                                  ? 'Add week'
-                                  : 'Complete this block to add a week',
+                          tooltip: 'Add week',
+                          // Before the block's last week is logged the screen
+                          // explains how weeks unlock, so a tap never does
+                          // nothing.
                           onPressed:
-                              canAdd ? () => widget.onAddWeek(block.id) : null,
+                              canPress
+                                  ? () => widget.onAddWeek(block.id)
+                                  : null,
                           // Once the block's last week is done, the plus is
                           // the next step, so it gains a ground to say so.
                           style: IconButton.styleFrom(
@@ -290,9 +314,9 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
                               borderRadius: AppRadius.control,
                             ),
                             backgroundColor:
-                                canAdd ? accentFillColor(context) : null,
+                                ready ? accentFillColor(context) : null,
                             foregroundColor:
-                                canAdd ? onAccentColor(context) : null,
+                                ready ? onAccentColor(context) : null,
                           ),
                           icon: const Icon(LucideIcons.plus, size: 20),
                         ),
@@ -399,11 +423,13 @@ class _BlockButton extends StatelessWidget {
 }
 
 /// A week label underlined like the plan tabs above the workout, so the two
-/// strips that frame the log speak the same language.
+/// strips that frame the log speak the same language. The week being trained
+/// now carries a small leading dot, whether or not it is selected.
 class _WeekTab extends StatelessWidget {
   final Key buttonKey;
   final int number;
   final bool selected;
+  final bool active;
   final VoidCallback? onPressed;
   final VoidCallback? onLongPress;
 
@@ -412,6 +438,7 @@ class _WeekTab extends StatelessWidget {
     required this.buttonKey,
     required this.number,
     required this.selected,
+    required this.active,
     required this.onPressed,
     this.onLongPress,
   });
@@ -419,8 +446,17 @@ class _WeekTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = accentColor(context);
+    final label = Text(
+      'Week $number',
+      style: AppTypography.figures(
+        fontSize: 14,
+        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+        color: selected ? accent : textSecondaryColor(context),
+      ),
+    );
     return Semantics(
       selected: selected,
+      value: active ? 'Current week' : null,
       onLongPressHint: onLongPress == null ? null : 'Week actions',
       child: InkWell(
         key: buttonKey,
@@ -450,14 +486,26 @@ class _WeekTab extends StatelessWidget {
                     ),
                   ),
                 ),
-                child: Text(
-                  'Week $number',
-                  style: AppTypography.figures(
-                    fontSize: 14,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? accent : textSecondaryColor(context),
-                  ),
-                ),
+                child:
+                    active
+                        ? Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            DecoratedBox(
+                              key: const ValueKey('active-week-dot'),
+                              decoration: BoxDecoration(
+                                color: accent,
+                                shape: BoxShape.circle,
+                              ),
+                              child: const SizedBox.square(dimension: 6),
+                            ),
+                            const SizedBox(
+                              width: AppSpacing.xs + AppSpacing.xxs,
+                            ),
+                            label,
+                          ],
+                        )
+                        : label,
               ),
             ),
           ),

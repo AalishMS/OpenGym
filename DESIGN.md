@@ -183,7 +183,10 @@ analytics are outside V1.
 The workout's bottom navigation always fills the available width. The selected
 week's block name stays at the left and Add week (+) stays at the right; only
 that block's week tabs scroll between them. The selected week keeps its accent
-underline and scrolls into view. The block name sits on a quiet ground, since a
+underline and scrolls into view; a reload that brings the same weeks leaves the
+row where it was scrolled. The week the workout is training now carries a small
+accent dot before its label, so it reads apart from a week that is only being
+browsed. The block name sits on a quiet ground, since a
 ground means tappable, and opens a compact menu above it, shaped like the
 split switcher. It lists every block in saved order with its intended length,
 marks the current one with a radio-style check, and then shows Create block,
@@ -194,9 +197,14 @@ on selection, outside tap or Back. There is no separate block overflow menu or
 collapse state.
 Switching blocks restores the last week viewed in that block during this screen
 visit, or its first supplied week on the first visit. Navigation saves pending
-edits before changing selection. The plus control is disabled until the active
-workout's final week is completed and selected; it then opens the same boundary
-sheet. Creating a block opens its first week for browsing without moving active
+edits before changing selection. The plus control always responds. Before the
+active block's final week is logged it adds nothing and says what unlocks the
+next week (*Week 2 of 4 in Build. Log Week 2 to unlock Week 3.*), with a
+*Go to Week n* action when another week is on screen. Once the final week is
+logged it carries the accent and opens the same boundary sheet, first moving to
+that finished week if another one is selected. Deleting the selected week
+follows progress to the active week, since a block left with no reached weeks
+still lists its first week as a browsing entry. Creating a block opens its first week for browsing without moving active
 progress. Only an explicit boundary choice moves into another block.
 
 A completed session carries revision-bound completion evidence with a fixed
