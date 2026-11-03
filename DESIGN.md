@@ -454,9 +454,14 @@ signature:
   opens the lift directory with sparklines in a sheet. The fixed time ranges
   (`4W`, `12W`, `6M`, `1Y`, `All`, spoken in full) use `SegmentedPills`;
   measure descriptions explain the calculation. Blocks opens on the block of
-  the latest workout and preserves its workload figures, weekly sets, and
-  biggest estimated-1RM gains. Compare blocks is a separate local view, with
-  averages per trained week so blocks of different lengths stay comparable.
+  the latest workout. A horizontally scrollable line chart compares Volume,
+  Sets, Workouts, or Records across logged blocks in saved block order.
+  Selection updates the readout and all detail below. The chart defaults to
+  averages per trained week, with Block total available from the calculation
+  control. A two-column totals layout replaces compressed metrics and repeated
+  rate subtitles. Weekly bars reveal exact values on selection; strength gains
+  expand to show their estimated-1RM endpoints. The page scrolls naturally so
+  its chart, totals, weekly workload, and gains have room to breathe.
   Sessions belong to blocks through their training week. Records keeps the
   chronological, expandable achievements and reveals older entries on demand.
   The four view controls remain visible while content scrolls; text can grow

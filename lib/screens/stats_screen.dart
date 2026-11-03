@@ -50,12 +50,10 @@ class _StatsScreenState extends State<StatsScreen> {
   _StatisticsView _view = _StatisticsView.overview;
   StatisticsPeriod _period = StatisticsPeriod.fourWeeks;
   ExerciseMetric _metric = ExerciseMetric.estimatedOneRepMax;
-  BlockMeasure _blockMeasure = BlockMeasure.sets;
   String? _blockId;
   String? _weeklyExercise;
   String? _progressExercise;
   String? _lastSplit;
-  bool _compareBlocks = false;
   int _recordLimit = 12;
 
   @override
@@ -194,7 +192,6 @@ class _StatsScreenState extends State<StatsScreen> {
       _blockId = null;
       _weeklyExercise = null;
       _progressExercise = null;
-      _compareBlocks = false;
       _recordLimit = 12;
       _resetScroll();
     }
@@ -383,52 +380,13 @@ class _StatsScreenState extends State<StatsScreen> {
                       'Log a workout in a training block to see its weekly workload and strength gains here.',
                   icon: LucideIcons.layers,
                 )
-                : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: StatisticsSectionHeader(
-                            title: 'Training blocks',
-                          ),
-                        ),
-                        if (blocks.length > 1)
-                          TextButton(
-                            onPressed:
-                                () => setState(
-                                  () => _compareBlocks = !_compareBlocks,
-                                ),
-                            child: Text(
-                              _compareBlocks
-                                  ? 'Block overview'
-                                  : 'Compare blocks',
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    if (_compareBlocks)
-                      BlockComparison(
-                        blocks: blocks,
-                        selectedId: selectedBlock.block.id,
-                        currentBlockId: currentBlockId,
-                        measure: _blockMeasure,
-                        onMeasure:
-                            (measure) =>
-                                setState(() => _blockMeasure = measure),
-                        onSelect: selectBlock,
-                        weightUnit: unit,
-                      )
-                    else
-                      BlockOverview(
-                        blocks: blocks,
-                        selected: selectedBlock,
-                        currentBlockId: currentBlockId,
-                        onSelect: selectBlock,
-                        weightUnit: unit,
-                      ),
-                  ],
+                : BlockOverview(
+                  key: ValueKey('blocks-$splitId'),
+                  blocks: blocks,
+                  selected: selectedBlock,
+                  currentBlockId: currentBlockId,
+                  onSelect: selectBlock,
+                  weightUnit: unit,
                 );
       case _StatisticsView.records:
         final records = _analytics.recordEvents(sessions);

@@ -71,8 +71,33 @@ hero illustrations, or independent color themes.
   and change. An info control opens the plain-language measure explanation. Period controls retain
   full spoken names. The trend uses straight segments between recorded values;
   it does not invent smoothing or measurements.
-- Block comparison is an explicit action instead of another panel below the
-  overview. Existing block analytics are preserved.
+- Blocks leads with a selectable line chart across logged blocks, using saved
+  block order. Volume, Sets, Workouts, and Records share one quiet measure
+  selector. Per trained week is the default basis; Block total reveals sums.
+  Only blocks with workouts enter the trend, so unused blocks are not presented
+  as measured zeroes. A single logged block renders one point and explains how
+  to extend the trend. Long histories scroll horizontally in whole visible
+  slots, while measure changes retain the browsing position.
+- Block totals sit in two generous columns on phones, without per-metric rate
+  subtitles or vertical separators. Weekly workload has one selected-week
+  readout instead of values above every bar. Strength gains show a lift and its
+  percentage; tapping reveals the start and end weights. Older block selection
+  updates all three sections. The page is deliberately scrollable.
 - Records load twelve events at a time, with more available on demand.
 - Large text can expand the page; navigation scrolls horizontally when its
   labels need more space. Empty states provide a next step.
+
+## Reviewing multiple blocks
+
+`tool/statistics_preview.dart` is a debug-only device entry point containing seven
+in-memory blocks. It uses the real Stats screen, analytics, and chart widgets.
+It does not initialize storage or accounts and never changes saved workouts.
+Build it with `flutter build apk --debug --target tool/statistics_preview.dart`.
+The block refinement screenshots use this fixture to demonstrate browsing a
+longer history. Build the normal `lib/main.dart` target to restore the regular app.
+
+The refinement keeps the same palette and type roles. Its layout is a quiet
+measure selector, selected block/value, one comparison line, the block trend,
+then totals, weekly workload, and gains with 24–32px section spacing. The rejected
+alternative was keeping the old four-column row and merely adding a graph:
+that would retain the cramped hierarchy the refinement is meant to resolve.
