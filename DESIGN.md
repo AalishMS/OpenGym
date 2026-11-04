@@ -402,14 +402,17 @@ signature:
 - Unknown data is left out rather than given a placeholder. A session
   duration that is null or under a minute counts as unknown
   (`knownDurationSeconds`), so History and Workout details never show "0m".
-- Don't nest a ground inside a card. History is a timeline: each month heads
-  its workouts with a count and volume tally, and the date sits on a rail
-  beside the card (above it at narrow widths or large text). A hairline runs
-  down the rail to the next workout in the month, and a second workout on the
-  same day hangs off the same line without repeating the date. The card leads
-  with the workout name, its block and week and known duration, then a ruled
-  row of Exercises / Sets / Volume in `figures`, and the exercise names. A
-  session with no performed sets says *No sets logged* instead of zeros.
+- Don't nest a ground inside a card. History is a ruled ledger, not a stack
+  of cards: each month heads its workouts with a count and volume tally over a
+  strong rule, and each workout is a row on the page ground separated by
+  hairlines. The date sits on a rail at the left (above the row at narrow
+  widths or large text); a second workout on the same day leaves the date out
+  and the rule between the two starts after the rail. A row leads with the
+  workout name and PR flag, then its block, week and known duration; volume
+  and set count sit right-aligned in `figures` so a month compares down the
+  page (they join the context line at large text), and the exercise names run
+  full width beneath. A session with no performed sets says *No sets logged*
+  instead of zeros.
 - Workout details opens with the long date, the workout name, its block and
   week, and how many exercises set a record (accent ink). A bounded readout
   puts Volume load and Duration large, over Exercises / Sets / Reps. Each

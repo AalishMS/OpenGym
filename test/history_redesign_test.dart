@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -415,18 +414,22 @@ void main() {
     await tester.pumpWidget(host(provider));
     await tester.pump();
 
-    Finder timerIn(String name) => find.descendant(
-      of: find.ancestor(
+    String detailsOf(String name) {
+      final row = find.ancestor(
         of: find.text(name),
         matching: find.byType(HistoryWorkoutRow),
-      ),
-      matching: find.byIcon(LucideIcons.timer),
-    );
-    expect(timerIn('Zero day'), findsNothing);
-    expect(timerIn('Short day'), findsNothing);
-    expect(timerIn('Timed day'), findsOneWidget);
-    expect(find.text('0m'), findsNothing);
-    expect(find.text('30m'), findsOneWidget);
+      );
+      final details = find.descendant(
+        of: row,
+        matching: find.textContaining('Week 4'),
+      );
+      return tester.widget<Text>(details).data!;
+    }
+
+    expect(detailsOf('Zero day'), 'Week 4');
+    expect(detailsOf('Short day'), 'Week 4');
+    expect(detailsOf('Timed day'), 'Week 4 · 30m');
+    expect(find.textContaining('0m'), findsOneWidget);
   });
 
   testWidgets('details leave out an unknown duration and show a known one', (
@@ -608,7 +611,7 @@ void main() {
     expect(find.text('200 kg'), findsOneWidget);
     expect(find.text('100'), findsOneWidget);
     expect(find.text('Pause at the bottom.'), findsOneWidget);
-        expect(find.text('No sets recorded'), findsOneWidget);
+    expect(find.text('No sets recorded'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

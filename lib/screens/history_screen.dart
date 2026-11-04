@@ -89,7 +89,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   group.workouts[index - 1].session.date,
                   workout.session.date,
                 ),
-            continuesTimeline: index < group.workouts.length - 1,
+            rule:
+                index == group.workouts.length - 1
+                    ? HistoryRowRule.none
+                    : DateUtils.isSameDay(
+                      group.workouts[index + 1].session.date,
+                      workout.session.date,
+                    )
+                    ? HistoryRowRule.inset
+                    : HistoryRowRule.full,
           ),
       ],
     ];
@@ -159,8 +167,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             if (entry is HistoryMonthGroup) {
                               return Padding(
                                 padding: EdgeInsets.only(
-                                  top: index == 0 ? 0 : AppSpacing.xl,
-                                  bottom: AppSpacing.xs,
+                                  top: index == 0 ? 0 : AppSpacing.xxl,
                                 ),
                                 child: HistoryMonthHeader(
                                   group: entry,
@@ -177,7 +184,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               summary: row.summary,
                               weightUnit: weightUnit,
                               showDate: row.showDate,
-                              continuesTimeline: row.continuesTimeline,
+                              rule: row.rule,
                               onTap: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute<void>(
@@ -201,16 +208,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
-/// A journal row and where it sits on the month's timeline.
+/// A journal row, whether it opens a new day, and the rule beneath it.
 class _JournalEntry {
   final HistoryWorkoutSummary summary;
   final bool showDate;
-  final bool continuesTimeline;
+  final HistoryRowRule rule;
 
   const _JournalEntry({
     required this.summary,
     required this.showDate,
-    required this.continuesTimeline,
+    required this.rule,
   });
 }
 

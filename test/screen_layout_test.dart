@@ -310,7 +310,7 @@ void main() {
     await tester.pumpWidget(host(const HistoryScreen(), sessions: [session]));
     await tester.pump();
     expect(find.text('Push Day'), findsOneWidget);
-    expect(find.text('Exercises'), findsOneWidget);
+    expect(find.text('1 set'), findsOneWidget);
     expect(find.text('Bench Press'), findsOneWidget);
     expect(find.byTooltip('Workout actions'), findsNothing);
     await tester.tap(find.text('Push Day'));
