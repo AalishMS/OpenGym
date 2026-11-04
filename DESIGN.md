@@ -340,6 +340,13 @@ or timer action to finish, even when no route changes. Deferred opens recheck
 that the session is still live. The observer is replaced along with the
 Navigator when the account changes.
 
+Android workout notifications use a system chronometer for elapsed time and
+retain Pause/Resume and Stop controls in the notification panel. While running,
+they request Live Update promotion on Android 16+ so supported devices can also
+show the timer in a status-bar chip. Pausing withdraws that request; resuming
+restores it. Promotion depends on the Android release, manufacturer and user
+notification settings. Other devices keep the regular timer notification.
+
 ## Bundled Workout Presets
 
 The app compiles a read-only catalog of workout programs from the reviewed
