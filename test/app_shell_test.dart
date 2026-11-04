@@ -243,6 +243,26 @@ void main() {
 
     await tester.dragFrom(start, const Offset(-25, -200));
     await tester.pumpAndSettle();
+    // Diagonal scrolls that lean sideways must not switch tabs, whichever
+    // axis the finger moves along first.
+    for (final diagonal in const [
+      Offset(-150, -120),
+      Offset(-150, 100),
+      Offset(150, -90),
+    ]) {
+      await tester.dragFrom(start, diagonal);
+      await tester.pumpAndSettle();
+    }
+    final sideways = TestPointer(7);
+    await tester.sendEventToBinding(sideways.down(start));
+    await tester.sendEventToBinding(
+      sideways.move(start + const Offset(-30, 0)),
+    );
+    await tester.sendEventToBinding(
+      sideways.move(start + const Offset(-160, -140)),
+    );
+    await tester.sendEventToBinding(sideways.up());
+    await tester.pumpAndSettle();
     await tester.timedDragFrom(
       start,
       const Offset(-45, 0),

@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'models/workout_session.dart';
 import 'navigation/open_workout.dart';
+import 'navigation/tab_swipe_recognizer.dart';
 import 'navigation/workout_destination.dart';
 import 'providers/coach_provider.dart';
 import 'providers/update_provider.dart';
@@ -44,6 +45,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   int _statsVisit = 0;
   int _homeResetRequest = 0;
   double _tabDragDistance = 0;
+  TabSwipeGestureRecognizer? _tabSwipeRecognizer;
   bool _openingHistoryWorkout = false;
   final ScrollController _homeScrollController = ScrollController();
   final GlobalKey _planTourKey = GlobalKey(debugLabel: 'tutorial-plan');
@@ -224,6 +226,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void _finishTabSwipe(DragEndDetails details, {required int showing}) {
     final distance = _tabDragDistance;
     _tabDragDistance = 0;
+    // A drag that wandered too far up or down was a scroll, not a swipe.
+    if (!(_tabSwipeRecognizer?.isMostlyHorizontal ?? true)) return;
     final velocity = details.primaryVelocity ?? 0;
     // Require a deliberate drag, or a short, fast flick. Vertical scrolling
     // competes with this horizontal recognizer in Flutter's gesture arena.
@@ -466,21 +470,27 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     return _withTutorial(
       Scaffold(
-        body: GestureDetector(
+        body: RawGestureDetector(
           behavior: HitTestBehavior.opaque,
           excludeFromSemantics: true,
-          onHorizontalDragStart:
-              coachInView ? null : (_) => _tabDragDistance = 0,
-          onHorizontalDragUpdate:
-              coachInView
-                  ? null
-                  : (details) => _tabDragDistance += details.primaryDelta ?? 0,
-          onHorizontalDragEnd:
-              coachInView
-                  ? null
-                  : (details) =>
-                      _finishTabSwipe(details, showing: effectiveIndex),
-          onHorizontalDragCancel: () => _tabDragDistance = 0,
+          gestures: {
+            if (!coachInView)
+              TabSwipeGestureRecognizer: GestureRecognizerFactoryWithHandlers<
+                TabSwipeGestureRecognizer
+              >(() => TabSwipeGestureRecognizer(debugOwner: this), (
+                recognizer,
+              ) {
+                _tabSwipeRecognizer = recognizer;
+                recognizer.onStart = (_) => _tabDragDistance = 0;
+                recognizer.onUpdate = (details) {
+                  _tabDragDistance += details.primaryDelta ?? 0;
+                };
+                recognizer.onEnd = (details) {
+                  _finishTabSwipe(details, showing: effectiveIndex);
+                };
+                recognizer.onCancel = () => _tabDragDistance = 0;
+              }),
+          },
           child: stack,
         ),
         bottomNavigationBar: AppBottomNav(
