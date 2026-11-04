@@ -83,7 +83,7 @@ Provider is the only app-wide state pattern.
 | `WorkoutSessionProvider` | Completed-session list and session mutations for the active split |
 | `TrainingBlockProvider` | Split structure, per-plan progress and session indexes |
 | `SettingsProvider` | Theme mode, accent color, units, auto-fill |
-| `UpdateProvider` | Self-update check against GitHub Releases |
+| `UpdateProvider` | Self-update from GitHub Releases: checks at launch and on resume, Wi-Fi prefetch, snoozed prompt, session install |
 
 Providers mutate data through `HiveService` (`SplitProvider` goes through
 `SplitRepository`), reload local state, notify listeners, and schedule sync

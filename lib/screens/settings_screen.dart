@@ -409,6 +409,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: _updateSubtitle(updates),
                           onTap: () => _handleUpdateCheck(context, updates),
                         ),
+                        if (UpdateService.isSupportedPlatform)
+                          _buildSwitchTile(
+                            context: context,
+                            icon: LucideIcons.wifi,
+                            title: 'Download updates on Wi-Fi',
+                            subtitle:
+                                'Get new versions ready in the background so '
+                                'updating takes seconds',
+                            value: updates.autoDownload,
+                            onChanged:
+                                (value) => _runSettingsAction(
+                                  context,
+                                  () => updates.setAutoDownload(value),
+                                ),
+                          ),
                         const _SectionHeader(title: 'About'),
                         if (widget.onReplayTutorial != null)
                           _buildSettingsTile(

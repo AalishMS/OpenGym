@@ -282,6 +282,26 @@ loudly if not), runs the tests, builds a single universal signed APK, checks it
 is signed with the release key rather than the debug fallback, and publishes it
 as a GitHub Release. Installed apps pick it up on their next check.
 
+The release body is what the in-app update dialog shows as "What's changed".
+It is built from the `feat:`, `fix:`, and `perf:` commit subjects since the
+previous tag, or from the tag message if you push an annotated tag
+(`git tag -a`). Write it as a `- ` list of user-facing changes.
+
+### How installed copies update
+
+- The app checks at launch and whenever it returns to the front, at most every
+  six hours. The prompt opens by itself once per release, then waits three
+  days. In between, a dot on Settings shows that an update is waiting. It
+  never opens over a running workout.
+- With **Download updates on Wi-Fi** on (the default), a new release
+  downloads in the background on unmetered networks, so "Update now" installs
+  straight away.
+- Installs go through a `PackageInstaller` session, and the APK is checked
+  against GitHub's SHA-256 digest first. On Android 12+, once OpenGym has
+  installed itself one time, later updates install without a confirmation
+  screen. The app then closes, an "OpenGym updated" notification reopens it,
+  and the next launch shows what's new.
+
 Two things will make a release invisible to the updater, so the workflow avoids
 both: marking it as a **draft** or a **prerelease** (the `/releases/latest`
 endpoint skips those), and attaching more than one `.apk` (which is why the

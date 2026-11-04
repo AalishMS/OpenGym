@@ -10,10 +10,15 @@ class AppBottomNav extends StatelessWidget {
   final int currentIndex;
   final ValueChanged<int> onTap;
   final Map<int, GlobalKey> destinationKeys;
+
+  /// The destination that carries an attention dot, such as Settings while an
+  /// update is waiting.
+  final int? badgedIndex;
   const AppBottomNav({
     required this.currentIndex,
     required this.onTap,
     this.destinationKeys = const {},
+    this.badgedIndex,
     super.key,
   });
 
@@ -71,7 +76,12 @@ class AppBottomNav extends StatelessWidget {
                 ),
                 borderRadius: AppRadius.button,
                 child: NavigationDestination(
-                  icon: Icon(_icons[i]),
+                  icon: Badge(
+                    isLabelVisible: badgedIndex == i,
+                    smallSize: 7,
+                    backgroundColor: accentFillColor(context),
+                    child: Icon(_icons[i]),
+                  ),
                   label: _labels[i],
                 ),
               ),

@@ -61,7 +61,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   bool _coachOpen = false;
 
   /// Guards against a second prompt if this State is rebuilt.
-  bool _updatePromptShown = false;
+  // Update prompt bookkeeping. The provider decides whether an offer is due;
+  // the shell decides whether now is a good moment for a dialog.
+  UpdateProvider? _updates;
+  bool _updateCheckStarted = false;
+  bool _updateCheckRunning = false;
+  bool _updatePromptOpen = false;
+  StreamSubscription<void>? _updateOpenSubscription;
+
+  /// A workout timer is running or paused, so no dialog may cover it and no
+  /// update may close the app.
+  bool _workoutLive = false;
   StreamSubscription<WorkoutTimerNotificationEvent>? _timerSubscription;
   int? _handledTimerIntentRevision;
   Future<void> _timerEvents = Future<void>.value();
@@ -323,7 +333,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _maybeStartTutorial();
       if (!mounted) return;
-      if (!_tourActive) unawaited(_checkForUpdate());
       unawaited(_restoreTimerNotification());
     });
   }
@@ -332,20 +341,30 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timerSubscription?.cancel();
+    _updateOpenSubscription?.cancel();
+    _updates?.canInterrupt = () async => true;
     _homeScrollController.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _reconcileCurrentTimer();
-    }
+    if (state == AppLifecycleState.resumed) unawaited(_onResumed());
+  }
+
+  Future<void> _onResumed() async {
+    await _reconcileCurrentTimer();
+    // Only once the launch check has run: the tour defers it on first run.
+    if (mounted && _updateCheckStarted) await _checkForUpdate();
   }
 
   Future<void> _restoreTimerNotification() async {
     await WorkoutTimerNotificationService.instance.restore();
     await _reconcileCurrentTimer();
+    // The update check waits for this so it knows whether a workout is live,
+    // but not for the timer's intent below, which can hold a pushed workout
+    // route open for as long as the session lasts.
+    if (mounted && !_tourActive) unawaited(_checkForUpdate());
     final event =
         await WorkoutTimerNotificationService.instance.consumeIntent();
     if (event != null) await _handleTimerEvent(event);
@@ -353,7 +372,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   Future<void> _reconcileCurrentTimer() async {
     final snapshot = await WorkoutTimerNotificationService.instance.snapshot();
-    if (snapshot != null) await _reconcileTimer(snapshot);
+    final session = snapshot == null ? null : await _reconcileTimer(snapshot);
+    _workoutLive = session != null;
   }
 
   Future<WorkoutSession?> _reconcileTimer(
@@ -409,21 +429,79 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     );
   }
 
+  /// Runs the launch check the first time and the resume check after that,
+  /// then opens the prompt if an offer is due and the moment is right.
   Future<void> _checkForUpdate() async {
-    final updates = context.read<UpdateProvider>();
-    await updates.checkOnStartup();
-    if (!mounted || _updatePromptShown || _tourActive || _replayingTutorial) {
-      return;
+    if (_updateCheckRunning) return;
+    _updateCheckRunning = true;
+    try {
+      final updates = _updates ??= context.read<UpdateProvider>();
+      // Read live, not from the last resume: a workout can start while a
+      // download the user asked for is still coming down.
+      updates.canInterrupt = () async {
+        if (!mounted) return false;
+        await _reconcileCurrentTimer();
+        return !_workoutLive;
+      };
+      _updateOpenSubscription ??= updates.openRequests.listen(
+        (_) => unawaited(_showUpdatePrompt()),
+      );
+      if (_updateCheckStarted) {
+        await updates.checkOnResume();
+      } else {
+        _updateCheckStarted = true;
+        await updates.checkOnStartup();
+      }
+      if (!mounted || !_mayPromptNow) return;
+
+      final whatsNew = updates.takeWhatsNew();
+      if (whatsNew != null) {
+        _updatePromptOpen = true;
+        try {
+          await showWhatsNewDialog(context, whatsNew);
+        } finally {
+          _updatePromptOpen = false;
+        }
+        return;
+      }
+
+      if (!await updates.shouldPromptAutomatically()) return;
+      if (!mounted || !_mayPromptNow) return;
+      await updates.markPrompted();
+      await _showUpdatePrompt();
+    } finally {
+      _updateCheckRunning = false;
     }
-    // A download picked up from an earlier run shows its progress too.
-    if (!updates.isUpdateAvailable && !updates.isBusy) return;
-    _updatePromptShown = true;
-    await showUpdateDialog(context);
+  }
+
+  /// Whether a dialog may open by itself: not over the tour, a workout, or a
+  /// screen the user pushed (a workout, a plan editor), and not twice.
+  bool get _mayPromptNow =>
+      !_updatePromptOpen &&
+      !_tourActive &&
+      !_replayingTutorial &&
+      !_workoutLive &&
+      (ModalRoute.of(context)?.isCurrent ?? true);
+
+  /// Opens the update dialog. Also the answer to tapping "Update ready to
+  /// install", which the user asked for, so only the tour holds it back.
+  Future<void> _showUpdatePrompt() async {
+    if (!mounted || _updatePromptOpen || _tourActive) return;
+    _updatePromptOpen = true;
+    try {
+      await showUpdateDialog(context);
+    } finally {
+      _updatePromptOpen = false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isWide = Breakpoints.isWide(context);
+    // Select, not watch: download progress ticks twice a second.
+    final updatePending = context.select<UpdateProvider?, bool>(
+      (updates) => updates?.hasPendingUpdate ?? false,
+    );
 
     // Dashboard (index 0) is desktop-only. On the narrow bottom-bar layout it's
     // unreachable, so clamp the rendered/highlighted screen to Plans (index 1).
@@ -457,6 +535,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   4: _settingsTourKey,
                 },
                 currentIndex: effectiveIndex,
+                badgedIndex: updatePending ? 4 : null,
                 onTap: (i) => _selectTab(i, showing: effectiveIndex),
               ),
               Expanded(child: stack),
@@ -501,6 +580,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           },
           // Bottom bar slots [PLANS, HISTORY, STATS, SETTINGS] map to screens 1–4.
           currentIndex: (effectiveIndex - 1).clamp(0, 3),
+          badgedIndex: updatePending ? 3 : null,
           onTap: (i) => _selectTab(i + 1, showing: effectiveIndex),
         ),
       ),

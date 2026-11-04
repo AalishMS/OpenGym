@@ -250,7 +250,50 @@ void main() {
     );
   });
 
+  group('release checksum', () {
+    const hex =
+        '3205aafc534c7bda735ba603d845d1885a124938c7d36ae8c101728d2337a00a';
+
+    test('reads GitHub\'s sha256 asset digest and survives the cache', () {
+      final release = ReleaseInfo.fromJson({
+        'tag_name': 'v1.0.16+17',
+        'assets': [
+          {
+            'name': 'OpenGym.apk',
+            'size': 10,
+            'browser_download_url': 'https://example.invalid/a.apk',
+            'digest': 'sha256:${hex.toUpperCase()}',
+          },
+        ],
+      })!;
+      expect(release.sha256, hex);
+      expect(ReleaseInfo.fromJson(release.toCache())!.sha256, hex);
+    });
+
+    test('ignores digests it cannot trust', () {
+      expect(parseSha256Digest('sha512:$hex'), isNull);
+      expect(parseSha256Digest('sha256:abc'), isNull);
+      expect(parseSha256Digest(hex), isNull);
+    });
+  });
+
   group('UpdateDownloadSnapshot.fromMap', () {
+    test('tells a background download from the user\'s', () {
+      final snapshot = UpdateDownloadSnapshot.fromMap(const {
+        'state': 'paused',
+        'tag': 'v1',
+        'reason': 3,
+        'background': true,
+      });
+      expect(snapshot.background, isTrue);
+      expect(snapshot.isWaitingForWifi, isTrue);
+      expect(
+        UpdateDownloadSnapshot.fromMap(const {'state': 'running', 'tag': 'v1'})
+            .background,
+        isFalse,
+      );
+    });
+
     test('reads a running download and its progress', () {
       final snapshot = UpdateDownloadSnapshot.fromMap(const {
         'state': 'running',

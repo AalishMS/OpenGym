@@ -9,6 +9,7 @@ import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.lang.ref.WeakReference
 
 class MainActivity: FlutterActivity() {
     // Backs the in-app updater's pre-flight check. "Install unknown apps" is not
@@ -22,14 +23,40 @@ class MainActivity: FlutterActivity() {
     private var pendingTimerIntentAction: String? = null
     private var pendingPermissionResult: MethodChannel.Result? = null
 
-    // The installer's answer, held until Dart asks for it on resume. Android
-    // delivers it in onActivityResult, just before onResume.
-    private var pendingInstallResult: Map<String, Any?>? = null
+    private var installerChannel: MethodChannel? = null
+    private var installListener: ((Map<String, Any?>) -> Unit)? = null
+
+    // Set when the app was opened from the "Update ready to install"
+    // notification, until Dart asks for it at startup.
+    private var pendingOpenUpdate = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INSTALLER_CHANNEL).setMethodCallHandler { call, result ->
+        val installer = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, INSTALLER_CHANNEL)
+        installerChannel = installer
+        UpdateInstaller.activity = WeakReference(this)
+        val listener: (Map<String, Any?>) -> Unit = { outcome ->
+            // Before Dart registers its handler, or if it fails, keep the
+            // result for takeInstallResult instead of losing it.
+            installer.invokeMethod("installResult", outcome, object : MethodChannel.Result {
+                override fun success(result: Any?) {}
+                override fun error(code: String, message: String?, details: Any?) {
+                    UpdateInstaller.hold(outcome)
+                }
+                override fun notImplemented() {
+                    UpdateInstaller.hold(outcome)
+                }
+            })
+        }
+        installListener = listener
+        UpdateInstaller.listener = listener
+        if (intent?.action == ACTION_OPEN_UPDATE) {
+            pendingOpenUpdate = true
+            // Consumed: a recreated activity must not reopen the prompt.
+            setIntent(Intent(intent).setAction(Intent.ACTION_MAIN))
+        }
+        installer.setMethodCallHandler { call, result ->
             when (call.method) {
                 "canRequestPackageInstalls" -> {
                     result.success(canRequestPackageInstalls())
@@ -45,6 +72,8 @@ class MainActivity: FlutterActivity() {
                             tag = call.argument<String>("tag")!!,
                             fileName = call.argument<String>("fileName")!!,
                             title = call.argument<String>("title") ?: "OpenGym update",
+                            label = call.argument<String>("label") ?: "the latest version",
+                            background = call.argument<Boolean>("background") ?: false,
                         )
                         result.success(null)
                     } catch (e: Exception) {
@@ -62,13 +91,23 @@ class MainActivity: FlutterActivity() {
                     UpdateDownloads.cancel(this)
                     result.success(null)
                 }
+                "setDownloadBackground" -> {
+                    UpdateDownloads.setBackground(this, call.argument<Boolean>("background") ?: false)
+                    result.success(null)
+                }
                 "installDownload" -> {
-                    pendingInstallResult = null
-                    result.success(UpdateDownloads.install(this))
+                    result.success(UpdateInstaller.install(this, call.argument<String>("sha256")))
                 }
                 "takeInstallResult" -> {
-                    result.success(pendingInstallResult)
-                    pendingInstallResult = null
+                    result.success(UpdateInstaller.pendingResult)
+                    UpdateInstaller.pendingResult = null
+                }
+                "canUpdateSilently" -> {
+                    result.success(UpdateInstaller.canUpdateSilently(this))
+                }
+                "takeOpenUpdateRequest" -> {
+                    result.success(pendingOpenUpdate)
+                    pendingOpenUpdate = false
                 }
                 else -> {
                     result.notImplemented()
@@ -113,8 +152,20 @@ class MainActivity: FlutterActivity() {
         }
     }
 
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        // A newer activity may already have installed its own listener.
+        if (UpdateInstaller.listener === installListener) UpdateInstaller.listener = null
+        installListener = null
+        installerChannel = null
+        super.cleanUpFlutterEngine(flutterEngine)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.action == ACTION_OPEN_UPDATE) {
+            installerChannel?.invokeMethod("openUpdate", null)
+            return
+        }
         setIntent(intent)
         val action = prepareTimerIntent(intent) ?: return
         pendingTimerIntentAction = action
@@ -213,16 +264,10 @@ class MainActivity: FlutterActivity() {
         window.attributes = params
     }
     
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == INSTALL_REQUEST_CODE) {
-            pendingInstallResult = UpdateDownloads.installResult(resultCode, data)
-        }
-    }
-
     override fun onResume() {
         super.onResume()
         UpdateDownloads.appInForeground = true
+        UpdateInstaller.activity = WeakReference(this)
         // The app is in front, so the update dialog takes over from the
         // "ready to install" notification.
         UpdateDownloads.clearNotification(this)
