@@ -233,6 +233,25 @@ void main() {
       expect(find.byKey(const ValueKey('beats-previous-0')), findsNothing);
     });
 
+    testWidgets('added weight beats a performed bodyweight baseline', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        card(
+          recordWeight: 0,
+          sets: [
+            gym.Set(weight: 10, reps: 8),
+            gym.Set(weight: 0, reps: 8),
+            gym.Set(weight: 10, reps: 0),
+          ],
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('live-record-0')), findsOneWidget);
+      expect(find.byKey(const ValueKey('live-record-1')), findsNothing);
+      expect(find.byKey(const ValueKey('live-record-2')), findsNothing);
+    });
+
     test('a record needs reps and history, like Finish', () {
       expect(ExerciseCard.isRecord(gym.Set(weight: 101, reps: 1), 100), isTrue);
       expect(

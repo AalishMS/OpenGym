@@ -299,6 +299,9 @@ class _WorkoutScreenState extends State<WorkoutScreen>
             );
             for (final set in exercise.sets) {
               if (set.reps == 0 && set.weight == 0) continue;
+              // Performed bodyweight sets establish history at zero, distinct
+              // from an exercise that has never been logged.
+              best.putIfAbsent(key, () => 0);
               if (set.weight > (best[key] ?? 0)) best[key] = set.weight;
             }
           }

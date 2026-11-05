@@ -58,7 +58,7 @@ class ExerciseCard extends StatelessWidget {
   /// Whether [set] would be a record if logged as entered. Matches Finish:
   /// the heaviest weight for the exercise, with reps performed.
   static bool isRecord(gym.Set set, double? recordWeight) =>
-      set.reps > 0 && (recordWeight ?? 0) > 0 && set.weight > recordWeight!;
+      set.reps > 0 && recordWeight != null && set.weight > recordWeight;
 
   static bool _beats(gym.Set set, gym.Set? previous) =>
       previous != null &&
