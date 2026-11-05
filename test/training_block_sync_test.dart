@@ -1,6 +1,14 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:gymapp/models/exercise_definition.dart';
+import 'package:gymapp/models/exercise.dart';
+import 'package:gymapp/models/set.dart' as gym;
+import 'package:gymapp/models/split_preference.dart';
+import 'package:gymapp/services/adopt_local_data.dart';
+import 'package:gymapp/services/statistics_analytics_service.dart';
+import 'package:gymapp/services/exercise_catalog.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/models/split.dart';
 import 'package:gymapp/models/training_block.dart';
@@ -49,7 +57,7 @@ class ReplicaApi {
     }
     final override = await intercept?.call(request);
     if (override != null) return override;
-    if (request.url.path.contains('/rpc/')) return http.Response('2', 200);
+    if (request.url.path.contains('/rpc/')) return http.Response('3', 200);
     final table = request.url.pathSegments.last;
     final rows = tables.putIfAbsent(table, () => []);
     if (request.method == 'GET') {
@@ -188,6 +196,201 @@ void main() {
   });
 
   test(
+    'a partial catalog pull survives restart and resolves a later target',
+    () async {
+      const sourceId = '11111111-1111-4111-8111-111111111111';
+      const targetId = '22222222-2222-4222-8222-222222222222';
+      final week = HiveService.getAllTrainingWeeksRaw().single;
+      await HiveService.putSessionRaw(
+        WorkoutSession(
+          id: 'partial-catalog-log',
+          date: stamp,
+          planName: 'Push',
+          planId: planId,
+          splitId: splitId,
+          userId: owner,
+          trainingWeekId: week.id,
+          updatedAt: stamp,
+          dirty: true,
+          exercises: [
+            Exercise(
+              name: 'DB Press',
+              exerciseId: sourceId,
+              sets: [gym.Set(reps: 8, weight: 20)],
+            ),
+          ],
+        ),
+      );
+      final source = ExerciseDefinition(
+        id: sourceId,
+        name: 'DB Press',
+        mergedIntoId: targetId,
+        userId: owner,
+        updatedAt: stamp,
+      );
+      api.tables['exercise_definitions'] = [
+        {
+          'id': sourceId,
+          'user_id': owner,
+          'data': source.toJson(),
+          'updated_at': stamp.toIso8601String(),
+          'server_seq': stamp.add(const Duration(days: 1)).toIso8601String(),
+        },
+      ];
+      // The server has only the first accepted row of an interrupted custom
+      // merge upload. This replica also loses transport after persisting it.
+      api.intercept =
+          (request) async =>
+              request.method == 'GET' &&
+                      request.url.path.endsWith('/workout_plans')
+                  ? http.Response('{"message":"offline","code":"OFFLINE"}', 503)
+                  : null;
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.retryableError);
+      expect(ExerciseCatalog.getById(sourceId)!.mergedIntoId, targetId);
+      expect(ExerciseCatalog.getById(targetId), isNull);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('lastUserId', owner);
+      await prefs.setBool('adopted_$owner', true);
+      final directory =
+          File(Hive.box<WorkoutPlan>(HiveService.plansBox).path!).parent.path;
+      await Hive.close();
+      Hive.init(directory);
+      await ExerciseCatalog.open();
+      await Hive.openBox<WorkoutPlan>(HiveService.plansBox);
+      await Hive.openBox<WorkoutSession>(HiveService.sessionsBox);
+      await Hive.openBox<Split>(HiveService.splitsBox);
+      await Hive.openBox<SplitPreference>(HiveService.splitPreferencesBox);
+      await HiveService.openTrainingBoxes();
+      final requestsBeforePreparation = api.requests.length;
+      await AdoptLocalData.prepareLocalForUser(owner);
+      // Startup and retry require no network to regain the saved logger.
+      await TrainingBlockMigration().normalize(ownerId: owner);
+      expect(api.requests, hasLength(requestsBeforePreparation));
+      expect(ExerciseCatalog.canonicalId(sourceId), sourceId);
+      expect(
+        ExerciseCatalog.search('DB Press').map((d) => d.id),
+        contains(sourceId),
+      );
+      expect(
+        HiveService.getSessionById(
+          'partial-catalog-log',
+        )!.exercises.single.sets.single.weight,
+        20,
+      );
+      expect(ExerciseCatalog.getById(targetId), isNull);
+
+      api.intercept = null;
+      final target = ExerciseDefinition(
+        id: targetId,
+        name: 'My dumbbell press',
+        userId: owner,
+        updatedAt: stamp,
+      );
+      api.tables['exercise_definitions']!.add({
+        'id': targetId,
+        'user_id': owner,
+        'data': target.toJson(),
+        'updated_at': stamp.toIso8601String(),
+        'server_seq': stamp.add(const Duration(days: 2)).toIso8601String(),
+      });
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(ExerciseCatalog.canonicalId(sourceId), targetId);
+      expect(ExerciseCatalog.findByName('DB Press')!.id, targetId);
+      final saved = HiveService.getSessionById('partial-catalog-log')!;
+      expect(saved.exercises.single.exerciseId, sourceId);
+      expect(saved.exercises.single.name, 'DB Press');
+      expect(saved.exercises.single.sets.single.weight, 20);
+      expect(const StatisticsAnalyticsService().exerciseDirectory([saved]), {
+        targetId: 'My dumbbell press',
+      });
+    },
+  );
+
+  test('custom exercise definitions sync before workout references', () async {
+    const id = '11111111-1111-4111-8111-111111111111';
+    await ExerciseCatalog.put(
+      ExerciseDefinition(
+        id: id,
+        name: 'My press',
+        userId: owner,
+        updatedAt: stamp,
+        dirty: true,
+      ),
+    );
+    await SyncService.instance.syncNow();
+    expect(ExerciseCatalog.getById(id)!.dirty, isFalse);
+    final row = api.tables['exercise_definitions']!.single;
+    expect(row['user_id'], owner);
+    expect((row['data'] as Map)['id'], id);
+    final writes =
+        api.requests
+            .where((r) => r.method == 'POST')
+            .map((r) => r.url.pathSegments.last)
+            .toList();
+    expect(
+      writes.indexOf('exercise_definitions'),
+      lessThan(writes.indexOf('workout_plans')),
+    );
+  });
+
+  test('a newer unmerged pull cannot erase a pending exercise merge', () async {
+    const id = '11111111-1111-4111-8111-111111111111';
+    final merged = ExerciseDefinition(
+      id: id,
+      name: 'DB Press',
+      mergedIntoId: 'builtin:dumbbell-press',
+      userId: owner,
+      updatedAt: stamp,
+      dirty: true,
+    );
+    await ExerciseCatalog.put(merged);
+    api.tables['exercise_definitions'] = [
+      {
+        'id': id,
+        'user_id': owner,
+        'updated_at': stamp.add(const Duration(days: 10)).toIso8601String(),
+        'server_seq': stamp.add(const Duration(days: 11)).toIso8601String(),
+        'data': {...merged.toJson(), 'mergedIntoId': null},
+      },
+    ];
+    await SyncService.instance.syncNow();
+    expect(ExerciseCatalog.canonicalId(id), 'builtin:dumbbell-press');
+    expect(ExerciseCatalog.getById(id)!.dirty, isFalse);
+    expect(
+      (api.tables['exercise_definitions']!.single['data']
+          as Map)['mergedIntoId'],
+      'builtin:dumbbell-press',
+    );
+  });
+
+  test('a remote merge wins over a newer local unmerged name edit', () async {
+    const id = '11111111-1111-4111-8111-111111111111';
+    final local = ExerciseDefinition(
+      id: id,
+      name: 'My press',
+      userId: owner,
+      updatedAt: stamp.add(const Duration(days: 10)),
+      dirty: true,
+    );
+    await ExerciseCatalog.put(local);
+    api.tables['exercise_definitions'] = [
+      {
+        'id': id,
+        'user_id': owner,
+        'updated_at': stamp.toIso8601String(),
+        'server_seq': stamp.add(const Duration(days: 11)).toIso8601String(),
+        'data': {...local.toJson(), 'mergedIntoId': 'builtin:dumbbell-press'},
+      },
+    ];
+    await SyncService.instance.syncNow();
+    expect(ExerciseCatalog.canonicalId(id), 'builtin:dumbbell-press');
+    expect(ExerciseCatalog.getById(id)!.dirty, isFalse);
+  });
+
+  test(
     'sync round trips intended duration and only the completing plan available weeks',
     () async {
       final repo = TrainingBlockRepository(ownerId: () => owner);
@@ -300,7 +503,7 @@ void main() {
       final rest =
           api.requests.where((r) => r.url.path.startsWith('/rest/')).toList();
       expect(
-        rest.every((r) => r.headers['x-opengym-training-schema'] == '2'),
+        rest.every((r) => r.headers['x-opengym-training-schema'] == '3'),
         isTrue,
       );
       final writes =

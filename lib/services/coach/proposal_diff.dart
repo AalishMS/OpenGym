@@ -1,3 +1,4 @@
+import '../exercise_catalog.dart';
 import '../../models/coach_proposal.dart';
 import '../../models/exercise_template.dart';
 import '../../models/workout_plan.dart';
@@ -149,7 +150,15 @@ class ProposalDiff {
   ) {
     final unpaired = <String, List<int>>{};
     for (var index = 0; index < before.length; index++) {
-      unpaired.putIfAbsent(_key(before[index].name), () => []).add(index);
+      unpaired
+          .putIfAbsent(
+            ExerciseCatalog.identity(
+              before[index].name,
+              before[index].exerciseId,
+            ),
+            () => [],
+          )
+          .add(index);
     }
     final pairedIndex = <int?>[
       for (final exercise in after)
@@ -253,8 +262,7 @@ class ProposalDiff {
     return result;
   }
 
-  static String _key(String name) =>
-      name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+  static String _key(String name) => ExerciseCatalog.identity(name);
 }
 
 bool _sameSets(List<CoachSet> a, List<CoachSet> b) {

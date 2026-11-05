@@ -1,3 +1,4 @@
+import '../exercise_catalog.dart';
 import '../../data/exercise_library.dart';
 import '../../models/coach_proposal.dart';
 import '../../models/set.dart' as gym;
@@ -187,8 +188,14 @@ class CoachContextBuilder {
       for (final exercise in session.exercises) {
         final sets = exercise.sets.where((set) => set.reps > 0);
         if (sets.isEmpty) continue;
-        final key = _key(exercise.name);
-        names.putIfAbsent(key, () => exercise.name.trim());
+        final key = ExerciseCatalog.identity(
+          exercise.name,
+          exercise.exerciseId,
+        );
+        names.putIfAbsent(
+          key,
+          () => ExerciseCatalog.displayName(key, exercise.name.trim()),
+        );
         performed.putIfAbsent(key, () => []).addAll(sets);
       }
       for (final entry in performed.entries) {

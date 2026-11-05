@@ -1,3 +1,4 @@
+import 'exercise_catalog.dart';
 import '../models/set.dart' as gym;
 import '../models/statistics.dart';
 import '../models/training_block.dart';
@@ -23,8 +24,8 @@ class StatisticsAnalyticsService {
           .where(
             (exercise) =>
                 exerciseName == null ||
-                exercise.name.trim().toLowerCase() ==
-                    exerciseName.trim().toLowerCase(),
+                ExerciseCatalog.identity(exercise.name, exercise.exerciseId) ==
+                    ExerciseCatalog.identity(exerciseName),
           )
           .expand((exercise) => exercise.sets)
           .where((set) => set.reps > 0);
@@ -57,25 +58,21 @@ class StatisticsAnalyticsService {
       for (final exercise in session.exercises) {
         if (exercise.sets.any((set) => set.reps > 0)) {
           latest.putIfAbsent(
-            exercise.name.trim().toLowerCase(),
+            ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
             () => session.date,
           );
         }
       }
     }
-    final names =
-        exerciseNames(
-            sessions,
-          ).where((name) => latest.containsKey(name.toLowerCase())).toList()
-          ..sort((a, b) {
-            final date = latest[b.toLowerCase()]!.compareTo(
-              latest[a.toLowerCase()]!,
-            );
-            return date == 0
-                ? a.toLowerCase().compareTo(b.toLowerCase())
-                : date;
-          });
-    return names.firstOrNull;
+    final directory = exerciseDirectory(sessions);
+    final ids =
+        latest.keys.toList()..sort((a, b) {
+          final date = latest[b]!.compareTo(latest[a]!);
+          if (date != 0) return date;
+          final name = directory[a]!.compareTo(directory[b]!);
+          return name == 0 ? a.compareTo(b) : name;
+        });
+    return ids.isEmpty ? null : directory[ids.first];
   }
 
   static double estimatedOneRepMax(gym.Set set) {
@@ -144,11 +141,18 @@ class StatisticsAnalyticsService {
     final states = <String, _RecordState>{};
     final events = <RecordEvent>[];
     for (final session in ordered) {
+      final exercises = <String, List<gym.Set>>{};
+      final names = <String, String>{};
       for (final exercise in session.exercises) {
-        final key = exercise.name.trim().toLowerCase();
+        final id = ExerciseCatalog.identity(exercise.name, exercise.exerciseId);
+        exercises.putIfAbsent(id, () => []).addAll(exercise.sets);
+        names.putIfAbsent(id, () => exercise.name);
+      }
+      for (final entry in exercises.entries) {
+        final key = entry.key;
         final state = states.putIfAbsent(key, _RecordState.new);
         final achievements = <RecordAchievement>[];
-        for (final set in exercise.sets.where((set) => set.reps > 0)) {
+        for (final set in entry.value.where((set) => set.reps > 0)) {
           final setVolume = set.weight * set.reps;
           final e1rm = estimatedOneRepMax(set);
           if (e1rm > state.estimatedOneRepMax) {
@@ -201,7 +205,8 @@ class StatisticsAnalyticsService {
         if (achievements.isNotEmpty) {
           events.add(
             RecordEvent(
-              exerciseName: exercise.name,
+              exerciseName: ExerciseCatalog.displayName(key, names[key]!),
+              exerciseId: key,
               session: session,
               achievements: List.unmodifiable(achievements),
             ),
@@ -213,21 +218,24 @@ class StatisticsAnalyticsService {
     return List.unmodifiable(events);
   }
 
-  List<String> exerciseNames(Iterable<WorkoutSession> sessions) {
+  Map<String, String> exerciseDirectory(Iterable<WorkoutSession> sessions) {
     final names = <String, String>{};
     for (final session in eligibleSessions(sessions)) {
-      for (final exercise in session.exercises) {
-        if (exercise.sets.any((set) => set.reps > 0)) {
+      for (final e in session.exercises) {
+        if (e.sets.any((s) => s.reps > 0)) {
+          final id = ExerciseCatalog.identity(e.name, e.exerciseId);
           names.putIfAbsent(
-            exercise.name.trim().toLowerCase(),
-            () => exercise.name.trim(),
+            id,
+            () => ExerciseCatalog.displayName(id, e.name.trim()),
           );
         }
       }
     }
-    final result = names.values.toList()..sort();
-    return List.unmodifiable(result);
+    return names;
   }
+
+  List<String> exerciseNames(Iterable<WorkoutSession> sessions) =>
+      exerciseDirectory(sessions).values.toList()..sort();
 
   ExerciseProgress exerciseProgress(
     Iterable<WorkoutSession> sessions,
@@ -242,8 +250,8 @@ class StatisticsAnalyticsService {
     for (final session in ordered) {
       final matching = session.exercises.where(
         (exercise) =>
-            exercise.name.trim().toLowerCase() ==
-            exerciseName.trim().toLowerCase(),
+            ExerciseCatalog.identity(exercise.name, exercise.exerciseId) ==
+            ExerciseCatalog.identity(exerciseName),
       );
       final sets =
           matching
@@ -388,22 +396,33 @@ class StatisticsAnalyticsService {
     final firsts = <String, (String, double)>{};
     final lasts = <String, double>{};
     for (final session in ordered) {
+      final bests = <String, double>{};
+      final names = <String, String>{};
       for (final exercise in session.exercises) {
-        var best = 0.0;
+        final key = ExerciseCatalog.identity(
+          exercise.name,
+          exercise.exerciseId,
+        );
+        names[key] = ExerciseCatalog.displayName(key, exercise.name.trim());
         for (final set in exercise.sets) {
-          final e1rm = estimatedOneRepMax(set);
-          if (e1rm > best) best = e1rm;
+          final value = estimatedOneRepMax(set);
+          if (value > (bests[key] ?? 0)) bests[key] = value;
         }
-        if (best == 0) continue;
-        final key = exercise.name.trim().toLowerCase();
-        firsts.putIfAbsent(key, () => (exercise.name.trim(), best));
-        lasts[key] = best;
+      }
+      for (final entry in bests.entries) {
+        firsts.putIfAbsent(entry.key, () => (names[entry.key]!, entry.value));
+        lasts[entry.key] = entry.value;
       }
     }
     final gains = [
       for (final MapEntry(:key, value: (name, start)) in firsts.entries)
         if (lasts[key]! > start)
-          LiftGain(exerciseName: name, start: start, end: lasts[key]!),
+          LiftGain(
+            exerciseName: name,
+            exerciseId: key,
+            start: start,
+            end: lasts[key]!,
+          ),
     ]..sort((a, b) => b.percent.compareTo(a.percent));
     return List.unmodifiable(gains);
   }
@@ -413,20 +432,25 @@ class StatisticsAnalyticsService {
     Iterable<WorkoutSession> sessions,
     ExerciseMetric metric,
   ) {
-    final summaries = [
-      for (final name in exerciseNames(sessions))
-        LiftSummary(
-          exerciseName: name,
-          progress: exerciseProgress(sessions, name, metric),
-        ),
-    ].where((lift) => lift.progress.points.isNotEmpty).toList()..sort((a, b) {
-      final date = b.progress.points.last.session.date.compareTo(
-        a.progress.points.last.session.date,
-      );
-      return date != 0
-          ? date
-          : a.exerciseName.toLowerCase().compareTo(b.exerciseName.toLowerCase());
-    });
+    final summaries =
+        [
+            for (final entry in exerciseDirectory(sessions).entries)
+              LiftSummary(
+                exerciseName: entry.value,
+                exerciseId: entry.key,
+                progress: exerciseProgress(sessions, entry.key, metric),
+              ),
+          ].where((lift) => lift.progress.points.isNotEmpty).toList()
+          ..sort((a, b) {
+            final date = b.progress.points.last.session.date.compareTo(
+              a.progress.points.last.session.date,
+            );
+            return date != 0
+                ? date
+                : a.exerciseName.toLowerCase().compareTo(
+                  b.exerciseName.toLowerCase(),
+                );
+          });
     return List.unmodifiable(summaries);
   }
 

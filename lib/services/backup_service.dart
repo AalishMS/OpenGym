@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import 'package:uuid/uuid.dart';
 
+import '../data/exercise_library.dart';
+import '../models/exercise_definition.dart';
+import 'exercise_identity_migration.dart';
 import '../models/split.dart';
 import '../models/training_block.dart';
 import '../models/training_week.dart';
@@ -66,7 +69,7 @@ class ImportResult {
 }
 
 class BackupService {
-  static const currentVersion = 5;
+  static const currentVersion = 6;
   static const _uuid = Uuid();
 
   static ExportResult exportData({
@@ -75,6 +78,7 @@ class BackupService {
     required String activeSplitId,
     required List<WorkoutPlan> plans,
     required List<WorkoutSession> sessions,
+    List<ExerciseDefinition> exerciseDefinitions = const [],
     List<TrainingBlock> blocks = const [],
     List<TrainingWeek> weeks = const [],
     List<WorkoutProgress> progress = const [],
@@ -82,6 +86,7 @@ class BackupService {
   }) {
     final owners =
         [
+          ...exerciseDefinitions.map((d) => d.userId),
           ...splits.map((r) => r.userId),
           ...plans.map((r) => r.userId),
           ...sessions.map((r) => r.userId),
@@ -97,6 +102,7 @@ class BackupService {
     final graph = TrainingBlockMigration.prepareGraph(
       TrainingBlockGraph(
         ownerId: sourceAccountId ?? owners.firstOrNull,
+        exerciseDefinitions: exerciseDefinitions,
         activeSplitId: activeSplitId,
         splits: splits,
         plans: plans,
@@ -121,6 +127,8 @@ class BackupService {
         'trainingBlocks': graph.blocks.map((r) => r.toJson()).toList(),
         'trainingWeeks': graph.weeks.map((r) => r.toJson()).toList(),
         'workoutProgress': graph.progress.map((r) => r.toJson()).toList(),
+        'exerciseDefinitions':
+            graph.exerciseDefinitions.map((d) => d.toJson()).toList(),
         'settings': settings,
       }),
       fileName: 'gymapp_backup_$date.json',
@@ -165,6 +173,7 @@ class BackupService {
       }
       final active =
           version < 3 ? splits.single.id : parsed['activeSplitId'] as String;
+      final exerciseRows = rows('exerciseDefinitions', optional: version < 6);
       final planRows = rows('workoutPlans');
       final sessionRows = rows('workoutSessions');
       final blockRows = rows('trainingBlocks', optional: version < 4);
@@ -173,6 +182,7 @@ class BackupService {
       final suppliedOwners = <String>{
         for (final r in [
           ...rows('splits', optional: version < 3),
+          ...exerciseRows,
           ...planRows,
           ...sessionRows,
           ...blockRows,
@@ -207,6 +217,8 @@ class BackupService {
           }).toList();
       var graph = TrainingBlockGraph(
         ownerId: inputOwner,
+        exerciseDefinitions:
+            exerciseRows.map(ExerciseDefinition.fromJson).toList(),
         activeSplitId: active,
         splits: splits,
         plans: plans,
@@ -215,6 +227,24 @@ class BackupService {
         weeks: weekRows.map(TrainingWeek.fromJson).toList(),
         progress: progressRows.map(WorkoutProgress.fromJson).toList(),
       ).ownedBy(inputOwner);
+      if (version == 6) {
+        final ids = {
+          ...exerciseRows.map((d) => d['id']),
+          ...ExerciseLibrary.idsByName.values,
+        };
+        // A v6 backup must carry identities, rather than silently re-migrating
+        // a damaged export. Built-in identities are validated separately.
+        for (final row in [...planRows, ...sessionRows]) {
+          for (final e in row['exercises'] as List) {
+            if (e['exerciseId'] is! String || !ids.contains(e['exerciseId'])) {
+              throw const FormatException(
+                'Backup is missing exercise identities.',
+              );
+            }
+          }
+        }
+      }
+      graph = ExerciseIdentityMigration.prepare(graph);
       if (version < 5) {
         graph = TrainingBlockMigration.prepareGraph(graph);
       } else {
@@ -227,7 +257,7 @@ class BackupService {
         graph.validate();
       }
       if (source == null || source != userId) {
-        graph = graph.remap(ownerId: userId);
+        graph = graph.remap(ownerId: userId, remapExerciseIds: true);
       } else {
         graph = graph.ownedBy(userId);
       }

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../services/exercise_catalog.dart';
 import '../../models/statistics.dart';
 import '../../models/workout_session.dart';
 import '../../services/statistics_analytics_service.dart';
@@ -20,6 +21,7 @@ class TrainingOverview extends StatefulWidget {
   final List<WorkoutSession> sessions;
   final List<WeeklyTrainingValue> weeks;
   final String? exercise;
+  final String? exerciseLabel;
   final String weightUnit;
   final VoidCallback onChooseExercise;
   final bool showCurrentWeek;
@@ -29,6 +31,7 @@ class TrainingOverview extends StatefulWidget {
     required this.sessions,
     required this.weeks,
     required this.exercise,
+    this.exerciseLabel,
     required this.weightUnit,
     required this.onChooseExercise,
     this.showCurrentWeek = false,
@@ -66,8 +69,8 @@ class _TrainingOverviewState extends State<TrainingOverview> {
           .where(
             (exercise) =>
                 widget.exercise == null ||
-                exercise.name.trim().toLowerCase() ==
-                    widget.exercise!.trim().toLowerCase(),
+                ExerciseCatalog.identity(exercise.name, exercise.exerciseId) ==
+                    ExerciseCatalog.identity(widget.exercise!),
           )
           .expand((exercise) => exercise.sets)
           .where((set) => set.reps > 0);
@@ -103,7 +106,9 @@ class _TrainingOverviewState extends State<TrainingOverview> {
                   children: [
                     Flexible(
                       child: Text(
-                        widget.exercise ?? 'All exercises',
+                        widget.exerciseLabel ??
+                            widget.exercise ??
+                            'All exercises',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),

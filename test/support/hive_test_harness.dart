@@ -1,8 +1,8 @@
 import 'dart:io';
 
+import 'package:gymapp/services/exercise_catalog.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
-
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
@@ -24,6 +24,7 @@ class HiveTestHarness {
   Future<void> open({bool includeSplits = false}) async {
     _directory = await Directory.systemTemp.createTemp('opengym_test_');
     Hive.init(_directory!.path);
+    await ExerciseCatalog.open();
     _register(TrainingBlockAdapter());
     _register(TrainingWeekAdapter());
     _register(WorkoutProgressAdapter());

@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 
+import '../models/exercise_definition.dart';
 import '../models/completion_transition.dart';
 import '../models/split.dart';
 import '../models/training_block.dart';
@@ -13,6 +14,7 @@ import 'training_week_choices.dart';
 /// A validated value used by normalization, backup and replacement recovery.
 /// It has no storage, cache, or notification responsibilities.
 class TrainingBlockGraph {
+  final List<ExerciseDefinition> exerciseDefinitions;
   final String? ownerId;
   final String? activeSplitId;
   final List<Split> splits;
@@ -25,6 +27,7 @@ class TrainingBlockGraph {
 
   const TrainingBlockGraph({
     required this.ownerId,
+    this.exerciseDefinitions = const [],
     this.activeSplitId,
     required this.splits,
     required this.plans,
@@ -36,6 +39,7 @@ class TrainingBlockGraph {
 
   TrainingBlockGraph copyWith({
     Object? ownerId = _unset,
+    List<ExerciseDefinition>? exerciseDefinitions,
     String? activeSplitId,
     List<Split>? splits,
     List<WorkoutPlan>? plans,
@@ -45,6 +49,7 @@ class TrainingBlockGraph {
     List<WorkoutProgress>? progress,
   }) => TrainingBlockGraph(
     ownerId: identical(ownerId, _unset) ? this.ownerId : ownerId as String?,
+    exerciseDefinitions: exerciseDefinitions ?? this.exerciseDefinitions,
     activeSplitId: activeSplitId ?? this.activeSplitId,
     splits: splits ?? this.splits,
     plans: plans ?? this.plans,
@@ -237,6 +242,17 @@ class TrainingBlockGraph {
       }
     }
 
+    // A merge target may arrive in a later catalog page or sync cycle. Its
+    // metadata is not a prerequisite for using the saved training graph.
+    // Definition shape and ownership still fail closed.
+    unique(exerciseDefinitions.map((d) => d.id), 'exercise');
+    for (final d in exerciseDefinitions) {
+      ExerciseDefinition.fromJson(d.toJson());
+      if ((d.builtIn && !d.id.startsWith('builtin:')) ||
+          (!allowUnowned && d.userId != ownerId)) {
+        throw const FormatException('Invalid exercise owner.');
+      }
+    }
     unique(splits.map((r) => r.id), 'split');
     unique(plans.map((r) => r.id), 'plan');
     unique(sessions.map((r) => r.id), 'session');
@@ -401,6 +417,7 @@ class TrainingBlockGraph {
   /// omits owner and dirty flags, but recovery must preserve both.
   Map<String, dynamic> toJson() => {
     'ownerId': ownerId,
+    'exerciseDefinitions': exerciseDefinitions.map((d) => d.toJson()).toList(),
     'activeSplitId': activeSplitId,
     'splits': [
       for (final r in splits)
@@ -432,6 +449,8 @@ class TrainingBlockGraph {
             .toList();
     return TrainingBlockGraph(
       ownerId: json['ownerId'] as String?,
+      exerciseDefinitions:
+          rows('exerciseDefinitions').map(ExerciseDefinition.fromJson).toList(),
       activeSplitId: json['activeSplitId'] as String?,
       splits: [
         for (final r in rows('splits'))
@@ -468,6 +487,10 @@ class TrainingBlockGraph {
 
   TrainingBlockGraph ownedBy(String? owner) => copyWith(
     ownerId: owner,
+    exerciseDefinitions: [
+      for (final d in exerciseDefinitions)
+        ExerciseDefinition.fromJson({...d.toJson(), 'userId': owner}),
+    ],
     splits: [for (final r in splits) r.copyWith()..userId = owner],
     plans: [for (final r in plans) r.copyWith()..userId = owner],
     sessions: [for (final r in sessions) r.copyWith(userId: owner)],
@@ -476,9 +499,32 @@ class TrainingBlockGraph {
     progress: [for (final r in progress) r.copyWith(userId: owner)],
   );
 
-  /// Copies an imported graph into another account without borrowing any
-  /// destination IDs. Historical dangling plan references remain dangling.
-  TrainingBlockGraph remap({required String? ownerId}) {
+  /// Copies training structure to fresh identities. Account-wide exercises
+  /// stay stable for structural restores. Foreign/unknown-provenance imports
+  /// explicitly copy catalog identities too, including pending merge targets.
+  /// Historical dangling plan references remain dangling.
+  TrainingBlockGraph remap({
+    required String? ownerId,
+    required bool remapExerciseIds,
+  }) {
+    final exerciseReferences = {
+      for (final d in exerciseDefinitions) ...[
+        d.id,
+        if (d.mergedIntoId != null) d.mergedIntoId!,
+      ],
+      for (final p in plans)
+        for (final e in p.exercises)
+          if (e.exerciseId != null) e.exerciseId!,
+      for (final s in sessions)
+        for (final e in s.exercises)
+          if (e.exerciseId != null) e.exerciseId!,
+    };
+    final exerciseIds = {
+      for (final id in exerciseReferences)
+        id: !remapExerciseIds || id.startsWith('builtin:') ? id : _uuid.v4(),
+    };
+    String? exerciseReference(String? id) =>
+        id == null ? null : exerciseIds[id] ?? id;
     final splitIds = {for (final r in splits) r.id: _uuid.v4()};
     final planIds = {for (final r in plans) r.id!: _uuid.v4()};
     final sessionIds = {for (final r in sessions) r.id!: _uuid.v4()};
@@ -497,6 +543,16 @@ class TrainingBlockGraph {
         id == null ? null : planIds.putIfAbsent(id, () => _uuid.v4());
     final copied = copyWith(
       ownerId: ownerId,
+      exerciseDefinitions: [
+        for (final d in exerciseDefinitions)
+          ExerciseDefinition.fromJson({
+            ...d.toJson(),
+            'id': exerciseIds[d.id],
+            'mergedIntoId': exerciseReference(d.mergedIntoId),
+            'userId': ownerId,
+            'dirty': true,
+          }),
+      ],
       activeSplitId: activeSplitId == null ? null : splitIds[activeSplitId],
       splits: [
         for (final r in splits)
@@ -504,8 +560,14 @@ class TrainingBlockGraph {
       ],
       plans: [
         for (final r in plans)
-          r.copyWith(id: planIds[r.id], splitId: splitIds[r.splitId])
-            ..userId = ownerId,
+          r.copyWith(
+            id: planIds[r.id],
+            splitId: splitIds[r.splitId],
+            exercises: [
+              for (final e in r.exercises)
+                e.copyWith(exerciseId: exerciseReference(e.exerciseId)),
+            ],
+          )..userId = ownerId,
       ],
       blocks: [
         for (final r in blocks)
@@ -528,6 +590,10 @@ class TrainingBlockGraph {
         for (final r in sessions)
           r.copyWith(
             id: sessionIds[r.id],
+            exercises: [
+              for (final e in r.exercises)
+                e.copyWith(exerciseId: exerciseReference(e.exerciseId)),
+            ],
             splitId: splitIds[r.splitId],
             planId: planReference(r.planId),
             trainingWeekId: weekIds[r.trainingWeekId],

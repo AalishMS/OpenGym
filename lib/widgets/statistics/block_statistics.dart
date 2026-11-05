@@ -473,19 +473,21 @@ class _GainsState extends State<_Gains> {
         for (final gain in gains)
           Semantics(
             button: true,
-            expanded: _expanded.contains(gain.exerciseName),
+            expanded: _expanded.contains(gain.exerciseId ?? gain.exerciseName),
             label:
                 '${gain.exerciseName}, up ${gain.percent.round()}%, '
                 'from ${formatAnalyticsWeight(gain.start, widget.unit)} '
                 'to ${formatAnalyticsWeight(gain.end, widget.unit)}',
             excludeSemantics: true,
             child: InkWell(
-              key: ValueKey('block-gain-${gain.exerciseName}'),
+              key: ValueKey(
+                'block-gain-${gain.exerciseId ?? gain.exerciseName}',
+              ),
               borderRadius: AppRadius.control,
               onTap:
                   () => setState(() {
-                    if (!_expanded.add(gain.exerciseName)) {
-                      _expanded.remove(gain.exerciseName);
+                    if (!_expanded.add(gain.exerciseId ?? gain.exerciseName)) {
+                      _expanded.remove(gain.exerciseId ?? gain.exerciseName);
                     }
                   }),
               child: Container(
@@ -513,7 +515,9 @@ class _GainsState extends State<_Gains> {
                         ),
                         const SizedBox(width: AppSpacing.sm),
                         Icon(
-                          _expanded.contains(gain.exerciseName)
+                          _expanded.contains(
+                                gain.exerciseId ?? gain.exerciseName,
+                              )
                               ? LucideIcons.chevronUp
                               : LucideIcons.chevronDown,
                           size: 14,
@@ -521,7 +525,9 @@ class _GainsState extends State<_Gains> {
                         ),
                       ],
                     ),
-                    if (_expanded.contains(gain.exerciseName)) ...[
+                    if (_expanded.contains(
+                      gain.exerciseId ?? gain.exerciseName,
+                    )) ...[
                       const SizedBox(height: AppSpacing.sm),
                       Text(
                         '${formatAnalyticsWeight(gain.start, widget.unit)} to ${formatAnalyticsWeight(gain.end, widget.unit)}',

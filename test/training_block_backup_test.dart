@@ -283,7 +283,7 @@ void main() {
   );
 
   test(
-    'v5 round trip preserves intended structure, duplicate logs, evidence and boundary state',
+    'v6 round trip preserves intended structure, duplicate logs, evidence and boundary state',
     () async {
       final repository = TrainingBlockRepository(ownerId: () => owner);
       await repository.createBlock(
@@ -326,7 +326,7 @@ void main() {
         ),
       );
       final exported = backup();
-      expect((jsonDecode(exported.jsonString) as Map)['version'], 5);
+      expect((jsonDecode(exported.jsonString) as Map)['version'], 6);
       final result = BackupService.importData(
         exported.jsonString,
         userId: owner,

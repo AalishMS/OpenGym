@@ -129,11 +129,13 @@ class RecordAchievement {
 
 class RecordEvent {
   final String exerciseName;
+  final String? exerciseId;
   final WorkoutSession session;
   final List<RecordAchievement> achievements;
 
   const RecordEvent({
     required this.exerciseName,
+    this.exerciseId,
     required this.session,
     required this.achievements,
   });
@@ -204,11 +206,13 @@ class BlockWeekStatistics {
 /// First-to-latest change of one lift's best estimated 1RM inside a block.
 class LiftGain {
   final String exerciseName;
+  final String? exerciseId;
   final double start;
   final double end;
 
   const LiftGain({
     required this.exerciseName,
+    this.exerciseId,
     required this.start,
     required this.end,
   });
@@ -269,7 +273,12 @@ class BlockStatistics {
 
 class LiftSummary {
   final String exerciseName;
+  final String? exerciseId;
   final ExerciseProgress progress;
 
-  const LiftSummary({required this.exerciseName, required this.progress});
+  const LiftSummary({
+    required this.exerciseName,
+    this.exerciseId,
+    required this.progress,
+  });
 }

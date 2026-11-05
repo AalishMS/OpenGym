@@ -69,3 +69,47 @@ For a separately authorized rollout:
 Activation is an irreversible per-account writer boundary. After activation,
 use forward fixes or stop new activations; do not downgrade data to an old
 client. Deployment, release, tags and version bumps require separate authorization.
+
+## Exercise identity (schema 3)
+
+Before releasing the exercise identity client, apply
+`20261105120000_exercise_identity_catalog.sql` and verify the existing
+`training_internal.guard_training_schema` pre-request hook is active in the
+production Data API. Migration installation alone must leave existing account
+capabilities unchanged.
+
+With isolated test accounts, verify that a schema 3 sync activates only its own
+account and that schema 2 reads and writes for that upgraded account return
+`PT426`. Accounts which have not upgraded must retain their prior behavior.
+Anonymous catalog reads/writes must fail, and one account must not read or
+update another account's `exercise_definitions` rows, even with a known ID.
+
+Create a custom exercise on one device, sync, and find it in the picker on a
+second device and in another split of the same account. Merge its duplicate
+name into the intended movement, then sync both devices in each order. Exercise
+statistics and previous sets should combine, all sets and historical names
+should remain, and a stale unmerged definition must not reverse the merge.
+Repeat while the duplicate has a newer rename timestamp than the merge.
+
+Export and restore format 6, including a merged custom exercise. Restore an
+older unmerged same-account backup and confirm the saved redirect survives.
+Restore into a different test account and confirm custom IDs and all their
+references move together. Switch accounts on a shared device and confirm the
+previous account's custom exercise names are absent. Log once more offline,
+restart, and confirm that its identity and history remain available.
+
+
+For interrupted catalog delivery, stop the originating device's upload after a
+custom source redirect is accepted but before its custom target is published.
+Let a second device receive that prefix, then restart it offline. Local
+preparation and Retry must succeed; the last known source/target in the chain
+must remain selectable and all its sets must remain available. Publish the
+missing target and reconnect the receiving device: its existing logs must now
+resolve to that target without rewriting their saved exercise IDs or names.
+
+For same-account restore, export a backup before a custom exercise is merged,
+then merge it and extend the live block beyond the backup's duration. Restore
+the shorter backup. Training graph IDs should change as required by structural
+recovery, while the custom exercise ID and saved merge remain intact and its
+strength history stays combined. Repeat with a deleted session and an added
+lazy week omitted by the backup.

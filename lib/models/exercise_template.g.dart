@@ -18,6 +18,7 @@ class ExerciseTemplateAdapter extends TypeAdapter<ExerciseTemplate> {
     };
     return ExerciseTemplate(
       name: fields[0] as String,
+      exerciseId: fields[4] as String?,
       sets: fields[1] as int,
       setTargets: (fields[2] as List?)?.cast<SetTemplate>(),
       note: fields[3] as String?,
@@ -27,7 +28,7 @@ class ExerciseTemplateAdapter extends TypeAdapter<ExerciseTemplate> {
   @override
   void write(BinaryWriter writer, ExerciseTemplate obj) {
     writer
-      ..writeByte(4)
+      ..writeByte(5)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
@@ -35,7 +36,9 @@ class ExerciseTemplateAdapter extends TypeAdapter<ExerciseTemplate> {
       ..writeByte(2)
       ..write(obj.setTargets)
       ..writeByte(3)
-      ..write(obj.note);
+      ..write(obj.note)
+      ..writeByte(4)
+      ..write(obj.exerciseId);
   }
 
   @override

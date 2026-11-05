@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+import '../../services/exercise_catalog.dart';
 import '../../models/workout_session.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/spacing.dart';
@@ -29,8 +31,14 @@ class PrEntry {
 
     for (final session in sessions.reversed) {
       for (final exercise in session.exercises) {
-        final key = exercise.name.toLowerCase();
-        display.putIfAbsent(key, () => exercise.name);
+        final key = ExerciseCatalog.identity(
+          exercise.name,
+          exercise.exerciseId,
+        );
+        display.putIfAbsent(
+          key,
+          () => ExerciseCatalog.displayName(key, exercise.name),
+        );
         for (final set in exercise.sets) {
           if (set.weight > (best[key] ?? 0)) {
             best[key] = set.weight;
@@ -42,11 +50,13 @@ class PrEntry {
 
     return best.entries
         .where((e) => e.value > 0)
-        .map((e) => PrEntry(
-              exercise: display[e.key] ?? e.key,
-              weight: e.value,
-              date: when[e.key]!,
-            ))
+        .map(
+          (e) => PrEntry(
+            exercise: display[e.key] ?? e.key,
+            weight: e.value,
+            date: when[e.key]!,
+          ),
+        )
         .toList()
       ..sort((a, b) => b.date.compareTo(a.date));
   }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:gymapp/services/exercise_catalog.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/models/coach_proposal.dart';
@@ -41,6 +42,7 @@ void main() {
 
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    await ExerciseCatalog.clear();
     await HiveService.clearTrainingData();
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
@@ -746,8 +748,15 @@ final _coachSquat = CoachExercise(
   note: 'Brace hard.',
 );
 
-WorkoutPlan _owned(WorkoutPlan plan, {required int color}) =>
-    plan.copyWith(userId: _userId, dirty: false, planColor: kPlanColors[color]);
+WorkoutPlan _owned(WorkoutPlan plan, {required int color}) => plan.copyWith(
+  userId: _userId,
+  dirty: false,
+  planColor: kPlanColors[color],
+  exercises: [
+    for (final e in plan.exercises)
+      e.copyWith(exerciseId: ExerciseCatalog.identity(e.name, e.exerciseId)),
+  ],
+);
 
 /// The split `kSplitId`, active for the user, holding [plans].
 Future<void> _seedSplit(List<WorkoutPlan> plans) async {

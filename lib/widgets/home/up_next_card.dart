@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/exercise_library.dart';
+import '../../services/exercise_catalog.dart';
 import '../../models/workout_plan.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
@@ -45,15 +46,23 @@ class UpNextCard extends StatelessWidget {
     // Neutral emphasis pairs with every user-selected accent.
     final nextColor = textPrimaryColor(context);
     final last = stat?.lastTrained;
-    final names = plan.exercises.map((e) => e.name.toLowerCase()).toSet();
     final groups =
-        ExerciseLibrary.categories.entries
-            .where(
-              (entry) =>
-                  entry.value.any((name) => names.contains(name.toLowerCase())),
+        plan.exercises
+            .map(
+              (e) =>
+                  ExerciseCatalog.getById(
+                    ExerciseCatalog.identity(e.name, e.exerciseId),
+                  )?.category,
             )
-            .map((entry) => entry.key)
-            .toList();
+            .whereType<String>()
+            .where((category) => category != 'Custom')
+            .toSet()
+            .toList()
+          ..sort(
+            (a, b) => ExerciseLibrary.categoryNames
+                .indexOf(a)
+                .compareTo(ExerciseLibrary.categoryNames.indexOf(b)),
+          );
     final sets = plan.exercises.fold<int>(0, (sum, e) => sum + e.sets);
     final count = plan.exercises.length;
     final meta = [

@@ -1,3 +1,4 @@
+import '../services/exercise_catalog.dart';
 import '../models/set.dart' as gym;
 import '../models/training_block.dart';
 import '../models/training_week.dart';
@@ -67,8 +68,8 @@ List<gym.Set> exerciseSetsFromOrderedHistory(
 ) {
   for (final session in sessions) {
     for (final exercise in session.exercises) {
-      if (exercise.name.trim().toLowerCase() ==
-              exerciseName.trim().toLowerCase() &&
+      if (ExerciseCatalog.identity(exercise.name, exercise.exerciseId) ==
+              ExerciseCatalog.identity(exerciseName) &&
           exercise.sets.any((set) => set.reps > 0)) {
         return exercise.sets;
       }

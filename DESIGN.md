@@ -104,9 +104,10 @@ The core model is intentionally small.
 | Model | Purpose |
 | --- | --- |
 | `Set` | One performed set: reps, weight, optional RPE, optional note |
-| `Exercise` | One logged exercise with a list of sets |
+| `ExerciseDefinition` | Account-wide movement identity, library name, search aliases and optional merge redirect |
+| `Exercise` | One logged occurrence with an exercise ID, name snapshot and list of sets |
 | `SetTemplate` | One target set in a plan: reps, weight, and optional RPE |
-| `ExerciseTemplate` | Exercise entry with targets and optional workout guidance |
+| `ExerciseTemplate` | Plan occurrence with an exercise ID, name snapshot, targets and optional guidance |
 | `WorkoutPlan` | Named plan with exercises, optional color, explicit order, and `splitId` |
 | `WorkoutSession` | Draft/log with stable ID, date, exercises, timer, `trainingWeekId`, retained week label and optional completion evidence |
 | `TrainingBlock` | Split-wide named block with explicit order and intended week count |
@@ -132,10 +133,19 @@ always wins over initialization. The first week of the first block uses targets.
 Week 1 of a later block copies Week 1 of the immediately preceding live block
 for the same plan. Every later week copies the preceding supplied week's
 completed values within its own block. Missing sources use current targets.
-Exercises match by normalized name and occurrence; current order/guidance wins,
+Exercises match by canonical exercise ID and occurrence; current order/guidance wins,
 set values/RPE/count are deep-copied, and past set notes are not inherited.
 Untouched previews never create logs. Previous-set references instead follow
 earlier structural slots; plan-editor Last and analytics remain date-based.
+
+Exercise definitions are shared across splits within one account. Bundled IDs
+are permanent; custom entries are reusable offline. Names and reviewed aliases
+support search, while statistics, records, initialization and previous sets use
+IDs. Legacy names migrate conservatively with the same recoverable graph flow.
+Settings → Manage exercises offers custom renaming and confirmed merging.
+Merges retain original logs and resolve redirects instead of deleting sets.
+See [exercise identity](docs/exercises.md) for migration, conflict, and backup
+behavior.
 
 ## Training blocks and progress
 
@@ -220,7 +230,8 @@ structural rebase cannot make an in-progress edit restore an obsolete label.
 
 `HiveService` owns plans, sessions, splits and preferences plus typed
 `training_blocks`, `training_weeks` and `workout_progress` boxes. A small
-`training_operations` box holds fixed structural recovery intents. Browser-only
+`training_operations` box holds fixed structural recovery intents. The dynamic
+`exercise_definitions` box stores account-wide custom movements and redirects. Browser-only
 `training_recovery_snapshots` holds safety/replacement JSON artifacts in
 IndexedDB; native targets retain flushed files with atomic pending-file rename.
 These artifacts are separate from the live graph and operation intents. UI reads
@@ -248,7 +259,7 @@ intents, safety artifacts and route/native state before showing another cache.
 `SyncService` implements a small last-write-wins sync loop between Hive and
 Supabase Postgres.
 
-The capable client sends `x-opengym-training-schema: 1`. After a successful
+The capable client sends `x-opengym-training-schema: 3`. After a successful
 local safety copy and preparation, the additive SQL RPC activates an irreversible
 per-account schema boundary. Activated accounts reject old reads and writes
 through the API pre-request guard; unactivated accounts retain legacy access.
@@ -260,9 +271,16 @@ then pulls again and replays completion evidence. Deleted splits normally upload
 last; capacity/name reuse may require uploading a pending parent tombstone first.
 Schema 2 activation backfills intended duration and per-plan availability
 without rewinding progress, then rejects schema 1 clients for that account.
-Installing the migration alone does not activate an account. Session JSON
-remains schema 1 because its representation has not changed.
-Blocks, weeks, plans, sessions, progress and the active preference sync as rows.
+Installing the migration alone does not activate an account. Schema 3 adds the exercise catalog and protects exercise IDs from older clients.
+Session JSON remains training schema 1 because its slot representation has not
+changed.
+Exercise definitions, blocks, weeks, plans, sessions, progress and the active
+preference sync as rows. Exercise definitions are pulled before workouts and
+pushed before plan/session references; explicit merges dominate unmerged copies.
+A missing custom merge target is deferred metadata: the last known movement
+remains usable offline, and later target delivery completes resolution. Missing
+metadata never blocks local preparation; definition shape and account ownership
+remain validated.
 Sessions retain duplicate slot logs under distinct IDs. Conflict resolution is
 whole-row LWW, with durable tombstone precedence and live-progress revision
 ordering on equal timestamps. Intended block length takes the greater value
@@ -518,19 +536,24 @@ whole app means editing the six scale constants in that one file.
 
 ## Backup And Import
 
-`BackupService` exports format v5: all splits/plans/sessions, intended block
+`BackupService` exports format v6: exercise definitions and merge redirects, all splits/plans/sessions, intended block
 lengths, allocated weeks, each plan's available/active weeks, settings and
 source-account provenance. Imports validate the complete graph before replacing
-local data. Versions 1–4 reuse normalization; unsupported future versions and v5
-backups missing duration/availability fail explicitly.
+local data. Versions 1–5 reuse exercise identity migration; versions 1–4 also normalize
+training structure. Unsupported future versions and v6 backups missing exercise
+IDs/definitions fail explicitly, as do v5+ backups missing duration/availability.
 
-Same-account restore preserves identities unless live restored rows would
-resurrect known tombstones. Foreign/unknown-provenance backups and those
-resurrection cases copy the full graph to new identities, including progress
-and completion references. Restoring a shorter schedule or removing a lazy
-slot from a retained block also uses new identities, so its next deterministic
-week ID cannot be stranded behind a deletion marker. Activation state is never copied. Restores tombstone
-omitted records and use the same recoverable replacement writer as installers.
+Same-account restore preserves training identities unless live restored rows
+would resurrect known tombstones. Resurrection cases copy the training graph to
+new identities, including progress and completion references. Restoring a
+shorter schedule or removing a lazy slot also uses new training identities, so
+its next deterministic week ID cannot be stranded behind a deletion marker.
+Account-wide exercise identities remain stable in all of these same-account
+structural copies, preserving saved merges. Foreign/unknown-provenance imports
+copy the training graph and explicitly remap custom definitions, occurrences,
+and all redirect target IDs together, including targets whose metadata has not
+arrived. Activation state is never copied. Restores tombstone omitted records
+and use the same recoverable replacement writer as installers.
 
 Deleting a plan tombstones progress and retains history. Split deletion cascades
 the entire graph after saving the replacement preference. Clear All Data retains
