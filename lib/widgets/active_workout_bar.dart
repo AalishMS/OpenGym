@@ -81,7 +81,9 @@ class _ActiveWorkoutBarState extends State<ActiveWorkoutBar> {
       label: '$status, ${session.planName}, $elapsed. Resume workout',
       excludeSemantics: true,
       child: Material(
-        color: surfaceColor(context),
+        // The page colour with a hairline, like the navigation below it, so
+        // the strip reads as part of the bar rather than a slab in light mode.
+        color: backgroundColor(context),
         child: InkWell(
           key: const ValueKey('active-workout-bar'),
           onTap: widget.onTap,

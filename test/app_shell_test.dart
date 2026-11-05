@@ -621,6 +621,41 @@ void main() {
       expect(strip, findsNothing);
     });
 
+    testWidgets('Home offers to resume the plan that is in progress', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        await seedHomeTraining();
+        await seedLive(running: true);
+        final box = Hive.box<WorkoutSession>(HiveService.sessionsBox);
+        await box.put(
+          'live-session',
+          box
+              .get('live-session')!
+              .copyWith(planId: 'shell-plan', planName: 'Push Day'),
+        );
+      });
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+
+      expect(find.text('In progress'), findsOneWidget);
+      expect(find.text('Resume workout'), findsOneWidget);
+      expect(find.text('Next up'), findsNothing);
+
+      await tester.runAsync(() async {
+        final box = Hive.box<WorkoutSession>(HiveService.sessionsBox);
+        await box.put(
+          'live-session',
+          box
+              .get('live-session')!
+              .copyWith(isCompleted: true, timerStartedAt: null),
+        );
+      });
+      await tester.pump();
+      expect(find.text('Next up'), findsOneWidget);
+      expect(find.text('Start workout'), findsOneWidget);
+    });
+
     testWidgets('sits under the content on the desktop rail', (tester) async {
       await tester.runAsync(() => seedLive(running: true));
       await tester.pumpWidget(shellHost(Breakpoints.medium));
