@@ -3,7 +3,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/set.dart' as gym;
 import 'package:gymapp/models/statistics.dart';
@@ -78,8 +77,8 @@ void main() {
             .map((week) => week.volumeLoad),
         [800, 0, 800],
       );
-      expect(analytics.exerciseNames(data), ['Bench press', 'Overhead press']);
-      expect(analytics.latestExercise(data), 'Bench press');
+      expect(analytics.exerciseNames(data), ['Bench Press', 'Overhead Press']);
+      expect(analytics.latestExercise(data), 'Bench Press');
       expect(analytics.weeklyVolume([], now: now).single.volumeLoad, 0);
     },
   );
@@ -415,19 +414,19 @@ void main() {
     expect(find.text('Recent records'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('weekly-exercise-picker')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Bench press').last);
+    await tester.tap(find.text('Bench Press').last);
     await tester.pumpAndSettle();
     expect(find.text('400 kg'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
     await tester.pumpAndSettle();
     expect(
       tester.widget<Text>(find.byKey(const ValueKey('progress-exercise'))).data,
-      'Bench press',
+      'Bench Press',
     );
     expect(find.text('Weekly training'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('statistics-tab-Overview')));
     await tester.pumpAndSettle();
-    expect(find.text('Bench press'), findsOneWidget);
+    expect(find.text('Bench Press'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('weekly-exercise-picker')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('All exercises').last);

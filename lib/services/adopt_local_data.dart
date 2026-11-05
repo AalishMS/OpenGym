@@ -1,4 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'exercise_catalog.dart';
 import '../services/hive_service.dart';
 import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
@@ -78,10 +80,12 @@ class AdoptLocalData {
       await TrainingBlockRestore().removeOwnerRecovery(lastUser);
       // A different account signed in on this device: drop the previous user's
       // locally cached rows and their pull cursors before syncing.
+      await ExerciseCatalog.clear();
       await HiveService.clearAllPlans();
       await HiveService.clearAllSessions();
       await HiveService.clearSplitData();
       await HiveService.clearTrainingData();
+      await prefs.remove('exercise_definitions_last_pulled');
       await prefs.remove('splits_last_pulled');
       await prefs.remove('split_preferences_last_pulled');
       await prefs.remove('plans_last_pulled');
@@ -111,6 +115,12 @@ class AdoptLocalData {
       // remote split metadata first, so a provisional default never overwrites
       // an existing cloud workspace.
       final now = DateTime.now();
+      for (final d in ExerciseCatalog.stored) {
+        if (d.userId != null && d.userId != userId) {
+          throw StateError('Exercise belongs to a different account.');
+        }
+        await ExerciseCatalog.put(d.copyWith(userId: userId, dirty: true));
+      }
       for (final p in HiveService.getAllPlansRaw()) {
         if (p.userId != null && p.userId != userId) {
           throw StateError('Plan belongs to a different account.');

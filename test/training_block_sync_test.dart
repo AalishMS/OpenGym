@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:gymapp/models/exercise_definition.dart';
+import 'package:gymapp/services/exercise_catalog.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/models/split.dart';
 import 'package:gymapp/models/training_block.dart';
@@ -49,7 +51,7 @@ class ReplicaApi {
     }
     final override = await intercept?.call(request);
     if (override != null) return override;
-    if (request.url.path.contains('/rpc/')) return http.Response('2', 200);
+    if (request.url.path.contains('/rpc/')) return http.Response('3', 200);
     final table = request.url.pathSegments.last;
     final rows = tables.putIfAbsent(table, () => []);
     if (request.method == 'GET') {
@@ -187,6 +189,87 @@ void main() {
     await storage.close();
   });
 
+  test('custom exercise definitions sync before workout references', () async {
+    const id = '11111111-1111-4111-8111-111111111111';
+    await ExerciseCatalog.put(
+      ExerciseDefinition(
+        id: id,
+        name: 'My press',
+        userId: owner,
+        updatedAt: stamp,
+        dirty: true,
+      ),
+    );
+    await SyncService.instance.syncNow();
+    expect(ExerciseCatalog.getById(id)!.dirty, isFalse);
+    final row = api.tables['exercise_definitions']!.single;
+    expect(row['user_id'], owner);
+    expect((row['data'] as Map)['id'], id);
+    final writes =
+        api.requests
+            .where((r) => r.method == 'POST')
+            .map((r) => r.url.pathSegments.last)
+            .toList();
+    expect(
+      writes.indexOf('exercise_definitions'),
+      lessThan(writes.indexOf('workout_plans')),
+    );
+  });
+
+  test('a newer unmerged pull cannot erase a pending exercise merge', () async {
+    const id = '11111111-1111-4111-8111-111111111111';
+    final merged = ExerciseDefinition(
+      id: id,
+      name: 'DB Press',
+      mergedIntoId: 'builtin:dumbbell-press',
+      userId: owner,
+      updatedAt: stamp,
+      dirty: true,
+    );
+    await ExerciseCatalog.put(merged);
+    api.tables['exercise_definitions'] = [
+      {
+        'id': id,
+        'user_id': owner,
+        'updated_at': stamp.add(const Duration(days: 10)).toIso8601String(),
+        'server_seq': stamp.add(const Duration(days: 11)).toIso8601String(),
+        'data': {...merged.toJson(), 'mergedIntoId': null},
+      },
+    ];
+    await SyncService.instance.syncNow();
+    expect(ExerciseCatalog.canonicalId(id), 'builtin:dumbbell-press');
+    expect(ExerciseCatalog.getById(id)!.dirty, isFalse);
+    expect(
+      (api.tables['exercise_definitions']!.single['data']
+          as Map)['mergedIntoId'],
+      'builtin:dumbbell-press',
+    );
+  });
+
+  test('a remote merge wins over a newer local unmerged name edit', () async {
+    const id = '11111111-1111-4111-8111-111111111111';
+    final local = ExerciseDefinition(
+      id: id,
+      name: 'My press',
+      userId: owner,
+      updatedAt: stamp.add(const Duration(days: 10)),
+      dirty: true,
+    );
+    await ExerciseCatalog.put(local);
+    api.tables['exercise_definitions'] = [
+      {
+        'id': id,
+        'user_id': owner,
+        'updated_at': stamp.toIso8601String(),
+        'server_seq': stamp.add(const Duration(days: 11)).toIso8601String(),
+        'data': {...local.toJson(), 'mergedIntoId': 'builtin:dumbbell-press'},
+      },
+    ];
+    await SyncService.instance.syncNow();
+    expect(ExerciseCatalog.canonicalId(id), 'builtin:dumbbell-press');
+    expect(ExerciseCatalog.getById(id)!.dirty, isFalse);
+  });
+
   test(
     'sync round trips intended duration and only the completing plan available weeks',
     () async {
@@ -300,7 +383,7 @@ void main() {
       final rest =
           api.requests.where((r) => r.url.path.startsWith('/rest/')).toList();
       expect(
-        rest.every((r) => r.headers['x-opengym-training-schema'] == '2'),
+        rest.every((r) => r.headers['x-opengym-training-schema'] == '3'),
         isTrue,
       );
       final writes =

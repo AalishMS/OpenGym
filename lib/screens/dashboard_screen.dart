@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../services/exercise_catalog.dart';
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
 import '../navigation/open_workout.dart';
@@ -209,8 +210,14 @@ class DashboardScreen extends StatelessWidget {
     final display = <String, String>{};
     for (final session in sessions) {
       for (final exercise in session.exercises) {
-        final key = exercise.name.toLowerCase();
-        display.putIfAbsent(key, () => exercise.name);
+        final key = ExerciseCatalog.identity(
+          exercise.name,
+          exercise.exerciseId,
+        );
+        display.putIfAbsent(
+          key,
+          () => ExerciseCatalog.displayName(key, exercise.name),
+        );
         counts[key] = (counts[key] ?? 0) + 1;
       }
     }
@@ -225,7 +232,7 @@ class DashboardScreen extends StatelessWidget {
     final topKey =
         counts.entries.reduce((a, b) => a.value >= b.value ? a : b).key;
     final name = display[topKey]!;
-    final progression = HiveService.getExerciseProgression(name, splitId);
+    final progression = HiveService.getExerciseProgression(topKey, splitId);
     final values = progression.map((p) => p['maxWeight'] as double).toList();
 
     return DashboardPanel(

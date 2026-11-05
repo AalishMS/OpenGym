@@ -25,12 +25,26 @@ class ExerciseTemplate extends HiveObject {
   @HiveField(3)
   final String? note;
 
+  /// Stable catalog identity; nullable only for legacy data.
+  @HiveField(4)
+  final String? exerciseId;
+
   ExerciseTemplate({
     required this.name,
+    this.exerciseId,
     required this.sets,
     this.setTargets,
     this.note,
   });
+
+  ExerciseTemplate copyWith({String? name, String? exerciseId}) =>
+      ExerciseTemplate(
+        name: name ?? this.name,
+        exerciseId: exerciseId ?? this.exerciseId,
+        sets: sets,
+        setTargets: setTargets,
+        note: note,
+      );
 
   /// The target for set [index], or null if this plan has none.
   SetTemplate? targetAt(int index) {
@@ -41,6 +55,7 @@ class ExerciseTemplate extends HiveObject {
 
   Map<String, dynamic> toJson() => {
     'name': name,
+    'exerciseId': exerciseId,
     'sets': sets,
     'setTargets': setTargets?.map((t) => t.toJson()).toList(),
     'note': note,
@@ -49,6 +64,7 @@ class ExerciseTemplate extends HiveObject {
   factory ExerciseTemplate.fromJson(Map<String, dynamic> json) =>
       ExerciseTemplate(
         name: json['name'] as String,
+        exerciseId: json['exerciseId'] as String?,
         sets: json['sets'] as int,
         setTargets:
             (json['setTargets'] as List<dynamic>?)

@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'exercise_catalog.dart';
+import 'exercise_identity_migration.dart';
 import '../models/training_block.dart';
 import '../models/training_week.dart';
 import '../models/workout_progress.dart';
@@ -53,6 +55,14 @@ class TrainingBlockMigration {
               : Map<String, dynamic>.from(jsonDecode(saved) as Map);
       // A completed normalization may be followed by late legacy inputs.
       // Snapshot those before touching them; pending recovery keeps its original.
+      final needsExercises = [
+        ...HiveService.getAllPlansRaw()
+            .expand((p) => p.exercises)
+            .map((e) => e.exerciseId),
+        ...HiveService.getAllSessionsRaw()
+            .expand((s) => s.exercises)
+            .map((e) => e.exerciseId),
+      ].any((id) => id == null);
       final needsLinks = HiveService.getAllSessionsRaw().any(
         (s) => s.trainingWeekId == null,
       );
@@ -64,11 +74,14 @@ class TrainingBlockMigration {
             (p) => p.availableWeekIds == null,
           );
       if (!await TrainingRecoverySnapshots.exists(path) ||
-          (journal['phase'] == 'complete' && (needsLinks || needsMetadata))) {
+          (journal['phase'] == 'complete' &&
+              (needsLinks || needsMetadata || needsExercises))) {
         await TrainingRecoverySnapshots.write(
           path,
           jsonEncode({
             'ownerId': ownerId,
+            'exerciseDefinitions':
+                ExerciseCatalog.stored.map((d) => d.toJson()).toList(),
             'splits':
                 HiveService.getAllSplitsRaw()
                     .map(
@@ -121,6 +134,13 @@ class TrainingBlockMigration {
       await HiveService.recoverTrainingOperations(ownerId: ownerId);
       final count = HiveService.getAllSessionsRaw().length;
       final prepared = prepareGraph(_readGraph(ownerId));
+      for (final d in prepared.exerciseDefinitions) {
+        if (jsonEncode(ExerciseCatalog.getById(d.id)?.toJson()) !=
+            jsonEncode(d.toJson())) {
+          await ExerciseCatalog.put(d);
+        }
+      }
+      await Hive.box<dynamic>(ExerciseCatalog.boxName).flush();
       for (final block in prepared.blocks) {
         final old = HiveService.getTrainingBlockById(block.id);
         if (old == null ||
@@ -192,6 +212,7 @@ class TrainingBlockMigration {
   }
 
   static TrainingBlockGraph prepareGraph(TrainingBlockGraph input) {
+    input = ExerciseIdentityMigration.prepare(input);
     input.validate(
       allowLegacyLinks: true,
       allowLiveChildrenOfDeletedParents: true,
@@ -561,6 +582,7 @@ class TrainingBlockMigration {
 
   void _validateOwner(String? ownerId) {
     final owners = [
+      ...ExerciseCatalog.stored.map((d) => d.userId),
       ...HiveService.getAllSplitsRaw().map((s) => s.userId),
       ...HiveService.getAllPlansRaw().map((p) => p.userId),
       ...HiveService.getAllSessionsRaw().map((s) => s.userId),
@@ -574,6 +596,7 @@ class TrainingBlockMigration {
   }
 
   static TrainingBlockGraph _readGraph(String? owner) => TrainingBlockGraph(
+    exerciseDefinitions: ExerciseCatalog.stored,
     ownerId: owner,
     splits: HiveService.getAllSplitsRaw(),
     plans: HiveService.getAllPlansRaw(),

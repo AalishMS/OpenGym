@@ -1,7 +1,7 @@
+import 'package:gymapp/services/exercise_catalog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/set.dart' as gym;
 import 'package:gymapp/models/statistics.dart';
@@ -67,7 +67,7 @@ WorkoutSession _session(
   isCompleted: completed,
   exercises: [
     Exercise(
-      name: 'Bench press',
+      name: 'Bench Press',
       sets: [for (var i = 0; i < sets; i++) gym.Set(weight: bench, reps: reps)],
     ),
     Exercise(name: 'Curl', sets: [gym.Set(weight: 10, reps: 15)]),
@@ -136,7 +136,7 @@ void main() {
           weeksByBlock: weeksByBlock,
         );
         final gain = stats.first.gains.single;
-        expect(gain.exerciseName, 'Bench press');
+        expect(gain.exerciseName, 'Bench Press');
         expect(gain.start, closeTo(80 * (1 + 5 / 30), 1e-9));
         expect(gain.end, closeTo(87.5 * (1 + 5 / 30), 1e-9));
         expect(gain.percent, closeTo(9.375, 1e-9));
@@ -169,7 +169,7 @@ void main() {
       ),
       ...sessions,
     ], ExerciseMetric.bestWeight);
-    expect(lifts.map((l) => l.exerciseName), ['Bench press', 'Curl', 'Squat']);
+    expect(lifts.map((l) => l.exerciseName), ['Bench Press', 'Curl', 'Squat']);
     expect(lifts.first.progress.change, 10);
   });
 
@@ -250,7 +250,9 @@ void main() {
         expect(overviewName(tester), 'Base');
         expect(tester.widget<Text>(readout).data, '1.3');
         // Selection changes the below-chart block detail as well.
-        final gain = find.byKey(const ValueKey('block-gain-Bench press'));
+        final gain = find.byKey(
+          const ValueKey('block-gain-builtin:bench-press'),
+        );
         await tester.ensureVisible(gain);
         await tester.tap(gain);
         await tester.pumpAndSettle();
@@ -282,8 +284,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
       await tester.pumpAndSettle();
       final title = find.byKey(const ValueKey('progress-exercise'));
-      final curl = find.byKey(const ValueKey('lift-Curl'));
-      expect(tester.widget<Text>(title).data, 'Bench press');
+      final curl = find.byKey(
+        ValueKey('lift-${ExerciseCatalog.identity('Curl')}'),
+      );
+      expect(tester.widget<Text>(title).data, 'Bench Press');
       expect(find.byTooltip('About Estimated 1RM'), findsOneWidget);
       // Fifteen-rep sets have no estimated 1RM, so curls only join the list
       // under a measure that counts them.

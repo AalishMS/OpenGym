@@ -200,7 +200,8 @@ class _StatsScreenState extends State<StatsScreen> {
       _recordLimit = 12;
       _resetScroll();
     }
-    final names = _analytics.exerciseNames(sessions);
+    final directory = _analytics.exerciseDirectory(sessions);
+    final names = directory.keys.toList();
     final weeklyExercise =
         names.contains(_weeklyExercise) ? _weeklyExercise : null;
     final lifts = _analytics.liftSummaries(
@@ -209,7 +210,10 @@ class _StatsScreenState extends State<StatsScreen> {
     );
     final lift =
         lifts
-            .where((lift) => lift.exerciseName == _progressExercise)
+            .where(
+              (lift) =>
+                  (lift.exerciseId ?? lift.exerciseName) == _progressExercise,
+            )
             .firstOrNull ??
         lifts.firstOrNull;
     final blocks =
@@ -247,13 +251,15 @@ class _StatsScreenState extends State<StatsScreen> {
             exerciseName: weeklyExercise,
           ),
           exercise: weeklyExercise,
+          exerciseLabel: directory[weeklyExercise],
           weightUnit: unit,
           onChooseExercise:
               () => _choose<String>(
                 title: 'Weekly training',
                 values: ['', ...names],
                 selected: weeklyExercise ?? '',
-                labelFor: (name) => name.isEmpty ? 'All exercises' : name,
+                labelFor:
+                    (name) => name.isEmpty ? 'All exercises' : directory[name]!,
                 onSelected:
                     (name) => setState(
                       () => _weeklyExercise = name.isEmpty ? null : name,
@@ -286,7 +292,12 @@ class _StatsScreenState extends State<StatsScreen> {
                 child: InkWell(
                   key: const ValueKey('progress-exercise-picker'),
                   borderRadius: AppRadius.control,
-                  onTap: () => _chooseLift(lifts, lift.exerciseName, unit),
+                  onTap:
+                      () => _chooseLift(
+                        lifts,
+                        lift.exerciseId ?? lift.exerciseName,
+                        unit,
+                      ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                       vertical: AppSpacing.sm,
@@ -374,7 +385,7 @@ class _StatsScreenState extends State<StatsScreen> {
             else
               StrengthTrend(
                 key: ValueKey(
-                  'strength-$splitId-${lift.exerciseName}-$_period-$_metric',
+                  'strength-$splitId-${lift.exerciseId ?? lift.exerciseName}-$_period-$_metric',
                 ),
                 progress: lift.progress,
                 metric: _metric,
@@ -424,7 +435,7 @@ class _StatsScreenState extends State<StatsScreen> {
               for (final event in records.take(_recordLimit))
                 RecordEventRow(
                   key: ValueKey(
-                    'record-${event.session.id}-${event.exerciseName}',
+                    'record-${event.session.id}-${event.exerciseId ?? event.exerciseName}',
                   ),
                   event: event,
                   weightUnit: unit,

@@ -625,6 +625,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 .map(
                                   (e) => ExerciseTemplate(
                                     name: e.name,
+                                    exerciseId: e.exerciseId,
                                     sets: e.sets,
                                     note: e.note,
                                     setTargets:

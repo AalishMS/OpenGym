@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import 'exercise_catalog.dart';
+import 'exercise_identity_migration.dart';
 import '../models/split_preference.dart';
 import '../utils/training_block_identity.dart';
 import 'hive_service.dart';
@@ -47,6 +49,10 @@ class TrainingBlockRestore {
     await HiveService.clearAllSessions();
     await HiveService.clearSplitData();
     await HiveService.clearTrainingData();
+    await ExerciseCatalog.clear();
+    for (final d in original.exerciseDefinitions) {
+      await ExerciseCatalog.put(d);
+    }
     for (final row in original.splits) {
       await HiveService.putSplitRaw(row);
     }
@@ -158,6 +164,7 @@ class TrainingBlockRestore {
     required String? operationId,
     required bool stampRecords,
   }) async {
+    graph = ExerciseIdentityMigration.prepare(graph);
     graph.validate();
     validateSettings(settings);
     final owner = graph.ownerId;
@@ -238,6 +245,10 @@ class TrainingBlockRestore {
     final now = DateTime.now();
     if (stampRecords) {
       imported = imported.copyWith(
+        exerciseDefinitions: [
+          for (final d in imported.exerciseDefinitions)
+            d.copyWith(updatedAt: now, dirty: true),
+        ],
         splits: [
           for (final r in imported.splits)
             r.copyWith(updatedAt: now, dirty: true),
@@ -278,6 +289,19 @@ class TrainingBlockRestore {
     }
 
     final desired = imported.copyWith(
+      exerciseDefinitions:
+          {
+            for (final d in original.exerciseDefinitions) d.id: d,
+            for (final d in imported.exerciseDefinitions) d.id: d,
+            // Restoring an old backup must not undo a durable exercise merge.
+            for (final d in original.exerciseDefinitions)
+              if (d.mergedIntoId != null &&
+                  imported.exerciseDefinitions.any(
+                    (incoming) =>
+                        incoming.id == d.id && incoming.mergedIntoId == null,
+                  ))
+                d.id: d,
+          }.values.toList(),
       splits: merge(
         original.splits,
         imported.splits,
@@ -413,6 +437,9 @@ class TrainingBlockRestore {
     );
     await operations.flush();
 
+    for (final d in graph.exerciseDefinitions) {
+      await ExerciseCatalog.put(d);
+    }
     for (final split in graph.splits) {
       await HiveService.putSplitRaw(split);
     }

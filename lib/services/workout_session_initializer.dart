@@ -1,9 +1,11 @@
+import 'package:uuid/uuid.dart';
+
+import 'exercise_catalog.dart';
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
 import '../models/training_week.dart';
-import 'package:uuid/uuid.dart';
 
 /// Builds a session only when the caller has no saved data for the requested
 /// plan and week.
@@ -30,16 +32,19 @@ class WorkoutSessionInitializer {
                 previousSession.deletedAt == null
             ? previousSession
             : null;
-    String name(String value) =>
-        value.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
     final sources = <String, List<Exercise>>{};
     for (final exercise in source?.exercises ?? <Exercise>[]) {
-      sources.putIfAbsent(name(exercise.name), () => []).add(exercise);
+      sources
+          .putIfAbsent(
+            ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
+            () => [],
+          )
+          .add(exercise);
     }
     final occurrences = <String, int>{};
     final exercises = <Exercise>[];
     for (final template in plan.exercises) {
-      final key = name(template.name);
+      final key = ExerciseCatalog.identity(template.name, template.exerciseId);
       final occurrence = occurrences[key] ?? 0;
       occurrences[key] = occurrence + 1;
       final matches = sources[key] ?? [];
@@ -47,6 +52,8 @@ class WorkoutSessionInitializer {
       exercises.add(
         Exercise(
           name: template.name,
+          exerciseId:
+              template.exerciseId ?? ExerciseCatalog.identity(template.name),
           note: template.note,
           sets:
               from != null && from.sets.isNotEmpty

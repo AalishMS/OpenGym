@@ -20,19 +20,22 @@ class ExerciseAdapter extends TypeAdapter<Exercise> {
       name: fields[0] as String,
       sets: (fields[1] as List).cast<Set>(),
       note: fields[2] as String?,
+      exerciseId: fields[3] as String?,
     );
   }
 
   @override
   void write(BinaryWriter writer, Exercise obj) {
     writer
-      ..writeByte(3)
+      ..writeByte(4)
       ..writeByte(0)
       ..write(obj.name)
       ..writeByte(1)
       ..write(obj.sets)
       ..writeByte(2)
-      ..write(obj.note);
+      ..write(obj.note)
+      ..writeByte(3)
+      ..write(obj.exerciseId);
   }
 
   @override

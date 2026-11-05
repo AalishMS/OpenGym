@@ -8,6 +8,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'exercise_management_screen.dart';
+import '../services/exercise_catalog.dart';
 import '../providers/settings_provider.dart';
 import '../providers/update_provider.dart';
 import '../providers/workout_plan_provider.dart';
@@ -248,6 +250,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildThemeSection(context, settings),
                         _buildAccentColorSection(context, settings),
                         const _SectionHeader(title: 'Workout'),
+                        _buildSettingsTile(
+                          icon: LucideIcons.dumbbell,
+                          title: 'Manage exercises',
+                          subtitle:
+                              'Rename custom exercises and merge duplicates',
+                          onTap:
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder:
+                                      (_) => ExerciseManagementScreen(
+                                        userId:
+                                            context
+                                                .read<SplitProvider>()
+                                                .activeSplit
+                                                ?.userId,
+                                      ),
+                                ),
+                              ),
+                        ),
                         _buildSwitchTile(
                           context: context,
                           icon: LucideIcons.zap,
@@ -792,6 +813,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           blocks: HiveService.getAllTrainingBlocksRaw(),
           weeks: HiveService.getAllTrainingWeeksRaw(),
           progress: HiveService.getAllWorkoutProgressRaw(),
+          exerciseDefinitions: ExerciseCatalog.stored,
           settings: {
             'themeMode': settings.themeMode.index,
             'accentIndex': settings.accentIndex,
@@ -867,6 +889,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               blocks: imported.blocks!,
               weeks: imported.weeks!,
               progress: imported.progress!,
+              exerciseDefinitions: imported.graph!.exerciseDefinitions,
               settings: imported.settings!,
               operationId: imported.operationId,
             );

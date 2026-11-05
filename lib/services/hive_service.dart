@@ -1,7 +1,11 @@
 import 'dart:convert';
+
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+
+import '../models/exercise_definition.dart';
+import 'exercise_catalog.dart';
 import '../models/split.dart';
 import '../models/training_block.dart';
 import '../models/training_week.dart';
@@ -41,6 +45,7 @@ class HiveService {
     await Hive.openBox<TrainingWeek>(trainingWeeksBox);
     await Hive.openBox<WorkoutProgress>(workoutProgressBox);
     await Hive.openBox<dynamic>(trainingOperationsBox);
+    await ExerciseCatalog.open();
   }
 
   static TrainingBlock? getTrainingBlockById(String id) =>
@@ -223,6 +228,7 @@ class HiveService {
         blocks: getAllTrainingBlocksRaw(),
         weeks: getAllTrainingWeeksRaw(),
         progress: getAllWorkoutProgressRaw(),
+        exerciseDefinitions: ExerciseCatalog.stored,
       );
 
   static Future<void> flushAllWorkoutData() async {
@@ -230,6 +236,9 @@ class HiveService {
     await _plansBox.flush();
     await _splitsBox.flush();
     await _splitPreferencesBox.flush();
+    if (Hive.isBoxOpen(ExerciseCatalog.boxName)) {
+      await Hive.box<dynamic>(ExerciseCatalog.boxName).flush();
+    }
   }
 
   static Future<void> setActiveSplitForRecovery(
@@ -387,7 +396,8 @@ class HiveService {
         Hive.isBoxOpen(trainingBlocksBox) &&
         Hive.isBoxOpen(trainingWeeksBox) &&
         Hive.isBoxOpen(workoutProgressBox) &&
-        Hive.isBoxOpen(trainingOperationsBox)) {
+        Hive.isBoxOpen(trainingOperationsBox) &&
+        Hive.isBoxOpen(ExerciseCatalog.boxName)) {
       return;
     }
     await Hive.initFlutter();
@@ -435,6 +445,7 @@ class HiveService {
     await Hive.openBox<TrainingWeek>(trainingWeeksBox);
     await Hive.openBox<WorkoutProgress>(workoutProgressBox);
     await Hive.openBox<dynamic>(trainingOperationsBox);
+    await ExerciseCatalog.open();
     await _migrateToIdKeys();
   }
 
@@ -818,7 +829,32 @@ class HiveService {
         );
       });
 
+  static bool _exerciseOwnerCurrent(String? splitId, String? owner) {
+    if (splitId == null || !Hive.isBoxOpen(splitsBox)) return true;
+    final split = getSplitById(splitId);
+    return split != null && split.deletedAt == null && split.userId == owner;
+  }
+
   static Future<void> upsertPlan(WorkoutPlan plan) async {
+    plan.id ??= _uuid.v4();
+    if (plan.userId == null &&
+        plan.splitId != null &&
+        Hive.isBoxOpen(splitsBox)) {
+      plan.userId = getSplitById(plan.splitId!)?.userId;
+    }
+    plan = plan.copyWith(
+      exercises: [
+        for (final e in plan.exercises)
+          e.copyWith(
+            exerciseId: await ExerciseCatalog.ensure(
+              e.name,
+              exerciseId: e.exerciseId,
+              userId: plan.userId,
+              isCurrent: () => _exerciseOwnerCurrent(plan.splitId, plan.userId),
+            ),
+          ),
+      ],
+    );
     if (plan.splitId != null && Hive.isBoxOpen(splitsBox)) {
       final split = getSplitById(plan.splitId!);
       if (split == null ||
@@ -828,7 +864,6 @@ class HiveService {
       }
       plan.userId = split.userId;
     }
-    plan.id ??= _uuid.v4();
     plan.updatedAt = DateTime.now();
     plan.dirty = true;
     await _plansBox.put(plan.id, plan);
@@ -915,6 +950,26 @@ class HiveService {
   static WorkoutSession? getSessionById(String id) => _sessionsBox.get(id);
 
   static Future<void> upsertSession(WorkoutSession session) async {
+    session.id ??= _uuid.v4();
+    if (session.userId == null &&
+        session.splitId != null &&
+        Hive.isBoxOpen(splitsBox)) {
+      session.userId = getSplitById(session.splitId!)?.userId;
+    }
+    session = session.copyWith(
+      exercises: [
+        for (final e in session.exercises)
+          e.copyWith(
+            exerciseId: await ExerciseCatalog.ensure(
+              e.name,
+              exerciseId: e.exerciseId,
+              userId: session.userId,
+              isCurrent:
+                  () => _exerciseOwnerCurrent(session.splitId, session.userId),
+            ),
+          ),
+      ],
+    );
     final saved = session.id == null ? null : getSessionById(session.id!);
     if ((saved?.isCompleted == true && !session.isCompleted) ||
         (saved?.deletedAt != null && session.deletedAt == null)) {
@@ -958,7 +1013,6 @@ class HiveService {
       }
       canonicalWeekNumber = week.number;
     }
-    session.id ??= _uuid.v4();
     session.updatedAt = DateTime.now();
     session.dirty = true;
     // Read the canonical label and enqueue this write without an intervening
@@ -1033,7 +1087,8 @@ class HiveService {
     final sessions = getCompletedSessions(splitId: splitId);
     for (var session in sessions) {
       for (var exercise in session.exercises) {
-        if (exercise.name.toLowerCase() == exerciseName.toLowerCase()) {
+        if (ExerciseCatalog.identity(exercise.name, exercise.exerciseId) ==
+            ExerciseCatalog.identity(exerciseName)) {
           return session;
         }
       }
@@ -1045,7 +1100,8 @@ class HiveService {
     final session = getLastSessionForExercise(exerciseName, splitId);
     if (session == null) return null;
     for (var exercise in session.exercises) {
-      if (exercise.name.toLowerCase() == exerciseName.toLowerCase()) {
+      if (ExerciseCatalog.identity(exercise.name, exercise.exerciseId) ==
+          ExerciseCatalog.identity(exerciseName)) {
         return exercise;
       }
     }
@@ -1093,7 +1149,8 @@ class HiveService {
     double maxWeight = 0;
     for (var session in sessions) {
       for (var exercise in session.exercises) {
-        if (exercise.name.toLowerCase() == exerciseName.toLowerCase()) {
+        if (ExerciseCatalog.identity(exercise.name, exercise.exerciseId) ==
+            ExerciseCatalog.identity(exerciseName)) {
           for (var set in exercise.sets) {
             if (set.weight > maxWeight) {
               maxWeight = set.weight;
@@ -1106,21 +1163,26 @@ class HiveService {
   }
 
   static List<String> getAllExerciseNames(String? splitId) {
-    final sessions = getCompletedSessions(splitId: splitId);
-    final names = <String>{};
-    for (var session in sessions) {
-      for (var exercise in session.exercises) {
-        names.add(exercise.name);
+    final names = <String, String>{};
+    for (final session in getCompletedSessions(splitId: splitId)) {
+      for (final e in session.exercises) {
+        final id = ExerciseCatalog.identity(e.name, e.exerciseId);
+        names.putIfAbsent(id, () => ExerciseCatalog.displayName(id, e.name));
       }
     }
-    return names.toList()..sort();
+    return names.values.toList()..sort();
   }
 
+  /// Records keyed by stable exercise identity, including merged aliases.
   static Map<String, double> getAllExercisePRs(String? splitId) {
-    final names = getAllExerciseNames(splitId);
     final prs = <String, double>{};
-    for (var name in names) {
-      prs[name] = getExercisePR(name, splitId);
+    for (final session in getCompletedSessions(splitId: splitId)) {
+      for (final e in session.exercises) {
+        final id = ExerciseCatalog.identity(e.name, e.exerciseId);
+        for (final set in e.sets.where((s) => s.reps > 0)) {
+          if (set.weight > (prs[id] ?? 0)) prs[id] = set.weight;
+        }
+      }
     }
     return prs;
   }
@@ -1129,27 +1191,30 @@ class HiveService {
     String exerciseName,
     String? splitId,
   ) {
-    final sessions = getCompletedSessions(splitId: splitId);
+    final id = ExerciseCatalog.identity(exerciseName);
     final progression = <Map<String, dynamic>>[];
-
-    for (var session in sessions) {
-      for (var exercise in session.exercises) {
-        if (exercise.name.toLowerCase() == exerciseName.toLowerCase() &&
-            exercise.sets.isNotEmpty) {
-          double maxWeight = 0;
-          int totalVolume = 0;
-          for (var set in exercise.sets) {
-            if (set.weight > maxWeight) maxWeight = set.weight;
-            totalVolume += (set.weight * set.reps).round();
-          }
-          progression.add({
-            'date': session.date,
-            'maxWeight': maxWeight,
-            'totalVolume': totalVolume,
-            'week': session.weekNumber,
-          });
-        }
-      }
+    for (final session in getCompletedSessions(splitId: splitId)) {
+      final sets =
+          session.exercises
+              .where(
+                (e) => ExerciseCatalog.identity(e.name, e.exerciseId) == id,
+              )
+              .expand((e) => e.sets)
+              .where((s) => s.reps > 0)
+              .toList();
+      if (sets.isEmpty) continue;
+      progression.add({
+        'date': session.date,
+        'maxWeight': sets.fold<double>(
+          0,
+          (max, s) => s.weight > max ? s.weight : max,
+        ),
+        'totalVolume': sets.fold<int>(
+          0,
+          (sum, s) => sum + (s.weight * s.reps).round(),
+        ),
+        'week': session.weekNumber,
+      });
     }
     progression.sort(
       (a, b) => (a['date'] as DateTime).compareTo(b['date'] as DateTime),
@@ -1267,6 +1332,7 @@ class HiveService {
     required String activeSplitId,
     required List<WorkoutPlan> plans,
     required List<WorkoutSession> sessions,
+    List<ExerciseDefinition> exerciseDefinitions = const [],
     List<TrainingBlock> blocks = const [],
     List<TrainingWeek> weeks = const [],
     List<WorkoutProgress> progress = const [],
@@ -1275,6 +1341,7 @@ class HiveService {
   }) => TrainingBlockRestore().replace(
     graph: TrainingBlockGraph(
       ownerId: userId,
+      exerciseDefinitions: exerciseDefinitions,
       activeSplitId: activeSplitId,
       splits: splits,
       plans: plans,

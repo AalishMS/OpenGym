@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../services/exercise_catalog.dart';
 import '../data/plan_colors.dart';
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
@@ -862,26 +863,41 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       alreadyAddedExerciseNames: session.exercises.map(
         (exercise) => exercise.name,
       ),
-      onAdd: (name) {
+      userId: session.userId,
+      alreadyAddedExerciseIds: session.exercises.map(
+        (e) => ExerciseCatalog.identity(e.name, e.exerciseId),
+      ),
+      onAdd: (_) {},
+      onRemove: (_) {},
+      onAddIdentified: (name, exerciseId) {
         final currentSession = _getOrCreateSession();
-        final normalizedName = name.trim().toLowerCase();
+        final normalizedName = exerciseId;
         if (currentSession.exercises.any(
-          (exercise) => exercise.name.trim().toLowerCase() == normalizedName,
+          (exercise) =>
+              ExerciseCatalog.identity(exercise.name, exercise.exerciseId) ==
+              normalizedName,
         )) {
           return;
         }
         final updatedExercises = List<Exercise>.from(currentSession.exercises);
-        updatedExercises.add(Exercise(name: name, sets: [], note: null));
+        updatedExercises.add(
+          Exercise(name: name, exerciseId: exerciseId, sets: [], note: null),
+        );
         _updateSession(currentSession.copyWith(exercises: updatedExercises));
         _autoSave();
       },
-      onRemove: (name) {
+      onRemoveIdentified: (name, exerciseId) {
         final currentSession = _getOrCreateSession();
-        final normalizedName = name.toLowerCase();
+        final normalizedName = exerciseId;
         final updatedExercises =
             currentSession.exercises
                 .where(
-                  (exercise) => exercise.name.toLowerCase() != normalizedName,
+                  (exercise) =>
+                      ExerciseCatalog.identity(
+                        exercise.name,
+                        exercise.exerciseId,
+                      ) !=
+                      normalizedName,
                 )
                 .toList();
         _updateSession(currentSession.copyWith(exercises: updatedExercises));
@@ -900,6 +916,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         final updatedExercises = List<Exercise>.from(session.exercises);
         updatedExercises[exerciseIndex] = Exercise(
           name: name,
+          exerciseId:
+              exercise.exerciseId ?? ExerciseCatalog.identity(exercise.name),
           sets: exercise.sets,
           note: exercise.note,
         );
@@ -919,13 +937,16 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       final last = exercise.sets.last;
       newSet = gym.Set(reps: last.reps, weight: last.weight, rpe: last.rpe);
     } else {
-      final planSet = _getLastSetForExerciseInPlan(exercise.name);
+      final planSet = _getLastSetForExerciseInPlan(
+        ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
+      );
       newSet = gym.Set(reps: planSet?.reps ?? 8, weight: planSet?.weight ?? 0);
     }
 
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(
       name: exercise.name,
+      exerciseId: exercise.exerciseId,
       sets: [...exercise.sets, newSet],
       note: exercise.note,
     );
@@ -940,6 +961,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(
       name: exercise.name,
+      exerciseId: exercise.exerciseId,
       sets: updatedSets,
       note: exercise.note,
     );
@@ -958,6 +980,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         final updatedExercises = List<Exercise>.from(session.exercises);
         updatedExercises[exerciseIndex] = Exercise(
           name: exercise.name,
+          exerciseId: exercise.exerciseId,
           sets: exercise.sets,
           note: note,
         );
@@ -988,6 +1011,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(
       name: exercise.name,
+      exerciseId: exercise.exerciseId,
       sets: updatedSets,
       note: exercise.note,
     );
@@ -1010,6 +1034,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final updatedExercises = List<Exercise>.from(session.exercises);
     updatedExercises[exerciseIndex] = Exercise(
       name: exercise.name,
+      exerciseId: exercise.exerciseId,
       sets: updatedSets,
       note: exercise.note,
     );
@@ -1830,7 +1855,12 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                           )
                                           : null,
                                   accent: accent,
-                                  previousSets: _previousFor(exercise.name),
+                                  previousSets: _previousFor(
+                                    ExerciseCatalog.identity(
+                                      exercise.name,
+                                      exercise.exerciseId,
+                                    ),
+                                  ),
                                   onSetChanged: _changeSetValues,
                                   onSetRpeChanged: _changeSetRpe,
                                   onEntryFinished: () {

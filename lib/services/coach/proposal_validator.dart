@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../exercise_catalog.dart';
 import '../../data/exercise_library.dart';
 import '../../models/coach_proposal.dart';
 import '../../models/workout_plan.dart';
@@ -364,6 +365,8 @@ class _Run {
       errors.add('$path: must be a non-empty string.');
       return null;
     }
+    final catalog = ExerciseCatalog.findByName(raw);
+    if (catalog != null) return (name: catalog.name, custom: !catalog.builtIn);
     final key = _key(raw);
     final library = _library[key];
     if (library != null) return (name: library, custom: false);

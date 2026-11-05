@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../services/exercise_catalog.dart';
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
 import '../models/workout_session.dart';
@@ -252,7 +253,7 @@ class WorkoutDetailsScreen extends StatelessWidget {
         analytics.eligibleSessions(provider.sessions, splitId: session.splitId),
       ))
         if (historySessionIdentity(event.session) == identity)
-          event.exerciseName.trim().toLowerCase(),
+          event.exerciseId ?? ExerciseCatalog.identity(event.exerciseName),
     };
   }
 
@@ -474,7 +475,10 @@ class WorkoutDetailsScreen extends StatelessWidget {
                           exerciseNumber: index + 1,
                           weightUnit: weightUnit,
                           isRecord: records.contains(
-                            exercise.name.trim().toLowerCase(),
+                            ExerciseCatalog.identity(
+                              exercise.name,
+                              exercise.exerciseId,
+                            ),
                           ),
                         ),
                     ],
@@ -769,7 +773,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
       context.read<WorkoutSessionProvider>().sessions.where(
         (session) => session.date.isBefore(_session.date),
       ),
-      exercise.name,
+      ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
       splitId: _session.splitId,
       planId: _session.planId,
       planName: _session.planName,
@@ -794,6 +798,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
     final old = exercises[exerciseIndex];
     exercises[exerciseIndex] = Exercise(
       name: old.name,
+      exerciseId: old.exerciseId,
       sets: sets,
       note: old.note,
     );

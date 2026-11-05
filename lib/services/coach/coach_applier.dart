@@ -1,5 +1,6 @@
 import 'package:uuid/uuid.dart';
 
+import '../exercise_catalog.dart';
 import '../../data/plan_colors.dart';
 import '../../models/coach_proposal.dart';
 import '../../models/exercise_template.dart';
@@ -137,12 +138,14 @@ class CoachApplier {
       final existing = coachPlan.existing;
       final effortSources = {
         for (final exercise in existing?.exercises ?? <ExerciseTemplate>[])
-          exercise.name.trim().toLowerCase(): exercise,
+          ExerciseCatalog.identity(exercise.name, exercise.exerciseId):
+              exercise,
       };
       final exercises = [
         for (final exercise in coachPlan.exercises)
           exercise.toTemplate(
-            effortSource: effortSources[exercise.name.trim().toLowerCase()],
+            effortSource:
+                effortSources[ExerciseCatalog.identity(exercise.name)],
           ),
       ];
       if (existing != null) {

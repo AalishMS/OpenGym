@@ -1,3 +1,4 @@
+import 'exercise_catalog.dart';
 import '../models/exercise.dart';
 import '../models/workout_session.dart';
 
@@ -26,7 +27,10 @@ class PRTrackingService {
     for (final session in completedHistory) {
       if (!session.isCompleted || session.deletedAt != null) continue;
       for (final exercise in session.exercises) {
-        final key = exercise.name.trim().toLowerCase();
+        final key = ExerciseCatalog.identity(
+          exercise.name,
+          exercise.exerciseId,
+        );
         for (final set in exercise.sets) {
           if (set.reps == 0 && set.weight == 0) continue;
           final old = previousByExercise[key] ?? 0;
@@ -39,7 +43,7 @@ class PRTrackingService {
     final bestCandidateByExercise =
         <String, ({Exercise exercise, double weight, int reps})>{};
     for (final exercise in exercises) {
-      final key = exercise.name.trim().toLowerCase();
+      final key = ExerciseCatalog.identity(exercise.name, exercise.exerciseId);
       for (final set in exercise.sets) {
         if (set.reps == 0 && set.weight == 0) continue;
         final best = bestCandidateByExercise[key];
