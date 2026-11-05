@@ -24,6 +24,7 @@ import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../theme/radii.dart';
+import '../utils/scroll_to_top.dart';
 import '../widgets/app_header.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/action_progress.dart';
@@ -37,7 +38,11 @@ class SettingsScreen extends StatefulWidget {
     this.onSignOut,
     this.onReplayTutorial,
     this.showSampleData = kDebugMode,
+    this.scrollToTopRequest = 0,
   });
+
+  /// Bumped when the Settings tab is tapped while showing.
+  final int scrollToTopRequest;
 
   final Future<void> Function(String splitId)? onClearData;
   final Future<void> Function()? onLoadSampleData;
@@ -55,6 +60,21 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   String? _busyAction;
   bool _confirmingMutation = false;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void didUpdateWidget(covariant SettingsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.scrollToTopRequest != oldWidget.scrollToTopRequest) {
+      scrollToTop(context, _scrollController);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   Future<void> _confirmMutation({
     required String title,
@@ -242,6 +262,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Consumer<SettingsProvider>(
                 builder: (context, settings, child) {
                   return SingleChildScrollView(
+                    controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -430,6 +451,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: _updateSubtitle(updates),
                           onTap: () => _handleUpdateCheck(context, updates),
                         ),
+                        if (UpdateService.isSupportedPlatform)
+                          _buildSwitchTile(
+                            context: context,
+                            icon: LucideIcons.wifi,
+                            title: 'Download updates on Wi-Fi',
+                            subtitle:
+                                'Get new versions ready in the background so '
+                                'updating takes seconds',
+                            value: updates.autoDownload,
+                            onChanged:
+                                (value) => _runSettingsAction(
+                                  context,
+                                  () => updates.setAutoDownload(value),
+                                ),
+                          ),
                         const _SectionHeader(title: 'About'),
                         if (widget.onReplayTutorial != null)
                           _buildSettingsTile(

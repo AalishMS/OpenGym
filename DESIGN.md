@@ -83,7 +83,7 @@ Provider is the only app-wide state pattern.
 | `WorkoutSessionProvider` | Completed-session list and session mutations for the active split |
 | `TrainingBlockProvider` | Split structure, per-plan progress and session indexes |
 | `SettingsProvider` | Theme mode, accent color, units, auto-fill |
-| `UpdateProvider` | Self-update check against GitHub Releases |
+| `UpdateProvider` | Self-update from GitHub Releases: checks at launch and on resume, Wi-Fi prefetch, snoozed prompt, session install |
 
 Providers mutate data through `HiveService` (`SplitProvider` goes through
 `SplitRepository`), reload local state, notify listeners, and schedule sync
@@ -314,6 +314,20 @@ the current screen, and short accidental drags do not switch tabs. Swipes use
 the same tab-selection behavior as navigation taps. The Coach overlay keeps
 its own gestures; main-tab swiping resumes when it closes.
 
+The selected bottom tab is marked by a short accent rule on the top hairline as
+well as by colour and weight, so selection never rests on colour alone. Moving
+to another tab gives a selection haptic and a brief fade-in (none under reduced
+motion). Tapping the tab that is already showing scrolls it back to the top;
+on Home it also closes the Coach and Manage.
+
+While a workout is in progress, a resume strip sits directly above the bottom
+navigation (below the content beside the desktop rail). It shows the plan's
+colour, the plan name, and the live session clock, and opens that workout in
+one tap, switching split if needed. It shows the running timer, or else a paused
+workout started within the last 12 hours (`HiveService.getLiveSession`). It
+listens to the sessions box directly, so finishing, deleting, or a sync pull
+removes it. Pushed routes such as the workout screen cover it.
+
 | Tab | Screen |
 | --- | --- |
 | Home | `HomeScreen` |
@@ -357,6 +371,13 @@ layers close. A pending notification finish confirmation waits for an autosave
 or timer action to finish, even when no route changes. Deferred opens recheck
 that the session is still live. The observer is replaced along with the
 Navigator when the account changes.
+
+Android workout notifications use a system chronometer for elapsed time and
+retain Pause/Resume and Stop controls in the notification panel. While running,
+they request Live Update promotion on Android 16+ so supported devices can also
+show the timer in a status-bar chip. Pausing withdraws that request; resuming
+restores it. Promotion depends on the Android release, manufacturer and user
+notification settings. Other devices keep the regular timer notification.
 
 ## Bundled Workout Presets
 

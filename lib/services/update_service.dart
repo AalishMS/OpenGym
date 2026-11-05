@@ -119,6 +119,11 @@ class ReleaseInfo {
   final int apkSize;
   final AppVersion version;
 
+  /// Lowercase hex SHA-256 of the APK from GitHub's asset `digest`, or null for
+  /// releases published before GitHub reported one. The installer checks the
+  /// downloaded file against it.
+  final String? sha256;
+
   const ReleaseInfo({
     required this.tagName,
     required this.displayVersion,
@@ -127,6 +132,7 @@ class ReleaseInfo {
     required this.apkUrl,
     required this.apkSize,
     required this.version,
+    this.sha256,
   });
 
   /// The public page for this exact build.
@@ -175,6 +181,7 @@ class ReleaseInfo {
     final url = apk['browser_download_url'];
     if (url is! String || url.isEmpty) return null;
     final size = apk['size'];
+    final digest = apk['digest'];
 
     final name = json['name'];
     final body = json['body'];
@@ -188,6 +195,7 @@ class ReleaseInfo {
       apkUrl: url,
       apkSize: size is int ? size : 0,
       version: version,
+      sha256: digest is String ? parseSha256Digest(digest) : null,
     );
   }
 
@@ -197,9 +205,21 @@ class ReleaseInfo {
         'body': changelog,
         'html_url': htmlUrl,
         'assets': [
-          {'name': 'cached.apk', 'size': apkSize, 'browser_download_url': apkUrl},
+          {
+            'name': 'cached.apk',
+            'size': apkSize,
+            'browser_download_url': apkUrl,
+            if (sha256 != null) 'digest': 'sha256:$sha256',
+          },
         ],
       };
+}
+
+/// Reads GitHub's `sha256:<hex>` asset digest. Anything else, including other
+/// algorithms, is ignored rather than half-trusted.
+String? parseSha256Digest(String digest) {
+  final match = RegExp(r'^sha256:([0-9a-fA-F]{64})$').firstMatch(digest.trim());
+  return match?.group(1)!.toLowerCase();
 }
 
 /// Renders a byte count for display. Returns an empty string when the size is
@@ -331,12 +351,17 @@ class UpdateDownloadSnapshot {
   /// HTTP status of a failed request. Zero when there is nothing to explain.
   final int reason;
 
+  /// The app started this download by itself (Wi-Fi only, no notification)
+  /// rather than because the user tapped "Update now".
+  final bool background;
+
   const UpdateDownloadSnapshot({
     required this.state,
     this.tag,
     this.downloadedBytes = 0,
     this.totalBytes = 0,
     this.reason = 0,
+    this.background = false,
   });
 
   static const UpdateDownloadSnapshot none = UpdateDownloadSnapshot(
@@ -356,6 +381,7 @@ class UpdateDownloadSnapshot {
       downloadedBytes: count(map['downloaded']),
       totalBytes: count(map['total']),
       reason: count(map['reason']),
+      background: map['background'] == true,
     );
   }
 
@@ -370,6 +396,10 @@ class UpdateDownloadSnapshot {
   bool get isWaitingForNetwork =>
       state == UpdateDownloadState.paused && reason >= 1 && reason <= 3;
 
+  /// Paused only because it may not use mobile data (PAUSED_QUEUED_FOR_WIFI).
+  bool get isWaitingForWifi =>
+      state == UpdateDownloadState.paused && reason == 3;
+
   /// Progress as 0..1, or null while the size is still unknown.
   double? get fraction {
     if (totalBytes <= 0) return null;
@@ -377,8 +407,11 @@ class UpdateDownloadSnapshot {
   }
 }
 
-/// How the system installer answered.
-enum InstallOutcome { installed, canceled, failed }
+/// How the system installer answered. [corrupt] means the downloaded file did
+/// not match the release's checksum and was never handed to Android.
+/// [confirming] is progress rather than an answer: Android's confirm screen
+/// is now showing.
+enum InstallOutcome { installed, canceled, failed, corrupt, confirming }
 
 @immutable
 class InstallResult {
@@ -415,6 +448,11 @@ String downloadFailureMessage(int reason) {
   }
 }
 
+/// Shown when the downloaded file does not match the release checksum.
+const String kCorruptDownloadMessage =
+    'The download was damaged on the way, so it was not installed. Tap Try '
+    'again to download it again.';
+
 /// Explains a failed install, keyed by PackageManager's INSTALL_FAILED code.
 String installFailureMessage(int code) {
   switch (code) {
@@ -435,8 +473,25 @@ String installFailureMessage(int code) {
   }
 }
 
-/// Runs the update download through Android's DownloadManager and opens the
-/// system installer. See `UpdateDownloads.kt`.
+/// Something Android told the updater without being asked.
+sealed class UpdatePlatformEvent {
+  const UpdatePlatformEvent();
+}
+
+/// The install session finished, one way or another.
+class InstallResultEvent extends UpdatePlatformEvent {
+  const InstallResultEvent(this.result);
+  final InstallResult? result;
+}
+
+/// The app was brought to the front from the "Update ready" notification.
+class OpenUpdateEvent extends UpdatePlatformEvent {
+  const OpenUpdateEvent();
+}
+
+/// Runs the update download through Android's DownloadManager and installs it
+/// through a PackageInstaller session. See `UpdateDownloads.kt` and
+/// `UpdateInstaller.kt`.
 ///
 /// The download is owned by the system, not by this process, which is the
 /// point: it survives the screen turning off, a switch to another app, and the
@@ -451,15 +506,23 @@ class UpdateDownloader {
   Future<bool> ensureInstallPermission() =>
       UpdateService.ensureInstallPermission();
 
-  /// Starts a fresh download of [release], replacing any earlier one.
-  Future<void> start(ReleaseInfo release) {
+  /// Starts a fresh download of [release], replacing any earlier one. A
+  /// [background] download waits for Wi-Fi and shows no notification.
+  Future<void> start(ReleaseInfo release, {bool background = false}) {
     return _installerChannel.invokeMethod<void>('startDownload', {
       'url': release.apkUrl,
       'tag': release.tagName,
       'fileName': updateFileName(release.tagName),
       'title': 'OpenGym ${release.version.displayLabel}',
+      'label': release.version.displayLabel,
+      'background': background,
     });
   }
+
+  /// Re-labels the current download as the app's own or the user's, which
+  /// decides whether its completion is announced.
+  Future<void> setBackground(bool background) => _installerChannel
+      .invokeMethod<void>('setDownloadBackground', {'background': background});
 
   Future<UpdateDownloadSnapshot> status() async {
     final map = await _installerChannel.invokeMapMethod<Object?, Object?>(
@@ -472,20 +535,55 @@ class UpdateDownloader {
   Future<void> cancel() =>
       _installerChannel.invokeMethod<void>('cancelDownload');
 
-  /// Opens the system installer. False when there is no finished file.
-  Future<bool> install() async {
+  /// Starts installing the finished download, checking it against
+  /// [release]'s checksum first. False when there is no finished file; the
+  /// outcome otherwise arrives as an [InstallResultEvent].
+  Future<bool> install(ReleaseInfo release) async {
     final launched = await _installerChannel.invokeMethod<bool>(
       'installDownload',
+      {'sha256': release.sha256},
     );
     return launched ?? false;
   }
 
-  /// The installer's answer since the last [install], or null if it gave none.
+  /// An install result that arrived while Dart was not listening.
   Future<InstallResult?> takeInstallResult() async {
     final map = await _installerChannel.invokeMapMethod<Object?, Object?>(
       'takeInstallResult',
     );
     return InstallResult.fromMap(map);
+  }
+
+  /// Whether Android will probably install without a confirmation screen.
+  Future<bool> canUpdateSilently() async {
+    return await _installerChannel.invokeMethod<bool>('canUpdateSilently') ??
+        false;
+  }
+
+  /// True once if the app was opened from the "Update ready" notification.
+  Future<bool> takeOpenUpdateRequest() async {
+    return await _installerChannel.invokeMethod<bool>(
+          'takeOpenUpdateRequest',
+        ) ??
+        false;
+  }
+
+  /// Routes Android's unprompted messages to [onEvent].
+  void listen(void Function(UpdatePlatformEvent event) onEvent) {
+    _installerChannel.setMethodCallHandler((call) async {
+      switch (call.method) {
+        case 'installResult':
+          final args = call.arguments;
+          onEvent(
+            InstallResultEvent(
+              args is Map ? InstallResult.fromMap(args.cast()) : null,
+            ),
+          );
+        case 'openUpdate':
+          onEvent(const OpenUpdateEvent());
+      }
+      return null;
+    });
   }
 }
 

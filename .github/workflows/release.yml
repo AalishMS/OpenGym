@@ -32,6 +32,14 @@ jobs:
     steps:
       - name: Check out the tag
         uses: actions/checkout@v4
+        with:
+          # The release notes are built from the commits since the last tag.
+          fetch-depth: 0
+
+      # actions/checkout can leave an annotated tag looking lightweight; fetch
+      # the real tag objects so a hand-written tag message is found.
+      - name: Fetch tags
+        run: git fetch --force --tags origin
 
       # Fails the build on a tag/pubspec mismatch rather than publishing a
       # release the updater would then refuse to offer. Runs before anything
@@ -152,6 +160,51 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk "$name"
           echo "path=$name" >> "$GITHUB_OUTPUT"
 
+      # The update dialog shows the first few list items of the release body,
+      # so the body must be a list of user-facing changes. An annotated tag's
+      # message wins (git tag -a vX.Y.Z+N); otherwise feat/fix/perf commit
+      # subjects since the previous tag are used. GitHub's generated notes are
+      # off: they list PRs only, with "by @user in <url>" attached, and miss
+      # work pushed straight to main. Install text goes below a --- rule, which
+      # the app treats as the end of the notes.
+      - name: Write the release notes
+        run: |
+          set -euo pipefail
+          notes=notes.md
+          : > "$notes"
+
+          # The tag message's list items, if it is annotated and has any. A
+          # one-line message such as "Release 1.0.2" is not release notes.
+          if [ "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = "tag" ]; then
+            git tag -l --format='%(contents)' "$GITHUB_REF_NAME" \
+              | sed '/-----BEGIN PGP SIGNATURE-----/,$d' \
+              | grep -E '^[-*] ' > "$notes" || true
+          fi
+
+          if ! grep -q '[^[:space:]]' "$notes"; then
+            previous="$(git describe --tags --abbrev=0 --match 'v*' \
+              "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+            range="${previous:+$previous..}$GITHUB_REF_NAME"
+            git log --no-merges --format=%s "$range" \
+              | sed -nE 's/^(feat|fix|perf)(\([^)]*\))?!?:[[:space:]]*(.+)$/\3/p' \
+              | sed -E 's/[[:space:]]*\(#[0-9]+\)$//' \
+              | awk '{ print "- " toupper(substr($0, 1, 1)) substr($0, 2) }' \
+              | head -n 12 > "$notes"
+          fi
+
+          if ! grep -q '[^[:space:]]' "$notes"; then
+            echo "- Fixes and improvements" > "$notes"
+          fi
+
+          {
+            echo
+            echo "---"
+            echo
+            echo "Install the APK below. If OpenGym is already installed, it"
+            echo "offers this update from inside the app."
+          } >> "$notes"
+          cat "$notes"
+
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
@@ -161,10 +214,8 @@ jobs:
           # updater.
           draft: false
           prerelease: false
-          generate_release_notes: true
-          body: |
-            Install the APK below. If OpenGym is already installed, it will
-            offer this update from inside the app.
+          generate_release_notes: false
+          body_path: notes.md
 
       # The runner is ephemeral, but an early failure in a later step should
       # still not leave signing material sitting in the workspace.

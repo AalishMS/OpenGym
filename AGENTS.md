@@ -87,6 +87,11 @@ git tag v1.0.2+3 && git push && git push --tags
   `.apk` asset it finds, so multiple assets could hand out the wrong ABI
 - The release must not be a draft or prerelease - the `/releases/latest`
   endpoint the app polls skips both
+- The update dialog shows the first four list items of the release body. The
+  workflow builds that list from `feat`/`fix`/`perf` commit subjects since the
+  previous tag, so write those subjects for users. To write the notes by hand,
+  use an annotated tag (`git tag -a v1.0.2+3`): its message, as `- ` lines,
+  replaces the generated list
 
 
 ---

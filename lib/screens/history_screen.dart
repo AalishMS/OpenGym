@@ -17,6 +17,7 @@ import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
+import '../utils/scroll_to_top.dart';
 import '../utils/set_history.dart';
 import '../utils/statistics_format.dart';
 import '../widgets/action_progress.dart';
@@ -29,7 +30,10 @@ import '../widgets/workout/set_entry_table.dart';
 import '../widgets/workout/workout_dialogs.dart';
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  /// Bumped when the History tab is tapped while showing.
+  final int scrollToTopRequest;
+
+  const HistoryScreen({this.scrollToTopRequest = 0, super.key});
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -41,6 +45,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String _query = '';
   String? _splitId;
   bool _hasSeenSplit = false;
+
+  @override
+  void didUpdateWidget(covariant HistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.scrollToTopRequest != oldWidget.scrollToTopRequest) {
+      scrollToTop(context, _scrollController);
+    }
+  }
 
   @override
   void didChangeDependencies() {

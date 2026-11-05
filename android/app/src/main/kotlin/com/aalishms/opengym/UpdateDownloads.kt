@@ -1,54 +1,61 @@
 package com.aalishms.opengym
 
-import android.app.Activity
 import android.app.DownloadManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import androidx.core.content.FileProvider
 import java.io.File
 
 private const val PREFS_NAME = "update_download"
 private const val KEY_ID = "downloadId"
 private const val KEY_TAG = "tag"
 private const val KEY_FILE = "fileName"
+private const val KEY_LABEL = "label"
+private const val KEY_BACKGROUND = "background"
 private const val DIRECTORY = "updates"
 private const val APK_MIME = "application/vnd.android.package-archive"
 private const val CHANNEL_ID = "app_updates"
 private const val NOTIFICATION_ID = 4110
 private const val CONTENT_REQUEST = 4111
 
-/** Hidden PackageManager extra the installer fills in when EXTRA_RETURN_RESULT is set. */
-private const val EXTRA_INSTALL_RESULT = "android.intent.extra.INSTALL_RESULT"
-
 const val ACTION_OPEN_UPDATE = "com.aalishms.opengym.update.OPEN"
-const val INSTALL_REQUEST_CODE = 4112
 
 /**
  * The self-update download, run by Android's DownloadManager.
  *
  * The download belongs to the system, not to this process, so it keeps going
  * when the screen is off, when the user switches apps, and even if Android
- * kills OpenGym. Dart polls [status] for progress and asks for [install] once
- * the app is back in front — Android blocks a background app from opening the
- * installer, so the install step always waits for the user.
+ * kills OpenGym. Dart polls [status] for progress and hands the finished file
+ * to [UpdateInstaller].
+ *
+ * A download is either one the user asked for, or a *background* one the app
+ * starts by itself so the update is ready when the user is. Background
+ * downloads only run on an unmetered network, show no system notification, and
+ * never post "ready to install" — the user did not ask for anything yet.
  *
  * Only one update download exists at a time. Its id and release tag live in
  * SharedPreferences so a restarted process can find it again.
  */
 object UpdateDownloads {
-    /** Set by MainActivity so the completion receiver knows whether to notify. */
+    /** Set by MainActivity so receivers know whether the app is on screen. */
     @Volatile
     var appInForeground = false
 
-    fun start(context: Context, url: String, tag: String, fileName: String, title: String) {
+    fun start(
+        context: Context,
+        url: String,
+        tag: String,
+        fileName: String,
+        title: String,
+        label: String,
+        background: Boolean,
+    ) {
         require(fileName.isNotBlank() && !fileName.contains('/')) { "Invalid file name" }
         cancel(context)
         val dir = context.getExternalFilesDir(DIRECTORY)
@@ -60,17 +67,39 @@ object UpdateDownloads {
             .setTitle(title)
             .setDescription("Downloading update")
             .setMimeType(APK_MIME)
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-            .setAllowedOverMetered(true)
-            .setAllowedOverRoaming(true)
+            // Hidden needs DOWNLOAD_WITHOUT_NOTIFICATION, declared in the manifest.
+            .setNotificationVisibility(
+                if (background) {
+                    DownloadManager.Request.VISIBILITY_HIDDEN
+                } else {
+                    DownloadManager.Request.VISIBILITY_VISIBLE
+                },
+            )
+            .setAllowedOverMetered(!background)
+            .setAllowedOverRoaming(!background)
             .setDestinationInExternalFilesDir(context, DIRECTORY, fileName)
         val id = manager(context).enqueue(request)
         prefs(context).edit()
             .putLong(KEY_ID, id)
             .putString(KEY_TAG, tag)
             .putString(KEY_FILE, fileName)
+            .putString(KEY_LABEL, label)
+            .putBoolean(KEY_BACKGROUND, background)
             .apply()
     }
+
+    /**
+     * Marks the current download as the user's (false) or the app's own (true).
+     * It only changes who is told when it finishes; the request is unchanged.
+     */
+    fun setBackground(context: Context, background: Boolean) {
+        val prefs = prefs(context)
+        if (prefs.getLong(KEY_ID, -1L) < 0) return
+        prefs.edit().putBoolean(KEY_BACKGROUND, background).apply()
+    }
+
+    /** The release label ("Version 18") of the current download, if any. */
+    fun label(context: Context): String? = prefs(context).getString(KEY_LABEL, null)
 
     /**
      * The current download as a map for Dart. `state` is one of none, pending,
@@ -107,6 +136,7 @@ object UpdateDownloads {
                 "downloaded" to cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)),
                 "total" to cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)),
                 "reason" to cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)),
+                "background" to prefs.getBoolean(KEY_BACKGROUND, false),
             )
         }
         return mapOf("state" to "none")
@@ -127,71 +157,45 @@ object UpdateDownloads {
         clearNotification(context)
     }
 
-    /**
-     * Opens the system installer for the finished download. Returns false when
-     * there is nothing to install or no installer would take it. The answer
-     * arrives in MainActivity.onActivityResult under [INSTALL_REQUEST_CODE].
-     */
-    fun install(activity: Activity): Boolean {
-        val file = apkFile(activity) ?: return false
-        val uri = FileProvider.getUriForFile(activity, "${activity.packageName}.update_provider", file)
-        @Suppress("DEPRECATION")
-        val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
-            setDataAndType(uri, APK_MIME)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            putExtra(Intent.EXTRA_RETURN_RESULT, true)
-        }
-        return try {
-            activity.startActivityForResult(intent, INSTALL_REQUEST_CODE)
-            clearNotification(activity)
-            true
-        } catch (_: ActivityNotFoundException) {
-            false
-        }
-    }
-
-    /**
-     * Turns the installer's answer into a map for Dart. A successful self-update
-     * replaces this process, so "installed" is rarely seen; "canceled" covers
-     * the user backing out, and "failed" carries PackageManager's INSTALL_FAILED
-     * code (for example -7 when the signing key does not match).
-     */
-    fun installResult(resultCode: Int, data: Intent?): Map<String, Any?> = mapOf(
-        "outcome" to when (resultCode) {
-            Activity.RESULT_OK -> "installed"
-            Activity.RESULT_CANCELED -> "canceled"
-            else -> "failed"
-        },
-        "code" to (data?.getIntExtra(EXTRA_INSTALL_RESULT, 0) ?: 0),
-    )
-
     /** Called by [UpdateDownloadReceiver] when any of our downloads ends. */
     fun onDownloadComplete(context: Context, downloadId: Long) {
         val prefs = prefs(context)
         if (downloadId < 0 || downloadId != prefs.getLong(KEY_ID, -1L)) return
         // In the foreground Dart is already polling and will open the installer.
         if (appInForeground) return
+        // A download the app started on its own is offered on the next launch,
+        // not announced: nobody asked for it yet.
+        if (prefs.getBoolean(KEY_BACKGROUND, false)) return
         val ready = status(context)["state"] == "successful"
-        notify(context, ready)
+        notify(
+            context,
+            title = if (ready) "Update ready to install" else "Update download failed",
+            text = if (ready) "Tap to finish updating OpenGym" else "Open OpenGym to try again",
+            action = ACTION_OPEN_UPDATE,
+        )
     }
 
     fun clearNotification(context: Context) {
         context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
     }
 
-    private fun notify(context: Context, ready: Boolean) {
+    /**
+     * Posts the one update notification, replacing any earlier one. [action] is
+     * the intent action MainActivity opens with, or null for a plain launch.
+     */
+    fun notify(context: Context, title: String, text: String, action: String?) {
         if (!WorkoutTimerNotification.notificationsAllowed(context)) return
         val manager = context.getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
                 NotificationChannel(CHANNEL_ID, "App updates", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                    description = "Tells you when a downloaded update is ready to install"
+                    description = "Tells you when an update is ready or has been installed"
                     setShowBadge(false)
                 },
             )
         }
         val openIntent = Intent(context, MainActivity::class.java).apply {
-            action = ACTION_OPEN_UPDATE
+            this.action = action ?: Intent.ACTION_MAIN
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or
                 Intent.FLAG_ACTIVITY_SINGLE_TOP
@@ -203,8 +207,8 @@ object UpdateDownloads {
         }
         builder
             .setSmallIcon(R.drawable.ic_launcher_monochrome)
-            .setContentTitle(if (ready) "Update ready to install" else "Update download failed")
-            .setContentText(if (ready) "Tap to finish updating OpenGym" else "Open OpenGym to try again")
+            .setContentTitle(title)
+            .setContentText(text)
             .setContentIntent(
                 PendingIntent.getActivity(
                     context,
@@ -218,7 +222,7 @@ object UpdateDownloads {
     }
 
     /** The finished APK, preferring the path DownloadManager reports. */
-    private fun apkFile(context: Context): File? {
+    fun apkFile(context: Context): File? {
         val prefs = prefs(context)
         val id = prefs.getLong(KEY_ID, -1L)
         if (id >= 0) {

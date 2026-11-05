@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +15,7 @@ import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/screens/history_screen.dart';
+import 'package:gymapp/screens/settings_screen.dart';
 import 'package:gymapp/screens/stats_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 
@@ -396,13 +398,270 @@ void main() {
     await tester.pump();
     expect(statsScroll.offset, greaterThan(0));
 
-    // A second tap on the tab that is showing leaves the position alone.
-    await openTab('Stats');
-    expect(statsScroll.offset, greaterThan(0));
-
     await openTab('History');
     await openTab('Stats');
     expect(statsScroll.offset, 0);
+  });
+
+  testWidgets('tapping the tab that is showing scrolls it to the top', (
+    tester,
+  ) async {
+    await tester.runAsync(seedHomeTraining);
+    await tester.pumpWidget(shellHost(390));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    Future<void> openTab(String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    await openTab('Stats');
+    final statsScroll =
+        tester
+            .widget<SingleChildScrollView>(
+              find.byKey(const ValueKey('statistics-scroll')),
+            )
+            .controller!;
+    statsScroll.jumpTo(300);
+    await tester.pump();
+    await openTab('Stats');
+    expect(statsScroll.offset, 0);
+
+    await openTab('Settings');
+    final settingsScroll =
+        tester
+            .widget<SingleChildScrollView>(
+              find
+                  .descendant(
+                    of: find.byType(SettingsScreen),
+                    matching: find.byType(SingleChildScrollView),
+                  )
+                  .first,
+            )
+            .controller!;
+    settingsScroll.jumpTo(200);
+    await tester.pump();
+    expect(settingsScroll.offset, greaterThan(0));
+    await openTab('Settings');
+    expect(settingsScroll.offset, 0);
+  });
+
+  testWidgets('changing tabs gives a selection click, reselecting does not', (
+    tester,
+  ) async {
+    final haptics = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'HapticFeedback.vibrate') {
+          haptics.add(call.arguments);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.pumpWidget(shellHost(390));
+    await tester.pump();
+
+    Future<void> openTab(String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    await openTab('History');
+    expect(haptics, ['HapticFeedbackType.selectionClick']);
+    await openTab('History');
+    expect(haptics, hasLength(1));
+  });
+
+  testWidgets('the selected tab is marked by a rule, not colour alone', (
+    tester,
+  ) async {
+    Alignment indicatorAt() => (tester
+                .widget<AnimatedAlign>(
+                  find.byKey(const ValueKey('bottom-nav-indicator')),
+                )
+                .alignment
+            as AlignmentDirectional)
+        .resolve(TextDirection.ltr);
+
+    await tester.pumpWidget(shellHost(390));
+    await tester.pump();
+    expect(indicatorAt().x, -1);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AppBottomNav),
+        matching: find.text('Settings'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(indicatorAt().x, 1);
+  });
+
+  group('workout in progress strip', () {
+    Future<void> seedLive({
+      required bool running,
+      Duration startedAgo = const Duration(minutes: 20),
+    }) async {
+      final now = DateTime.now();
+      final session = WorkoutSession(
+        id: 'live-session',
+        planName: 'Leg Day',
+        date: now.subtract(startedAgo),
+        startedAt: now.subtract(startedAgo),
+        isCompleted: false,
+        timerStartedAt:
+            running ? now.subtract(const Duration(minutes: 5)) : null,
+        durationSeconds: 600,
+        exercises: [
+          Exercise(name: 'Squat', sets: [Set(reps: 5, weight: 100)]),
+        ],
+      );
+      await Hive.box<WorkoutSession>(
+        HiveService.sessionsBox,
+      ).put(session.id, session);
+    }
+
+    final strip = find.byKey(const ValueKey('active-workout-bar'));
+
+    testWidgets('shows a running workout above the bar and ticks', (
+      tester,
+    ) async {
+      // Real time passes below, so the shell's native timer restore runs.
+      const timerChannel = MethodChannel(
+        'com.aalishms.opengym/workout_timer_notification',
+      );
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        timerChannel,
+        (_) async => null,
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+          timerChannel,
+          null,
+        ),
+      );
+      await tester.runAsync(() => seedLive(running: true));
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+
+      expect(strip, findsOneWidget);
+      expect(find.text('Leg Day'), findsOneWidget);
+      expect(find.text('Workout in progress'), findsOneWidget);
+      expect(
+        tester.getBottomLeft(strip).dy,
+        lessThanOrEqualTo(tester.getTopLeft(find.byType(AppBottomNav)).dy),
+      );
+      String clock() =>
+          tester.widget<Text>(find.textContaining(RegExp(r'^15:0\d$'))).data!;
+      final before = clock();
+      // The clock reads wall time, so let real time pass, then the ticker.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 1100)),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(clock(), isNot(before));
+    });
+
+    testWidgets('a recent paused workout shows as paused', (tester) async {
+      await tester.runAsync(() => seedLive(running: false));
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+
+      expect(find.text('Workout paused'), findsOneWidget);
+      expect(find.text('10:00'), findsOneWidget);
+    });
+
+    testWidgets('a paused workout left for days is not shown', (tester) async {
+      await tester.runAsync(
+        () => seedLive(running: false, startedAgo: const Duration(days: 3)),
+      );
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+
+      expect(strip, findsNothing);
+    });
+
+    testWidgets('disappears once the workout is finished', (tester) async {
+      await tester.runAsync(() => seedLive(running: true));
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+      expect(strip, findsOneWidget);
+
+      await tester.runAsync(() async {
+        final box = Hive.box<WorkoutSession>(HiveService.sessionsBox);
+        await box.put(
+          'live-session',
+          box
+              .get('live-session')!
+              .copyWith(isCompleted: true, timerStartedAt: null),
+        );
+      });
+      await tester.pump();
+      expect(strip, findsNothing);
+    });
+
+    testWidgets('Home offers to resume the plan that is in progress', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        await seedHomeTraining();
+        await seedLive(running: true);
+        final box = Hive.box<WorkoutSession>(HiveService.sessionsBox);
+        await box.put(
+          'live-session',
+          box
+              .get('live-session')!
+              .copyWith(planId: 'shell-plan', planName: 'Push Day'),
+        );
+      });
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+
+      expect(find.text('In progress'), findsOneWidget);
+      expect(find.text('Resume workout'), findsOneWidget);
+      expect(find.text('Next up'), findsNothing);
+
+      await tester.runAsync(() async {
+        final box = Hive.box<WorkoutSession>(HiveService.sessionsBox);
+        await box.put(
+          'live-session',
+          box
+              .get('live-session')!
+              .copyWith(isCompleted: true, timerStartedAt: null),
+        );
+      });
+      await tester.pump();
+      expect(find.text('Next up'), findsOneWidget);
+      expect(find.text('Start workout'), findsOneWidget);
+    });
+
+    testWidgets('sits under the content on the desktop rail', (tester) async {
+      await tester.runAsync(() => seedLive(running: true));
+      await tester.pumpWidget(shellHost(Breakpoints.medium));
+      await tester.pump();
+      expect(strip, findsOneWidget);
+    });
   });
 
   testWidgets('a trained weekday opens its latest detail and returns to Home', (

@@ -22,6 +22,10 @@ class UpNextCard extends StatelessWidget {
   final int? durationMinutes;
   final GlobalKey? tutorialStartKey;
 
+  /// This plan's workout is already under way, so the card offers to resume
+  /// it instead of starting the next one.
+  final bool inProgress;
+
   const UpNextCard({
     required this.plan,
     required this.day,
@@ -31,6 +35,7 @@ class UpNextCard extends StatelessWidget {
     this.trainedDays = const {},
     this.durationMinutes,
     this.tutorialStartKey,
+    this.inProgress = false,
     super.key,
   });
 
@@ -87,7 +92,7 @@ class UpNextCard extends StatelessWidget {
                 runSpacing: AppSpacing.xs,
                 children: [
                   Text(
-                    'Next up',
+                    inProgress ? 'In progress' : 'Next up',
                     style: textTheme.labelLarge?.copyWith(color: nextColor),
                   ),
                   if (last != null)
@@ -160,16 +165,16 @@ class UpNextCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               AppButton.primary(
                 key: tutorialStartKey,
-                label: 'Start workout',
+                label: inProgress ? 'Resume workout' : 'Start workout',
                 onPressed: onStart,
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(LucideIcons.play, size: 18),
-                    SizedBox(width: AppSpacing.sm),
+                    const Icon(LucideIcons.play, size: 18),
+                    const SizedBox(width: AppSpacing.sm),
                     Flexible(
                       child: Text(
-                        'Start workout',
+                        inProgress ? 'Resume workout' : 'Start workout',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),

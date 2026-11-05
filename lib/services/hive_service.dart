@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -946,6 +947,38 @@ class HiveService {
     }
     return null;
   }
+
+  /// How long a paused workout still counts as in progress. A paused draft
+  /// left behind for days is no longer something the user is "in".
+  static const Duration livePauseWindow = Duration(hours: 12);
+
+  /// The workout the user is in the middle of, for the shell's resume strip:
+  /// the running timer if there is one, otherwise the most recently started
+  /// paused workout from within [livePauseWindow]. Account-wide, like
+  /// [getRunningSession], because resuming switches to the workout's split.
+  static WorkoutSession? getLiveSession({DateTime? now}) {
+    final running = getRunningSession();
+    if (running != null) return running;
+    final cutoff = (now ?? DateTime.now()).subtract(livePauseWindow);
+    WorkoutSession? latest;
+    for (final session in getSessions()) {
+      final startedAt = session.startedAt;
+      if (session.isCompleted || session.id == null || startedAt == null) {
+        continue;
+      }
+      if ((session.durationSeconds ?? 0) <= 0) continue;
+      if (startedAt.isBefore(cutoff)) continue;
+      if (latest == null || startedAt.isAfter(latest.startedAt!)) {
+        latest = session;
+      }
+    }
+    return latest;
+  }
+
+  /// Fires on every session write, including sync pulls and completion, which
+  /// do not all go through [WorkoutSessionProvider].
+  static ValueListenable<Box<WorkoutSession>> sessionsListenable() =>
+      _sessionsBox.listenable();
 
   static WorkoutSession? getSessionById(String id) => _sessionsBox.get(id);
 

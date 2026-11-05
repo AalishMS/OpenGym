@@ -372,15 +372,41 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         children: [
           if (!_managing) ...[
-            UpNextCard(
-              tutorialStartKey: widget.tutorialStartKey,
-              plan: plans[nextIndex],
-              day: nextIndex + 1,
-              dayCount: plans.length,
-              stat: statsByIndex[nextIndex],
-              trainedDays: trainedDays,
-              durationMinutes: durationMinutes,
-              onStart: () => _openWorkout(context, plans[nextIndex], nextIndex),
+            // Session writes do not all pass through the provider (finishing
+            // a workout, sync), so follow the box for the in-progress state.
+            ValueListenableBuilder(
+              valueListenable: HiveService.sessionsListenable(),
+              builder: (context, _, _) {
+                final live = HiveService.getLiveSession();
+                final liveIndex =
+                    live?.planId == null
+                        ? -1
+                        : plans.indexWhere((plan) => plan.id == live!.planId);
+                final inProgress = liveIndex >= 0;
+                final index = inProgress ? liveIndex : nextIndex;
+                return UpNextCard(
+                  tutorialStartKey: widget.tutorialStartKey,
+                  plan: plans[index],
+                  day: index + 1,
+                  dayCount: plans.length,
+                  stat: statsByIndex[index],
+                  trainedDays: trainedDays,
+                  durationMinutes: inProgress ? null : durationMinutes,
+                  inProgress: inProgress,
+                  onStart:
+                      inProgress
+                          ? () => openWorkoutDestination(
+                            context,
+                            WorkoutDestination.session(live!.id!),
+                            requireIncomplete: true,
+                          )
+                          : () => _openWorkout(
+                            context,
+                            plans[nextIndex],
+                            nextIndex,
+                          ),
+                );
+              },
             ),
             const SizedBox(height: AppSpacing.sm),
             TrainingSnapshot(

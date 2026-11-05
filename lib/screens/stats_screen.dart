@@ -11,6 +11,7 @@ import '../services/statistics_analytics_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
+import '../utils/scroll_to_top.dart';
 import '../widgets/app_header.dart';
 import '../widgets/statistics/block_statistics.dart';
 import '../widgets/statistics/lift_list.dart';
@@ -34,9 +35,13 @@ class StatsScreen extends StatefulWidget {
   final int weeklyTrainingRequest;
   final int visitRequest;
 
+  /// Bumped when the Stats tab is tapped while showing.
+  final int scrollToTopRequest;
+
   const StatsScreen({
     this.weeklyTrainingRequest = 0,
     this.visitRequest = 0,
+    this.scrollToTopRequest = 0,
     super.key,
   });
 
@@ -63,6 +68,9 @@ class _StatsScreenState extends State<StatsScreen> {
   @override
   void didUpdateWidget(covariant StatsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.scrollToTopRequest != oldWidget.scrollToTopRequest) {
+      scrollToTop(context, _scrollController);
+    }
     final weekly =
         widget.weeklyTrainingRequest != oldWidget.weeklyTrainingRequest;
     if (!weekly && widget.visitRequest == oldWidget.visitRequest) return;

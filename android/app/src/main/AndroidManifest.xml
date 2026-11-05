@@ -6,11 +6,21 @@
          reach the GitHub Releases API, and Supabase sync needs it too. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Allows supported Android versions to show the running workout timer
+         as a Live Update chip in the status bar. -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <!-- Lets the app hand a downloaded APK to the system installer so it can
          update itself. The user must still approve "install unknown apps" and
          then confirm the install; this only allows us to ask. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
+    <!-- Android 12+: once OpenGym is the installer of record for itself, its
+         own updates install without a confirmation screen. Android falls back
+         to asking whenever its conditions are not met. -->
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION"/>
+    <!-- Background update downloads (Wi-Fi only, opt-out in Settings) run
+         without a system download notification. -->
+    <uses-permission android:name="android.permission.DOWNLOAD_WITHOUT_NOTIFICATION"/>
 
     <!-- No feature touches shared storage: update downloads land in the app's
          own external files directory, which needs no permission. These
@@ -61,17 +71,21 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Hands the downloaded update APK to the system installer. Only the
-             updates/ folder is exposed; see res/xml/filepaths.xml. -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.update_provider"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data
-                android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/filepaths" />
-        </provider>
+        <!-- Receives the update install session's status. Only our own
+             PendingIntent addresses it. -->
+        <receiver
+            android:name=".UpdateInstallReceiver"
+            android:exported="false" />
+        <!-- Runs in the new version after a self-update to post "OpenGym
+             updated - tap to open", since the old process ends without
+             reopening the app. Only the system sends this broadcast. -->
+        <receiver
+            android:name=".UpdateAppliedReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <!-- Posts "Update ready to install" when the system finishes the update
              download while OpenGym is in the background. Exported because the
              sender is the system download provider; the receiver re-reads the

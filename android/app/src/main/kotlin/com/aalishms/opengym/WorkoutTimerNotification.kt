@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.Bundle
 import androidx.core.content.ContextCompat
 
 private const val CHANNEL_ID = "workout_timer"
@@ -239,6 +240,15 @@ object WorkoutTimerNotification {
                     PendingIntent.getActivity(context, 4102, stopIntent, immutable),
                 ).build(),
             )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.BAKLAVA) {
+            // Use the documented extra because the equivalent builder method
+            // requires SDK 36.1; this project compiles against SDK 36. Supported
+            // systems can promote the existing chronometer into a status-bar
+            // Live Update without app-driven ticks. Pausing removes promotion.
+            builder.addExtras(Bundle().apply {
+                putBoolean("android.requestPromotedOngoing", state.running)
+            })
+        }
         manager.notify(NOTIFICATION_ID, builder.build())
     }
 

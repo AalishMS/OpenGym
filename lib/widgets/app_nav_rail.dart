@@ -11,10 +11,15 @@ class AppNavRail extends StatelessWidget {
   final ValueChanged<int> onTap;
   final Map<int, GlobalKey> destinationKeys;
 
+  /// The destination that carries an attention dot, such as Settings while an
+  /// update is waiting.
+  final int? badgedIndex;
+
   const AppNavRail({
     required this.currentIndex,
     required this.onTap,
     this.destinationKeys = const {},
+    this.badgedIndex,
     super.key,
   });
 
@@ -51,8 +56,8 @@ class AppNavRail extends StatelessWidget {
           minExtendedWidth: 180,
           backgroundColor: surfaceColor(context),
           indicatorColor: accent.withAlpha(20),
-          selectedIconTheme: IconThemeData(color: accent, size: 16),
-          unselectedIconTheme: IconThemeData(color: textSecondary, size: 16),
+          selectedIconTheme: IconThemeData(color: accent, size: 20),
+          unselectedIconTheme: IconThemeData(color: textSecondary, size: 20),
           selectedLabelTextStyle: Theme.of(context).textTheme.labelMedium
               ?.copyWith(color: accent, fontWeight: FontWeight.bold),
           unselectedLabelTextStyle: Theme.of(
@@ -65,7 +70,12 @@ class AppNavRail extends StatelessWidget {
           destinations: [
             for (var i = 0; i < _labels.length; i++)
               NavigationRailDestination(
-                icon: Icon(_icons[i], key: iconKeys[i]),
+                icon: Badge(
+                  isLabelVisible: badgedIndex == i,
+                  smallSize: 7,
+                  backgroundColor: accentFillColor(context),
+                  child: Icon(_icons[i], key: iconKeys[i]),
+                ),
                 label: GuidedTourTarget(
                   key: destinationKeys[i],
                   additionalTarget: iconKeys[i],
