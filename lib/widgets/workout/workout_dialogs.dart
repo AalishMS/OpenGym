@@ -4,78 +4,12 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../models/set.dart' as gym;
 import '../../providers/settings_provider.dart';
-import '../../services/pr_tracking_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import 'set_entry_table.dart';
 
 class WorkoutDialogs {
-  static void showPRDialog(BuildContext context, List<PRResult> prs) {
-    showDialog(
-      context: context,
-      builder:
-          (context) => Dialog(
-            backgroundColor: surfaceColor(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: borderColor(context), width: 1),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 4),
-                    ...prs.map(
-                      (pr) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              pr.exerciseName,
-                              style: GoogleFonts.jetBrainsMono(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '${pr.newPR} kg · was ${pr.previousPR} kg',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodyMedium?.copyWith(
-                                color: textSecondaryColor(context),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accentFillColor(context),
-                          foregroundColor: onAccentColor(context),
-                        ),
-                        child: Text(
-                          'Got it',
-                          style: Theme.of(context).textTheme.labelLarge,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-    );
-  }
-
   static void showRenameExerciseDialog(
     BuildContext context, {
     required String currentName,

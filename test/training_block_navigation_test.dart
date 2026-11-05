@@ -462,6 +462,10 @@ void main() {
       await tester.tap(find.byTooltip('Finish workout'));
       await tester.pumpAndSettle();
       await tester.tap(find.widgetWithText(FilledButton, 'Log workout'));
+      // Logging opens the summary over the workout; Done returns to it.
+      final done = find.byKey(const ValueKey('summary-done'));
+      await waitFor(tester, () => done.evaluate().isNotEmpty);
+      await tester.tap(done);
       await waitFor(
         tester,
         () =>
@@ -1179,11 +1183,17 @@ void main() {
         await open(tester, exact: rows!.$1);
         await tester.tap(find.byKey(ValueKey('training-week-${rows.$2}')));
         await pumpWithStorage(tester);
-        final button = find.descendant(
-          of: find.byType(AppBar),
-          matching: find.byType(TextButton),
+        // Neither the clock nor Finish may act for the browsed draft.
+        final buttons = tester.widgetList<TextButton>(
+          find.descendant(
+            of: find.byType(AppBar),
+            matching: find.byType(TextButton),
+          ),
         );
-        expect(tester.widget<TextButton>(button).onPressed, isNull);
+        expect(buttons, isNotEmpty);
+        for (final button in buttons) {
+          expect(button.onPressed, isNull);
+        }
       },
     );
 

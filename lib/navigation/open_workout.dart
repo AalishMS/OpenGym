@@ -18,6 +18,7 @@ Future<void> openWorkoutDestination(
   WorkoutDestination destination, {
   bool requestLogConfirmation = false,
   bool requireIncomplete = false,
+  String? heroTag,
 }) async {
   final generation = SupabaseService.accountGeneration;
   final owner = SupabaseService.currentUserId;
@@ -76,6 +77,7 @@ Future<void> openWorkoutDestination(
                   planIndex: index < 0 ? 0 : index,
                   destination: destination,
                   showLogConfirmationOnOpen: confirm,
+                  heroTag: heroTag,
                 ),
           ),
         ),

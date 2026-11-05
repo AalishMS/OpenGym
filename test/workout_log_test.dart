@@ -22,7 +22,6 @@ import 'package:gymapp/utils/training_block_identity.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
 import 'package:gymapp/widgets/workout/training_block_strip.dart';
 import 'package:hive/hive.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -292,7 +291,7 @@ void main() {
               find.descendant(of: card, matching: find.byType(Scrollbar)),
               findsNothing,
             );
-            final finish = find.widgetWithIcon(IconButton, LucideIcons.check);
+            final finish = find.byKey(const ValueKey('finish-workout'));
             expect(finish, findsOneWidget);
             expect(
               tester
@@ -478,7 +477,7 @@ void main() {
       await tester.runAsync(() => seed());
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
-      final finish = find.widgetWithIcon(IconButton, LucideIcons.check);
+      final finish = find.byKey(const ValueKey('finish-workout'));
       // Nothing to finish before Start, so the header leaves Finish out.
       expect(finish, findsNothing);
       expect(find.textContaining('Tap Start in the toolbar'), findsNothing);
@@ -496,10 +495,16 @@ void main() {
       await tester.runAsync(() => seed(started: true));
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
-      expect(tester.widget<IconButton>(finish).onPressed, isNotNull);
+      final finishButton = tester.widget<TextButton>(finish);
+      expect(finishButton.onPressed, isNotNull);
       expect(
-        tester.widget<IconButton>(finish).color,
+        finishButton.style!.foregroundColor!.resolve({}),
         accentColor(tester.element(finish)),
+      );
+      // Labelled, so it can't be read as a generic save.
+      expect(
+        find.descendant(of: finish, matching: find.text('Finish')),
+        findsOneWidget,
       );
       await tester.tap(finish);
       await tester.pumpAndSettle();

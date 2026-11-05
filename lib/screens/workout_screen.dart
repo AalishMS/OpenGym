@@ -21,7 +21,6 @@ import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../repositories/training_block_repository.dart';
 import '../services/hive_service.dart';
-import '../services/pr_tracking_service.dart';
 import '../services/sync_service.dart';
 import '../services/workout_progression_service.dart';
 import '../services/workout_session_initializer.dart';
@@ -31,11 +30,13 @@ import '../theme/app_typography.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
+import '../utils/haptics.dart';
 import '../utils/set_history.dart';
 import '../utils/workout_context.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
+import '../widgets/plan_title_hero.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
 import '../widgets/workout/plan_swipe_region.dart';
@@ -44,6 +45,7 @@ import '../widgets/workout/training_block_dialogs.dart';
 import '../widgets/workout/training_block_strip.dart';
 import '../widgets/workout/training_boundary_sheet.dart';
 import '../widgets/workout/workout_dialogs.dart';
+import 'workout_summary_screen.dart';
 
 class WorkoutScreen extends StatefulWidget {
   final WorkoutPlan plan;
@@ -51,12 +53,16 @@ class WorkoutScreen extends StatefulWidget {
   final WorkoutDestination? destination;
   final bool showLogConfirmationOnOpen;
 
+  /// Set when opened from Home's Next up card; the plan name flies in.
+  final String? heroTag;
+
   const WorkoutScreen({
     super.key,
     required this.plan,
     required this.planIndex,
     this.destination,
     this.showLogConfirmationOnOpen = false,
+    this.heroTag,
   });
 
   @override
@@ -103,6 +109,11 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   final ValueNotifier<DateTime> _now = ValueNotifier(DateTime.now());
   List<WorkoutSession> _previousRows = [];
   final Map<String, List<gym.Set>> _previousSets = {};
+  Map<String, double>? _recordCache;
+
+  /// Record sets already felt, so each new one buzzes once. Null until the
+  /// week's log is first shown, so records it opened with stay quiet.
+  Set<String>? _celebratedRecords;
   int _currentWeekIndex = 0;
   final Map<String, WorkoutSession> _weekSessions = {};
   bool _hasUnsavedChanges = false;
@@ -241,7 +252,59 @@ class _WorkoutScreenState extends State<WorkoutScreen>
               excludingSessionId: saved?.id,
             );
     _previousSets.clear();
+    _recordCache = null;
+    _celebratedRecords = null;
   }
+
+  Set<String> _recordSetsIn(WorkoutSession session) {
+    if (session.isCompleted) return {};
+    return {
+      for (final exercise in session.exercises)
+        for (final (index, set) in exercise.sets.indexed)
+          if (ExerciseCard.isRecord(
+            set,
+            _recordWeights[ExerciseCatalog.identity(
+              exercise.name,
+              exercise.exerciseId,
+            )],
+          ))
+            '${ExerciseCatalog.identity(exercise.name, exercise.exerciseId)}'
+                '#$index',
+    };
+  }
+
+  /// Runs when a value entry closes: a set that has just become a record
+  /// gets the record haptic along with its PR mark.
+  void _celebrateNewRecords() {
+    final current = _recordSetsIn(_getOrCreateSession());
+    final before = _celebratedRecords ?? current;
+    if (current.difference(before).isNotEmpty) Haptics.celebrate();
+    _celebratedRecords = current;
+  }
+
+  /// Heaviest weight per exercise before this workout, matching how Finish
+  /// decides a record, so a live PR mark agrees with the summary.
+  Map<String, double> get _recordWeights =>
+      _recordCache ??= () {
+        final currentId = _weekSessions[_currentWeek]?.id;
+        final best = <String, double>{};
+        for (final session in HiveService.getCompletedSessions(
+          splitId: widget.plan.splitId,
+        )) {
+          if (session.deletedAt != null || session.id == currentId) continue;
+          for (final exercise in session.exercises) {
+            final key = ExerciseCatalog.identity(
+              exercise.name,
+              exercise.exerciseId,
+            );
+            for (final set in exercise.sets) {
+              if (set.reps == 0 && set.weight == 0) continue;
+              if (set.weight > (best[key] ?? 0)) best[key] = set.weight;
+            }
+          }
+        }
+        return best;
+      }();
 
   WorkoutSession? _savedSessionForWeek(String week) {
     final selected = _weekSessions[week];
@@ -476,10 +539,6 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     child: child,
   );
 
-  void _showPRDialog(List<PRResult> prs) {
-    WorkoutDialogs.showPRDialog(context, prs);
-  }
-
   String get _currentWeek => _weeks[_currentWeekIndex];
   TrainingWeek get _selectedWeek => _weekById[_currentWeek]!;
   WorkoutProgress? get _progress => _training.progressByPlan[widget.plan.id];
@@ -659,6 +718,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     _weekSessions[week] = started;
     _syncTicker(started);
     _hasUnsavedChanges = false;
+    Haptics.confirm();
     await _updateTimerNotification(() async {
       final notificationsAllowed =
           current.hasStarted ||
@@ -775,12 +835,15 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         );
         if (!mounted) return;
         setState(() {});
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Workout logged')));
-        if (result.personalRecords.isNotEmpty) {
-          _showPRDialog(result.personalRecords);
-        }
+        Haptics.celebrate();
+        unawaited(
+          Navigator.of(context).push(
+            WorkoutSummaryScreen.route(
+              session: result.session,
+              records: result.personalRecords,
+            ),
+          ),
+        );
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1575,6 +1638,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       );
     }
     final session = _getOrCreateSession();
+    _celebratedRecords ??= _recordSetsIn(session);
     final accent = accentColor(context);
 
     final planProvider = context.watch<WorkoutPlanProvider>();
@@ -1640,7 +1704,14 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                   onDragProgress: _updatePlanSwipe,
                   onDragCancel: _settlePlanSwipe,
                   child: _animatedPlanContent(
-                    _PlanHeader(plan: activePlan, color: planColor),
+                    _PlanHeader(
+                      plan: activePlan,
+                      color: planColor,
+                      heroTag:
+                          activePlan.id == widget.plan.id
+                              ? widget.heroTag
+                              : null,
+                    ),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
@@ -1672,21 +1743,18 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                 ),
                 // Nothing to finish before Start, so Finish waits for it.
                 if (session.hasStarted)
-                  IconButton(
-                    tooltip: 'Finish workout',
+                  _FinishButton(
+                    // Large text on a narrow phone needs the label's room
+                    // for the title, so Finish falls back to its icon.
+                    compact:
+                        MediaQuery.sizeOf(context).width < 400 &&
+                        textScaler.scale(1) > 1.3,
                     onPressed:
                         !_isSaving &&
                                 _timerAction == null &&
                                 _canUseTimer(session)
                             ? _stopWorkout
                             : null,
-                    color: accent,
-                    disabledColor: textSecondaryColor(context),
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
-                    ),
-                    icon: const Icon(LucideIcons.check, size: 22),
                   )
                 else
                   const SizedBox(width: AppSpacing.xs),
@@ -1863,8 +1931,15 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                   ),
                                   onSetChanged: _changeSetValues,
                                   onSetRpeChanged: _changeSetRpe,
+                                  recordWeight:
+                                      _recordWeights[ExerciseCatalog.identity(
+                                        exercise.name,
+                                        exercise.exerciseId,
+                                      )],
                                   onEntryFinished: () {
-                                    if (mounted) _autoSave();
+                                    if (!mounted) return;
+                                    _celebrateNewRecords();
+                                    _autoSave();
                                   },
                                   onAddSet: (i) => _addSet(i),
                                   onDeleteSet:
@@ -1967,8 +2042,9 @@ class _PlanHeader extends StatelessWidget {
 
   /// The active plan's resolved identity-marker colour.
   final Color color;
+  final String? heroTag;
 
-  const _PlanHeader({required this.plan, required this.color});
+  const _PlanHeader({required this.plan, required this.color, this.heroTag});
 
   @override
   Widget build(BuildContext context) {
@@ -1988,8 +2064,9 @@ class _PlanHeader extends StatelessWidget {
         ),
         const SizedBox(width: AppSpacing.sm),
         Flexible(
-          child: Text(
-            plan.name,
+          child: PlanTitleHero(
+            tag: heroTag,
+            text: plan.name,
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
             style: Theme.of(context).textTheme.headlineSmall!.copyWith(
@@ -1998,6 +2075,53 @@ class _PlanHeader extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Logs the workout. Labelled, because a bare check in a header reads as
+/// "save" as often as "finish".
+class _FinishButton extends StatelessWidget {
+  final bool compact;
+  final VoidCallback? onPressed;
+
+  const _FinishButton({required this.compact, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextButton.styleFrom(
+      foregroundColor: accentColor(context),
+      disabledForegroundColor: textSecondaryColor(context),
+      minimumSize: const Size(48, 48),
+      tapTargetSize: MaterialTapTargetSize.padded,
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 0 : AppSpacing.md,
+      ),
+      shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
+    );
+    const icon = Icon(LucideIcons.check, size: 18);
+    return Tooltip(
+      message: 'Finish workout',
+      child: Semantics(
+        button: true,
+        label: 'Finish workout',
+        excludeSemantics: true,
+        child:
+            compact
+                ? TextButton(
+                  key: const ValueKey('finish-workout'),
+                  onPressed: onPressed,
+                  style: style,
+                  child: icon,
+                )
+                : TextButton.icon(
+                  key: const ValueKey('finish-workout'),
+                  onPressed: onPressed,
+                  style: style,
+                  icon: icon,
+                  label: const Text('Finish'),
+                ),
+      ),
     );
   }
 }

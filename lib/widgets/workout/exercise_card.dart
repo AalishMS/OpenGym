@@ -30,6 +30,10 @@ class ExerciseCard extends StatelessWidget {
   final void Function(int) onRename;
   final void Function(int) onDeleteExercise;
 
+  /// The heaviest weight logged for this exercise before this workout, or
+  /// null without history. A set entered above it is marked as a record.
+  final double? recordWeight;
+
   const ExerciseCard({
     super.key,
     required this.exercise,
@@ -48,7 +52,20 @@ class ExerciseCard extends StatelessWidget {
     required this.onAddNote,
     required this.onRename,
     required this.onDeleteExercise,
+    this.recordWeight,
   });
+
+  /// Whether [set] would be a record if logged as entered. Matches Finish:
+  /// the heaviest weight for the exercise, with reps performed.
+  static bool isRecord(gym.Set set, double? recordWeight) =>
+      set.reps > 0 && (recordWeight ?? 0) > 0 && set.weight > recordWeight!;
+
+  static bool _beats(gym.Set set, gym.Set? previous) =>
+      previous != null &&
+      previous.reps > 0 &&
+      set.reps > 0 &&
+      (set.weight > previous.weight ||
+          (set.weight == previous.weight && set.reps > previous.reps));
 
   void _onAction(_ExerciseAction action) {
     switch (action) {
@@ -178,6 +195,14 @@ class ExerciseCard extends StatelessWidget {
                               ? '${entryWeight(previousSets[i].weight)} × ${previousSets[i].reps}'
                               : null,
                       rpe: exercise.sets[i].rpe,
+                      record:
+                          !readOnly && isRecord(exercise.sets[i], recordWeight),
+                      beatsPrevious:
+                          !readOnly &&
+                          _beats(
+                            exercise.sets[i],
+                            i < previousSets.length ? previousSets[i] : null,
+                          ),
                     ),
                 ],
                 onChanged:
