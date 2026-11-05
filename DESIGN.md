@@ -296,6 +296,20 @@ the current screen, and short accidental drags do not switch tabs. Swipes use
 the same tab-selection behavior as navigation taps. The Coach overlay keeps
 its own gestures; main-tab swiping resumes when it closes.
 
+The selected bottom tab is marked by a short accent rule on the top hairline as
+well as by colour and weight, so selection never rests on colour alone. Moving
+to another tab gives a selection haptic and a brief fade-in (none under reduced
+motion). Tapping the tab that is already showing scrolls it back to the top;
+on Home it also closes the Coach and Manage.
+
+While a workout is in progress, a resume strip sits directly above the bottom
+navigation (below the content beside the desktop rail). It shows the plan's
+colour, the plan name, and the live session clock, and opens that workout in
+one tap, switching split if needed. It shows the running timer, or else a paused
+workout started within the last 12 hours (`HiveService.getLiveSession`). It
+listens to the sessions box directly, so finishing, deleting, or a sync pull
+removes it. Pushed routes such as the workout screen cover it.
+
 | Tab | Screen |
 | --- | --- |
 | Home | `HomeScreen` |

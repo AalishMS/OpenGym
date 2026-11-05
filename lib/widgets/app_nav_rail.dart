@@ -56,8 +56,8 @@ class AppNavRail extends StatelessWidget {
           minExtendedWidth: 180,
           backgroundColor: surfaceColor(context),
           indicatorColor: accent.withAlpha(20),
-          selectedIconTheme: IconThemeData(color: accent, size: 16),
-          unselectedIconTheme: IconThemeData(color: textSecondary, size: 16),
+          selectedIconTheme: IconThemeData(color: accent, size: 20),
+          unselectedIconTheme: IconThemeData(color: textSecondary, size: 20),
           selectedLabelTextStyle: Theme.of(context).textTheme.labelMedium
               ?.copyWith(color: accent, fontWeight: FontWeight.bold),
           unselectedLabelTextStyle: Theme.of(

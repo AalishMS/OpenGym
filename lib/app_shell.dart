@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -23,6 +24,8 @@ import 'services/hive_service.dart';
 import 'services/tutorial_preferences.dart';
 import 'services/workout_timer_notification_service.dart';
 import 'theme/breakpoints.dart';
+import 'utils/scroll_to_top.dart';
+import 'widgets/active_workout_bar.dart';
 import 'widgets/app_bottom_nav.dart';
 import 'widgets/app_nav_rail.dart';
 import 'widgets/coach/coach_button.dart';
@@ -37,13 +40,27 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
+class _AppShellState extends State<AppShell>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   // Index into [_screens]. Dashboard is index 0 (desktop-only); the phone
   // bottom bar addresses screens 1–4.
   int _currentIndex = 0;
   int _weeklyTrainingRequest = 0;
   int _statsVisit = 0;
   int _homeResetRequest = 0;
+
+  /// Tapping the tab that is already showing scrolls it back to the top.
+  int _historyTopRequest = 0;
+  int _statsTopRequest = 0;
+  int _settingsTopRequest = 0;
+
+  /// Fades the incoming tab in, so a tap or swipe reads as a move rather than
+  /// a cut. The IndexedStack underneath still keeps every tab's state.
+  late final AnimationController _tabFade = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 160),
+    value: 1,
+  );
   double _tabDragDistance = 0;
   TabSwipeGestureRecognizer? _tabSwipeRecognizer;
   bool _openingHistoryWorkout = false;
@@ -100,12 +117,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         ],
       ),
     ),
-    const HistoryScreen(),
+    HistoryScreen(scrollToTopRequest: _historyTopRequest),
     StatsScreen(
       weeklyTrainingRequest: _weeklyTrainingRequest,
       visitRequest: _statsVisit,
+      scrollToTopRequest: _statsTopRequest,
     ),
-    SettingsScreen(onReplayTutorial: _replayTutorial),
+    SettingsScreen(
+      onReplayTutorial: _replayTutorial,
+      scrollToTopRequest: _settingsTopRequest,
+    ),
   ];
 
   Future<void> _maybeStartTutorial() async {
@@ -222,15 +243,65 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (_coachOpen) setState(() => _coachOpen = false);
   }
 
-  /// A tap on the tab that is already showing closes the Coach over Home.
+  /// A tap on the tab that is already showing closes the Coach over Home and
+  /// scrolls that tab back to the top.
   void _selectTab(int index, {required int showing}) {
+    final reselected = index == showing;
+    if (!reselected) {
+      HapticFeedback.selectionClick();
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _tabFade.value = 1;
+      } else {
+        _tabFade.forward(from: 0);
+      }
+    }
     setState(() {
       if (index == 1) _homeResetRequest++;
-      if (index == showing && index == 1) _coachOpen = false;
+      if (reselected) {
+        switch (index) {
+          case 1:
+            _coachOpen = false;
+            scrollToTop(context, _homeScrollController);
+          case 2:
+            _historyTopRequest++;
+          case 3:
+            _statsTopRequest++;
+          case 4:
+            _settingsTopRequest++;
+        }
+      }
       // Stats reopens at the top whenever it is entered from another tab.
       if (index == 3 && showing != 3) _statsVisit++;
       _currentIndex = index;
     });
+  }
+
+  void _resumeWorkout(WorkoutSession session) {
+    final id = session.id;
+    if (id == null) return;
+    unawaited(
+      openWorkoutDestination(
+        context,
+        WorkoutDestination.session(id),
+        requireIncomplete: true,
+      ),
+    );
+  }
+
+  /// The resume strip, rebuilt on every session write so it appears when a
+  /// timer starts and disappears when the workout is finished or deleted.
+  Widget _liveWorkoutStrip() {
+    return ValueListenableBuilder(
+      valueListenable: HiveService.sessionsListenable(),
+      builder: (context, _, _) {
+        final session = HiveService.getLiveSession();
+        if (session == null) return const SizedBox.shrink();
+        return ActiveWorkoutBar(
+          session: session,
+          onTap: () => _resumeWorkout(session),
+        );
+      },
+    );
   }
 
   void _finishTabSwipe(DragEndDetails details, {required int showing}) {
@@ -344,6 +415,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _updateOpenSubscription?.cancel();
     _updates?.canInterrupt = () async => true;
     _homeScrollController.dispose();
+    _tabFade.dispose();
     super.dispose();
   }
 
@@ -518,9 +590,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         );
     final coachInView = coachShown && effectiveIndex == 1;
 
-    final stack = IndexedStack(
-      index: effectiveIndex,
-      children: _screens(coachShown: coachShown, showing: effectiveIndex),
+    final stack = FadeTransition(
+      opacity: CurvedAnimation(parent: _tabFade, curve: Curves.easeOut),
+      child: IndexedStack(
+        index: effectiveIndex,
+        children: _screens(coachShown: coachShown, showing: effectiveIndex),
+      ),
     );
 
     if (isWide) {
@@ -538,7 +613,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 badgedIndex: updatePending ? 4 : null,
                 onTap: (i) => _selectTab(i, showing: effectiveIndex),
               ),
-              Expanded(child: stack),
+              Expanded(
+                child: Column(
+                  children: [Expanded(child: stack), _liveWorkoutStrip()],
+                ),
+              ),
             ],
           ),
         ),
@@ -572,16 +651,23 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           },
           child: stack,
         ),
-        bottomNavigationBar: AppBottomNav(
-          destinationKeys: {
-            1: _historyTourKey,
-            2: _statsTourKey,
-            3: _settingsTourKey,
-          },
-          // Bottom bar slots [PLANS, HISTORY, STATS, SETTINGS] map to screens 1–4.
-          currentIndex: (effectiveIndex - 1).clamp(0, 3),
-          badgedIndex: updatePending ? 3 : null,
-          onTap: (i) => _selectTab(i + 1, showing: effectiveIndex),
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _liveWorkoutStrip(),
+            AppBottomNav(
+              destinationKeys: {
+                1: _historyTourKey,
+                2: _statsTourKey,
+                3: _settingsTourKey,
+              },
+              // Bottom bar slots [PLANS, HISTORY, STATS, SETTINGS] map to
+              // screens 1–4.
+              currentIndex: (effectiveIndex - 1).clamp(0, 3),
+              badgedIndex: updatePending ? 3 : null,
+              onTap: (i) => _selectTab(i + 1, showing: effectiveIndex),
+            ),
+          ],
         ),
       ),
       coachInView: coachInView,
