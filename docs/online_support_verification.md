@@ -97,3 +97,19 @@ Restore into a different test account and confirm custom IDs and all their
 references move together. Switch accounts on a shared device and confirm the
 previous account's custom exercise names are absent. Log once more offline,
 restart, and confirm that its identity and history remain available.
+
+
+For interrupted catalog delivery, stop the originating device's upload after a
+custom source redirect is accepted but before its custom target is published.
+Let a second device receive that prefix, then restart it offline. Local
+preparation and Retry must succeed; the last known source/target in the chain
+must remain selectable and all its sets must remain available. Publish the
+missing target and reconnect the receiving device: its existing logs must now
+resolve to that target without rewriting their saved exercise IDs or names.
+
+For same-account restore, export a backup before a custom exercise is merged,
+then merge it and extend the live block beyond the backup's duration. Restore
+the shorter backup. Training graph IDs should change as required by structural
+recovery, while the custom exercise ID and saved merge remain intact and its
+strength history stays combined. Repeat with a deleted session and an added
+lazy week omitted by the backup.

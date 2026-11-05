@@ -119,7 +119,7 @@ void main() {
     () async {
       final desired = HiveService.readTrainingGraph(
         ownerId: 'owner',
-      ).remap(ownerId: 'owner');
+      ).remap(ownerId: 'owner', remapExerciseIds: false);
       await pendingCreation();
       final writer = TrainingBlockRestore(
         onPhase: (phase) async {
@@ -146,7 +146,7 @@ void main() {
   test('restore supersedes pending creation for replaced split', () async {
     final desired = HiveService.readTrainingGraph(
       ownerId: 'owner',
-    ).remap(ownerId: 'owner');
+    ).remap(ownerId: 'owner', remapExerciseIds: false);
     final block = TrainingBlock(
       id: 'pending',
       splitId: 'a',

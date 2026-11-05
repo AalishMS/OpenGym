@@ -240,7 +240,7 @@ class TrainingBlockRestore {
         resurrects(original.progress, graph.progress) ||
         shortensBlock ||
         removesLazySlot) {
-      imported = imported.remap(ownerId: owner);
+      imported = imported.remap(ownerId: owner, remapExerciseIds: false);
     }
     final now = DateTime.now();
     if (stampRecords) {

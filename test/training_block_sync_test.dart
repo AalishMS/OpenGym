@@ -1,7 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:gymapp/models/exercise_definition.dart';
+import 'package:gymapp/models/exercise.dart';
+import 'package:gymapp/models/set.dart' as gym;
+import 'package:gymapp/models/split_preference.dart';
+import 'package:gymapp/services/adopt_local_data.dart';
+import 'package:gymapp/services/statistics_analytics_service.dart';
 import 'package:gymapp/services/exercise_catalog.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/models/split.dart';
@@ -188,6 +194,120 @@ void main() {
     await SupabaseService.signOut();
     await storage.close();
   });
+
+  test(
+    'a partial catalog pull survives restart and resolves a later target',
+    () async {
+      const sourceId = '11111111-1111-4111-8111-111111111111';
+      const targetId = '22222222-2222-4222-8222-222222222222';
+      final week = HiveService.getAllTrainingWeeksRaw().single;
+      await HiveService.putSessionRaw(
+        WorkoutSession(
+          id: 'partial-catalog-log',
+          date: stamp,
+          planName: 'Push',
+          planId: planId,
+          splitId: splitId,
+          userId: owner,
+          trainingWeekId: week.id,
+          updatedAt: stamp,
+          dirty: true,
+          exercises: [
+            Exercise(
+              name: 'DB Press',
+              exerciseId: sourceId,
+              sets: [gym.Set(reps: 8, weight: 20)],
+            ),
+          ],
+        ),
+      );
+      final source = ExerciseDefinition(
+        id: sourceId,
+        name: 'DB Press',
+        mergedIntoId: targetId,
+        userId: owner,
+        updatedAt: stamp,
+      );
+      api.tables['exercise_definitions'] = [
+        {
+          'id': sourceId,
+          'user_id': owner,
+          'data': source.toJson(),
+          'updated_at': stamp.toIso8601String(),
+          'server_seq': stamp.add(const Duration(days: 1)).toIso8601String(),
+        },
+      ];
+      // The server has only the first accepted row of an interrupted custom
+      // merge upload. This replica also loses transport after persisting it.
+      api.intercept =
+          (request) async =>
+              request.method == 'GET' &&
+                      request.url.path.endsWith('/workout_plans')
+                  ? http.Response('{"message":"offline","code":"OFFLINE"}', 503)
+                  : null;
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.retryableError);
+      expect(ExerciseCatalog.getById(sourceId)!.mergedIntoId, targetId);
+      expect(ExerciseCatalog.getById(targetId), isNull);
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('lastUserId', owner);
+      await prefs.setBool('adopted_$owner', true);
+      final directory =
+          File(Hive.box<WorkoutPlan>(HiveService.plansBox).path!).parent.path;
+      await Hive.close();
+      Hive.init(directory);
+      await ExerciseCatalog.open();
+      await Hive.openBox<WorkoutPlan>(HiveService.plansBox);
+      await Hive.openBox<WorkoutSession>(HiveService.sessionsBox);
+      await Hive.openBox<Split>(HiveService.splitsBox);
+      await Hive.openBox<SplitPreference>(HiveService.splitPreferencesBox);
+      await HiveService.openTrainingBoxes();
+      final requestsBeforePreparation = api.requests.length;
+      await AdoptLocalData.prepareLocalForUser(owner);
+      // Startup and retry require no network to regain the saved logger.
+      await TrainingBlockMigration().normalize(ownerId: owner);
+      expect(api.requests, hasLength(requestsBeforePreparation));
+      expect(ExerciseCatalog.canonicalId(sourceId), sourceId);
+      expect(
+        ExerciseCatalog.search('DB Press').map((d) => d.id),
+        contains(sourceId),
+      );
+      expect(
+        HiveService.getSessionById(
+          'partial-catalog-log',
+        )!.exercises.single.sets.single.weight,
+        20,
+      );
+      expect(ExerciseCatalog.getById(targetId), isNull);
+
+      api.intercept = null;
+      final target = ExerciseDefinition(
+        id: targetId,
+        name: 'My dumbbell press',
+        userId: owner,
+        updatedAt: stamp,
+      );
+      api.tables['exercise_definitions']!.add({
+        'id': targetId,
+        'user_id': owner,
+        'data': target.toJson(),
+        'updated_at': stamp.toIso8601String(),
+        'server_seq': stamp.add(const Duration(days: 2)).toIso8601String(),
+      });
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(ExerciseCatalog.canonicalId(sourceId), targetId);
+      expect(ExerciseCatalog.findByName('DB Press')!.id, targetId);
+      final saved = HiveService.getSessionById('partial-catalog-log')!;
+      expect(saved.exercises.single.exerciseId, sourceId);
+      expect(saved.exercises.single.name, 'DB Press');
+      expect(saved.exercises.single.sets.single.weight, 20);
+      expect(const StatisticsAnalyticsService().exerciseDirectory([saved]), {
+        targetId: 'My dumbbell press',
+      });
+    },
+  );
 
   test('custom exercise definitions sync before workout references', () async {
     const id = '11111111-1111-4111-8111-111111111111';

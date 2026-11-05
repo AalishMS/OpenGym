@@ -25,6 +25,7 @@ import 'package:gymapp/services/statistics_analytics_service.dart';
 import 'package:gymapp/services/training_block_graph.dart';
 import 'package:gymapp/services/workout_session_initializer.dart';
 import 'package:gymapp/utils/set_history.dart';
+import 'package:gymapp/utils/training_block_identity.dart';
 
 import 'support/hive_test_harness.dart';
 
@@ -409,4 +410,327 @@ void main() {
     expect(imported.success, isTrue, reason: imported.errorMessage);
     expect(imported.sessions!.single.exercises.single.name, name);
   });
+  test(
+    'pending merge chains stay usable and late cycle metadata converges',
+    () async {
+      const thirdId = '33333333-3333-4333-8333-333333333333';
+      const pending = ExerciseDefinition(
+        id: customId,
+        name: 'One',
+        mergedIntoId: otherId,
+      );
+      final initial = TrainingBlockMigration.prepareGraph(
+        graph([
+          session('One', 20, 1, exerciseId: customId),
+        ]).copyWith(exerciseDefinitions: [pending]),
+      );
+      await TrainingBlockRestore().replace(graph: initial);
+      await TrainingBlockMigration().normalize(ownerId: null);
+      expect(ExerciseCatalog.canonicalId(customId), customId);
+      expect(ExerciseCatalog.findByName('One')!.id, customId);
+      expect(ExerciseCatalog.active.map((d) => d.id), contains(customId));
+      expect(ExerciseCatalog.getById(otherId), isNull);
+
+      await ExerciseCatalog.put(
+        const ExerciseDefinition(
+          id: otherId,
+          name: 'Two',
+          mergedIntoId: thirdId,
+        ),
+      );
+      await TrainingBlockMigration().normalize(ownerId: null);
+      expect(ExerciseCatalog.canonicalId(customId), otherId);
+      expect(ExerciseCatalog.active.map((d) => d.id), contains(otherId));
+      expect(ExerciseCatalog.getById(thirdId), isNull);
+
+      await ExerciseCatalog.put(
+        const ExerciseDefinition(
+          id: thirdId,
+          name: 'Three',
+          mergedIntoId: otherId,
+        ),
+      );
+      await TrainingBlockMigration().normalize(ownerId: null);
+      expect(ExerciseCatalog.canonicalId(customId), otherId);
+      expect(ExerciseCatalog.canonicalId(thirdId), otherId);
+      expect(
+        ExerciseCatalog.active.where(
+          (d) => [customId, otherId, thirdId].contains(d.id),
+        ),
+        hasLength(1),
+      );
+      expect(ExerciseCatalog.getById(customId)!.mergedIntoId, otherId);
+      final saved = HiveService.getCompletedSessions().single;
+      expect(saved.exercises.single.exerciseId, customId);
+      expect(saved.exercises.single.sets.single.weight, 20);
+    },
+  );
+
+  test(
+    'pending merge targets do not relax owner or malformed redirect validation',
+    () {
+      final base = graph([]);
+      expect(
+        () => base
+            .copyWith(
+              exerciseDefinitions: [
+                const ExerciseDefinition(
+                  id: customId,
+                  name: 'Foreign',
+                  userId: 'another-owner',
+                  mergedIntoId: otherId,
+                ),
+              ],
+            )
+            .validate(allowLegacyLinks: true),
+        throwsFormatException,
+      );
+      for (final target in ['', '   ', customId]) {
+        expect(
+          () => base
+              .copyWith(
+                exerciseDefinitions: [
+                  ExerciseDefinition(
+                    id: customId,
+                    name: 'Invalid',
+                    mergedIntoId: target,
+                  ),
+                ],
+              )
+              .validate(allowLegacyLinks: true),
+          throwsFormatException,
+        );
+      }
+    },
+  );
+
+  for (final reason in [
+    'shorter block',
+    'deleted session',
+    'removed lazy week',
+  ]) {
+    test(
+      'same-account $reason restore preserves custom identities and saved merges',
+      () async {
+        const restoreOwner = 'exercise-restore-owner';
+        var original = TrainingBlockMigration.prepareGraph(
+          graph([
+            session('DB Press', 20, 1, exerciseId: customId),
+            session('Dumbbell Press', 25, 2, exerciseId: pressId),
+          ]).copyWith(
+            exerciseDefinitions: [
+              const ExerciseDefinition(id: customId, name: 'DB Press'),
+            ],
+          ),
+        );
+        original = original.copyWith(
+          plans: [
+            original.plans.single.copyWith(
+              exercises: [
+                ExerciseTemplate(
+                  name: 'DB Press',
+                  exerciseId: customId,
+                  sets: 1,
+                ),
+              ],
+            ),
+          ],
+        );
+        if (reason == 'removed lazy week') {
+          original = original.copyWith(
+            blocks: [original.blocks.single.copyWith(plannedWeekCount: 2)],
+          );
+        }
+        original = original.ownedBy(restoreOwner);
+        final backup = BackupService.exportData(
+          sourceAccountId: restoreOwner,
+          splits: original.splits,
+          activeSplitId: original.activeSplitId!,
+          plans: original.plans,
+          sessions: original.sessions,
+          settings: {},
+          blocks: original.blocks,
+          weeks: original.weeks,
+          progress: original.progress,
+          exerciseDefinitions: original.exerciseDefinitions,
+        );
+        final imported = BackupService.importData(
+          backup.jsonString,
+          userId: restoreOwner,
+        );
+        expect(imported.success, isTrue, reason: imported.errorMessage);
+        original = imported.graph!;
+        expect(original.plans.single.id, 'plan');
+        expect(original.exerciseDefinitions.single.id, customId);
+        await TrainingBlockRestore().replace(graph: original);
+        await ExerciseCatalog.merge(customId, pressId, userId: restoreOwner);
+        expect(
+          analytics.liftSummaries(
+            HiveService.getCompletedSessions(),
+            ExerciseMetric.bestWeight,
+          ),
+          hasLength(1),
+        );
+        final liveBlock = HiveService.getAllTrainingBlocksRaw().single;
+        if (reason == 'shorter block') {
+          await HiveService.putTrainingBlockRaw(
+            liveBlock.copyWith(plannedWeekCount: 2),
+          );
+        } else if (reason == 'deleted session') {
+          final old = HiveService.getSessionById('session-1')!;
+          await HiveService.putSessionRaw(
+            old.copyWith(deletedAt: DateTime(2026, 11, 4)),
+          );
+        } else {
+          await HiveService.putTrainingWeekRaw(
+            TrainingWeek(
+              id: lazyTrainingWeekId('split', liveBlock.id, 2),
+              splitId: 'split',
+              blockId: liveBlock.id,
+              number: 2,
+              createdAt: DateTime(2026),
+              userId: restoreOwner,
+            ),
+          );
+        }
+        await TrainingBlockRestore().replace(graph: original);
+        final restoredPlans = HiveService.getPlans();
+        expect(
+          restoredPlans.single.id,
+          isNot('plan'),
+          reason: 'The structural copy branch must be exercised.',
+        );
+        expect(restoredPlans.single.exercises.single.exerciseId, customId);
+        final restored = HiveService.getCompletedSessions();
+        expect(restored, hasLength(2));
+        expect(
+          restored
+              .singleWhere((s) => s.exercises.single.name == 'DB Press')
+              .exercises
+              .single
+              .exerciseId,
+          customId,
+        );
+        expect(ExerciseCatalog.canonicalId(customId), pressId);
+        expect(ExerciseCatalog.stored.map((d) => d.id), [customId]);
+        final lift =
+            analytics.liftSummaries(restored, ExerciseMetric.bestWeight).single;
+        expect(lift.exerciseId, pressId);
+        expect(lift.progress.points.map((p) => p.value), [20, 25]);
+      },
+    );
+  }
+
+  test(
+    'known foreign imports remap custom merge targets and every occurrence together',
+    () async {
+      final input = graph([
+        session('One', 20, 1, exerciseId: customId),
+        session('Two', 25, 2, exerciseId: otherId),
+      ]);
+      final exported = BackupService.exportData(
+        sourceAccountId: 'source-owner',
+        splits: input.splits,
+        activeSplitId: 'split',
+        plans: input.plans,
+        sessions: input.sessions,
+        settings: {},
+        exerciseDefinitions: [
+          const ExerciseDefinition(
+            id: customId,
+            name: 'One',
+            mergedIntoId: otherId,
+          ),
+          const ExerciseDefinition(id: otherId, name: 'Two'),
+        ],
+      );
+      final imported = BackupService.importData(
+        exported.jsonString,
+        userId: 'destination-owner',
+      );
+      expect(imported.success, isTrue, reason: imported.errorMessage);
+      final definitions = imported.graph!.exerciseDefinitions;
+      final source = definitions.singleWhere((d) => d.name == 'One');
+      final target = definitions.singleWhere((d) => d.name == 'Two');
+      expect(
+        definitions.map((d) => d.id).toSet().intersection({customId, otherId}),
+        isEmpty,
+      );
+      expect(source.mergedIntoId, target.id);
+      expect(
+        imported.sessions!
+            .singleWhere((s) => s.exercises.single.name == 'One')
+            .exercises
+            .single
+            .exerciseId,
+        source.id,
+      );
+      expect(
+        imported.sessions!
+            .singleWhere((s) => s.exercises.single.name == 'Two')
+            .exercises
+            .single
+            .exerciseId,
+        target.id,
+      );
+      expect(imported.plans!.single.exercises.single.exerciseId, pressId);
+      await TrainingBlockRestore().replace(graph: imported.graph!);
+      final lift =
+          analytics
+              .liftSummaries(
+                HiveService.getCompletedSessions(),
+                ExerciseMetric.bestWeight,
+              )
+              .single;
+      expect(lift.exerciseId, target.id);
+      expect(lift.progress.points.map((p) => p.value), [20, 25]);
+    },
+  );
+
+  for (final destination in ['foreign-owner', null]) {
+    test(
+      'foreign or unknown-provenance restore copies pending custom target identities ($destination)',
+      () {
+        final input = graph([session('One', 20, 1, exerciseId: customId)]);
+        final exported = BackupService.exportData(
+          splits: input.splits,
+          activeSplitId: 'split',
+          plans: input.plans,
+          sessions: input.sessions,
+          settings: {},
+          exerciseDefinitions: [
+            const ExerciseDefinition(
+              id: customId,
+              name: 'One',
+              mergedIntoId: otherId,
+            ),
+          ],
+        );
+        final imported = BackupService.importData(
+          exported.jsonString,
+          userId: destination,
+        );
+        expect(imported.success, isTrue, reason: imported.errorMessage);
+        final copied = imported.graph!.exerciseDefinitions.single;
+        expect(copied.id, isNot(customId));
+        expect(copied.mergedIntoId, isNot(otherId));
+        expect(copied.mergedIntoId, isNotNull);
+        expect(
+          imported.graph!.exerciseDefinitions.any(
+            (d) => d.id == copied.mergedIntoId,
+          ),
+          isFalse,
+        );
+        expect(
+          imported.sessions!.single.exercises.single.exerciseId,
+          copied.id,
+        );
+        expect(
+          imported.sessions!.single.exercises.single.sets.single.weight,
+          20,
+        );
+        imported.graph!.validate();
+      },
+    );
+  }
 }

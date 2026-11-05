@@ -68,6 +68,7 @@ class ExerciseDefinition {
     if (value.id.trim().isEmpty ||
         value.name.trim().isEmpty ||
         value.mergedIntoId == value.id ||
+        (value.mergedIntoId != null && value.mergedIntoId!.trim().isEmpty) ||
         value.aliases.any((a) => a.trim().isEmpty)) {
       throw const FormatException('Invalid exercise definition.');
     }

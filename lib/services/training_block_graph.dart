@@ -1,6 +1,5 @@
 import 'package:uuid/uuid.dart';
 
-import '../data/exercise_library.dart';
 import '../models/exercise_definition.dart';
 import '../models/completion_transition.dart';
 import '../models/split.dart';
@@ -243,18 +242,15 @@ class TrainingBlockGraph {
       }
     }
 
+    // A merge target may arrive in a later catalog page or sync cycle. Its
+    // metadata is not a prerequisite for using the saved training graph.
+    // Definition shape and ownership still fail closed.
     unique(exerciseDefinitions.map((d) => d.id), 'exercise');
-    final bundledIds = ExerciseLibrary.idsByName.values.toSet();
-    final definitionIds = {
-      ...bundledIds,
-      ...exerciseDefinitions.map((d) => d.id),
-    };
     for (final d in exerciseDefinitions) {
       ExerciseDefinition.fromJson(d.toJson());
       if ((d.builtIn && !d.id.startsWith('builtin:')) ||
-          (!allowUnowned && d.userId != ownerId) ||
-          (d.mergedIntoId != null && !definitionIds.contains(d.mergedIntoId))) {
-        throw const FormatException('Invalid exercise owner or merge target.');
+          (!allowUnowned && d.userId != ownerId)) {
+        throw const FormatException('Invalid exercise owner.');
       }
     }
     unique(splits.map((r) => r.id), 'split');
@@ -503,12 +499,29 @@ class TrainingBlockGraph {
     progress: [for (final r in progress) r.copyWith(userId: owner)],
   );
 
-  /// Copies an imported graph into another account without borrowing any
-  /// destination IDs. Historical dangling plan references remain dangling.
-  TrainingBlockGraph remap({required String? ownerId}) {
+  /// Copies training structure to fresh identities. Account-wide exercises
+  /// stay stable for structural restores. Foreign/unknown-provenance imports
+  /// explicitly copy catalog identities too, including pending merge targets.
+  /// Historical dangling plan references remain dangling.
+  TrainingBlockGraph remap({
+    required String? ownerId,
+    required bool remapExerciseIds,
+  }) {
+    final exerciseReferences = {
+      for (final d in exerciseDefinitions) ...[
+        d.id,
+        if (d.mergedIntoId != null) d.mergedIntoId!,
+      ],
+      for (final p in plans)
+        for (final e in p.exercises)
+          if (e.exerciseId != null) e.exerciseId!,
+      for (final s in sessions)
+        for (final e in s.exercises)
+          if (e.exerciseId != null) e.exerciseId!,
+    };
     final exerciseIds = {
-      for (final d in exerciseDefinitions)
-        d.id: d.id.startsWith('builtin:') ? d.id : _uuid.v4(),
+      for (final id in exerciseReferences)
+        id: !remapExerciseIds || id.startsWith('builtin:') ? id : _uuid.v4(),
     };
     String? exerciseReference(String? id) =>
         id == null ? null : exerciseIds[id] ?? id;

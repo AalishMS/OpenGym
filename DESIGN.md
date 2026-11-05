@@ -277,6 +277,10 @@ changed.
 Exercise definitions, blocks, weeks, plans, sessions, progress and the active
 preference sync as rows. Exercise definitions are pulled before workouts and
 pushed before plan/session references; explicit merges dominate unmerged copies.
+A missing custom merge target is deferred metadata: the last known movement
+remains usable offline, and later target delivery completes resolution. Missing
+metadata never blocks local preparation; definition shape and account ownership
+remain validated.
 Sessions retain duplicate slot logs under distinct IDs. Conflict resolution is
 whole-row LWW, with durable tombstone precedence and live-progress revision
 ordering on equal timestamps. Intended block length takes the greater value
@@ -518,13 +522,17 @@ local data. Versions 1–5 reuse exercise identity migration; versions 1–4 als
 training structure. Unsupported future versions and v6 backups missing exercise
 IDs/definitions fail explicitly, as do v5+ backups missing duration/availability.
 
-Same-account restore preserves identities unless live restored rows would
-resurrect known tombstones. Foreign/unknown-provenance backups and those
-resurrection cases copy the full graph to new identities, including progress
-and completion references. Restoring a shorter schedule or removing a lazy
-slot from a retained block also uses new identities, so its next deterministic
-week ID cannot be stranded behind a deletion marker. Activation state is never copied. Restores tombstone
-omitted records and use the same recoverable replacement writer as installers.
+Same-account restore preserves training identities unless live restored rows
+would resurrect known tombstones. Resurrection cases copy the training graph to
+new identities, including progress and completion references. Restoring a
+shorter schedule or removing a lazy slot also uses new training identities, so
+its next deterministic week ID cannot be stranded behind a deletion marker.
+Account-wide exercise identities remain stable in all of these same-account
+structural copies, preserving saved merges. Foreign/unknown-provenance imports
+copy the training graph and explicitly remap custom definitions, occurrences,
+and all redirect target IDs together, including targets whose metadata has not
+arrived. Activation state is never copied. Restores tombstone omitted records
+and use the same recoverable replacement writer as installers.
 
 Deleting a plan tombstones progress and retains history. Split deletion cascades
 the entire graph after saving the replacement preference. Clear All Data retains

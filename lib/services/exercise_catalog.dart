@@ -79,7 +79,10 @@ class ExerciseCatalog {
       }
       path.add(current);
       final next = definitions[current]?.mergedIntoId;
-      if (next == null) {
+      // Catalog rows can arrive separately or be interrupted mid-pull. Keep
+      // the last known movement usable until its target metadata is delivered;
+      // never hide it behind an ID which the picker cannot display.
+      if (next == null || !definitions.containsKey(next)) {
         for (final entry in path) {
           _canonical[entry] = current;
         }

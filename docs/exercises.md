@@ -42,9 +42,19 @@ recovery snapshots. An interrupted migration can run again with the same IDs.
 Settings → Manage exercises lets the user select a source and destination, then
 confirm a merge. The source stores `mergedIntoId`; no plan or workout sets are
 rewritten or removed. Every identity consumer resolves redirect chains, so
-older backups and late uploads also combine. Statistics are computed from the
-original sets, including multiple occurrences in one session. Session record
-events combine those occurrences, and block gains use their best estimated 1RM.
+older backups and late uploads also combine. Catalog rows are delivered
+individually, so a redirect may arrive before its custom target. That unresolved
+dependency is retained unchanged, while identity resolution stops at the last
+known definition. The known movement remains selectable and its logs remain
+usable offline; startup, retries, recovery snapshots, and backups do not require
+network metadata to become available. When the target arrives, the catalog cache
+is invalidated and the full chain resolves automatically, including cycles.
+Ownership and redirect shape validation remain strict; no target definition is
+invented from the redirect alone.
+
+Statistics are computed from the original sets, including multiple occurrences
+in one session. Session record events combine those occurrences, and block gains
+use their best estimated 1RM.
 
 A merge takes precedence over an unmerged copy, regardless of clock skew.
 Conflicting merged destinations follow whole-row LWW. Opposing offline merges
@@ -59,8 +69,15 @@ account-wide and old references may still arrive.
 Backup format 6 includes exercise definitions, redirects, and all occurrence IDs.
 Imports of versions 1–5 migrate identities; format 6 rejects missing identities
 or custom definitions. Foreign-account imports remap custom IDs and every
-reference/redirect together; bundled IDs remain shared. Same-account restores
-preserve exercise identities.
+reference/redirect together; bundled IDs remain shared. Missing custom merge
+target IDs receive fresh mappings too, so they cannot resolve to an unrelated
+exercise already present in the destination account. Same-account restores
+preserve exercise identities even when shortening a block, removing a lazy slot,
+or restoring deleted records requires fresh training graph IDs.
+`TrainingBlockGraph.remap` requires an explicit `remapExerciseIds` choice:
+structural restores pass false, while foreign/unknown-provenance imports pass
+true. Format 6 still requires a definition for every custom ID used directly by
+a plan or session; only a merge target's not-yet-delivered metadata may be absent.
 
 Cloud catalog rows are keyed by `(user_id, id)` and protected by owner RLS.
 Anonymous access and client DELETE are revoked; authenticated clients can

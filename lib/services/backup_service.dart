@@ -257,7 +257,7 @@ class BackupService {
         graph.validate();
       }
       if (source == null || source != userId) {
-        graph = graph.remap(ownerId: userId);
+        graph = graph.remap(ownerId: userId, remapExerciseIds: true);
       } else {
         graph = graph.ownedBy(userId);
       }
