@@ -10,6 +10,7 @@ import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
 import 'trend_line.dart';
 import 'training_overview.dart';
+import '../rolling_figure.dart';
 
 /// A lift's selected value, plot and period summary on a single open canvas.
 class StrengthTrend extends StatefulWidget {
@@ -63,7 +64,7 @@ class _StrengthTrendState extends State<StrengthTrend> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: AppSpacing.xs),
-              Text(
+              RollingFigure(
                 value(point.value),
                 style: AppTypography.figures(
                   fontSize: 40,
@@ -197,7 +198,7 @@ class _StrengthTrendState extends State<StrengthTrend> {
               'Change',
               change == null
                   ? 'Need 2 workouts'
-                  : '${change > 0 ? '+' : ''}${value(change)}',
+                  : formatSignedChange(change, value),
             ),
             ('Best in period', value(high)),
           ],

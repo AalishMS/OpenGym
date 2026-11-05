@@ -12,6 +12,7 @@ import '../../utils/statistics_format.dart';
 import 'block_trend.dart';
 import 'statistics_controls.dart';
 import 'statistics_widgets.dart';
+import '../rolling_figure.dart';
 
 /// Block-to-block progression leads; roomy totals and detail follow below.
 class BlockOverview extends StatefulWidget {
@@ -132,9 +133,9 @@ class _BlockOverviewState extends State<BlockOverview> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
+              RollingFigure(
                 _measure.format(value, widget.weightUnit),
-                key: const ValueKey('block-trend-value'),
+                textKey: const ValueKey('block-trend-value'),
                 style: AppTypography.figures(
                   fontSize: 40,
                   height: 1.15,
@@ -151,7 +152,7 @@ class _BlockOverviewState extends State<BlockOverview> {
               if (change != null) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  '${change > 0 ? '+' : ''}${change.round()}% vs ${previous!.block.name}',
+                  '${formatSignedChange(change, (v) => '${v.round()}%')} vs ${previous!.block.name}',
                   style: AppTypography.figures(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
