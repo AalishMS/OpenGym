@@ -47,8 +47,9 @@ void main() {
       exercises: [
         Exercise(
           name: 'Leg press',
-          sets: List.generate(11, (_) => gym.Set(weight: 20, reps: 8)),
+          sets: List.generate(10, (_) => gym.Set(weight: 20, reps: 8)),
         ),
+        Exercise(name: 'Lateral raise', sets: [gym.Set(weight: 10, reps: 10)]),
       ],
     );
     await tester.pumpWidget(
@@ -68,6 +69,7 @@ void main() {
             session.copyWith(
               id: 'previous',
               date: session.date.subtract(const Duration(days: 7)),
+              exercises: [session.exercises.first],
             ),
           ],
           records: [

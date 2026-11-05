@@ -51,29 +51,36 @@ class PlanTitleHero extends StatelessWidget {
     if (from == null || to == null) {
       return (toHeroContext.widget as Hero).child;
     }
-    final fromStyle = DefaultTextStyle.of(fromHeroContext).style.merge(
-      from.style,
-    );
+    final fromStyle = DefaultTextStyle.of(
+      fromHeroContext,
+    ).style.merge(from.style);
     final toStyle = DefaultTextStyle.of(toHeroContext).style.merge(to.style);
     return Material(
       type: MaterialType.transparency,
       child: AnimatedBuilder(
         animation: animation,
-        builder:
-            (context, _) => Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: Text(
-                animation.value < .5 ? from.text : to.text,
-                maxLines: 1,
-                softWrap: false,
-                overflow: TextOverflow.fade,
-                style: TextStyle.lerp(
-                  fromStyle,
-                  toStyle,
-                  Curves.easeInOut.transform(animation.value),
-                ),
+        builder: (context, _) {
+          // The route's animation runs backwards on pop; the shuttle still
+          // travels from the current title to the destination title.
+          final progress =
+              direction == HeroFlightDirection.pop
+                  ? 1 - animation.value
+                  : animation.value;
+          return Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(
+              progress < .5 ? from.text : to.text,
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.fade,
+              style: TextStyle.lerp(
+                fromStyle,
+                toStyle,
+                Curves.easeInOut.transform(progress),
               ),
             ),
+          );
+        },
       ),
     );
   }

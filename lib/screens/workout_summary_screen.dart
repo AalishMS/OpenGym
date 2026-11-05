@@ -9,6 +9,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/workout_session.dart';
 import '../providers/settings_provider.dart';
+import '../services/exercise_catalog.dart';
 import '../services/hive_service.dart';
 import '../services/pr_tracking_service.dart';
 import '../services/statistics_analytics_service.dart';
@@ -162,11 +163,31 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen> {
             .length +
         1;
 
+    // Zero added weight can be a performed bodyweight exercise. First logs
+    // depend on exercise identity and performed sets, not a positive weight PR.
+    final previousExercises = {
+      for (final other in history)
+        if (other.id != session.id &&
+            other.deletedAt == null &&
+            other.isCompleted &&
+            other.splitId == session.splitId)
+          for (final exercise in other.exercises)
+            if (exercise.sets.any((set) => set.reps > 0))
+              ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
+    };
+    final loggedExercises = {
+      for (final exercise in session.exercises)
+        if (exercise.sets.any((set) => set.reps > 0))
+          ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
+    };
     final realRecords = [
       for (final record in widget.records)
-        if (record.previousPR > 0) record,
+        if (previousExercises.contains(
+          ExerciseCatalog.identity(record.exerciseName, record.exerciseId),
+        ))
+          record,
     ];
-    final firstLogs = widget.records.length - realRecords.length;
+    final firstLogs = loggedExercises.difference(previousExercises).length;
 
     return Scaffold(
       backgroundColor: backgroundColor(context),

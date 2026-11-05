@@ -285,7 +285,14 @@ void main() {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = Size(width, 900);
       addTearDown(tester.view.reset);
-      final session = push('now', date, 105).copyWith(planName: planName);
+      final pushSession = push('now', date, 105);
+      final session = pushSession.copyWith(
+        planName: planName,
+        exercises: [
+          ...pushSession.exercises,
+          Exercise(name: 'Curl', sets: [gym.Set(weight: 0, reps: 10)]),
+        ],
+      );
       await tester.pumpWidget(
         MaterialApp(
           theme: buildTheme(const Color(0xFF41B9B9), brightness),
@@ -326,12 +333,6 @@ void main() {
                                         previousPR: 100,
                                         newPR: 105,
                                         reps: 5,
-                                      ),
-                                      PRResult(
-                                        exerciseName: 'Curl',
-                                        previousPR: 0,
-                                        newPR: 20,
-                                        reps: 10,
                                       ),
                                     ],
                                   ),
@@ -380,8 +381,8 @@ void main() {
       await pumpSummary(tester, settle: false);
       expect(find.text('52m'), findsOneWidget);
       expect(find.text('1.1 t'), findsOneWidget);
-      expect(find.bySemanticsLabel('Sets: 2'), findsOneWidget);
-      expect(find.bySemanticsLabel('Reps: 10'), findsOneWidget);
+      expect(find.bySemanticsLabel('Sets: 3'), findsOneWidget);
+      expect(find.bySemanticsLabel('Reps: 20'), findsOneWidget);
       expect(
         tester
             .widget<IconButton>(
@@ -437,6 +438,99 @@ void main() {
             }
           }
         }
+      },
+    );
+
+    testWidgets('added weight after bodyweight training remains a record', (
+      tester,
+    ) async {
+      final previous = WorkoutSession(
+        id: 'previous',
+        splitId: 'pull',
+        planName: 'Pull',
+        date: date.subtract(const Duration(days: 7)),
+        exercises: [
+          Exercise(
+            name: 'Pull-up',
+            exerciseId: 'pull-up-id',
+            sets: [gym.Set(weight: 0, reps: 8)],
+          ),
+        ],
+      );
+      final session = previous.copyWith(
+        id: 'current',
+        date: date,
+        exercises: [
+          Exercise(
+            name: 'Renamed pull-up',
+            exerciseId: 'pull-up-id',
+            sets: [gym.Set(weight: 10, reps: 8)],
+          ),
+        ],
+      );
+      final records = PRTrackingService.checkAgainstHistory(session.exercises, [
+        previous,
+      ]);
+      expect(records.single.exerciseId, 'pull-up-id');
+      await tester.pumpWidget(
+        app(
+          WorkoutSummaryScreen(
+            session: session,
+            records: records,
+            history: [previous, session],
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Personal record'), findsOneWidget);
+      expect(find.text('Renamed pull-up'), findsOneWidget);
+      expect(find.text('was 0 kg'), findsOneWidget);
+      expect(find.textContaining('logged for the first time'), findsNothing);
+    });
+
+    testWidgets(
+      'first logs count performed exercise identities at any weight',
+      (tester) async {
+        final session = WorkoutSession(
+          id: 'current',
+          splitId: 'push',
+          planName: 'Push',
+          date: date,
+          exercises: [
+            for (final name in ['Push-up', 'Renamed push-up'])
+              Exercise(
+                name: name,
+                exerciseId: 'push-up-id',
+                sets: [gym.Set(weight: 0, reps: 10)],
+              ),
+            Exercise(name: 'Curl', sets: [gym.Set(weight: 20, reps: 10)]),
+            Exercise(name: 'Squat', sets: [gym.Set(weight: 50, reps: 0)]),
+          ],
+        );
+        final history = [
+          session,
+          session.copyWith(id: 'draft', isCompleted: false),
+          session.copyWith(id: 'deleted', deletedAt: date),
+          session.copyWith(id: 'other-split', splitId: 'other'),
+        ];
+        await tester.pumpWidget(
+          app(
+            WorkoutSummaryScreen(
+              session: session,
+              records: PRTrackingService.checkAgainstHistory(
+                session.exercises,
+                [],
+              ),
+              history: history,
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          find.text('2 exercises logged for the first time'),
+          findsOneWidget,
+        );
+        expect(find.text('Personal record'), findsNothing);
       },
     );
 
@@ -522,6 +616,57 @@ void main() {
       inFlight.any((size) => size != null && size > 18 && size < 22),
       isTrue,
     );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('returning Home grows the title from the workout style', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder:
+              (context) => Scaffold(
+                body: GestureDetector(
+                  onTap:
+                      () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder:
+                              (_) => const Scaffold(
+                                body: Align(
+                                  alignment: Alignment.topLeft,
+                                  child: PlanTitleHero(
+                                    tag: 'return-plan',
+                                    text: 'Push day',
+                                    style: TextStyle(fontSize: 18),
+                                  ),
+                                ),
+                              ),
+                        ),
+                      ),
+                  child: const Center(
+                    child: PlanTitleHero(
+                      tag: 'return-plan',
+                      text: 'Push Day',
+                      style: TextStyle(fontSize: 22),
+                    ),
+                  ),
+                ),
+              ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Push Day'));
+    await tester.pumpAndSettle();
+    tester.state<NavigatorState>(find.byType(Navigator)).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 16));
+    final departure = tester.widget<Text>(find.text('Push day'));
+    expect(departure.style!.fontSize!, lessThan(19));
+    await tester.pump(const Duration(milliseconds: 200));
+    final arrival = tester.widget<Text>(find.text('Push Day'));
+    expect(arrival.style!.fontSize!, greaterThan(21));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
