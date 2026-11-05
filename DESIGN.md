@@ -477,13 +477,20 @@ signature:
   more reps at the same weight) shows an accent arrow beside Previous.
   Exercises with no history are never marked.
 - Finish in the workout header is labelled, not a bare check; large text on a
-  narrow phone falls back to the icon. Logging opens the workout summary over
-  the log: a card with the wordmark, date, plan, block/week, and which workout
-  of the week it was; Duration, Volume and Sets count up once; volume compared
-  with the most recent earlier session of the same plan; then personal records
-  with what they replaced. Exercises logged for the first time are counted in
-  one line rather than listed as records. Share sends that card as a PNG, on the
-  page ground so it never has transparent corners. Done returns to the log.
+  narrow phone falls back to the icon. Finish and the compact timer controls
+  expose their enabled state and tap action to screen readers. Logging opens
+  an open summary on the page ground, without a card or enclosing border. The
+  date and weekly workout count lead into the plan name and block/week. Volume
+  lifted is the main figure, followed by comparison with the most recent
+  earlier session of the same plan; Duration, Sets and Reps sit below a rule
+  and wrap according to the measured text width. Compact spacing keeps a
+  typical summary on one phone screen; accessibility text and long record
+  lists remain scrollable. Personal records show the exercise, new
+  weight/reps and the weight replaced. First-time exercises are counted
+  separately. The wordmark signs the summary at the bottom. Figures show final
+  values immediately, so Share always exports accurate totals. The header's
+  Share action captures the complete summary as an opaque PNG after pending
+  paint finishes; Done returns to the log.
 - Haptics are named for the moment (`lib/utils/haptics.dart`): a medium impact
   when the workout clock starts, a heavy one for a new record or a logged
   workout. Keypad keys keep their own selection clicks.

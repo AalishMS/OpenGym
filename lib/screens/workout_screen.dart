@@ -2105,6 +2105,8 @@ class _FinishButton extends StatelessWidget {
       child: Semantics(
         button: true,
         label: 'Finish workout',
+        enabled: onPressed != null,
+        onTap: onPressed,
         excludeSemantics: true,
         child:
             compact
@@ -2178,6 +2180,8 @@ class _TimerButton extends StatelessWidget {
         child: Semantics(
           button: true,
           label: label,
+          enabled: onPressed != null,
+          onTap: onPressed,
           excludeSemantics: true,
           child: TextButton(onPressed: onPressed, style: style, child: icon),
         ),

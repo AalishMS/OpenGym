@@ -272,14 +272,31 @@ void main() {
           ],
         );
 
-    Future<void> pumpSummary(WidgetTester tester) async {
+    Future<void> pumpSummary(
+      WidgetTester tester, {
+      bool settle = true,
+      Brightness brightness = Brightness.light,
+      double width = 390,
+      double scale = 1,
+      bool reduceMotion = false,
+      String planName = 'Push',
+    }) async {
+      await tester.pumpWidget(const SizedBox.shrink());
       tester.view.devicePixelRatio = 1;
-      tester.view.physicalSize = const Size(390, 900);
+      tester.view.physicalSize = Size(width, 900);
       addTearDown(tester.view.reset);
-      final session = push('now', date, 105);
+      final session = push('now', date, 105).copyWith(planName: planName);
       await tester.pumpWidget(
         MaterialApp(
-          theme: buildTheme(const Color(0xFF41B9B9), Brightness.light),
+          theme: buildTheme(const Color(0xFF41B9B9), brightness),
+          builder:
+              (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: TextScaler.linear(scale),
+                  disableAnimations: reduceMotion,
+                ),
+                child: child!,
+              ),
           home: Builder(
             builder:
                 (context) => Scaffold(
@@ -328,7 +345,12 @@ void main() {
         ),
       );
       await tester.tap(find.text('Open'));
-      await tester.pumpAndSettle();
+      if (settle) {
+        await tester.pumpAndSettle();
+      } else {
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 16));
+      }
     }
 
     testWidgets('celebrates real records and counts first logs apart', (
@@ -344,11 +366,79 @@ void main() {
       expect(find.text('Curl'), findsNothing);
       expect(find.text('1 exercise logged for the first time'), findsOneWidget);
       // Compared with the most recent earlier Push (90 kg), not the older one.
-      expect(find.text('+17% volume vs last Push'), findsOneWidget);
-      // Figures settle on their exact values after counting up.
+      expect(find.text('+17%'), findsOneWidget);
+      expect(find.text('volume vs previous workout'), findsOneWidget);
+      // The figures always show their final values.
       expect(find.text('52m'), findsOneWidget);
       expect(find.text('1.1 t'), findsOneWidget);
     });
+
+    testWidgets('sharing starts with final totals on the very first frame', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
+      await pumpSummary(tester, settle: false);
+      expect(find.text('52m'), findsOneWidget);
+      expect(find.text('1.1 t'), findsOneWidget);
+      expect(find.bySemanticsLabel('Sets: 2'), findsOneWidget);
+      expect(find.bySemanticsLabel('Reps: 10'), findsOneWidget);
+      expect(
+        tester
+            .widget<IconButton>(
+              find.byWidgetPredicate(
+                (widget) =>
+                    widget is IconButton && widget.tooltip == 'Share workout',
+              ),
+            )
+            .onPressed,
+        isNotNull,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('52m'), findsOneWidget);
+      expect(find.text('1.1 t'), findsOneWidget);
+      semantics.dispose();
+    });
+
+    testWidgets(
+      'open summary adapts to narrow screens and large text in both themes',
+      (tester) async {
+        for (final brightness in Brightness.values) {
+          for (final width in [320.0, 390.0]) {
+            for (final scale in [1.0, 2.0]) {
+              await pumpSummary(
+                tester,
+                brightness: brightness,
+                width: width,
+                scale: scale,
+                planName: 'Legs and shoulders with a longer workout name',
+                reduceMotion: scale == 2,
+              );
+              expect(tester.takeException(), isNull);
+              expect(find.byType(Card), findsNothing);
+              final content = find.byKey(
+                const ValueKey('workout-summary-content'),
+              );
+              expect(
+                find.descendant(
+                  of: content,
+                  matching: find.byWidgetPredicate(
+                    (widget) =>
+                        widget is DecoratedBox &&
+                        widget.decoration is BoxDecoration &&
+                        (widget.decoration as BoxDecoration).color != null,
+                  ),
+                ),
+                findsNothing,
+              );
+              // The entire record remains reachable when the summary scrolls.
+              await tester.ensureVisible(find.text('was 100 kg'));
+              await tester.pumpAndSettle();
+              expect(find.text('was 100 kg').hitTestable(), findsOneWidget);
+            }
+          }
+        }
+      },
+    );
 
     testWidgets('Done returns to the workout', (tester) async {
       await pumpSummary(tester);

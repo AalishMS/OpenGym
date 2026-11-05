@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -23,10 +24,10 @@ import '../widgets/app_wordmark.dart';
 
 /// What a logged workout added up to: the moment after Finish.
 ///
-/// The card at the top is exactly what Share sends, so what the lifter sees
-/// is what their friends get. Records come from the same check Finish has
-/// always made (heaviest weight per exercise); an exercise logged for the
-/// first time is counted separately rather than celebrated as a record.
+/// The open summary is exactly what Share sends. Figures show their final
+/// values from the first frame, including when shared immediately. Records
+/// come from the same check Finish has always made (heaviest weight per
+/// exercise); a first-time exercise is counted separately from records.
 class WorkoutSummaryScreen extends StatefulWidget {
   final WorkoutSession session;
   final List<PRResult> records;
@@ -56,7 +57,8 @@ class WorkoutSummaryScreen extends StatefulWidget {
 }
 
 class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen> {
-  final _cardKey = GlobalKey();
+  final _summaryKey = GlobalKey();
+  final _shareKey = GlobalKey();
   bool _sharing = false;
 
   List<WorkoutSession> get _history =>
@@ -67,11 +69,19 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen> {
     if (_sharing) return;
     setState(() => _sharing = true);
     try {
+      // Finish any pending layout/paint before reading the boundary. The
+      // figures themselves are final immediately; no animation enters the PNG.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
       final boundary =
-          _cardKey.currentContext!.findRenderObject()! as RenderRepaintBoundary;
+          _summaryKey.currentContext!.findRenderObject()!
+              as RenderRepaintBoundary;
+      final shareBox =
+          _shareKey.currentContext!.findRenderObject()! as RenderBox;
+      final origin = shareBox.localToGlobal(Offset.zero) & shareBox.size;
       final image = await boundary.toImage(pixelRatio: 3);
-      final png = await image.toByteData(format: ui.ImageByteFormat.png);
-      image.dispose();
+      final png = await _encodePng(image);
+      if (!mounted) return;
       if (png == null) throw StateError('No image data');
       await Share.shareXFiles(
         [
@@ -82,6 +92,7 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen> {
           ),
         ],
         fileNameOverrides: const ['opengym-workout.png'],
+        sharePositionOrigin: origin,
       );
     } catch (error) {
       debugPrint('Could not share workout summary: $error');
@@ -100,6 +111,14 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen> {
     }
   }
 
+  Future<ByteData?> _encodePng(ui.Image image) async {
+    try {
+      return await image.toByteData(format: ui.ImageByteFormat.png);
+    } finally {
+      image.dispose();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final unit = context.watch<SettingsProvider?>()?.weightUnit ?? 'kg';
@@ -107,26 +126,27 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen> {
     final history = _history;
     const analytics = StatisticsAnalyticsService();
     final stats = analytics.sessionStatistics(session);
-    final previous =
-        history
-            .where(
-              (other) =>
-                  other.id != session.id &&
-                  other.deletedAt == null &&
-                  other.isCompleted &&
-                  other.planId != null &&
-                  other.planId == session.planId &&
-                  other.date.isBefore(session.date),
-            )
-            .fold<WorkoutSession?>(
-              null,
-              (latest, other) =>
-                  latest == null || other.date.isAfter(latest.date)
-                      ? other
-                      : latest,
-            );
+    final previous = history
+        .where(
+          (other) =>
+              other.id != session.id &&
+              other.deletedAt == null &&
+              other.isCompleted &&
+              other.planId != null &&
+              other.planId == session.planId &&
+              other.date.isBefore(session.date),
+        )
+        .fold<WorkoutSession?>(
+          null,
+          (latest, other) =>
+              latest == null || other.date.isAfter(latest.date)
+                  ? other
+                  : latest,
+        );
     final previousVolume =
-        previous == null ? null : analytics.sessionStatistics(previous).volumeLoad;
+        previous == null
+            ? null
+            : analytics.sessionStatistics(previous).volumeLoad;
     final weekStart = startOfWeek(session.date);
     final weekEnd = weekStart.add(const Duration(days: 7));
     final thisWeek =
@@ -153,76 +173,87 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen> {
       appBar: AppHeader(
         leading: AppBackButton(onPressed: () => Navigator.pop(context)),
         title: const Text('Workout logged'),
+        actions: [
+          IconButton(
+            key: _shareKey,
+            tooltip: 'Share workout',
+            onPressed: _sharing ? null : _share,
+            icon:
+                _sharing
+                    ? SizedBox.square(
+                      dimension: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: accentColor(context),
+                      ),
+                    )
+                    : const Icon(
+                      LucideIcons.share2,
+                      key: ValueKey('summary-share'),
+                      size: 20,
+                    ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
       ),
       body: SafeArea(
         top: false,
-        child: Center(
+        child: Align(
+          alignment: Alignment.topCenter,
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(
-                AppSpacing.sm,
-                AppSpacing.lg,
-                AppSpacing.sm,
-                AppSpacing.xl,
-              ),
-              children: [
-                RepaintBoundary(
-                  key: _cardKey,
-                  // The page ground travels with the image, so a shared
-                  // card never lands with transparent corners.
-                  child: ColoredBox(
-                    color: backgroundColor(context),
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.sm),
-                      child: _SummaryCard(
-                        session: session,
-                        volumeLoad: stats.volumeLoad,
-                        totalSets: stats.totalSets,
-                        previousVolume: previousVolume,
-                        workoutOfWeek: thisWeek,
-                        records: realRecords,
-                        firstLogs: firstLogs,
-                        unit: unit,
-                      ),
+            child: SingleChildScrollView(
+              child: RepaintBoundary(
+                key: _summaryKey,
+                child: ColoredBox(
+                  // The same opaque page ground travels with the PNG.
+                  color: backgroundColor(context),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.xl,
+                      AppSpacing.lg,
+                      AppSpacing.xl,
+                      AppSpacing.lg,
+                    ),
+                    child: _SummaryContent(
+                      session: session,
+                      volumeLoad: stats.volumeLoad,
+                      totalSets: stats.totalSets,
+                      totalReps: stats.totalReps,
+                      previousVolume: previousVolume,
+                      workoutOfWeek: thisWeek,
+                      records: realRecords,
+                      firstLogs: firstLogs,
+                      unit: unit,
                     ),
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),
       ),
       bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.sm,
-            AppSpacing.lg,
-            AppSpacing.lg,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  key: const ValueKey('summary-share'),
-                  onPressed: _sharing ? null : _share,
-                  icon: const Icon(LucideIcons.share2, size: 18),
-                  label: const Text('Share'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
-                  ),
-                ),
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 560),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.xl,
+                AppSpacing.md,
+                AppSpacing.xl,
+                AppSpacing.lg,
               ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
+              child: SizedBox(
+                width: double.infinity,
                 child: FilledButton(
                   key: const ValueKey('summary-done'),
                   onPressed: () => Navigator.pop(context),
                   style: FilledButton.styleFrom(
                     backgroundColor: accentFillColor(context),
                     foregroundColor: onAccentColor(context),
-                    minimumSize: const Size.fromHeight(48),
+                    minimumSize: const Size.fromHeight(52),
                     shape: const RoundedRectangleBorder(
                       borderRadius: AppRadius.button,
                     ),
@@ -230,7 +261,7 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen> {
                   child: const Text('Done'),
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -238,20 +269,24 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen> {
   }
 }
 
-class _SummaryCard extends StatelessWidget {
+/// A training result on the page ground: the workout leads, volume carries
+/// the emphasis, and supporting figures and records stay open and readable.
+class _SummaryContent extends StatelessWidget {
   final WorkoutSession session;
   final double volumeLoad;
   final int totalSets;
+  final int totalReps;
   final double? previousVolume;
   final int workoutOfWeek;
   final List<PRResult> records;
   final int firstLogs;
   final String unit;
 
-  const _SummaryCard({
+  const _SummaryContent({
     required this.session,
     required this.volumeLoad,
     required this.totalSets,
+    required this.totalReps,
     required this.previousVolume,
     required this.workoutOfWeek,
     required this.records,
@@ -268,135 +303,212 @@ class _SummaryCard extends StatelessWidget {
         previousVolume == null || previousVolume! <= 0 || totalSets == 0
             ? null
             : (volumeLoad - previousVolume!) / previousVolume! * 100;
-    return DecoratedBox(
-      key: const ValueKey('workout-summary-card'),
-      decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border.all(color: borderColor(context)),
-        borderRadius: AppRadius.card,
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final metrics = <(String, String)>[
+      if (duration != null) ('Duration', formatStatisticsDuration(duration)),
+      ('Sets', '$totalSets'),
+      ('Reps', '$totalReps'),
+    ];
+    final volume = formatVolumeLoad(volumeLoad, unit);
+    final unitAt = volume.lastIndexOf(' ');
+    return Column(
+      key: const ValueKey('workout-summary-content'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: AppSpacing.lg,
+          runSpacing: AppSpacing.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Row(
-              children: [
-                const Expanded(child: AppWordmark(fontSize: 16)),
-                Text(
-                  formatStatisticsDate(session.date),
-                  style: textTheme.labelMedium?.copyWith(color: secondary),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xl),
-            Semantics(
-              header: true,
-              child: Text(session.planName, style: textTheme.displaySmall),
-            ),
-            const SizedBox(height: AppSpacing.xs),
             Text(
-              '${workoutContext(session)} · Workout $workoutOfWeek this week',
-              style: textTheme.labelMedium?.copyWith(
-                color: secondary,
-                fontWeight: FontWeight.w500,
-              ),
+              formatStatisticsDate(session.date),
+              style: textTheme.bodySmall,
             ),
-            const SizedBox(height: AppSpacing.xl),
-            Wrap(
-              spacing: AppSpacing.xl,
-              runSpacing: AppSpacing.lg,
-              children: [
-                if (duration != null)
-                  _CountUpFigure(
-                    label: 'Duration',
-                    value: duration.toDouble(),
-                    format: (v) => formatStatisticsDuration(v.round()),
-                  ),
-                _CountUpFigure(
-                  label: 'Volume',
-                  value: volumeLoad,
-                  format: (v) => formatVolumeLoad(v, unit),
-                ),
-                _CountUpFigure(
-                  label: 'Sets',
-                  value: totalSets.toDouble(),
-                  format: (v) => '${v.round()}',
-                ),
-              ],
+            Text(
+              'Workout $workoutOfWeek this week',
+              style: textTheme.bodySmall?.copyWith(color: accentColor(context)),
             ),
-            if (change != null) ...[
-              const SizedBox(height: AppSpacing.lg),
-              Row(
-                children: [
-                  Icon(
-                    change >= 0
-                        ? LucideIcons.trendingUp
-                        : LucideIcons.trendingDown,
-                    size: 16,
-                    color: change >= 0 ? accentColor(context) : secondary,
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Expanded(
-                    child: Text(
-                      '${formatSignedChange(change, (v) => '${v.round()}%')} '
-                      'volume vs last ${session.planName}',
-                      style: AppTypography.figures(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color:
-                            change >= 0
-                                ? accentColor(context)
-                                : textPrimaryColor(context),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            if (records.isNotEmpty || firstLogs > 0) ...[
-              const SizedBox(height: AppSpacing.lg),
-              Divider(height: 1, thickness: 1, color: borderColor(context)),
-              const SizedBox(height: AppSpacing.lg),
-            ],
-            if (records.isNotEmpty) ...[
-              Row(
-                children: [
-                  Icon(
-                    LucideIcons.trophy,
-                    size: 16,
-                    color: accentColor(context),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    records.length == 1
-                        ? 'Personal record'
-                        : '${records.length} personal records',
-                    style: textTheme.titleSmall,
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              for (final record in records)
-                _RecordRow(record: record, unit: unit),
-            ],
-            if (firstLogs > 0)
-              Padding(
-                padding: EdgeInsets.only(
-                  top: records.isEmpty ? 0 : AppSpacing.sm,
-                ),
-                child: Text(
-                  firstLogs == 1
-                      ? '1 exercise logged for the first time'
-                      : '$firstLogs exercises logged for the first time',
-                  style: textTheme.bodySmall,
-                ),
-              ),
           ],
         ),
-      ),
+        const SizedBox(height: AppSpacing.lg),
+        Semantics(
+          header: true,
+          child: Text(
+            session.planName,
+            style: textTheme.displaySmall?.copyWith(
+              fontSize: 30,
+              height: 1.12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -1,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Text(
+          workoutContext(session),
+          style: textTheme.bodyMedium?.copyWith(color: secondary),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          'Volume lifted',
+          style: textTheme.bodyMedium?.copyWith(color: secondary),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Semantics(
+          label: 'Volume: $volume',
+          excludeSemantics: true,
+          child: Text.rich(
+            TextSpan(
+              children: [
+                TextSpan(text: volume.substring(0, unitAt)),
+                TextSpan(
+                  text: volume.substring(unitAt),
+                  style: AppTypography.figures(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w500,
+                    color: secondary,
+                  ),
+                ),
+              ],
+            ),
+            style: AppTypography.figures(
+              fontSize: 52,
+              height: 1.05,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -2,
+              color: textPrimaryColor(context),
+            ),
+          ),
+        ),
+        if (change != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              Text(
+                formatSignedChange(change, (v) => '${v.round()}%'),
+                style: AppTypography.figures(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color:
+                      change > 0
+                          ? accentColor(context)
+                          : textPrimaryColor(context),
+                ),
+              ),
+              Text('volume vs previous workout', style: textTheme.bodySmall),
+            ],
+          ),
+        ],
+        const SizedBox(height: AppSpacing.lg),
+        Divider(height: 1, color: borderColor(context)),
+        const SizedBox(height: AppSpacing.lg),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // Measure the actual type so ordinary phone scaling retains
+            // columns and long durations or accessibility text wrap naturally.
+            var minimumWidth = 0.0;
+            for (final (label, value) in metrics) {
+              for (final (text, style) in [
+                (label, textTheme.bodySmall!),
+                (value, _SummaryMetric.valueStyle(context)),
+              ]) {
+                final painter = TextPainter(
+                  text: TextSpan(text: text, style: style),
+                  textDirection: Directionality.of(context),
+                  textScaler: MediaQuery.textScalerOf(context),
+                  maxLines: 1,
+                )..layout();
+                if (painter.width > minimumWidth) minimumWidth = painter.width;
+                painter.dispose();
+              }
+            }
+            final columns = ((constraints.maxWidth + AppSpacing.lg) /
+                    (minimumWidth + AppSpacing.lg))
+                .floor()
+                .clamp(1, metrics.length);
+            final width =
+                (constraints.maxWidth - AppSpacing.lg * (columns - 1)) /
+                columns;
+            return Wrap(
+              spacing: AppSpacing.lg,
+              runSpacing: AppSpacing.xl,
+              children: [
+                for (final (label, value) in metrics)
+                  SizedBox(
+                    width: width,
+                    child: _SummaryMetric(label: label, value: value),
+                  ),
+              ],
+            );
+          },
+        ),
+        if (records.isNotEmpty || firstLogs > 0) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Divider(height: 1, color: borderColor(context)),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+        if (records.isNotEmpty) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(LucideIcons.trophy, size: 20, color: accentColor(context)),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  records.length == 1
+                      ? 'Personal record'
+                      : '${records.length} personal records',
+                  style: textTheme.titleMedium,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          for (final record in records) _RecordRow(record: record, unit: unit),
+        ],
+        if (firstLogs > 0) ...[
+          Text(
+            firstLogs == 1
+                ? '1 exercise logged for the first time'
+                : '$firstLogs exercises logged for the first time',
+            style: textTheme.bodySmall,
+          ),
+        ],
+        const SizedBox(height: AppSpacing.lg),
+        const AppWordmark(fontSize: 14),
+      ],
     );
   }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _SummaryMetric({required this.label, required this.value});
+
+  static TextStyle valueStyle(BuildContext context) => AppTypography.figures(
+    fontSize: 22,
+    height: 1.2,
+    fontWeight: FontWeight.w600,
+    color: textPrimaryColor(context),
+  );
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: '$label: $value',
+    excludeSemantics: true,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+        const SizedBox(height: AppSpacing.sm),
+        Text(value, style: valueStyle(context)),
+      ],
+    ),
+  );
 }
 
 class _RecordRow extends StatelessWidget {
@@ -411,88 +523,36 @@ class _RecordRow extends StatelessWidget {
     final was = formatAnalyticsWeight(record.previousPR, unit);
     return Semantics(
       label:
-          '${record.exerciseName}: $value for ${record.reps} '
-          '${record.reps == 1 ? 'rep' : 'reps'}, was $was',
+          '${record.exerciseName}: $value for ${record.reps} ${record.reps == 1 ? 'rep' : 'reps'}, was $was',
       excludeSemantics: true,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-        child: Row(
+        padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(
-                record.exerciseName,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+            Text(
+              record.exerciseName,
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
-            const SizedBox(width: AppSpacing.md),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
+            const SizedBox(height: AppSpacing.xs),
+            Wrap(
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.xs,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Text(
                   '$value × ${record.reps}',
                   style: AppTypography.figures(
-                    fontSize: 15,
+                    fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: textPrimaryColor(context),
+                    color: accentColor(context),
                   ),
                 ),
-                Text(
-                  'was $was',
-                  style: AppTypography.figures(
-                    fontSize: 12,
-                    color: textSecondaryColor(context),
-                  ),
-                ),
+                Text('was $was', style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// A large figure that counts up once when the summary opens.
-class _CountUpFigure extends StatelessWidget {
-  final String label;
-  final double value;
-  final String Function(double) format;
-
-  const _CountUpFigure({
-    required this.label,
-    required this.value,
-    required this.format,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
-    return Semantics(
-      label: '$label: ${format(value)}',
-      excludeSemantics: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TweenAnimationBuilder<double>(
-            tween: Tween(begin: reduceMotion ? value : 0, end: value),
-            duration: const Duration(milliseconds: 900),
-            curve: Curves.easeOutCubic,
-            builder:
-                (context, shown, _) => Text(
-                  format(shown),
-                  style: AppTypography.figures(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
-                    height: 1.1,
-                    color: textPrimaryColor(context),
-                  ),
-                ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(label, style: Theme.of(context).textTheme.labelSmall),
-        ],
       ),
     );
   }

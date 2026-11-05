@@ -98,7 +98,13 @@ void main() {
         rootBundle.load('packages/lucide_icons_flutter/assets/lucide.ttf'),
       )).load();
       final manifest = const StandardMessageCodec().encodeMessage({
-        for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold', 'ExtraBold'])
+        for (final weight in [
+          'Regular',
+          'Medium',
+          'SemiBold',
+          'Bold',
+          'ExtraBold',
+        ])
           'Manrope-$weight.ttf': [
             {'asset': 'Manrope-$weight.ttf'},
           ],
@@ -495,6 +501,18 @@ void main() {
       await tester.runAsync(() => seed(started: true));
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
+      final semantics = tester.ensureSemantics();
+      final finishNode = tester.getSemantics(
+        find.bySemanticsLabel('Finish workout'),
+      );
+      expect(
+        finishNode.getSemanticsData().hasAction(ui.SemanticsAction.tap),
+        isTrue,
+      );
+      expect(
+        finishNode.getSemanticsData().flagsCollection.isEnabled,
+        ui.Tristate.isTrue,
+      );
       final finishButton = tester.widget<TextButton>(finish);
       expect(finishButton.onPressed, isNotNull);
       expect(
@@ -506,9 +524,11 @@ void main() {
         find.descendant(of: finish, matching: find.text('Finish')),
         findsOneWidget,
       );
-      await tester.tap(finish);
+      // Activate the action the same way a screen reader does.
+      finishNode.owner!.performAction(finishNode.id, ui.SemanticsAction.tap);
       await tester.pumpAndSettle();
       expect(find.text('Log workout?'), findsOneWidget);
+      semantics.dispose();
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(
