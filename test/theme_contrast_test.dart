@@ -129,7 +129,7 @@ void main() {
     }
   });
 
-  testWidgets('today keeps a neutral outline ground for every trained accent', (
+  testWidgets('today stays legible beside a trained bar for every accent', (
     tester,
   ) async {
     final today = DateTime(2026, 10, 1);
@@ -156,19 +156,31 @@ void main() {
         );
         final day = find.byKey(const ValueKey('training-day-3'));
         final context = tester.element(day);
+        final page = backgroundColor(context);
+        final dot = tester.widget<DecoratedBox>(
+          find.byKey(const ValueKey('training-day-today-dot')),
+        );
+        _expectContrast(
+          (dot.decoration as BoxDecoration).color!,
+          page,
+          atLeast: 3,
+          what: '${accent.name} ${brightness.name} today dot on page',
+        );
         final bar = tester.widget<Container>(
           find.descendant(of: day, matching: find.byType(Container)),
         );
-        final ground = (bar.decoration! as BoxDecoration).color!;
-        expect(ground, backgroundColor(context));
+        expect(
+          (bar.decoration! as BoxDecoration).color,
+          accentFillColor(context),
+        );
         final label = tester.widget<Text>(
           find.descendant(of: day, matching: find.byType(Text)),
         );
         _expectContrast(
           label.style!.color!,
-          ground,
-          atLeast: 3,
-          what: '${accent.name} today outline on trained bar ground',
+          page,
+          atLeast: 4.5,
+          what: '${accent.name} ${brightness.name} today letter on page',
         );
         expect(
           tester

@@ -11,7 +11,7 @@ import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import '../readable_table_viewport.dart';
 
-/// Completed sets by calendar day, with an outline identifying today.
+/// Completed sets by calendar day, with a dot under today's letter.
 class TrainingSnapshot extends StatelessWidget {
   final List<WorkoutPlan> plans;
   final List<WorkoutSession> sessions;
@@ -56,7 +56,6 @@ class TrainingSnapshot extends StatelessWidget {
     final maxSets = dailySets.reduce(math.max);
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
-    final todayColor = textPrimaryColor(context);
     const letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
     const names = [
       'Monday',
@@ -130,14 +129,16 @@ class TrainingSnapshot extends StatelessWidget {
           summaryLink,
           const SizedBox(height: AppSpacing.md),
           Semantics(
-            label: 'Completed sets by day. The outlined day is today.',
+            label: 'Completed sets by day. Today is marked with a dot.',
+            // Seven 48dp targets fit a 390dp phone without gaps between them;
+            // the bars are inset inside their targets instead. Only narrower
+            // screens scroll.
             child: ReadableTableViewport(
-              minimumWidth: 7 * 48 + 6 * AppSpacing.sm,
+              minimumWidth: 7 * 48,
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  for (var index = 0; index < 7; index++) ...[
-                    if (index > 0) const SizedBox(width: AppSpacing.sm),
+                  for (var index = 0; index < 7; index++)
                     Expanded(
                       child: Semantics(
                         label:
@@ -159,85 +160,20 @@ class TrainingSnapshot extends StatelessWidget {
                                         onOpenLastWorkout!(latestByDay[index]!),
                             borderRadius: AppRadius.control,
                             child: ExcludeSemantics(
-                              child: Column(
-                                children: [
-                                  SizedBox(
-                                    height: 52,
-                                    child: Align(
-                                      alignment: Alignment.bottomCenter,
-                                      child: Container(
-                                        width: double.infinity,
-                                        height:
-                                            dailyWorkouts[index] > 0
-                                                ? 14 +
-                                                    (maxSets == 0
-                                                        ? 0
-                                                        : 38 *
-                                                            dailySets[index] /
-                                                            maxSets)
-                                                : index == todayIndex
-                                                ? 40
-                                                : 5,
-                                        decoration: BoxDecoration(
-                                          color:
-                                              index == todayIndex
-                                                  ? backgroundColor(context)
-                                                  : dailyWorkouts[index] > 0
-                                                  ? accentFillColor(context)
-                                                  : borderColor(context),
-                                          borderRadius: AppRadius.control,
-                                        ),
-                                        child:
-                                            index == todayIndex
-                                                ? CustomPaint(
-                                                  painter: _TodayOutline(
-                                                    color: todayColor,
-                                                  ),
-                                                  // Leave a neutral gap between the outline and
-                                                  // the bar so every accent keeps today legible.
-                                                  child:
-                                                      dailyWorkouts[index] > 0
-                                                          ? Padding(
-                                                            padding:
-                                                                const EdgeInsets.all(
-                                                                  3,
-                                                                ),
-                                                            child: DecoratedBox(
-                                                              decoration: BoxDecoration(
-                                                                color:
-                                                                    accentFillColor(
-                                                                      context,
-                                                                    ),
-                                                                borderRadius:
-                                                                    AppRadius
-                                                                        .micro,
-                                                              ),
-                                                            ),
-                                                          )
-                                                          : null,
-                                                )
-                                                : null,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: AppSpacing.sm),
-                                  Text(
-                                    letters[index],
-                                    style: textTheme.labelSmall?.copyWith(
-                                      color:
-                                          index == todayIndex
-                                              ? todayColor
-                                              : secondary,
-                                    ),
-                                  ),
-                                ],
+                              child: _DayColumn(
+                                letter: letters[index],
+                                trained: dailyWorkouts[index] > 0,
+                                today: index == todayIndex,
+                                share:
+                                    maxSets == 0
+                                        ? 0
+                                        : dailySets[index] / maxSets,
                               ),
                             ),
                           ),
                         ),
                       ),
                     ),
-                  ],
                 ],
               ),
             ),
@@ -248,29 +184,84 @@ class TrainingSnapshot extends StatelessWidget {
   }
 }
 
-class _TodayOutline extends CustomPainter {
-  final Color color;
-  const _TodayOutline({required this.color});
+/// One day: a bar that grows with the day's sets, then its letter. Today
+/// reads apart through its letter and a small accent dot under it, the same
+/// mark the workout uses for the week being trained now.
+class _DayColumn extends StatelessWidget {
+  final String letter;
+  final bool trained;
+  final bool today;
+  final double share;
+
+  const _DayColumn({
+    required this.letter,
+    required this.trained,
+    required this.today,
+    required this.share,
+  });
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final paint =
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5;
-    final rect = AppRadius.control.toRRect(Offset.zero & size).deflate(0.75);
-    final path = Path()..addRRect(rect);
-    for (final metric in path.computeMetrics()) {
-      for (double distance = 0; distance < metric.length; distance += 7) {
-        canvas.drawPath(
-          metric.extractPath(distance, math.min(distance + 4, metric.length)),
-          paint,
-        );
-      }
-    }
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 52,
+            child: Align(
+              alignment: Alignment.bottomCenter,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(end: trained ? 14 + 38 * share : 5),
+                duration:
+                    reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 420),
+                curve: Curves.easeOutCubic,
+                builder:
+                    (context, height, _) => Container(
+                      width: double.infinity,
+                      height: height,
+                      decoration: BoxDecoration(
+                        color:
+                            trained
+                                ? accentFillColor(context)
+                                : today
+                                ? textSecondaryColor(context)
+                                : borderColor(context),
+                        borderRadius: AppRadius.control,
+                      ),
+                    ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            letter,
+            style: textTheme.labelSmall?.copyWith(
+              color:
+                  today ? textPrimaryColor(context) : textSecondaryColor(context),
+              fontWeight: today ? FontWeight.w700 : null,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xxs),
+          SizedBox(
+            height: 4,
+            child:
+                today
+                    ? DecoratedBox(
+                      key: const ValueKey('training-day-today-dot'),
+                      decoration: BoxDecoration(
+                        color: accentColor(context),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const SizedBox(width: 4, height: 4),
+                    )
+                    : null,
+          ),
+        ],
+      ),
+    );
   }
-
-  @override
-  bool shouldRepaint(_TodayOutline oldDelegate) => oldDelegate.color != color;
 }

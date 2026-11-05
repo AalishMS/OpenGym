@@ -21,6 +21,16 @@ String formatAnalyticsNumber(double value, {int decimals = 0}) {
   return buffer.toString();
 }
 
+/// A signed change with a true minus sign (U+2212). A hyphen is narrower than
+/// the plus sign and sits low, so a negative change read as a typo next to a
+/// positive one.
+String formatSignedChange(num change, String Function(double magnitude) format) {
+  final magnitude = format(change.abs().toDouble());
+  // A change that rounds away reads as no change, not as "−0%".
+  if (change == 0 || magnitude == format(0)) return magnitude;
+  return '${change > 0 ? '+' : '\u2212'}$magnitude';
+}
+
 String formatAnalyticsWeight(double kilograms, String weightUnit) {
   final converted = displayWeight(kilograms, weightUnit);
   return '${formatWeight(converted)} $weightUnit';

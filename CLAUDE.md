@@ -68,7 +68,9 @@ directly.
   involved. Widget tests use fake time, so `pumpAndSettle` can't drain real
   filesystem futures.
 - `loadTestFonts()` loads deterministic local fonts and turns off google_fonts
-  network fetching. Use it in widget tests that render text. A pure `test()` can't call `buildTheme`, so use `deriveColorScheme`
+  network fetching. Use it in widget tests that render text. The real fonts
+  ship in `assets/google_fonts/`, so a test without it renders actual Manrope;
+  any test that measures text against square test glyphs must call it. A pure `test()` can't call `buildTheme`, so use `deriveColorScheme`
   for colour assertions.
 - CI (`.github/workflows/release.yml`) runs `flutter test` before it builds a
   release, so a failing test blocks publishing.

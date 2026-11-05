@@ -22,7 +22,6 @@ import 'package:gymapp/utils/training_block_identity.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
 import 'package:gymapp/widgets/workout/training_block_strip.dart';
 import 'package:hive/hive.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -99,7 +98,13 @@ void main() {
         rootBundle.load('packages/lucide_icons_flutter/assets/lucide.ttf'),
       )).load();
       final manifest = const StandardMessageCodec().encodeMessage({
-        for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold', 'ExtraBold'])
+        for (final weight in [
+          'Regular',
+          'Medium',
+          'SemiBold',
+          'Bold',
+          'ExtraBold',
+        ])
           'Manrope-$weight.ttf': [
             {'asset': 'Manrope-$weight.ttf'},
           ],
@@ -292,7 +297,7 @@ void main() {
               find.descendant(of: card, matching: find.byType(Scrollbar)),
               findsNothing,
             );
-            final finish = find.widgetWithIcon(IconButton, LucideIcons.check);
+            final finish = find.byKey(const ValueKey('finish-workout'));
             expect(finish, findsOneWidget);
             expect(
               tester
@@ -478,7 +483,7 @@ void main() {
       await tester.runAsync(() => seed());
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
-      final finish = find.widgetWithIcon(IconButton, LucideIcons.check);
+      final finish = find.byKey(const ValueKey('finish-workout'));
       // Nothing to finish before Start, so the header leaves Finish out.
       expect(finish, findsNothing);
       expect(find.textContaining('Tap Start in the toolbar'), findsNothing);
@@ -496,14 +501,34 @@ void main() {
       await tester.runAsync(() => seed(started: true));
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
-      expect(tester.widget<IconButton>(finish).onPressed, isNotNull);
+      final semantics = tester.ensureSemantics();
+      final finishNode = tester.getSemantics(
+        find.bySemanticsLabel('Finish workout'),
+      );
       expect(
-        tester.widget<IconButton>(finish).color,
+        finishNode.getSemanticsData().hasAction(ui.SemanticsAction.tap),
+        isTrue,
+      );
+      expect(
+        finishNode.getSemanticsData().flagsCollection.isEnabled,
+        ui.Tristate.isTrue,
+      );
+      final finishButton = tester.widget<TextButton>(finish);
+      expect(finishButton.onPressed, isNotNull);
+      expect(
+        finishButton.style!.foregroundColor!.resolve({}),
         accentColor(tester.element(finish)),
       );
-      await tester.tap(finish);
+      // Labelled, so it can't be read as a generic save.
+      expect(
+        find.descendant(of: finish, matching: find.text('Finish')),
+        findsOneWidget,
+      );
+      // Activate the action the same way a screen reader does.
+      finishNode.owner!.performAction(finishNode.id, ui.SemanticsAction.tap);
       await tester.pumpAndSettle();
       expect(find.text('Log workout?'), findsOneWidget);
+      semantics.dispose();
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(

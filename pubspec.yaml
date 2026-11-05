@@ -43,3 +43,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  # Manrope and JetBrains Mono ship with the app, so the first launch in a
+  # gym with no signal already has the right type and nothing is fetched from
+  # Google at runtime. google_fonts finds them by file name; main() turns its
+  # network fallback off.
+  assets:
+    - assets/google_fonts/

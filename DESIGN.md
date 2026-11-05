@@ -39,7 +39,7 @@ recognizable details rather than a theme that users need to understand. The
 | Settings storage | SharedPreferences |
 | Charts | Flutter canvas and custom chart widgets |
 | Auth and cloud sync | Supabase |
-| Typography | Readable app typography via `google_fonts` |
+| Typography | Manrope and JetBrains Mono, bundled in `assets/google_fonts/` and resolved by `google_fonts` with runtime fetching off |
 
 ## Runtime Architecture
 
@@ -314,6 +314,12 @@ the current screen, and short accidental drags do not switch tabs. Swipes use
 the same tab-selection behavior as navigation taps. The Coach overlay keeps
 its own gestures; main-tab swiping resumes when it closes.
 
+Android's predictive back gesture is enabled
+(`enableOnBackInvokedCallback`), so a back swipe previews the page underneath
+on Android 13+; screens that guard unsaved work still intercept it through
+`PopScope`. Starting a workout from Home's Next up card flies the plan name
+into the workout header (`PlanTitleHero`); other entry points open normally.
+
 The selected bottom tab is marked by a short accent rule on the top hairline as
 well as by colour and weight, so selection never rests on colour alone. Moving
 to another tab gives a selection haptic and a brief fade-in (none under reduced
@@ -464,6 +470,30 @@ signature:
   row, set apart by a rule and the error colour. In Manage, the drag grip
   leads each card and *Plan actions* trails it, so the two targets sit at
   opposite ends.
+- The workout marks records while you lift. A set whose entered weight
+  beats the heaviest weight logged for that exercise before this workout (the
+  same check Finish makes) gets the PR badge, which pops in, and a heavy haptic
+  when the entry closes. A set that goes past its Previous set (more weight, or
+  more reps at the same weight) shows an accent arrow beside Previous.
+  Exercises with no history are never marked.
+- Finish in the workout header is labelled, not a bare check; large text on a
+  narrow phone falls back to the icon. Finish and the compact timer controls
+  expose their enabled state and tap action to screen readers. Logging opens
+  an open summary on the page ground, without a card or enclosing border. The
+  date and weekly workout count lead into the plan name and block/week. Volume
+  lifted is the main figure, followed by comparison with the most recent
+  earlier session of the same plan; Duration, Sets and Reps sit below a rule
+  and wrap according to the measured text width. Compact spacing keeps a
+  typical summary on one phone screen; accessibility text and long record
+  lists remain scrollable. Personal records show the exercise, new
+  weight/reps and the weight replaced. First-time exercises are counted
+  separately. The wordmark signs the summary at the bottom. Figures show final
+  values immediately, so Share always exports accurate totals. The header's
+  Share action captures the complete summary as an opaque PNG after pending
+  paint finishes; Done returns to the log.
+- Haptics are named for the moment (`lib/utils/haptics.dart`): a medium impact
+  when the workout clock starts, a heavy one for a new record or a logged
+  workout. Keypad keys keep their own selection clicks.
 - Create and Edit plan share the workout log's open exercise sections, hairline
   dividers, filled weight/rep cells, and optional RPE controls. Exercises start
   expanded and can be collapsed or reordered using the trailing grip. Add set
@@ -506,9 +536,16 @@ signature:
   its chart, totals, weekly workload, and gains have room to breathe.
   Sessions belong to blocks through their training week. Records keeps the
   chronological, expandable achievements and reveals older entries on demand.
+  Headline figures roll to a new value (`RollingFigure`): up when it grew,
+  down when it fell, and plain under reduced motion. Signed changes use a true
+  minus sign (`formatSignedChange`), and a change that rounds to zero has none.
   The four view controls remain visible while content scrolls; text can grow
   and scroll naturally on small screens. Returning to Stats resets its vertical
   offset. See [statistics design](docs/statistics-design.md) for references.
+- Home's weekly strip gives each day a full 48dp target without gaps, so all
+  seven fit a 390dp phone; bars are inset inside their targets and grow in
+  when the week changes. Today is marked by its bold letter and a small accent
+  dot under it, the same dot the workout uses for the week being trained now.
 - Home labels the rotation bar with “Workout N of M”. The same workout
   numbers appear in the plan list's coloured markers. Muscle groups sit on
   their own line in the launcher; exercise, set, and duration values wrap as

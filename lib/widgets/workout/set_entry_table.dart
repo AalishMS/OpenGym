@@ -22,15 +22,25 @@ class SetEntry {
   final String? annotation;
   final int? rpe;
 
+  /// The entered values are heavier than anything logged for this exercise
+  /// before, so the live log marks the set as a record while you lift.
+  final bool record;
+
+  /// The entered values go past the set shown in Previous.
+  final bool beatsPrevious;
+
   const SetEntry({
     required this.weight,
     required this.reps,
     this.previous,
     this.annotation,
     this.rpe,
+    this.record = false,
+    this.beatsPrevious = false,
   });
 
   bool get isPrMarker {
+    if (record) return true;
     final note = annotation?.trim().toLowerCase().replaceAll(
       RegExp(r'[.!]+$'),
       '',
@@ -644,6 +654,8 @@ class _SetEntryTableState extends State<SetEntryTable> {
                               reps: '${sets[index].reps}',
                               rpe: sets[index].rpe,
                               isPrMarker: sets[index].isPrMarker,
+                              liveRecord: sets[index].record,
+                              beatsPrevious: sets[index].beatsPrevious,
                               onDetails:
                                   onDetails != null && onDelete != null
                                       ? () {
@@ -875,6 +887,10 @@ class _EntryRow extends StatelessWidget {
   final String reps;
   final int? rpe;
   final bool isPrMarker;
+
+  /// The PR mark was earned by values entered just now, so it pops in.
+  final bool liveRecord;
+  final bool beatsPrevious;
   final VoidCallback? onDetails;
   final VoidCallback onWeight;
   final VoidCallback onReps;
@@ -893,6 +909,8 @@ class _EntryRow extends StatelessWidget {
     required this.reps,
     this.rpe,
     this.isPrMarker = false,
+    this.liveRecord = false,
+    this.beatsPrevious = false,
     this.onDetails,
     required this.onWeight,
     required this.onReps,
@@ -907,19 +925,7 @@ class _EntryRow extends StatelessWidget {
   Widget build(BuildContext context) => _columns(
     [
       _setNumber(context),
-      Semantics(
-        label: 'Previous set ${index + 1}: ${previous ?? 'no history'}',
-        child: Text(
-          previous ?? '—',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-            fontSize: continuousLog ? 13 : 16,
-            fontWeight: continuousLog ? FontWeight.w400 : FontWeight.w600,
-            color: textSecondaryColor(context),
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-        ),
-      ),
+      _previousCell(context),
       _valueFieldTarget(
         _field(context, weight, 'Kg', onWeight, _SetField.weight),
       ),
@@ -932,6 +938,43 @@ class _EntryRow extends StatelessWidget {
     numberIsAction: onDetails != null,
     showPrevious: showPrevious,
   );
+
+  Widget _previousCell(BuildContext context) {
+    final text = Text(
+      previous ?? '—',
+      textAlign: TextAlign.center,
+      style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+        fontSize: continuousLog ? 13 : 16,
+        fontWeight: continuousLog ? FontWeight.w400 : FontWeight.w600,
+        color: textSecondaryColor(context),
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    );
+    final improved = beatsPrevious && previous != null;
+    final label = 'Previous set ${index + 1}: ${previous ?? 'no history'}';
+    if (!improved) return Semantics(label: label, child: text);
+    // An accent arrow beside the old set says this one went past it.
+    return Semantics(
+      label: '$label, beaten',
+      excludeSemantics: true,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.arrow_upward_rounded,
+              key: ValueKey('beats-previous-$index'),
+              size: MediaQuery.textScalerOf(context).scale(13),
+              color: accentColor(context),
+            ),
+            const SizedBox(width: AppSpacing.xxs),
+            text,
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _setNumber(BuildContext context) {
     final number = Column(
@@ -950,20 +993,24 @@ class _EntryRow extends StatelessWidget {
           Semantics(
             label: 'Personal record',
             excludeSemantics: true,
-            child: Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: AppSpacing.xs,
-                vertical: AppSpacing.xxs,
-              ),
-              decoration: BoxDecoration(
-                color: accentFillColor(context),
-                borderRadius: AppRadius.badge,
-              ),
-              child: Text(
-                'PR',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: onAccentColor(context),
-                  fontWeight: FontWeight.w700,
+            child: _PopIn(
+              key: ValueKey('live-record-$index'),
+              enabled: liveRecord,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.xs,
+                  vertical: AppSpacing.xxs,
+                ),
+                decoration: BoxDecoration(
+                  color: accentFillColor(context),
+                  borderRadius: AppRadius.badge,
+                ),
+                child: Text(
+                  'PR',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: onAccentColor(context),
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
@@ -1112,6 +1159,29 @@ class _EntryRow extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Scales its child in once when it first appears, for a mark earned just
+/// now. Disabled, or under reduced motion, the child simply shows.
+class _PopIn extends StatelessWidget {
+  final bool enabled;
+  final Widget child;
+
+  const _PopIn({super.key, required this.enabled, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled || MediaQuery.disableAnimationsOf(context)) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 360),
+      curve: Curves.easeOutBack,
+      builder:
+          (context, scale, child) =>
+              Transform.scale(scale: scale, child: child),
+      child: child,
+    );
+  }
 }
 
 class _SetKeyboard extends StatefulWidget {

@@ -12,6 +12,7 @@ import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
+import '../rolling_figure.dart';
 import 'trend_line.dart';
 import 'workout_heatmap.dart';
 
@@ -136,9 +137,9 @@ class _TrainingOverviewState extends State<TrainingOverview> {
                 style: theme.textTheme.bodySmall,
               ),
               const SizedBox(height: AppSpacing.xs),
-              Text(
+              RollingFigure(
                 formatExactVolume(week.volumeLoad, widget.weightUnit),
-                key: const ValueKey('weekly-volume-value'),
+                textKey: const ValueKey('weekly-volume-value'),
                 style: AppTypography.figures(
                   fontSize: 40,
                   height: 1.15,
@@ -158,7 +159,7 @@ class _TrainingOverviewState extends State<TrainingOverview> {
                     Text('Week in progress', style: theme.textTheme.bodySmall)
                   else if (change != null)
                     Text(
-                      '${change > 0 ? '+' : ''}${change.round()}% vs previous week',
+                      '${formatSignedChange(change, (v) => '${v.round()}%')} vs previous week',
                       style: AppTypography.figures(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -375,7 +376,7 @@ class StatisticsFigures extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  RollingFigure(
                     value,
                     style: AppTypography.figures(
                       fontSize: 22,
