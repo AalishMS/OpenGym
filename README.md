@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Flutter-3.5%2B-02569B?logo=flutter&logoColor=white" alt="Flutter">
+  <img src="https://img.shields.io/badge/Dart-3.7%2B-02569B?logo=flutter&logoColor=white" alt="Dart SDK 3.7 or later">
   <img src="https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20Web%20%7C%20Desktop-lightgrey" alt="Platforms">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
   <img src="https://img.shields.io/badge/state%20management-Provider-blueviolet" alt="Provider">
@@ -41,91 +41,26 @@ workspaces, and workout progress.
 
 ## Screenshots
 
-These refreshed screenshots show the current app with example workout data. They
-were captured from the web build, without mobile status or navigation bars.
+Screens below are rendered from the current Flutter widgets with example workout
+data, without device status or navigation bars. The light and dark captures use
+the same layouts and theme system as the app.
 
 <table>
   <tr>
-    <td align="center">
-      <strong>Workout plans</strong><br>
-      <img src="screenshots/home.png" width="300" alt="OpenGym workout plans screen">
-    </td>
-    <td align="center">
-      <strong>Workout logging</strong><br>
-      <img src="screenshots/workout.png" width="300" alt="OpenGym active workout screen">
-    </td>
-    <td align="center">
-      <strong>Fast set entry</strong><br>
-      <img src="screenshots/workout_keypad.png" width="300" alt="OpenGym workout keypad for entering a set">
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <strong>Workout history</strong><br>
-      <img src="screenshots/history.png" width="300" alt="OpenGym workout history with personal records">
-    </td>
-    <td align="center">
-      <strong>Weekly training</strong><br>
-      <img src="screenshots/statistics.png" width="300" alt="OpenGym weekly training volume chart">
-    </td>
-    <td align="center">
-      <strong>Consistency</strong><br>
-      <img src="screenshots/statistics_2.png" width="300" alt="OpenGym workout heatmap and exercise progress list">
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <strong>Exercise progress</strong><br>
-      <img src="screenshots/statistics_3.png" width="300" alt="OpenGym exercise progress chart">
-    </td>
-    <td align="center">
-      <strong>Appearance and preferences</strong><br>
-      <img src="screenshots/settings.png" width="300" alt="OpenGym settings screen">
-    </td>
-    <td align="center">
-      <strong>Training blocks</strong><br>
-      <img src="screenshots/block_menu.png" width="300" alt="OpenGym training block menu for switching, creating and reordering blocks">
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <strong>Create a block</strong><br>
-      <img src="screenshots/block_create.png" width="300" alt="OpenGym create block dialog with name and week count">
-    </td>
-    <td></td>
-    <td></td>
+    <td align="center"><strong>Workout plans</strong><br><img src="screenshots/home.png" width="280" alt="Home with workout rotation, weekly summary, and workout plans"></td>
+    <td align="center"><strong>Workout logging</strong><br><img src="screenshots/workout.png" width="280" alt="Workout log with weight, reps, and set controls"></td>
+    <td align="center"><strong>Workout history</strong><br><img src="screenshots/history.png" width="280" alt="Workout history grouped by month with training volume and records"></td>
   </tr>
 </table>
 
 <details>
 <summary><strong>Dark mode</strong></summary>
-<br>
+
 <table>
   <tr>
-    <td align="center">
-      <strong>Plans</strong><br>
-      <img src="screenshots/home_dark.png" width="200" alt="OpenGym workout plans screen in dark mode">
-    </td>
-    <td align="center">
-      <strong>Set entry</strong><br>
-      <img src="screenshots/workout_keypad_dark.png" width="200" alt="OpenGym workout keypad in dark mode">
-    </td>
-    <td align="center">
-      <strong>Statistics</strong><br>
-      <img src="screenshots/statistics_dark.png" width="200" alt="OpenGym statistics screen in dark mode">
-    </td>
-    <td align="center">
-      <strong>Training blocks</strong><br>
-      <img src="screenshots/block_menu_dark.png" width="200" alt="OpenGym training block menu in dark mode">
-    </td>
-    <td align="center">
-      <strong>Create a block</strong><br>
-      <img src="screenshots/block_create_dark.png" width="200" alt="OpenGym create block dialog in dark mode">
-    </td>
-    <td align="center">
-      <strong>Settings</strong><br>
-      <img src="screenshots/settings_dark.png" width="200" alt="OpenGym settings screen in dark mode">
-    </td>
+    <td align="center"><strong>Workout plans</strong><br><img src="screenshots/home_dark.png" width="280" alt="Workout plans in dark mode"></td>
+    <td align="center"><strong>Workout logging</strong><br><img src="screenshots/workout_dark.png" width="280" alt="Workout logging in dark mode"></td>
+    <td align="center"><strong>Workout history</strong><br><img src="screenshots/history_dark.png" width="280" alt="Workout history in dark mode"></td>
   </tr>
 </table>
 
@@ -135,39 +70,39 @@ were captured from the web build, without mobile status or navigation bars.
 
 ## Features
 
-### Workout Tracking
-- **Plan Management** : Create, edit, copy, and delete custom workout plans
-- **65+ Pre-built Exercises** : Across 6 muscle categories (Chest, Back, Shoulders, Arms, Legs, Core) + custom exercise entry
-- **Set Logging** : Track weight (kg/lbs), reps, RPE (1-10), and notes per set
-- **Week-Based Periodization** : Organize sessions by week with auto-copy from previous week
-- **Auto-Save** : Workouts save on every screen change
-- **PR Detection** : Flags new personal records when you log a heavier weight
-- **Progression Suggestions** : Double-progression logic recommends the next weight/reps
-- **Auto-Fill** : Pre-fills weights from your last session for faster logging
+### Plan and train
 
-### Statistics & History
-- **Workout Frequency Chart** : Weekly bar chart showing your consistency (last 8 weeks)
-- **Exercise Progression Chart** : Line chart tracking max weight over time per exercise
-- **Summary Stats** : Total workouts, weekly count, PRs tracked
-- **Full History** : Expandable session cards with edit/delete for past workouts
+- **Split workspaces** keep separate programs, plans, and workout history.
+- **Workout presets** provide ready-made programs you can copy and customize.
+- **Training blocks and weeks** organize progression, with each workout advancing independently and future weeks allocated as needed.
+- **Set logging** tracks weight, reps, optional RPE, and notes, with a compact keypad and previous-session values.
+- **Workout timer** supports pause and resume, with Android notification controls.
+- **Exercise library** includes built-in and custom exercises with stable identities for tracking progress across renames.
 
-### Customization
-- **Dark / Light / System Theme** : Automatic or manual theming
-- **12 Accent Colors** : Choose a color that makes the app feel like yours
-- **Weight Units** : Switch between kg and lbs on the fly
-- **High Refresh Rate** : 90/120Hz display support
-- **Focused Visual Design** : Clear information, quiet surfaces, and restrained
-  plan-color details
+### Review progress
 
-### Sync
-- **Supabase Backend** : Email auth, Postgres tables, and row-level security scoped to your account
-- **Automatic Push/Pull** : Changes sync on save and when the app returns to the foreground; edits made offline drain on reconnect
-- **Last-Write-Wins** : Edits from two devices resolve to the later timestamp
+- **History** groups sessions by month, with volume, sets, records, and editable workout details.
+- **Overview** charts weekly volume and training days, with exercise filtering and exact weekly totals.
+- **Strength** tracks individual lifts across selectable periods and measures.
+- **Blocks** compares workload and strength gains across training blocks.
+- **Records** keeps a chronological log of exercise achievements.
 
-### Data
-- **On-Device First** : All records live in local Hive storage, so the app keeps working without a connection
-- **Sample Data** : Load 5 sample plans with 15 sessions across 5 weeks to explore the app
-- **Export / Clear** : Full control over your data
+### Make it yours
+
+- Light, dark, and system themes with **eight accent colors**.
+- Weight display in kilograms or pounds.
+- Optional **AI Coach** for signed-in users: chat about plans, review proposed changes, and apply only the changes you choose. See [Coach documentation](docs/coach.md) for data sharing and setup details.
+
+### Keep your data
+
+- **Offline first:** Hive stores training data on the device; an account is optional.
+- **Account sync:** Supabase email authentication and account-scoped sync, with offline changes queued for reconnect and last-write-wins conflict resolution.
+- **Backup and restore:** export or import training data and settings.
+- **Android updates:** signed APK releases with in-app update checks.
+- Debug builds offer sample data for exploring the app; loading it replaces workouts in the active split.
+
+See [DESIGN.md](DESIGN.md) for architecture and data lifecycle details, and
+[split workspaces](docs/splits.md) for program organization.
 
 ---
 
@@ -175,8 +110,8 @@ were captured from the web build, without mobile status or navigation bars.
 
 | Technology | Purpose |
 |---|---|
-| [Flutter](https://flutter.dev) 3.5+ | Cross-platform UI framework |
-| [Dart](https://dart.dev) 3.5+ | Programming language |
+| [Flutter](https://flutter.dev) | Cross-platform UI framework |
+| [Dart](https://dart.dev) 3.7+ | Programming language |
 | [Provider](https://pub.dev/packages/provider) | State management (ChangeNotifier) |
 | [Hive](https://pub.dev/packages/hive) | Local NoSQL database |
 | Flutter canvas | Lightweight dashboard sparkline rendering |
@@ -205,7 +140,7 @@ lib/
 
 ### Prerequisites
 
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) 3.5 or later
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) with Dart 3.7 or later
 - Dart SDK (included with Flutter)
 - Android Studio, Xcode, or VS Code (for your target platform)
 
@@ -234,6 +169,8 @@ flutter run
 ```bash
 flutter build apk --release
 ```
+Local release builds require the signing setup described below.
+
 APK output: `build/app/outputs/flutter-apk/app-release.apk`
 
 ### iOS
@@ -350,8 +287,8 @@ different application ID (`com.example.gymapp.offline`). Android treats the new
 release as a **different app**, so it installs alongside the old one and starts
 empty. Migrating once:
 
-1. In the old app: **Settings → EXPORT DATA**, and keep the file somewhere safe.
-2. Install the new APK, then **Settings → IMPORT DATA** and pick that file.
+1. In the old app: **Settings → Export data**, and keep the file somewhere safe.
+2. Install the new APK, then **Settings → Import data** and pick that file.
 3. Uninstall the old app.
 
 Do the export *first*. Uninstalling the old app deletes its local database.
@@ -361,7 +298,7 @@ Do the export *first*. Uninstalling the old app deletes its local database.
 ## Project Structure
 
 ```
-gymapp-offline/
+OpenGym/
 ├── lib/
 │   ├── main.dart                   # Startup: Hive, Supabase, providers
 │   ├── app_shell.dart              # Tab layout (Home / History / Stats / Settings)

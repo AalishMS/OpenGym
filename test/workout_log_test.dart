@@ -99,7 +99,7 @@ void main() {
         rootBundle.load('packages/lucide_icons_flutter/assets/lucide.ttf'),
       )).load();
       final manifest = const StandardMessageCodec().encodeMessage({
-        for (final weight in ['Regular', 'SemiBold', 'Bold'])
+        for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold', 'ExtraBold'])
           'Manrope-$weight.ttf': [
             {'asset': 'Manrope-$weight.ttf'},
           ],
