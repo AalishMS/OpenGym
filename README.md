@@ -41,26 +41,101 @@ workspaces, and workout progress.
 
 ## Screenshots
 
-Screens below are rendered from the current Flutter widgets with example workout
-data, without device status or navigation bars. The light and dark captures use
-the same layouts and theme system as the app.
+The gallery covers workout planning, logging, history, statistics, and settings.
+Statistics captures come from the current web build with example training history;
+no personal account data is shown.
 
 <table>
   <tr>
-    <td align="center"><strong>Workout plans</strong><br><img src="screenshots/home.png" width="280" alt="Home with workout rotation, weekly summary, and workout plans"></td>
-    <td align="center"><strong>Workout logging</strong><br><img src="screenshots/workout.png" width="280" alt="Workout log with weight, reps, and set controls"></td>
-    <td align="center"><strong>Workout history</strong><br><img src="screenshots/history.png" width="280" alt="Workout history grouped by month with training volume and records"></td>
+    <td align="center">
+      <strong>Workout plans</strong><br>
+      <img src="screenshots/home.png" width="300" alt="OpenGym workout plans screen">
+    </td>
+    <td align="center">
+      <strong>Workout logging</strong><br>
+      <img src="screenshots/workout.png" width="300" alt="OpenGym active workout screen">
+    </td>
+    <td align="center">
+      <strong>Fast set entry</strong><br>
+      <img src="screenshots/workout_keypad.png" width="300" alt="OpenGym workout keypad for entering a set">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <strong>Workout history</strong><br>
+      <img src="screenshots/history.png" width="300" alt="OpenGym workout history with personal records">
+    </td>
+    <td align="center">
+      <strong>Statistics overview</strong><br>
+      <img src="screenshots/statistics.png" width="300" alt="OpenGym statistics Overview with weekly volume and training calendar">
+    </td>
+    <td align="center">
+      <strong>Block progress</strong><br>
+      <img src="screenshots/statistics_2.png" width="300" alt="OpenGym training block workload and progress">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <strong>Exercise progress</strong><br>
+      <img src="screenshots/statistics_3.png" width="300" alt="OpenGym exercise progress chart">
+    </td>
+    <td align="center">
+      <strong>Appearance and preferences</strong><br>
+      <img src="screenshots/settings.png" width="300" alt="OpenGym settings screen">
+    </td>
+    <td align="center">
+      <strong>Training blocks</strong><br>
+      <img src="screenshots/block_menu.png" width="300" alt="OpenGym training block menu for switching, creating and reordering blocks">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <strong>Create a block</strong><br>
+      <img src="screenshots/block_create.png" width="300" alt="OpenGym create block dialog with name and week count">
+    </td>
+    <td align="center">
+      <strong>Personal records</strong><br>
+      <img src="screenshots/statistics_records.png" width="300" alt="OpenGym personal records with weights, reps, and workout dates">
+    </td>
+    <td></td>
   </tr>
 </table>
 
 <details>
 <summary><strong>Dark mode</strong></summary>
-
+<br>
 <table>
   <tr>
-    <td align="center"><strong>Workout plans</strong><br><img src="screenshots/home_dark.png" width="280" alt="Workout plans in dark mode"></td>
-    <td align="center"><strong>Workout logging</strong><br><img src="screenshots/workout_dark.png" width="280" alt="Workout logging in dark mode"></td>
-    <td align="center"><strong>Workout history</strong><br><img src="screenshots/history_dark.png" width="280" alt="Workout history in dark mode"></td>
+    <td align="center">
+      <strong>Plans</strong><br>
+      <img src="screenshots/home_dark.png" width="200" alt="OpenGym workout plans screen in dark mode">
+    </td>
+    <td align="center">
+      <strong>Set entry</strong><br>
+      <img src="screenshots/workout_keypad_dark.png" width="200" alt="OpenGym workout keypad in dark mode">
+    </td>
+    <td align="center">
+      <strong>Statistics</strong><br>
+      <img src="screenshots/statistics_dark.png" width="200" alt="OpenGym statistics screen in dark mode">
+    </td>
+    <td align="center">
+      <strong>Training blocks</strong><br>
+      <img src="screenshots/block_menu_dark.png" width="200" alt="OpenGym training block menu in dark mode">
+    </td>
+    <td align="center">
+      <strong>Create a block</strong><br>
+      <img src="screenshots/block_create_dark.png" width="200" alt="OpenGym create block dialog in dark mode">
+    </td>
+    <td align="center">
+      <strong>Settings</strong><br>
+      <img src="screenshots/settings_dark.png" width="200" alt="OpenGym settings screen in dark mode">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <strong>Personal records</strong><br>
+      <img src="screenshots/statistics_records_dark.png" width="200" alt="OpenGym personal records in dark mode">
+    </td>
   </tr>
 </table>
 
