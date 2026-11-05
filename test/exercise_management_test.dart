@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:gymapp/models/exercise.dart';
@@ -16,13 +15,14 @@ import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/exercise_picker_sheet.dart';
 
 import 'support/hive_test_harness.dart';
+import 'support/test_fonts.dart';
 
 void main() {
   final storage = HiveTestHarness();
   const customId = '11111111-1111-4111-8111-111111111111';
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
-    GoogleFonts.config.allowRuntimeFetching = false;
+    await loadTestFonts();
     await Supabase.initialize(
       url: 'https://example.supabase.co',
       publishableKey: 'test-key',
