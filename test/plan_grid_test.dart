@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/workout_plan.dart';
@@ -9,8 +8,12 @@ import 'package:gymapp/utils/plan_stats.dart';
 import 'package:gymapp/widgets/home/plan_card.dart';
 import 'package:gymapp/widgets/home/plan_grid.dart';
 
+import 'support/test_fonts.dart';
+
 void main() {
-  setUp(() => GoogleFonts.config.allowRuntimeFetching = false);
+  // Square test glyphs: the fonts now ship with the app, so without this
+  // google_fonts would find real Manrope and the measurements would move.
+  setUpAll(loadTestFonts);
 
   List<WorkoutPlan> plans() => [
     for (final name in ['Push', 'Pull', 'Legs', 'Upper', 'Lower'])

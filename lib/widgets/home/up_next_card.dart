@@ -10,9 +10,14 @@ import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import '../../utils/plan_stats.dart';
 import '../app_button.dart';
+import '../plan_title_hero.dart';
 
 /// A workout launcher; weekly activity lives outside this card.
 class UpNextCard extends StatelessWidget {
+  /// Shared with the workout header, so the plan name flies between them.
+  static String heroTagFor(WorkoutPlan plan) =>
+      'up-next-title-${plan.id ?? plan.name}';
+
   final WorkoutPlan plan;
   final int day;
   final int dayCount;
@@ -136,8 +141,9 @@ class UpNextCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
-              Text(
-                titleCase(plan.name),
+              PlanTitleHero(
+                tag: heroTagFor(plan),
+                text: titleCase(plan.name),
                 style: textTheme.headlineLarge?.copyWith(
                   color: textPrimaryColor(context),
                   fontWeight: FontWeight.w600,

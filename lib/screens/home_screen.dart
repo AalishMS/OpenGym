@@ -399,11 +399,13 @@ class _HomeScreenState extends State<HomeScreen> {
                             context,
                             WorkoutDestination.session(live!.id!),
                             requireIncomplete: true,
+                            heroTag: UpNextCard.heroTagFor(plans[index]),
                           )
                           : () => _openWorkout(
                             context,
                             plans[nextIndex],
                             nextIndex,
+                            heroTag: UpNextCard.heroTagFor(plans[nextIndex]),
                           ),
                 );
               },
@@ -508,8 +510,17 @@ class _HomeScreenState extends State<HomeScreen> {
     _movePlan(context, planId, plans[target].id!);
   }
 
-  void _openWorkout(BuildContext context, WorkoutPlan plan, int index) {
-    openWorkoutDestination(context, WorkoutDestination.active(plan.id!));
+  void _openWorkout(
+    BuildContext context,
+    WorkoutPlan plan,
+    int index, {
+    String? heroTag,
+  }) {
+    openWorkoutDestination(
+      context,
+      WorkoutDestination.active(plan.id!),
+      heroTag: heroTag,
+    );
   }
 
   /// `4 exercises · last trained yesterday`, for the plan menu's header.

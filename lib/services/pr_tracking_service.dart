@@ -4,12 +4,14 @@ import '../models/workout_session.dart';
 
 class PRResult {
   final String exerciseName;
+  final String? exerciseId;
   final double previousPR;
   final double newPR;
   final int reps;
 
   PRResult({
     required this.exerciseName,
+    this.exerciseId,
     required this.previousPR,
     required this.newPR,
     required this.reps,
@@ -63,6 +65,7 @@ class PRTrackingService {
         results.add(
           PRResult(
             exerciseName: candidate.exercise.name,
+            exerciseId: entry.key,
             previousPR: previous,
             newPR: candidate.weight,
             reps: candidate.reps,
