@@ -1,0 +1,4 @@
+interface:
+  display_name: "Refresh screenshots"
+  short_description: "Refresh OpenGym screenshots with realistic sample data"
+  default_prompt: "Use $refresh-screenshots to update the OpenGym screenshot gallery after the latest UI changes."
