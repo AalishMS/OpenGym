@@ -308,11 +308,15 @@ offline-only: it skips auth and opens the app shell directly.
 
 `AppShell` owns the main tab layout using an `IndexedStack` so tabs preserve
 their state. In the phone layout, horizontal swipes across the screen select
-the adjacent tab in Home, History, Stats, Settings order and update the bottom
-navigation. The first and last tabs do not wrap. Vertical scrolling stays within
-the current screen, and short accidental drags do not switch tabs. Swipes use
-the same tab-selection behavior as navigation taps. The Coach overlay keeps
-its own gestures; main-tab swiping resumes when it closes.
+the adjacent destination in Home, History, Statistics Overview, Strength,
+Blocks, Records, Settings order and update the bottom navigation. Statistics
+consumes swipes between its sections before leaving for History or Settings;
+swiping in from either side opens the nearest section. Without logged workouts,
+Statistics has a single empty screen. The first and last tabs do not wrap.
+Vertical scrolling stays within the current screen, and short accidental drags
+do not switch destinations. Charts keep their own horizontal browsing gestures.
+Main-tab changes use the same selection behavior as navigation taps. The Coach
+overlay keeps its own gestures; main-tab swiping resumes when it closes.
 
 The selected bottom tab is marked by a short accent rule on the top hairline as
 well as by colour and weight, so selection never rests on colour alone. Moving

@@ -289,6 +289,125 @@ void main() {
     expect(find.text('Manage'), findsOneWidget);
   });
 
+  testWidgets('swipes traverse Statistics sections before adjacent tabs', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      await seedHomeTraining();
+      final sessions = Hive.box<WorkoutSession>(HiveService.sessionsBox);
+      final older = sessions
+          .get('shell-session')!
+          .copyWith(
+            id: 'shell-session-older',
+            date: DateTime.now().subtract(const Duration(days: 84)),
+          );
+      await sessions.put(older.id, older);
+    });
+    await tester.pumpWidget(shellHost(390));
+    await tester.pumpAndSettle();
+
+    int selectedTab() =>
+        tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex;
+
+    void expectSection(String label) {
+      expect(selectedTab(), 2);
+      final tab = find.byKey(ValueKey('statistics-tab-$label'));
+      final semantics = tester.widget<Semantics>(
+        find.ancestor(of: tab, matching: find.byType(Semantics)).first,
+      );
+      expect(semantics.properties.selected, isTrue, reason: label);
+    }
+
+    Future<void> swipe(double dx) async {
+      // The header is outside the charts that own horizontal browsing.
+      final start = Offset(tester.getCenter(find.byType(AppShell)).dx, 30);
+      await tester.dragFrom(start, Offset(dx, 0));
+      await tester.pumpAndSettle();
+    }
+
+    await swipe(-250);
+    expect(selectedTab(), 1);
+    for (final section in ['Overview', 'Strength', 'Blocks', 'Records']) {
+      await swipe(-250);
+      expectSection(section);
+    }
+    await swipe(-250);
+    expect(selectedTab(), 3);
+    for (final section in ['Records', 'Blocks', 'Strength', 'Overview']) {
+      await swipe(250);
+      expectSection(section);
+    }
+    await swipe(250);
+    expect(selectedTab(), 1);
+
+    // Section taps change where the next swipe goes.
+    await swipe(-250);
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Blocks')));
+    await tester.pumpAndSettle();
+    await swipe(250);
+    expectSection('Strength');
+
+    // A body swipe also changes sections and resets the vertical offset.
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Overview')));
+    await tester.pumpAndSettle();
+    final scroll =
+        tester
+            .widget<SingleChildScrollView>(
+              find.byKey(const ValueKey('statistics-scroll')),
+            )
+            .controller!;
+    scroll.jumpTo(300);
+    await tester.pump();
+    expect(scroll.offset, greaterThan(0));
+    await tester.dragFrom(
+      tester.getCenter(find.byType(AppShell)),
+      const Offset(-250, 0),
+    );
+    await tester.pumpAndSettle();
+    expectSection('Strength');
+    expect(scroll.offset, 0);
+
+    // Re-entering from either side starts at its adjacent section, even if
+    // a different section was selected when Stats was last visible.
+    Future<void> openTab(String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await openTab('Settings');
+    await swipe(250);
+    expectSection('Records');
+    await openTab('History');
+    await swipe(-250);
+    expectSection('Overview');
+
+    // Scrolling the weekly plot stays within Overview.
+    await tester.drag(
+      find.byKey(const ValueKey('training-timeline')),
+      const Offset(200, 0),
+    );
+    await tester.pumpAndSettle();
+    expectSection('Overview');
+
+    // Diagonal scrolls and short drags keep the current section.
+    final start = tester.getCenter(find.byType(AppShell));
+    await tester.dragFrom(start, const Offset(-150, -120));
+    await tester.pumpAndSettle();
+    expectSection('Overview');
+    await tester.timedDragFrom(
+      start,
+      const Offset(-45, 0),
+      const Duration(milliseconds: 600),
+    );
+    await tester.pumpAndSettle();
+    expectSection('Overview');
+  });
+
   testWidgets(
     'weekly summary opens statistics and resets its scroll on each visit',
     (tester) async {

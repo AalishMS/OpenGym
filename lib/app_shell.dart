@@ -48,6 +48,7 @@ class _AppShellState extends State<AppShell>
   int _weeklyTrainingRequest = 0;
   int _statsVisit = 0;
   int _homeResetRequest = 0;
+  final GlobalKey<StatsScreenState> _statsKey = GlobalKey<StatsScreenState>();
 
   /// Tapping the tab that is already showing scrolls it back to the top.
   int _historyTopRequest = 0;
@@ -119,6 +120,7 @@ class _AppShellState extends State<AppShell>
     ),
     HistoryScreen(scrollToTopRequest: _historyTopRequest),
     StatsScreen(
+      key: _statsKey,
       weeklyTrainingRequest: _weeklyTrainingRequest,
       visitRequest: _statsVisit,
       scrollToTopRequest: _statsTopRequest,
@@ -323,7 +325,18 @@ class _AppShellState extends State<AppShell>
         Directionality.of(context) == TextDirection.ltr
             ? distance < 0
             : distance > 0;
+    if (showing == 3 &&
+        (_statsKey.currentState?.handleSectionSwipe(forward: forward) ??
+            false)) {
+      return;
+    }
     final next = showing + (forward ? 1 : -1);
+    if (next == 3) {
+      _statsKey.currentState?.handleSectionSwipe(
+        forward: forward,
+        entering: true,
+      );
+    }
     if (next >= 1 && next <= 4) _selectTab(next, showing: showing);
   }
 

@@ -46,10 +46,10 @@ class StatsScreen extends StatefulWidget {
   });
 
   @override
-  State<StatsScreen> createState() => _StatsScreenState();
+  State<StatsScreen> createState() => StatsScreenState();
 }
 
-class _StatsScreenState extends State<StatsScreen> {
+class StatsScreenState extends State<StatsScreen> {
   static const _analytics = StatisticsAnalyticsService();
   final ScrollController _scrollController = ScrollController();
   _StatisticsView _view = _StatisticsView.overview;
@@ -60,6 +60,7 @@ class _StatsScreenState extends State<StatsScreen> {
   String? _progressExercise;
   String? _lastSplit;
   int _recordLimit = 12;
+  bool _hasSections = false;
 
   /// Home's weekly shortcut asks for the week in progress; any other entry
   /// into Stats returns the Overview to the last complete week.
@@ -91,6 +92,21 @@ class _StatsScreenState extends State<StatsScreen> {
   void _selectView(_StatisticsView view) {
     setState(() => _view = view);
     _resetScroll();
+  }
+
+  /// Handles a shell swipe before it moves to an adjacent main tab.
+  /// Entry from History starts at Overview; entry from Settings at Records.
+  /// Returns false at a boundary or when the empty screen has no sections.
+  bool handleSectionSwipe({required bool forward, bool entering = false}) {
+    if (!_hasSections) return false;
+    const views = _StatisticsView.values;
+    final next =
+        entering
+            ? (forward ? 0 : views.length - 1)
+            : _view.index + (forward ? 1 : -1);
+    if (next < 0 || next >= views.length) return false;
+    _selectView(views[next]);
+    return true;
   }
 
   @override
@@ -199,6 +215,7 @@ class _StatsScreenState extends State<StatsScreen> {
       context.watch<WorkoutSessionProvider>().sessions,
       splitId: splitId,
     );
+    _hasSections = sessions.isNotEmpty;
     if (_lastSplit != splitId) {
       _lastSplit = splitId;
       _view = _StatisticsView.overview;
