@@ -48,6 +48,13 @@ void main() {
   });
 
   setUp(() async {
+    // AppShell restores the native timer after its first frame. Mock the
+    // channel in every test, including when runAsync lets that work complete.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('com.aalishms.opengym/workout_timer_notification'),
+          (_) async => null,
+        );
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
   });
@@ -666,20 +673,6 @@ void main() {
     testWidgets('shows a running workout above the bar and ticks', (
       tester,
     ) async {
-      // Real time passes below, so the shell's native timer restore runs.
-      const timerChannel = MethodChannel(
-        'com.aalishms.opengym/workout_timer_notification',
-      );
-      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-        timerChannel,
-        (_) async => null,
-      );
-      addTearDown(
-        () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
-          timerChannel,
-          null,
-        ),
-      );
       await tester.runAsync(() => seedLive(running: true));
       await tester.pumpWidget(shellHost(390));
       await tester.pump();
