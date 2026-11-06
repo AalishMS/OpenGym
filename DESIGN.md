@@ -516,6 +516,10 @@ signature:
   in. Danger zone is always last. *Load sample data* replaces the active
   split's workouts, so it is a development tool. It only appears in debug
   builds (`SettingsScreen.showSampleData`, which defaults to `kDebugMode`).
+  The sample is about three months of a five-day week (Push, Pull, Legs,
+  Upper, Full body): Foundation and Hypertrophy blocks ending in deloads, a
+  week off, then a Strength block in progress where the plans sit on
+  different lazily allocated weeks, so every plan has Previous sets.
 - Stats uses four persistent views: Overview, Strength, Blocks, and Records.
   Charts and figures sit directly on the page, without a vertical feed of
   panels. Overview pairs a weekly volume timeline with the selected week's
