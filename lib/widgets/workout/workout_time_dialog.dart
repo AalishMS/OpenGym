@@ -109,9 +109,15 @@ class _WorkoutTimeDialogState extends State<_WorkoutTimeDialog> {
     final hours = int.tryParse(_hours.text.trim()) ?? 0;
     final minutes = int.tryParse(_minutes.text.trim()) ?? 0;
     final total = hours * 60 + minutes;
+    // An untouched duration keeps its stored value, even an unknown or
+    // sub-minute one, so correcting only the date never forces a new duration.
+    final durationUnchanged =
+        hours == _initialHours && minutes == _initialMinutes;
     final String? error =
         _start.isAfter(_now)
             ? "A workout can't start in the future."
+            : durationUnchanged
+            ? null
             : total < 1
             ? 'Enter a duration of at least 1 minute.'
             : total >= 24 * 60
@@ -121,8 +127,6 @@ class _WorkoutTimeDialogState extends State<_WorkoutTimeDialog> {
       setState(() => _error = error);
       return;
     }
-    final durationUnchanged =
-        hours == _initialHours && minutes == _initialMinutes;
     final duration = durationUnchanged ? widget.durationSeconds : total * 60;
     if (_start == widget.start && duration == widget.durationSeconds) {
       Navigator.pop(context);
@@ -227,7 +231,10 @@ class _WorkoutTimeDialogState extends State<_WorkoutTimeDialog> {
         ),
       ),
       actions: [
-        AppButton.text(label: 'Cancel', onPressed: () => Navigator.pop(context)),
+        AppButton.text(
+          label: 'Cancel',
+          onPressed: () => Navigator.pop(context),
+        ),
         AppButton.primary(label: 'Save', onPressed: _save),
       ],
     );

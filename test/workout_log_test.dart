@@ -33,6 +33,7 @@ import 'support/test_fonts.dart';
 void main() {
   final harness = HiveTestHarness();
   final writes = <WorkoutSession>[];
+  var failWrites = false;
   void workoutTest(String name, Future<void> Function(WidgetTester) body) =>
       testWidgets(name, (tester) async {
         try {
@@ -43,6 +44,7 @@ void main() {
       });
   setUp(() async {
     writes.clear();
+    failWrites = false;
     await harness.open();
   });
   final plan = WorkoutPlan(
@@ -164,7 +166,7 @@ void main() {
             ]),
       ),
       ChangeNotifierProvider<WorkoutSessionProvider>(
-        create: (_) => _Sessions(writes),
+        create: (_) => _Sessions(writes, () => failWrites),
       ),
     ],
     child: MaterialApp(
@@ -445,9 +447,7 @@ void main() {
     }
   });
 
-  workoutTest('completed log edits in place and stays logged', (
-    tester,
-  ) async {
+  workoutTest('completed log edits in place and stays logged', (tester) async {
     await tester.runAsync(() => seed(completed: true));
     await tester.pumpWidget(host());
     await tester.pumpAndSettle();
@@ -487,7 +487,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('6 Sep 2026'), findsOneWidget);
 
-    // Nothing entered yet: a logged workout needs a real duration.
+    await tester.enterText(
+      find.byKey(const ValueKey('workout-duration-hours')),
+      '24',
+    );
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('workout-time-error')), findsOneWidget);
@@ -508,6 +511,84 @@ void main() {
     expect(saved.durationSeconds, 65 * 60);
     expect(saved.date, DateTime(2026, 9, 6));
     expect(find.textContaining('1:05:00'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('changing only the date keeps a sub-minute duration', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      await seed(completed: true);
+      final box = Hive.box<WorkoutSession>(HiveService.sessionsBox);
+      await box.put(
+        'week-6',
+        box
+            .get('week-6')!
+            .copyWith(
+              startedAt: DateTime(2026, 9, 6, 18),
+              date: DateTime(2026, 9, 6, 18),
+              durationSeconds: 42,
+            ),
+      );
+    });
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Workout actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit date and duration'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('workout-date')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CalendarDatePicker),
+        matching: find.text('4'),
+      ),
+    );
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await pumpWithStorage(tester);
+    expect(find.byKey(const ValueKey('workout-time-error')), findsNothing);
+    final saved = HiveService.getSessionById('week-6')!;
+    expect(saved.date, DateTime(2026, 9, 4, 18));
+    expect(saved.startedAt, DateTime(2026, 9, 4, 18));
+    expect(saved.durationSeconds, 42);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('unsaved edits to a logged workout leave through saving', (
+    tester,
+  ) async {
+    await tester.runAsync(() => seed(completed: true));
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+    bool canPop() =>
+        tester
+            .widget<PopScope<Object?>>(
+              find
+                  .descendant(
+                    of: find.byType(WorkoutScreen),
+                    matching: find.byWidgetPredicate((w) => w is PopScope),
+                  )
+                  .first,
+            )
+            .canPop;
+    expect(canPop(), isTrue);
+    failWrites = true;
+    await tester.tap(find.text('Add set').first);
+    await pumpWithStorage(tester);
+    // The failed autosave keeps the edit, so Back must retry it, not pop.
+    expect(find.text('Retry'), findsOneWidget);
+    expect(canPop(), isFalse);
+    failWrites = false;
+    await tester.tap(find.text('Retry'));
+    await pumpWithStorage(tester);
+    expect(canPop(), isTrue);
+    expect(
+      HiveService.getSessionById('week-6')!.exercises.first.sets,
+      hasLength(5),
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -605,10 +686,12 @@ class _Plans extends WorkoutPlanProvider {
 
 class _Sessions extends WorkoutSessionProvider {
   final List<WorkoutSession> writes;
-  _Sessions(this.writes);
+  final bool Function() fail;
+  _Sessions(this.writes, this.fail);
 
   @override
   Future<void> upsertSession(WorkoutSession session) async {
+    if (fail()) throw StateError('disk full');
     await super.upsertSession(session);
     writes.add(session);
   }

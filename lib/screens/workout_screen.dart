@@ -1709,8 +1709,11 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         .clamp(kToolbarHeight + AppSpacing.sm, double.infinity);
 
     return PopScope(
+      // A logged workout can be edited too, so unsaved edits (a failed
+      // autosave, an entry still open) leave through the save flow.
       canPop:
           session.isCompleted &&
+          !_hasUnsavedChanges &&
           !_isNavigating &&
           !_isSaving &&
           _timerAction == null,
@@ -2141,9 +2144,7 @@ class _FinishButton extends StatelessWidget {
       disabledForegroundColor: textSecondaryColor(context),
       minimumSize: const Size(48, 48),
       tapTargetSize: MaterialTapTargetSize.padded,
-      padding: EdgeInsets.symmetric(
-        horizontal: compact ? 0 : AppSpacing.md,
-      ),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 0 : AppSpacing.md),
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
     );
     const icon = Icon(LucideIcons.check, size: 18);
