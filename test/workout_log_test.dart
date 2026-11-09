@@ -445,26 +445,69 @@ void main() {
     }
   });
 
-  workoutTest('completed log hides editing and workout management controls', (
+  workoutTest('completed log edits in place and stays logged', (
     tester,
   ) async {
     await tester.runAsync(() => seed(completed: true));
     await tester.pumpWidget(host());
     await tester.pumpAndSettle();
-    expect(find.text('Add set'), findsNothing);
-    expect(find.text('Add exercise'), findsNothing);
-    expect(find.byTooltip('Exercise actions for Bench press'), findsNothing);
-    expect(find.byTooltip('Workout actions'), findsNothing);
+    // A logged workout has no clock to run, but everything else is editable.
     expect(find.bySemanticsLabel('Start workout'), findsNothing);
     expect(find.byTooltip('Finish workout'), findsNothing);
-    // Completed sessions deliberately ignore pointer events on the log.
-    await tester.longPress(
-      find.bySemanticsLabel('Set 1 Kg').first,
-      warnIfMissed: false,
-    );
+    expect(find.text('Add set'), findsWidgets);
+    expect(find.byTooltip('Exercise actions for Bench press'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Exercise actions for Bench press'));
     await tester.pumpAndSettle();
-    expect(find.text('Delete set'), findsNothing);
-    expect(find.text('70'), findsWidgets);
+    await tester.tap(find.text('Move down'));
+    await pumpWithStorage(tester);
+    var saved = HiveService.getSessionById('week-6')!;
+    expect(saved.isCompleted, isTrue);
+    expect(saved.exercises.first.name, 'Incline dumbbell press');
+    expect(saved.planName, plan.name);
+
+    await tester.tap(find.text('Add set').first);
+    await pumpWithStorage(tester);
+    saved = HiveService.getSessionById('week-6')!;
+    expect(saved.isCompleted, isTrue);
+    expect(saved.exercises.first.sets, hasLength(4));
+    // A logged workout's edits never open the new-workout flow.
+    expect(find.text('Log workout?'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('completed log corrects its date and duration', (tester) async {
+    await tester.runAsync(() => seed(completed: true));
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Workout actions'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard workout'), findsNothing);
+    await tester.tap(find.text('Edit date and duration'));
+    await tester.pumpAndSettle();
+    expect(find.text('6 Sep 2026'), findsOneWidget);
+
+    // Nothing entered yet: a logged workout needs a real duration.
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('workout-time-error')), findsOneWidget);
+    expect(writes, isEmpty);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('workout-duration-hours')),
+      '1',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('workout-duration-minutes')),
+      '5',
+    );
+    await tester.tap(find.text('Save'));
+    await pumpWithStorage(tester);
+    final saved = HiveService.getSessionById('week-6')!;
+    expect(saved.isCompleted, isTrue);
+    expect(saved.durationSeconds, 65 * 60);
+    expect(saved.date, DateTime(2026, 9, 6));
+    expect(find.textContaining('1:05:00'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

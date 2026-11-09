@@ -45,6 +45,7 @@ import '../widgets/workout/training_block_dialogs.dart';
 import '../widgets/workout/training_block_strip.dart';
 import '../widgets/workout/training_boundary_sheet.dart';
 import '../widgets/workout/workout_dialogs.dart';
+import '../widgets/workout/workout_time_dialog.dart';
 import 'workout_summary_screen.dart';
 
 class WorkoutScreen extends StatefulWidget {
@@ -284,14 +285,19 @@ class _WorkoutScreenState extends State<WorkoutScreen>
 
   /// Heaviest weight per exercise before this workout, matching how Finish
   /// decides a record, so a live PR mark agrees with the summary.
+  /// A logged workout being edited compares only against workouts logged
+  /// before it, so a later session never hides one of its records.
   Map<String, double> get _recordWeights =>
       _recordCache ??= () {
-        final currentId = _weekSessions[_currentWeek]?.id;
+        final current = _weekSessions[_currentWeek];
+        final currentId = current?.id;
+        final loggedAt = current?.isCompleted == true ? current!.date : null;
         final best = <String, double>{};
         for (final session in HiveService.getCompletedSessions(
           splitId: widget.plan.splitId,
         )) {
           if (session.deletedAt != null || session.id == currentId) continue;
+          if (loggedAt != null && !session.date.isBefore(loggedAt)) continue;
           for (final exercise in session.exercises) {
             final key = ExerciseCatalog.identity(
               exercise.name,
@@ -363,13 +369,15 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         if (!_hasUnsavedChanges) return true;
         final saved =
             session.id == null ? null : HiveService.getSessionById(session.id!);
-        if (saved != null && (saved.deletedAt != null || saved.isCompleted)) {
+        if (saved != null &&
+            (saved.deletedAt != null ||
+                (saved.isCompleted && !session.isCompleted))) {
           // A synced deletion/completion must also survive Back's autosave.
+          // Edits to a log that is already completed here save normally.
           _weekSessions[_currentWeek] = saved;
           _hasUnsavedChanges = false;
           return true;
         }
-        if (session.isCompleted) return true;
         if (!_hasUnsavedChanges && saved == null) return true;
         final hasSets = session.exercises.any((e) => e.sets.isNotEmpty);
         if (!hasSets && !_hasUnsavedChanges) return true;
@@ -378,7 +386,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         // Keep the identity assigned by the first write for subsequent edits.
         session = session.copyWith(
           planId: widget.plan.id,
-          planName: widget.plan.name,
+          // A log keeps the name it was recorded under if the plan is renamed.
+          planName: session.isCompleted ? session.planName : widget.plan.name,
           weekNumber: _weekById[week]!.number,
           trainingWeekId: week,
           splitId: widget.plan.splitId,
@@ -572,10 +581,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   }
 
   void _updateSession(WorkoutSession session) {
-    if (_getOrCreateSession().isCompleted ||
-        _getOrCreateSession().deletedAt != null) {
-      return;
-    }
+    if (_getOrCreateSession().deletedAt != null) return;
     _weekSessions[_currentWeek] = session;
     _hasUnsavedChanges = true;
     _draftRevision++;
@@ -1110,7 +1116,6 @@ class _WorkoutScreenState extends State<WorkoutScreen>
 
   void _reorderExercises(int oldIndex, int newIndex) {
     final session = _getOrCreateSession();
-    if (session.isCompleted) return;
     final exerciseCount = session.exercises.length;
     if (oldIndex < 0 || oldIndex >= exerciseCount) return;
     // The final drop slot can land after the non-draggable Add exercise tile.
@@ -1612,6 +1617,32 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     }
   }
 
+  /// Corrects when a logged workout started and how long it took. Sets and
+  /// exercises are edited in place like a draft's.
+  Future<void> _editWorkoutTime() async {
+    if (_timerAction != null || _isNavigating || _isSaving) return;
+    final session = _getOrCreateSession();
+    if (!session.isCompleted) return;
+    final edited = await showWorkoutTimeDialog(
+      context,
+      start: session.startedAt ?? session.date,
+      durationSeconds: session.durationSeconds ?? 0,
+    );
+    if (edited == null || !mounted) return;
+    final current = _getOrCreateSession();
+    if (!current.isCompleted || current.id != session.id) return;
+    _updateSession(
+      current.copyWith(
+        date: edited.start,
+        startedAt: current.startedAt == null ? null : edited.start,
+        durationSeconds: edited.durationSeconds,
+      ),
+    );
+    // Records compare against workouts logged before this one.
+    _recordCache = null;
+    await _autoSave();
+  }
+
   void _deleteExercise(int exerciseIndex) async {
     final session = _getOrCreateSession();
     final exercise = session.exercises[exerciseIndex];
@@ -1620,7 +1651,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       exerciseName: exercise.name,
     );
 
-    if (confirmed && mounted && !session.isCompleted) {
+    if (confirmed && mounted) {
       final updatedExercises = List<Exercise>.from(session.exercises);
       updatedExercises.removeAt(exerciseIndex);
       _updateSession(session.copyWith(exercises: updatedExercises));
@@ -1783,8 +1814,24 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                       ],
                 ),
               ] else
-                // Nothing to act on once finished; keep the title off the edge.
-                const SizedBox(width: AppSpacing.lg),
+                PopupMenuButton<String>(
+                  tooltip: 'Workout actions',
+                  icon: Icon(
+                    LucideIcons.ellipsisVertical,
+                    color: textSecondaryColor(context),
+                  ),
+                  onSelected: (value) {
+                    if (value == 'time') _editWorkoutTime();
+                  },
+                  itemBuilder:
+                      (context) => const [
+                        PopupMenuItem(
+                          value: 'time',
+                          height: 48,
+                          child: Text('Edit date and duration'),
+                        ),
+                      ],
+                ),
             ],
             bottom: _buildPlanTabBar(accent, plans, currentPlanIndex),
           ),
@@ -1861,9 +1908,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                             vertical: AppSpacing.sm,
                           ),
                           sliver: SliverReorderableList(
-                            itemCount:
-                                session.exercises.length +
-                                (session.isCompleted ? 0 : 1),
+                            itemCount: session.exercises.length + 1,
                             onReorderItem: _reorderExercises,
                             proxyDecorator: (child, index, animation) {
                               return Material(
@@ -1909,8 +1954,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                 child: ExerciseCard(
                                   exercise: exercise,
                                   exerciseIndex: index,
-                                  reorderable: !session.isCompleted,
-                                  readOnly: session.isCompleted,
+                                  reorderable: true,
                                   onMoveUp:
                                       index > 0
                                           ? () => _reorderExercises(

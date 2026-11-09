@@ -222,7 +222,12 @@ commit time and resulting revision. Recovery applies it only to the exact
 expected progress state, so interruption between the log and progress writes
 cannot log twice or advance an unrelated later visit. An already-started
 nonactive draft can finish by exact session ID without advancing progress.
-Completed logs are read-only in the logger; History retains explicit editing.
+Completed logs stay editable in place in the logger, the same way a draft is:
+sets, RPE, notes, exercises and their order autosave, and the workout menu
+corrects the start date/time and duration. Edits keep the log completed, its
+plan, week and completion evidence, and never move progress; History's Edit
+workout remains for logs whose plan or week is gone. Live record marks on a
+log compare only against workouts logged before it, and edits never buzz.
 Session writes resolve the current label from the durable week ID, so a
 structural rebase cannot make an in-progress edit restore an obsolete label.
 

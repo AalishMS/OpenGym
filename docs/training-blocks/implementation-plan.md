@@ -72,7 +72,8 @@ but was not yet executable without further product and recovery design.
   Exact-session entry opens the requested log/draft, without moving progress or
   triggering a boundary prompt. Save-before-navigation remains mandatory.
 - Browsing may edit/save incomplete drafts, but a new timer and Log workout are
-  enabled only for the active slot. Completed logs are read-only in the logger.
+  enabled only for the active slot. Completed logs are edited in place in the
+  logger without changing their slot, completion evidence, or progress.
   An already-started nonactive draft from migration or another device can resume,
   stop, and finish by exact ID; finishing it saves history without advancing
   progress. This exception prevents stranded timers and does not enable Skip.
