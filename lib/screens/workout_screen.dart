@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -15,10 +16,12 @@ import '../models/workout_progress.dart';
 import '../models/workout_session.dart';
 import '../navigation/app_navigation_observer.dart';
 import '../navigation/workout_destination.dart';
+import '../providers/settings_provider.dart';
 import '../providers/training_block_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../repositories/training_block_repository.dart';
+import '../services/exercise_rename_service.dart';
 import '../services/hive_service.dart';
 import '../services/pr_tracking_service.dart';
 import '../services/sync_service.dart';
@@ -493,19 +496,44 @@ class _WorkoutScreenState extends State<WorkoutScreen>
           session.id != null &&
           session.hasStarted);
 
+  /// The plan as saved now. Renaming an exercise everywhere rewrites the saved
+  /// plan while this screen is open, so a week opened afterwards must not be
+  /// built from the copy this screen was pushed with.
+  WorkoutPlan get _livePlan {
+    final id = widget.plan.id;
+    final saved = id == null ? null : HiveService.getPlanById(id);
+    return saved != null &&
+            saved.deletedAt == null &&
+            saved.splitId == widget.plan.splitId
+        ? saved
+        : widget.plan;
+  }
+
   WorkoutSession _getOrCreateSession() {
     if (_weekSessions[_currentWeek] case final session?) return session;
-    final session = WorkoutSessionInitializer.initialize(
-      plan: widget.plan,
-      week: _selectedWeek,
+    final session = _initializeSession(
       existingSession: _savedSessionForWeek(_currentWeek),
-      previousSession:
-          widget.plan.id == null
-              ? null
-              : _training.source(widget.plan.id!, _currentWeek),
     );
     _weekSessions[_currentWeek] = session;
     return session;
+  }
+
+  /// Builds the selected week's workout, or returns [existingSession] when it
+  /// is saved. A week with no saved data starts from the previous week's
+  /// logged sets while *Start from last week's sets* is on, and from the
+  /// plan's targets while it is off. Saved drafts and logs are never changed.
+  WorkoutSession _initializeSession({WorkoutSession? existingSession}) {
+    final startFromLastWeek =
+        context.read<SettingsProvider?>()?.autoFillLast ?? true;
+    return WorkoutSessionInitializer.initialize(
+      plan: _livePlan,
+      week: _selectedWeek,
+      existingSession: existingSession,
+      previousSession:
+          !startFromLastWeek || widget.plan.id == null
+              ? null
+              : _training.source(widget.plan.id!, _currentWeek),
+    );
   }
 
   void _updateSession(WorkoutSession session) {
@@ -844,10 +872,9 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         await WorkoutTimerNotificationService.instance.dismiss();
       }
     }
-    final clean = WorkoutSessionInitializer.initialize(
-      plan: widget.plan,
-      week: _selectedWeek,
-    );
+    // The discarded draft is gone, so the week opens exactly as it would on a
+    // fresh visit: the same starting values reopening it later would show.
+    final clean = _initializeSession();
     setState(() {
       _weekSessions[_currentWeek] = clean;
       _hasUnsavedChanges = false;
@@ -893,6 +920,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   void _showExerciseRenameDialog(int exerciseIndex) {
     final session = _getOrCreateSession();
     final exercise = session.exercises[exerciseIndex];
+    final splitId = widget.plan.splitId;
     WorkoutDialogs.showRenameExerciseDialog(
       context,
       currentName: exercise.name,
@@ -906,7 +934,117 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         _updateSession(session.copyWith(exercises: updatedExercises));
         _autoSave();
       },
+      impactFor:
+          splitId == null
+              ? null
+              : (name) => ExerciseRenameService.impact(
+                splitId: splitId,
+                from: exercise.name,
+                to: name,
+              ),
+      onRenameEverywhere:
+          splitId == null
+              ? null
+              : (name) =>
+                  _renameExerciseEverywhere(splitId, exercise.name, name),
     );
+  }
+
+  /// Renames [from] in this workout, then in every plan and workout of the
+  /// split, so its history, Previous values and records stay together.
+  Future<void> _renameExerciseEverywhere(
+    String splitId,
+    String from,
+    String to,
+  ) async {
+    if (to == from) return;
+    final source = ExerciseRenameService.normalize(from);
+    final session = _getOrCreateSession();
+    if (session.isCompleted) return;
+    // This workout first: it may hold entries that are not saved yet.
+    _updateSession(
+      session.copyWith(
+        exercises: [
+          for (final exercise in session.exercises)
+            ExerciseRenameService.normalize(exercise.name) == source
+                ? Exercise(name: to, sets: exercise.sets, note: exercise.note)
+                : exercise,
+        ],
+      ),
+    );
+    if (!await _autoSave() || !mounted) return;
+    try {
+      await ExerciseRenameService.rename(splitId: splitId, from: from, to: to);
+    } catch (error) {
+      debugPrint('Failed to rename exercise everywhere: $error');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Renamed in this workout only. Plans and past workouts could not '
+            'be updated. Try again.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    // Every screen reads these providers; the training reload also refreshes
+    // this week's Previous values from the renamed history.
+    context.read<WorkoutPlanProvider>().loadPlans();
+    context.read<WorkoutSessionProvider>().loadSessions();
+    _training.reload();
+  }
+
+  /// Swaps another exercise into this workout only, keeping the set count.
+  ///
+  /// Sets take the new exercise's latest logged weights and reps in this
+  /// split, or weight 0 with the replaced exercise's reps when it has none.
+  /// RPE, set notes and the exercise note are cleared.
+  Future<void> _replaceExercise(int exerciseIndex) async {
+    final session = _getOrCreateSession();
+    if (session.isCompleted) return;
+    final replaced = session.exercises[exerciseIndex];
+    final name = await pickSingleExercise(
+      context,
+      title: 'Replace ${replaced.name}',
+      unavailableExerciseNames: session.exercises.map((e) => e.name),
+    );
+    if (name == null || !mounted) return;
+    final current = _getOrCreateSession();
+    const key = ExerciseRenameService.normalize;
+    if (current.isCompleted ||
+        exerciseIndex >= current.exercises.length ||
+        key(current.exercises[exerciseIndex].name) != key(replaced.name)) {
+      return;
+    }
+    if (current.exercises.any((e) => key(e.name) == key(name))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$name is already in this workout.')),
+      );
+      return;
+    }
+    final history = previousExerciseSets(
+      HiveService.getCompletedSessions(splitId: widget.plan.splitId),
+      name,
+      splitId: widget.plan.splitId,
+      excludingSessionId: current.id,
+    );
+    final updated = List<Exercise>.from(current.exercises);
+    updated[exerciseIndex] = Exercise(
+      name: name,
+      sets: [
+        for (var i = 0; i < replaced.sets.length; i++)
+          history.isEmpty
+              ? gym.Set(weight: 0, reps: replaced.sets[i].reps)
+              : gym.Set(
+                weight: history[math.min(i, history.length - 1)].weight,
+                reps: history[math.min(i, history.length - 1)].reps,
+              ),
+      ],
+    );
+    _updateSession(current.copyWith(exercises: updated));
+    await _autoSave();
   }
 
   void _addSet(int exerciseIndex) {
@@ -1841,6 +1979,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                       (i, setIndex) => _deleteSet(i, setIndex),
                                   onAddNote: _addExerciseNote,
                                   onRename: _showExerciseRenameDialog,
+                                  onReplace: _replaceExercise,
                                   onDeleteExercise: _deleteExercise,
                                 ),
                               );

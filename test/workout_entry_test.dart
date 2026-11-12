@@ -7,8 +7,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
+import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/workout_screen.dart';
@@ -268,6 +270,135 @@ void main() {
       },
     );
   }
+
+  group("Start from last week's sets", () {
+    final plan = WorkoutPlan(
+      id: 'plan-start-from',
+      name: 'Start from',
+      exercises: [
+        ExerciseTemplate(
+          name: 'Bench Press',
+          sets: 2,
+          setTargets: [
+            SetTemplate(weight: 60, reps: 5),
+            SetTemplate(weight: 62.5, reps: 4),
+          ],
+        ),
+      ],
+    );
+
+    Future<void> openWeekTwo(
+      WidgetTester tester, {
+      required bool startFromLastWeek,
+      WorkoutSession? savedDraft,
+    }) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(400, 880);
+      addTearDown(tester.view.reset);
+      final settings = SettingsProvider();
+      await tester.runAsync(() async {
+        await settings.reload();
+        await settings.setAutoFillLast(startFromLastWeek);
+        await Hive.box<WorkoutPlan>(HiveService.plansBox).put(plan.id, plan);
+        await Hive.box<WorkoutSession>(HiveService.sessionsBox).put(
+          'week-1-log',
+          WorkoutSession(
+            id: 'week-1-log',
+            planId: plan.id,
+            planName: plan.name,
+            date: DateTime(2026, 1, 1),
+            weekNumber: 1,
+            exercises: [
+              Exercise(
+                name: 'Bench Press',
+                sets: [Set(weight: 80, reps: 8), Set(weight: 75, reps: 10)],
+              ),
+            ],
+          ),
+        );
+        if (savedDraft != null) {
+          await Hive.box<WorkoutSession>(
+            HiveService.sessionsBox,
+          ).put(savedDraft.id, savedDraft);
+        }
+        await hiveHarness.prepareTraining([plan]);
+      });
+      // Default back on so the preference cannot leak into other tests.
+      addTearDown(() => SharedPreferences.setMockInitialValues({}));
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider.value(value: settings),
+            ChangeNotifierProvider(create: (_) => WorkoutPlanProvider()),
+            ChangeNotifierProvider(create: (_) => WorkoutSessionProvider()),
+          ],
+          child: MaterialApp(home: WorkoutScreen(plan: plan, planIndex: 0)),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    Finder value(String field, String text) => find.descendant(
+      of: find.bySemanticsLabel(field).last,
+      matching: find.text(text),
+    );
+
+    workoutTest('on: a new week opens with last week\'s logged sets', (
+      tester,
+    ) async {
+      await openWeekTwo(tester, startFromLastWeek: true);
+      expect(value('Set 1 Kg', '80'), findsOneWidget);
+      expect(value('Set 1 Reps', '8'), findsOneWidget);
+      expect(value('Set 2 Kg', '75'), findsOneWidget);
+      expect(value('Set 2 Reps', '10'), findsOneWidget);
+      expect(find.text('80 × 8'), findsOneWidget);
+      // Opening a week is only a preview; nothing is saved until an edit.
+      expect(
+        HiveService.getSessionForPlanAndWeek(plan.name, 2, plan.splitId),
+        isNull,
+      );
+    });
+
+    workoutTest("off: a new week opens with the plan's targets", (
+      tester,
+    ) async {
+      await openWeekTwo(tester, startFromLastWeek: false);
+      expect(value('Set 1 Kg', '60'), findsOneWidget);
+      expect(value('Set 1 Reps', '5'), findsOneWidget);
+      expect(value('Set 2 Kg', '62.5'), findsOneWidget);
+      expect(value('Set 2 Reps', '4'), findsOneWidget);
+      // The Previous column still shows what was logged last week.
+      expect(find.text('80 × 8'), findsOneWidget);
+      expect(find.text('75 × 10'), findsOneWidget);
+      expect(
+        HiveService.getSessionForPlanAndWeek(plan.name, 2, plan.splitId),
+        isNull,
+      );
+    });
+
+    workoutTest('off: a saved draft keeps its own values', (tester) async {
+      await openWeekTwo(
+        tester,
+        startFromLastWeek: false,
+        savedDraft: WorkoutSession(
+          id: 'week-2-draft',
+          planId: plan.id,
+          planName: plan.name,
+          date: DateTime(2026, 1, 8),
+          weekNumber: 2,
+          isCompleted: false,
+          exercises: [
+            Exercise(name: 'Bench Press', sets: [Set(weight: 90, reps: 3)]),
+          ],
+        ),
+      );
+      expect(value('Set 1 Kg', '90'), findsOneWidget);
+      expect(value('Set 1 Reps', '3'), findsOneWidget);
+      expect(find.bySemanticsLabel('Set 2 Kg'), findsNothing);
+      final draft = HiveService.getSessionById('week-2-draft')!;
+      expect(draft.exercises.single.sets.single.weight, 90);
+    });
+  });
 
   workoutTest('workout add exercise opens the library picker and autosaves', (
     tester,

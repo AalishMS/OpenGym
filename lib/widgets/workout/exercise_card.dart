@@ -8,7 +8,7 @@ import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import 'set_entry_table.dart';
 
-enum _ExerciseAction { note, rename, moveUp, moveDown, deleteExercise }
+enum _ExerciseAction { note, rename, replace, moveUp, moveDown, deleteExercise }
 
 /// An expanded exercise section in the continuous workout log.
 class ExerciseCard extends StatelessWidget {
@@ -28,6 +28,9 @@ class ExerciseCard extends StatelessWidget {
   final void Function(int, int) onDeleteSet;
   final void Function(int) onAddNote;
   final void Function(int) onRename;
+
+  /// Swaps another exercise into this workout. Hidden when null.
+  final void Function(int)? onReplace;
   final void Function(int) onDeleteExercise;
 
   const ExerciseCard({
@@ -47,6 +50,7 @@ class ExerciseCard extends StatelessWidget {
     required this.onDeleteSet,
     required this.onAddNote,
     required this.onRename,
+    this.onReplace,
     required this.onDeleteExercise,
   });
 
@@ -56,6 +60,8 @@ class ExerciseCard extends StatelessWidget {
         onAddNote(exerciseIndex);
       case _ExerciseAction.rename:
         onRename(exerciseIndex);
+      case _ExerciseAction.replace:
+        onReplace?.call(exerciseIndex);
       case _ExerciseAction.moveUp:
         onMoveUp?.call();
       case _ExerciseAction.moveDown:
@@ -109,6 +115,8 @@ class ExerciseCard extends StatelessWidget {
                 onSelected: _onAction,
                 itemBuilder:
                     (context) => [
+                      // The note, then what the exercise is, then where it
+                      // sits; Delete stays last.
                       const PopupMenuItem(
                         value: _ExerciseAction.note,
                         height: 48,
@@ -119,6 +127,12 @@ class ExerciseCard extends StatelessWidget {
                         height: 48,
                         child: Text('Rename exercise'),
                       ),
+                      if (onReplace != null)
+                        const PopupMenuItem(
+                          value: _ExerciseAction.replace,
+                          height: 48,
+                          child: Text('Replace exercise'),
+                        ),
                       if (onMoveUp != null)
                         const PopupMenuItem(
                           value: _ExerciseAction.moveUp,

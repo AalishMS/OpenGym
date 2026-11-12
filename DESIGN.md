@@ -67,7 +67,7 @@ The app is split into small layers:
 | Models | `lib/models/` | Hive objects and JSON serialization |
 | Providers | `lib/providers/` | UI-facing state and `notifyListeners()` |
 | Repositories | `lib/repositories/` | Thin split and training-structure data access |
-| Services | `lib/services/` | Storage, sync, backup, PR tracking, seeding |
+| Services | `lib/services/` | Storage, sync, backup, statistics and personal records, seeding |
 | Screens | `lib/screens/` | Page-level UI |
 | Widgets | `lib/widgets/` | Reusable UI components |
 | Theme | `lib/theme/` | Colors, typography, spacing, breakpoints, corner radii, theme helpers |
@@ -82,7 +82,7 @@ Provider is the only app-wide state pattern.
 | `WorkoutPlanProvider` | Workout plan list and plan CRUD for the active split |
 | `WorkoutSessionProvider` | Completed-session list and session mutations for the active split |
 | `TrainingBlockProvider` | Split structure, per-plan progress and session indexes |
-| `SettingsProvider` | Theme mode, accent color, units, auto-fill |
+| `SettingsProvider` | Theme mode, accent color, units, start from last week's sets |
 | `UpdateProvider` | Self-update check against GitHub Releases |
 
 Providers mutate data through `HiveService` (`SplitProvider` goes through
@@ -136,6 +136,70 @@ Exercises match by normalized name and occurrence; current order/guidance wins,
 set values/RPE/count are deep-copied, and past set notes are not inherited.
 Untouched previews never create logs. Previous-set references instead follow
 earlier structural slots; plan-editor Last and analytics remain date-based.
+The copying above is Settings → Workout → *Start from last week's sets*, on by
+default (stored as `auto_fill_last`, backed up as `autoFillLast`). Off, a week
+with no saved data opens with the plan's current targets instead; saved drafts
+and logs are never changed, and the Previous column still shows the earlier
+logged sets. Discarding a draft rebuilds the week exactly as a fresh open would,
+under the same setting. The logger builds new weeks from the plan as currently
+saved, not the copy it was opened with.
+
+### Exercise identity
+
+An exercise is identified by its name, compared trimmed and case-insensitively,
+everywhere: plan templates, workout initialization, Previous values, history,
+Stats and records. Renaming one inside a single workout therefore starts a new
+history. The workout's exercise menu (Exercise note, Rename exercise, Replace
+exercise, Move up/down, Delete exercise last) is only offered while a workout is
+editable; completed logs are read-only in the logger.
+
+- *Rename exercise* has *Also rename in plans and past workouts*, checked by
+  default, with how many plans and workouts in the split use the name. Checked,
+  `ExerciseRenameService` rewrites the name in every live plan and every live
+  workout of the split (drafts and logs), also ignoring repeated spaces. It
+  runs under the sync gate, marks each changed record dirty with a fresh
+  `updatedAt`, and schedules a sync. Other splits and tombstones are untouched.
+  Renaming to a name the split already uses is a merge, and the dialog says so:
+  the histories combine because they now share a name. A plan or workout that
+  held both names keeps both entries. The open workout is renamed and saved
+  first, then the plan and session providers reload. Unchecked, only this
+  workout changes.
+- *Replace exercise* opens the exercise library in single-choice mode and swaps
+  the choice into this workout only. It keeps the set count. Weight and reps
+  come from the new exercise's latest logged performance in the split, or
+  weight 0 with the same reps when there is none. RPE, set notes and the
+  exercise note are cleared. Exercises already in the workout show as *Added*
+  and can't be chosen.
+
+### Personal records
+
+Records are derived, never stored, and have one definition:
+`StatisticsAnalyticsService.recordEvents`. Stats (Recent records and each
+block's Records figure), the History PR pill, Workout details and the result of
+logging a workout all read it, so they cannot disagree.
+
+- Only completed, live workouts in the split count, in date order, and only
+  sets with reps above zero. Lifts match by trimmed, case-insensitive name; a
+  lift logged twice in one workout is one lift there.
+- The first workout with performed sets of a lift sets its baselines and is
+  never a record, not even between its own sets. Records start from the second
+  workout with that lift.
+- Each later workout is compared with the workouts before it, not with its own
+  sets, so it breaks each record at most once. Its best set is a *heaviest
+  weight*, *best set volume* (weight × reps) or *estimated 1RM* record when it
+  beats the previous best. An estimated 1RM needs an earlier one to beat.
+- A set of N reps at weight W is an *N-rep best* when W beats the heaviest
+  weight previously lifted for N or more reps, and no other set in the workout
+  matched it with as many reps and as much weight. 70 kg × 5 after 70 kg × 8 is
+  not a record; 75 kg × 5 is. With no earlier set of N or more reps there is
+  nothing to beat.
+- Each record carries the value it beat and the exercise and set index of the
+  set that broke it. Workout details marks exactly that set; a set note that
+  says "PR" is only a note.
+- `WorkoutCompletionService` judges the just-logged workout against the split's
+  other logs with the same rules and returns the result as `records`. The
+  record dialog's legacy `personalRecords` (`PRResult`) is its heaviest-weight
+  subset until a later change moves the dialog onto `records`.
 
 ## Training blocks and progress
 
@@ -416,7 +480,10 @@ signature:
   exercise is its own numbered card: the accent number sits in the set-number
   gutter, volume trails the name (or joins the summary line when narrow), the
   note hangs off an accent rule, and sets below in the ruled table. Sets saved
-  at zero reps stay on the record in the secondary ink.
+  at zero reps stay on the record in the secondary ink. The set that broke a
+  personal record (see Personal records) carries a *PR* badge beside its
+  weight, and its weight is read aloud with ", Personal record". Set notes,
+  including ones that say "PR", always show as notes.
 - A plan's menu (long press, or *Plan actions* in Manage) is a modal bottom
   sheet with a drag handle, not a dialog. *Delete plan* is always the last
   row, set apart by a rule and the error colour. In Manage, the drag grip
@@ -440,9 +507,15 @@ signature:
   in. Danger zone is always last. *Load sample data* replaces the active
   split's workouts, so it is a development tool. It only appears in debug
   builds (`SettingsScreen.showSampleData`, which defaults to `kDebugMode`).
+- Appearance defaults to *System* on a new installation. An installation from
+  before that default whose user never picked a theme keeps *Light*, so an
+  update never changes how the app looks. `main` settles this before the first
+  frame (`SettingsProvider.resolveStoredThemeMode`), using the first-run intro
+  flag as the sign of an earlier install, and stores the answer.
 - Stats runs Training blocks, Weekly training, Activity, Exercise progress,
   and Recent records. Training blocks opens on the block of the latest
-  workout. It shows workouts, sets, volume, and records for that block. Its
+  workout. It shows workouts, sets, volume, and records (lifts that set a
+  personal record in a workout, see Personal records) for that block. Its
   arrows compare an average trained week with the previous block that has
   workouts. Below them are sets for each week of the block (unreached planned
   weeks are empty outlines) and the three biggest estimated-1RM gains. With
@@ -463,7 +536,12 @@ signature:
   numbers appear in the plan list's coloured markers. Muscle groups sit on
   their own line in the launcher; exercise, set, and duration values wrap as
   whole phrases. The weekly summary keeps its “This week” label and Stats
-  navigation affordance even before the first workout is logged.
+  navigation affordance even before the first workout is logged. Its week
+  strip splits the card width into seven contiguous, equal tap targets, with
+  the gap between bars drawn as padding inside each, so Monday to Sunday always
+  fit without scrolling from a 320 dp screen up. At 360 dp each day is about
+  47 dp wide and at least 48 dp tall; narrower phones keep the height and stay
+  above the 24 dp minimum width.
 - Familiar labels and icons make actions understandable outside a technical
   audience.
 - Pressed, focused, disabled, loading, empty, and error states should feel like
@@ -474,7 +552,8 @@ not part of the product identity. Figures that need to line up or hold their
 width (Stats numbers and chart axes, record rows, the update status, the app
 version, plan-editor rows) use `AppTypography.figures`: Manrope with tabular figures, so digits
 align without a change of typeface. JetBrains Mono (`trainingData`) remains
-only in a few compact training-data spots outside Stats and Settings. The `>` symbol is reserved for the OpenGym wordmark rather
+only in a few compact training-data spots outside Stats, Settings and the
+workout dialogs. The `>` symbol is reserved for the OpenGym wordmark rather
 than used as a general interface decoration.
 
 UI code should use theme helpers from `lib/theme/app_theme.dart` instead of

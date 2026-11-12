@@ -251,9 +251,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildSwitchTile(
                           context: context,
                           icon: LucideIcons.zap,
-                          title: 'Auto-fill last weights',
+                          title: "Start from last week's sets",
+                          // Both states have to read clearly, since off
+                          // changes what a new week opens with.
                           subtitle:
-                              'Automatically fill weight from previous workout',
+                              settings.autoFillLast
+                                  ? 'New weeks open with the weights and reps '
+                                      'you logged the week before'
+                                  : "New weeks open with the plan's targets",
                           value: settings.autoFillLast,
                           onChanged:
                               (value) => _runSettingsAction(

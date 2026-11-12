@@ -1007,6 +1007,10 @@ class HiveService {
     await _sessionsBox.put(session.id, session);
   }
 
+  /// One Hive batch; the caller sets any sync metadata the rows need.
+  static Future<void> putSessionsRaw(Map<String, WorkoutSession> sessions) =>
+      _sessionsBox.putAll(sessions);
+
   /// Clear the dirty flag after a successful push, without bumping updatedAt.
   static Future<void> clearPlanDirty(String id) async {
     final p = _plansBox.get(id);

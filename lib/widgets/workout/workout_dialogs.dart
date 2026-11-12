@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import '../../models/set.dart' as gym;
 import '../../providers/settings_provider.dart';
+import '../../services/exercise_rename_service.dart';
 import '../../services/pr_tracking_service.dart';
+import '../../theme/app_typography.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
@@ -37,9 +38,7 @@ class WorkoutDialogs {
                           children: [
                             Text(
                               pr.exerciseName,
-                              style: GoogleFonts.jetBrainsMono(
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: Theme.of(context).textTheme.titleSmall,
                             ),
                             Text(
                               '${pr.newPR} kg · was ${pr.previousPR} kg',
@@ -76,104 +75,29 @@ class WorkoutDialogs {
     );
   }
 
+  /// Renames an exercise in the open workout.
+  ///
+  /// With [impactFor] and [onRenameEverywhere], the dialog also offers to
+  /// rename it in the split's plans and past workouts, checked by default,
+  /// with the affected counts and a note when the new name already exists and
+  /// the two histories will merge. Unchecked, [onRename] renames this workout
+  /// only.
   static void showRenameExerciseDialog(
     BuildContext context, {
     required String currentName,
     required void Function(String name) onRename,
+    ExerciseRenameImpact Function(String name)? impactFor,
+    void Function(String name)? onRenameEverywhere,
   }) {
-    final accent = accentColor(context);
-    final nameController = TextEditingController(text: currentName);
-
-    showDialog(
+    final offerEverywhere = impactFor != null && onRenameEverywhere != null;
+    showDialog<void>(
       context: context,
       builder:
-          (context) => Dialog(
-            backgroundColor: surfaceColor(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: borderColor(context), width: 1),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Rename exercise',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: accent,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: nameController,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        labelText: 'Exercise name',
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: AppRadius.field,
-                          borderSide: BorderSide(
-                            color: borderColor(context),
-                            width: 1,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: AppRadius.field,
-                          borderSide: BorderSide(color: accent, width: 1),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OverflowBar(
-                      alignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text(
-                            'Cancel',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: textSecondaryColor(context),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () {
-                            final name = nameController.text.trim();
-                            if (name.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Enter an exercise name',
-                                    style: GoogleFonts.jetBrainsMono(),
-                                  ),
-                                  backgroundColor: errorColor(context),
-                                ),
-                              );
-                              return;
-                            }
-                            Navigator.pop(context);
-                            onRename(name);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accentFillColor(context),
-                            foregroundColor: onAccentColor(context),
-                          ),
-                          child: Text(
-                            'Rename',
-                            style: GoogleFonts.jetBrainsMono(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          (_) => _RenameExerciseDialog(
+            currentName: currentName,
+            onRename: onRename,
+            impactFor: offerEverywhere ? impactFor : null,
+            onRenameEverywhere: offerEverywhere ? onRenameEverywhere : null,
           ),
     );
   }
@@ -184,7 +108,6 @@ class WorkoutDialogs {
     required void Function(gym.Set newSet) onAdd,
   }) {
     final settings = context.read<SettingsProvider>();
-    final accent = accentColor(context);
 
     final weightController = TextEditingController(
       text: lastSet?.weight.toString() ?? '',
@@ -214,11 +137,7 @@ class WorkoutDialogs {
                     children: [
                       Text(
                         'Add set',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: accent,
-                        ),
+                        style: Theme.of(context).dialogTheme.titleTextStyle,
                       ),
                       const SizedBox(height: 12),
                       _DialogSetEntry(
@@ -229,7 +148,7 @@ class WorkoutDialogs {
                       const SizedBox(height: 12),
                       Text(
                         'RPE (Rate of Perceived Exertion)',
-                        style: GoogleFonts.jetBrainsMono(fontSize: 12),
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -273,7 +192,7 @@ class WorkoutDialogs {
                                 child: Center(
                                   child: Text(
                                     '$rpe',
-                                    style: GoogleFonts.jetBrainsMono(
+                                    style: AppTypography.figures(
                                       fontSize: 12,
                                       color:
                                           selectedRpe == rpe
@@ -293,12 +212,7 @@ class WorkoutDialogs {
                         children: [
                           TextButton(
                             onPressed: () => Navigator.pop(context),
-                            child: Text(
-                              'Cancel',
-                              style: GoogleFonts.jetBrainsMono(
-                                color: textSecondaryColor(context),
-                              ),
-                            ),
+                            child: const Text('Cancel'),
                           ),
                           const SizedBox(width: 8),
                           ElevatedButton(
@@ -311,9 +225,8 @@ class WorkoutDialogs {
                               if (weight == null || weight < 0) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text(
+                                    content: const Text(
                                       'Weight must be 0 or more',
-                                      style: GoogleFonts.jetBrainsMono(),
                                     ),
                                     backgroundColor: errorColor(context),
                                   ),
@@ -324,9 +237,8 @@ class WorkoutDialogs {
                               if (reps == null || reps <= 0) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text(
+                                    content: const Text(
                                       'Reps must be greater than 0',
-                                      style: GoogleFonts.jetBrainsMono(),
                                     ),
                                     backgroundColor: errorColor(context),
                                   ),
@@ -348,10 +260,7 @@ class WorkoutDialogs {
                               backgroundColor: accentFillColor(context),
                               foregroundColor: onAccentColor(context),
                             ),
-                            child: Text(
-                              'Add',
-                              style: GoogleFonts.jetBrainsMono(),
-                            ),
+                            child: const Text('Add'),
                           ),
                         ],
                       ),
@@ -389,7 +298,6 @@ class WorkoutDialogs {
     required void Function(String? note) onSave,
   }) {
     final noteController = TextEditingController(text: currentNote ?? '');
-    final accent = accentColor(context);
 
     showDialog(
       context: context,
@@ -409,11 +317,7 @@ class WorkoutDialogs {
                 children: [
                   Text(
                     'Note',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: accent,
-                    ),
+                    style: Theme.of(context).dialogTheme.titleTextStyle,
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -430,12 +334,7 @@ class WorkoutDialogs {
                     children: [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
-                        child: Text(
-                          'Cancel',
-                          style: GoogleFonts.jetBrainsMono(
-                            color: textSecondaryColor(context),
-                          ),
-                        ),
+                        child: const Text('Cancel'),
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton(
@@ -451,7 +350,7 @@ class WorkoutDialogs {
                           backgroundColor: accentFillColor(context),
                           foregroundColor: onAccentColor(context),
                         ),
-                        child: Text('Save', style: GoogleFonts.jetBrainsMono()),
+                        child: const Text('Save'),
                       ),
                     ],
                   ),
@@ -854,4 +753,122 @@ class _DialogSetEntryState extends State<_DialogSetEntry> {
           widget.repsController.text = '$reps';
         }),
   );
+}
+
+class _RenameExerciseDialog extends StatefulWidget {
+  final String currentName;
+  final void Function(String name) onRename;
+  final ExerciseRenameImpact Function(String name)? impactFor;
+  final void Function(String name)? onRenameEverywhere;
+
+  const _RenameExerciseDialog({
+    required this.currentName,
+    required this.onRename,
+    required this.impactFor,
+    required this.onRenameEverywhere,
+  });
+
+  @override
+  State<_RenameExerciseDialog> createState() => _RenameExerciseDialogState();
+}
+
+class _RenameExerciseDialogState extends State<_RenameExerciseDialog> {
+  late final TextEditingController _name = TextEditingController(
+    text: widget.currentName,
+  );
+  bool _everywhere = true;
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  String _count(int value, String noun) =>
+      '$value ${value == 1 ? noun : '${noun}s'}';
+
+  void _submit() {
+    final name = _name.text.trim();
+    if (name.isEmpty) {
+      setState(() => _error = 'Enter an exercise name');
+      return;
+    }
+    Navigator.pop(context);
+    final everywhere = widget.onRenameEverywhere;
+    if (everywhere != null && _everywhere) {
+      everywhere(name);
+    } else {
+      widget.onRename(name);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final secondary = textSecondaryColor(context);
+    final impactFor = widget.impactFor;
+    final name = _name.text.trim();
+    final impact = impactFor?.call(name.isEmpty ? widget.currentName : name);
+    return AlertDialog(
+      title: const Text('Rename exercise'),
+      scrollable: true,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _name,
+            autofocus: true,
+            textCapitalization: TextCapitalization.sentences,
+            onChanged: (_) => setState(() => _error = null),
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              labelText: 'Exercise name',
+              errorText: _error,
+            ),
+          ),
+          if (impact != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            CheckboxListTile(
+              key: const ValueKey('rename-everywhere'),
+              value: _everywhere,
+              onChanged: (value) => setState(() => _everywhere = value ?? true),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Also rename in plans and past workouts'),
+              subtitle: Text(
+                impact.isEmpty
+                    ? 'No plans or other workouts in this split use '
+                        '${widget.currentName}.'
+                    : '${_count(impact.plans, 'plan')} and '
+                        '${_count(impact.workouts, 'workout')} in this split '
+                        'use ${widget.currentName}.',
+                style: textTheme.bodySmall?.copyWith(color: secondary),
+              ),
+            ),
+            if (_everywhere && impact.merges)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xs),
+                child: Text(
+                  '$name already exists, so the two histories and records '
+                  'will merge.',
+                  key: const ValueKey('rename-merge-note'),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: textPrimaryColor(context),
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(onPressed: _submit, child: const Text('Rename')),
+      ],
+    );
+  }
 }

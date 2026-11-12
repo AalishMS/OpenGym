@@ -252,7 +252,7 @@ void main() {
     // call sites, and the rule is that none of them reaches for monospace
     // again. A widget test per site would pin today's widgets, not the next
     // figure someone adds.
-    test('Stats and Settings no longer ask for monospace', () {
+    test('Stats, Settings and workout dialogs no longer ask for monospace', () {
       final files = <File>[
         ...Directory('lib/widgets/statistics')
             .listSync(recursive: true)
@@ -260,6 +260,7 @@ void main() {
             .where((f) => f.path.endsWith('.dart')),
         File('lib/screens/stats_screen.dart'),
         File('lib/screens/settings_screen.dart'),
+        File('lib/widgets/workout/workout_dialogs.dart'),
       ];
       final banned = RegExp(r'jetBrainsMono|trainingData\(');
       final offenders = <String>[];
@@ -278,7 +279,8 @@ void main() {
         offenders,
         isEmpty,
         reason:
-            'Use AppTypography.figures for numbers in Stats and Settings:\n'
+            'Use AppTypography.figures for numbers and theme text styles '
+            'for copy in Stats, Settings and workout dialogs:\n'
             '${offenders.join('\n')}',
       );
     });
