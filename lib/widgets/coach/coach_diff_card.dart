@@ -2,15 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../models/coach_proposal.dart';
+import '../../providers/settings_provider.dart';
 import '../../services/coach/proposal_diff.dart';
 import '../../services/coach/proposal_selection.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../../utils/weight_units.dart';
 
 /// Sets as runs of identical sets: `3 × 8 · 60 kg, 1 × 6 · 65 kg`. A weight
 /// of 0 is "no weight target", so it's left out.
-String formatCoachSets(List<CoachSet> sets) {
+///
+/// Display only: the Coach reads and writes kilograms, and [weightUnit] just
+/// converts what the review shows.
+String formatCoachSets(List<CoachSet> sets, {String weightUnit = 'kg'}) {
   final runs = <(int, CoachSet)>[];
   for (final set in sets) {
     if (runs.isNotEmpty && runs.last.$2 == set) {
@@ -23,7 +28,9 @@ String formatCoachSets(List<CoachSet> sets) {
     for (final (count, set) in runs)
       set.kg == 0
           ? '$count × ${set.reps}'
-          : '$count × ${set.reps} · ${coachNumber(set.kg)} kg',
+          : '$count × ${set.reps} · '
+              '${formatEntryWeight(set.kg, weightUnit)} '
+              '${weightUnitLabel(weightUnit)}',
   ].join(', ');
 }
 
@@ -212,6 +219,9 @@ class _ChangeDetails extends StatelessWidget {
     final secondary = textSecondaryColor(context);
     final plan = change.plan;
     final exercise = change.exercise;
+    final weightUnit = SettingsProvider.unitOf(context);
+    String sets(List<CoachSet> sets) =>
+        formatCoachSets(sets, weightUnit: weightUnit);
 
     final (verb, icon, verbColor) = switch (change.kind) {
       ReviewChangeKind.rename => (
@@ -241,18 +251,18 @@ class _ChangeDetails extends StatelessWidget {
     if (exercise != null) {
       switch (exercise.kind) {
         case DiffKind.added:
-          details.add(_Value(formatCoachSets(exercise.after), kept: kept));
+          details.add(_Value(sets(exercise.after), kept: kept));
           if (exercise.noteAfter case final note?) {
             details.add(_Value('Note: $note', kept: kept));
           }
         case DiffKind.removed:
-          details.add(_Value(formatCoachSets(exercise.before), kept: false));
+          details.add(_Value(sets(exercise.before), kept: false));
         case DiffKind.changed || DiffKind.unchanged:
           if (exercise.setsChanged) {
             details.add(
               _BeforeAfter(
-                before: formatCoachSets(exercise.before),
-                after: formatCoachSets(exercise.after),
+                before: sets(exercise.before),
+                after: sets(exercise.after),
                 kept: kept,
               ),
             );

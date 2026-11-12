@@ -19,6 +19,7 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/set_history.dart';
 import '../utils/statistics_format.dart';
+import '../utils/weight_units.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_header.dart';
@@ -698,7 +699,8 @@ class _EditSessionScreenState extends State<EditSessionScreen>
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Weights are edited in kilograms. Tap a value to edit, or a set number for notes.',
+                  'Weights are in ${weightUnitSpoken(SettingsProvider.unitOf(context))}. '
+                  'Tap a value to edit, or a set number for notes.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: AppSpacing.xl),
@@ -768,6 +770,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
   }
 
   List<SetEntry> _entriesFor(Exercise exercise) {
+    final weightUnit = SettingsProvider.unitOf(context);
     final previous = previousExerciseSets(
       context.read<WorkoutSessionProvider>().sessions.where(
         (session) => session.date.isBefore(_session.date),
@@ -784,7 +787,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
           reps: exercise.sets[index].reps,
           previous:
               index < previous.length && previous[index].reps > 0
-                  ? '${entryWeight(previous[index].weight)} × ${previous[index].reps}'
+                  ? '${formatEntryWeight(previous[index].weight, weightUnit)} × ${previous[index].reps}'
                   : null,
           annotation: exercise.sets[index].note,
           rpe: exercise.sets[index].rpe,

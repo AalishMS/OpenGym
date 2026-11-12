@@ -3,9 +3,11 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../models/exercise.dart';
 import '../../models/set.dart' as gym;
+import '../../providers/settings_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../../utils/weight_units.dart';
 import 'set_entry_table.dart';
 
 enum _ExerciseAction { note, rename, replace, moveUp, moveDown, deleteExercise }
@@ -73,6 +75,7 @@ class ExerciseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final weightUnit = SettingsProvider.unitOf(context);
     final title = Semantics(
       header: true,
       child: Padding(
@@ -177,6 +180,7 @@ class ExerciseCard extends StatelessWidget {
               ignoring: readOnly,
               child: SetEntryTable(
                 continuousLog: true,
+                weightUnit: weightUnit,
                 onEntryFinished: onEntryFinished,
                 onDelete:
                     readOnly
@@ -189,7 +193,7 @@ class ExerciseCard extends StatelessWidget {
                       reps: exercise.sets[i].reps,
                       previous:
                           i < previousSets.length && previousSets[i].reps > 0
-                              ? '${entryWeight(previousSets[i].weight)} × ${previousSets[i].reps}'
+                              ? '${formatEntryWeight(previousSets[i].weight, weightUnit)} × ${previousSets[i].reps}'
                               : null,
                       rpe: exercise.sets[i].rpe,
                     ),

@@ -7,14 +7,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import '../../providers/settings_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../theme/semantic_colors.dart';
+import '../../utils/weight_units.dart';
 import '../readable_table_viewport.dart';
 
 /// A display snapshot. Editing it never mutates a session or a plan implicitly.
+///
+/// [weight] is kilograms, as stored. The table shows it in the chosen unit and
+/// hands kilograms back through `onChanged`. [previous] is already formatted,
+/// so callers build it with `formatEntryWeight` in the same unit.
 class SetEntry {
   final double weight;
   final int reps;
@@ -39,8 +45,9 @@ class SetEntry {
   }
 }
 
-String entryWeight(double weight) =>
-    weight.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
+/// A figure at set-table precision, with no unit conversion. Weights that
+/// came from storage go through `formatEntryWeight` instead.
+String entryWeight(double weight) => formatEntryValue(weight);
 
 enum _SetField { weight, reps, rpe }
 
@@ -84,6 +91,7 @@ double _detailsWidth(BuildContext context) => math.max(
 double _minimumTableWidth(
   BuildContext context,
   List<SetEntry> sets, {
+  required String weightUnit,
   required bool showHistoryColumns,
   required bool showPrevious,
   required bool showRpe,
@@ -102,7 +110,7 @@ double _minimumTableWidth(
   );
   final weight = widest([
     '999.99',
-    ...sets.map((set) => entryWeight(set.weight)),
+    ...sets.map((set) => formatEntryWeight(set.weight, weightUnit)),
   ], valueStyle);
   final reps = widest(['999', ...sets.map((set) => '${set.reps}')], valueStyle);
   final previous = widest(
@@ -206,6 +214,10 @@ class SetEntryTable extends StatefulWidget {
   /// not pad itself. Without it the padding sits inside the table's card.
   final bool hostReservesSpace;
 
+  /// `kg` or `lbs` for display and entry. Null follows `SettingsProvider`,
+  /// or kilograms when none is in scope. Values in and out stay kilograms.
+  final String? weightUnit;
+
   const SetEntryTable({
     super.key,
     required this.sets,
@@ -219,6 +231,7 @@ class SetEntryTable extends StatefulWidget {
     this.continuousLog = false,
     this.scrollWideTable = false,
     this.hostReservesSpace = false,
+    this.weightUnit,
   });
 
   @override
@@ -246,6 +259,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
   int? _tapPointer;
   bool _changed = false;
   bool _disposing = false;
+  String _weightUnit = kWeightUnitKg;
   final Map<int, GlobalKey> _rowKeys = {};
   List<SetEntry> get sets => widget.sets;
   void Function(int, double, int) get onChanged => widget.onChanged;
@@ -437,6 +451,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
                 builder:
                     (_) => _SetKeyboard(
                       key: owner._keyboardKey,
+                      weightUnit: owner._weightUnit,
                       sets: List.of(owner.sets),
                       initialIndex: session.index,
                       initialField: session.field,
@@ -572,7 +587,16 @@ class _SetEntryTableState extends State<SetEntryTable> {
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
+  Widget build(BuildContext context) {
+    // Kept on the state so the keypad overlay, built from another context,
+    // reads the same unit as the rows.
+    _weightUnit = normalizeWeightUnit(
+      widget.weightUnit ?? SettingsProvider.unitOf(context),
+    );
+    return _buildTable(context, _weightUnit);
+  }
+
+  Widget _buildTable(BuildContext context, String weightUnit) => LayoutBuilder(
     builder: (context, constraints) {
       final numberIsAction = onDetails != null && onDelete != null;
       final showTrailing =
@@ -585,6 +609,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
       final table = Column(
         children: [
           _EntryHeader(
+            weightUnit: weightUnit,
             trailing: showTrailing,
             showHistoryColumns: showHistoryColumns,
             showRpe: onRpeChanged != null,
@@ -640,7 +665,11 @@ class _SetEntryTableState extends State<SetEntryTable> {
                                       ? null
                                       : _keyboardKey.currentState,
                               previous: sets[index].previous,
-                              weight: entryWeight(sets[index].weight),
+                              weightUnit: weightUnit,
+                              weight: formatEntryWeight(
+                                sets[index].weight,
+                                weightUnit,
+                              ),
                               reps: '${sets[index].reps}',
                               rpe: sets[index].rpe,
                               isPrMarker: sets[index].isPrMarker,
@@ -737,6 +766,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
           minimumWidth: _minimumTableWidth(
             context,
             sets,
+            weightUnit: weightUnit,
             showHistoryColumns: showHistoryColumns,
             showPrevious: showPrevious,
             showRpe: onRpeChanged != null,
@@ -819,6 +849,7 @@ Widget _columns(
 );
 
 class _EntryHeader extends StatelessWidget {
+  final String weightUnit;
   final bool trailing;
   final bool showHistoryColumns;
   final bool showRpe;
@@ -826,6 +857,7 @@ class _EntryHeader extends StatelessWidget {
   final bool showPrevious;
   final bool continuousLog;
   const _EntryHeader({
+    required this.weightUnit,
     this.trailing = false,
     this.showHistoryColumns = true,
     this.showRpe = false,
@@ -842,7 +874,7 @@ class _EntryHeader extends StatelessWidget {
         for (final label in [
           'Set',
           continuousLog ? 'Previous' : 'Prev',
-          'Kg',
+          weightColumnLabel(weightUnit),
           'Reps',
           if (showRpe) 'RPE',
         ])
@@ -871,6 +903,7 @@ class _EntryRow extends StatelessWidget {
   final int index;
   final _SetKeyboardState? editing;
   final String? previous;
+  final String weightUnit;
   final String weight;
   final String reps;
   final int? rpe;
@@ -889,6 +922,7 @@ class _EntryRow extends StatelessWidget {
     required this.index,
     this.editing,
     this.previous,
+    required this.weightUnit,
     required this.weight,
     required this.reps,
     this.rpe,
@@ -921,7 +955,13 @@ class _EntryRow extends StatelessWidget {
         ),
       ),
       _valueFieldTarget(
-        _field(context, weight, 'Kg', onWeight, _SetField.weight),
+        _field(
+          context,
+          weight,
+          weightColumnLabel(weightUnit),
+          onWeight,
+          _SetField.weight,
+        ),
       ),
       _valueFieldTarget(_field(context, reps, 'Reps', onReps, _SetField.reps)),
       if (onRpe != null) _valueFieldTarget(_rpeReadout(context)),
@@ -1065,7 +1105,7 @@ class _EntryRow extends StatelessWidget {
                 ? (editing!._input.isEmpty
                     ? 'Not set'
                     : '${editing!._input} out of 10')
-                : '${editing!._input.isEmpty ? '0' : editing!._input} ${field == _SetField.weight ? 'kilograms' : 'repetitions'}')
+                : '${editing!._input.isEmpty ? '0' : editing!._input} ${field == _SetField.weight ? weightUnitSpoken(weightUnit) : 'repetitions'}')
             : value,
     selected: _active(field),
     liveRegion: _active(field),
@@ -1116,6 +1156,7 @@ class _EntryRow extends StatelessWidget {
 
 class _SetKeyboard extends StatefulWidget {
   final List<SetEntry> sets;
+  final String weightUnit;
   final int initialIndex;
   final _SetField initialField;
   final VoidCallback onClose;
@@ -1127,6 +1168,7 @@ class _SetKeyboard extends StatefulWidget {
   const _SetKeyboard({
     super.key,
     required this.sets,
+    required this.weightUnit,
     required this.initialIndex,
     required this.initialField,
     required this.onClose,
@@ -1146,6 +1188,13 @@ class _SetKeyboardState extends State<_SetKeyboard> {
   late _SetField _field = widget.initialField;
   late String _input = _value;
   bool _replace = true;
+
+  /// The stored kilograms of the weight cell when it was selected. Typing back
+  /// the figure it showed restores this exactly instead of a re-converted
+  /// value, so opening a pounds cell never drifts what is stored.
+  late double _selectedWeight = _set.weight;
+
+  String get _unit => widget.weightUnit;
 
   @override
   void dispose() {
@@ -1202,7 +1251,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
 
   SetEntry get _set => widget.sets[_index];
   String get _value => switch (_field) {
-    _SetField.weight => entryWeight(_set.weight),
+    _SetField.weight => formatEntryWeight(_set.weight, _unit),
     _SetField.reps => '${_set.reps}',
     _SetField.rpe => _set.rpe?.toString() ?? '',
   };
@@ -1210,6 +1259,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
   void _select(int index, _SetField field) => setState(() {
     _index = index;
     _field = field;
+    _selectedWeight = _set.weight;
     _input = _value;
     _replace = true;
     _keyboardFocus.requestFocus();
@@ -1219,10 +1269,14 @@ class _SetKeyboardState extends State<_SetKeyboard> {
 
   void _publish() {
     // Clearing weight or reps sets it to zero. Clearing RPE removes the
-    // optional value. Reps and RPE are always integral.
+    // optional value. Reps and RPE are always integral. Weight is typed in
+    // the display unit and stored in kilograms.
     final value = double.tryParse(_input) ?? 0;
     final updated = SetEntry(
-      weight: _field == _SetField.weight ? value : _set.weight,
+      weight:
+          _field == _SetField.weight
+              ? kilogramsFromEntry(value, _unit, original: _selectedWeight)
+              : _set.weight,
       reps: _field == _SetField.reps ? value.toInt() : _set.reps,
       previous: _set.previous,
       annotation: _set.annotation,
@@ -1278,7 +1332,8 @@ class _SetKeyboardState extends State<_SetKeyboard> {
       return;
     }
     if (_field == _SetField.weight) {
-      _input = entryWeight((_set.weight + delta).clamp(0, 999).toDouble());
+      final shown = kilogramsToUnit(_set.weight, _unit);
+      _input = formatEntryValue((shown + delta).clamp(0, 999).toDouble());
     } else {
       _input = (_set.reps + delta.toInt()).clamp(0, 999).toString();
     }
@@ -1323,15 +1378,18 @@ class _SetKeyboardState extends State<_SetKeyboard> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final keyHeight = _keyHeight(context);
-          final minimumKeyWidth = math.max(
+          // '−2.5' is in every unit's set, so the width holds steady while
+          // the lower pair's labels follow the selected field.
+          final minimumKeyWidth = [
             48.0,
-            readableTextWidth(
-                  context,
-                  '−2.5',
-                  Theme.of(context).textTheme.labelLarge!,
-                ) +
-                8,
-          );
+            for (final label in {'−2.5', for (final (l, _) in _adjustments) l})
+              readableTextWidth(
+                    context,
+                    label,
+                    Theme.of(context).textTheme.labelLarge!,
+                  ) +
+                  8,
+          ].reduce(math.max);
           final width = math.max(
             math.min(constraints.maxWidth, 680.0),
             5 * minimumKeyWidth + 4 * _kKeyGap + 2 * _kKeypadPadding,
@@ -1374,7 +1432,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
   );
 
   String get _fieldLabel => switch (_field) {
-    _SetField.weight => 'Weight (kg)',
+    _SetField.weight => weightFieldLabel(_unit),
     _SetField.reps => 'Reps',
     _SetField.rpe => 'RPE (1–10)',
   };
@@ -1471,12 +1529,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         column([
-          for (final (label, delta) in const [
-            ('+2.5', 2.5),
-            ('−2.5', -2.5),
-            ('+1', 1.0),
-            ('−1', -1.0),
-          ])
+          for (final (label, delta) in _adjustments)
             (1, _incrementKey(context, label: label, delta: delta)),
         ]),
         for (final keys in const [
@@ -1531,6 +1584,21 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     );
   }
 
+  /// The adjustment column, top to bottom: the unit's large weight step, then
+  /// its small one. Reps always step by one, so in pounds the lower pair
+  /// reads ±1 while reps are selected and ±2.5 for weight; in kilograms the
+  /// small weight step is already 1.
+  List<(String, double)> get _adjustments {
+    final steps = weightSteps(_unit);
+    final small = _field == _SetField.reps ? 1.0 : steps.small;
+    return [
+      for (final step in [steps.large, small]) ...[
+        ('+${formatEntryValue(step)}', step),
+        ('−${formatEntryValue(step)}', -step),
+      ],
+    ];
+  }
+
   bool _adjustmentEnabled(double delta) => switch (_field) {
     _SetField.weight => true,
     _SetField.reps => delta.abs() == 1,
@@ -1545,9 +1613,11 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     final enabled = _adjustmentEnabled(delta);
     final emphasized =
         enabled &&
-        ((_field == _SetField.weight && delta.abs() == 2.5) ||
+        ((_field == _SetField.weight &&
+                delta.abs() == weightSteps(_unit).large) ||
             (_field == _SetField.reps && delta.abs() == 1));
-    final unit = _field == _SetField.reps ? 'reps' : 'kilograms';
+    final unit =
+        _field == _SetField.reps ? 'reps' : weightUnitSpoken(_unit);
     return Semantics(
       label: '$label $unit',
       child: _key(

@@ -109,12 +109,8 @@ class WorkoutDialogs {
   }) {
     final settings = context.read<SettingsProvider>();
 
-    final weightController = TextEditingController(
-      text: lastSet?.weight.toString() ?? '',
-    );
-    final repsController = TextEditingController(
-      text: lastSet?.reps.toString() ?? '8',
-    );
+    // Kilograms, as stored; the entry table shows them in the chosen unit.
+    final draft = _SetDraft(weight: lastSet?.weight, reps: lastSet?.reps ?? 8);
     int? selectedRpe = settings.autoFillLast ? lastSet?.rpe : null;
 
     showDialog(
@@ -140,11 +136,7 @@ class WorkoutDialogs {
                         style: Theme.of(context).dialogTheme.titleTextStyle,
                       ),
                       const SizedBox(height: 12),
-                      _DialogSetEntry(
-                        weightController: weightController,
-                        repsController: repsController,
-                        showHistoryColumns: false,
-                      ),
+                      _DialogSetEntry(draft: draft, showHistoryColumns: false),
                       const SizedBox(height: 12),
                       Text(
                         'RPE (Rate of Perceived Exertion)',
@@ -217,10 +209,8 @@ class WorkoutDialogs {
                           const SizedBox(width: 8),
                           ElevatedButton(
                             onPressed: () {
-                              final weight = double.tryParse(
-                                weightController.text,
-                              );
-                              final reps = int.tryParse(repsController.text);
+                              final weight = draft.weight;
+                              final reps = draft.reps;
 
                               if (weight == null || weight < 0) {
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -555,11 +545,11 @@ class _EditSetSheet extends StatefulWidget {
 }
 
 class _EditSetSheetState extends State<_EditSetSheet> {
-  late final TextEditingController _weight = TextEditingController(
-    text: entryWeight(widget.set.weight),
-  );
-  late final TextEditingController _reps = TextEditingController(
-    text: '${widget.set.reps}',
+  // The stored kilograms at full precision. A text field in between rounded
+  // them to two decimals, which rewrote a weight typed in pounds on every save.
+  late final _SetDraft _draft = _SetDraft(
+    weight: widget.set.weight,
+    reps: widget.set.reps,
   );
   late final TextEditingController _note = TextEditingController(
     text: widget.set.note ?? '',
@@ -569,15 +559,13 @@ class _EditSetSheetState extends State<_EditSetSheet> {
 
   @override
   void dispose() {
-    _weight.dispose();
-    _reps.dispose();
     _note.dispose();
     super.dispose();
   }
 
   void _save() {
-    final weight = double.tryParse(_weight.text);
-    final reps = int.tryParse(_reps.text);
+    final weight = _draft.weight;
+    final reps = _draft.reps;
     if (weight == null || weight < 0 || reps == null || reps <= 0) {
       setState(() => _error = 'Enter a valid weight and at least one rep.');
       return;
@@ -605,11 +593,7 @@ class _EditSetSheetState extends State<_EditSetSheet> {
           children: [
             Text('Edit set', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: AppSpacing.lg),
-            _DialogSetEntry(
-              weightController: _weight,
-              repsController: _reps,
-              showHistoryColumns: false,
-            ),
+            _DialogSetEntry(draft: _draft, showHistoryColumns: false),
             const SizedBox(height: AppSpacing.md),
             Text('RPE', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: AppSpacing.sm),
@@ -722,16 +706,19 @@ class _EditSetSheetState extends State<_EditSetSheet> {
   );
 }
 
+/// A set being drafted in a dialog: kilograms and reps, null until known.
+class _SetDraft {
+  double? weight;
+  int? reps;
+
+  _SetDraft({this.weight, this.reps});
+}
+
 class _DialogSetEntry extends StatefulWidget {
-  final TextEditingController weightController;
-  final TextEditingController repsController;
+  final _SetDraft draft;
   final bool showHistoryColumns;
 
-  const _DialogSetEntry({
-    required this.weightController,
-    required this.repsController,
-    this.showHistoryColumns = true,
-  });
+  const _DialogSetEntry({required this.draft, this.showHistoryColumns = true});
 
   @override
   State<_DialogSetEntry> createState() => _DialogSetEntryState();
@@ -742,15 +729,13 @@ class _DialogSetEntryState extends State<_DialogSetEntry> {
   Widget build(BuildContext context) => SetEntryTable(
     showHistoryColumns: widget.showHistoryColumns,
     sets: [
-      SetEntry(
-        weight: double.tryParse(widget.weightController.text) ?? 0,
-        reps: int.tryParse(widget.repsController.text) ?? 0,
-      ),
+      SetEntry(weight: widget.draft.weight ?? 0, reps: widget.draft.reps ?? 0),
     ],
     onChanged:
         (index, weight, reps) => setState(() {
-          widget.weightController.text = entryWeight(weight);
-          widget.repsController.text = '$reps';
+          widget.draft
+            ..weight = weight
+            ..reps = reps;
         }),
   );
 }

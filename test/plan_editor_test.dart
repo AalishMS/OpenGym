@@ -13,11 +13,14 @@ import 'package:gymapp/models/set.dart' as gym;
 import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/utils/weight_units.dart';
 
+import 'support/fixed_unit_settings.dart';
 import 'support/hive_test_harness.dart';
 
 void main() {
@@ -74,11 +77,20 @@ void main() {
     WidgetTester tester,
     WorkoutPlan plan, {
     Size size = const Size(400, 880),
+    String? weightUnit,
   }) async {
     tester.view.devicePixelRatio = 1.0;
     tester.view.physicalSize = size;
     addTearDown(tester.view.reset);
-    await tester.pumpWidget(MaterialApp(home: PlanEditorScreen.edit(plan)));
+    final app = MaterialApp(home: PlanEditorScreen.edit(plan));
+    await tester.pumpWidget(
+      weightUnit == null
+          ? app
+          : ChangeNotifierProvider<SettingsProvider>.value(
+            value: FixedUnitSettings(weightUnit),
+            child: app,
+          ),
+    );
     await tester.pumpAndSettle();
   }
 
@@ -574,6 +586,68 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('Last:'), findsOneWidget);
+  });
+
+  testWidgets('collapsed rows and targets read in pounds when chosen', (
+    tester,
+  ) async {
+    final bar = unitToKilograms(135, 'lbs');
+    await tester.runAsync(
+      () => Hive.box<WorkoutSession>(HiveService.sessionsBox).add(
+        WorkoutSession(
+          date: DateTime(2026, 10, 1),
+          planName: 'Push',
+          exercises: [
+            Exercise(
+              name: 'Bench Press',
+              sets: [gym.Set(weight: bar, reps: 12)],
+            ),
+          ],
+        ),
+      ),
+    );
+    final plan = WorkoutPlan(
+      name: 'Push',
+      exercises: [
+        ExerciseTemplate(
+          name: 'Bench Press',
+          sets: 3,
+          setTargets: [
+            for (var i = 0; i < 3; i++) SetTemplate(reps: 12, weight: bar),
+          ],
+        ),
+        ExerciseTemplate(
+          name: 'Incline Press',
+          sets: 2,
+          setTargets: [
+            SetTemplate(reps: 10, weight: 60),
+            SetTemplate(reps: 8, weight: 60),
+          ],
+        ),
+      ],
+    );
+    await pumpEditorWithPlan(tester, plan, weightUnit: 'lbs');
+    await tester.tap(find.text('Bench Press'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Incline Press'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('3 × 12  ·  135 lbs', findRichText: true),
+      findsOneWidget,
+    );
+    expect(find.text('Last: 135 lbs × 12'), findsOneWidget);
+    expect(
+      find.textContaining('132.28 × 10, 132.28 × 8', findRichText: true),
+      findsOneWidget,
+    );
+    expect(find.textContaining(' kg', findRichText: true), findsNothing);
+
+    // Expanded, the targets are entered in pounds too.
+    await tester.tap(find.text('Bench Press'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lbs'), findsOneWidget);
+    expect(find.text('135'), findsNWidgets(3));
   });
 
   testWidgets('editor controls expose 48 pixel targets and set semantics', (

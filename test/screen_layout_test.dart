@@ -571,15 +571,64 @@ void main() {
     }
   });
 
-  testWidgets('settings does not expose a Units section', (tester) async {
+  testWidgets('weight unit sits under Workout and switches kg and lbs', (
+    tester,
+  ) async {
+    // The page is laid out 4000 tall; make the view match so taps land.
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 4000);
+    addTearDown(tester.view.reset);
+    final settings = SettingsProvider();
     await tester.pumpWidget(
-      host(const SettingsScreen(), size: const Size(390, 4000)),
+      host(
+        const SettingsScreen(),
+        size: const Size(390, 4000),
+        settingsProvider: settings,
+      ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
+    // Part of Workout, not a section of its own, and no old all-caps labels.
     expect(find.text('Units'), findsNothing);
-    expect(find.text('Weight unit'), findsNothing);
     expect(find.text('KILOGRAMS (KG)'), findsNothing);
     expect(find.text('POUNDS (LBS)'), findsNothing);
+    final unitTop = tester.getTopLeft(find.text('Weight unit')).dy;
+    expect(unitTop, greaterThan(tester.getTopLeft(find.text('Workout')).dy));
+    expect(
+      unitTop,
+      lessThan(
+        tester.getTopLeft(find.text("Start from last week's sets")).dy,
+      ),
+    );
+
+    SegmentedButton<String> selector() => tester.widget(
+      find.byKey(const ValueKey('weight-unit-selector')),
+    );
+    expect(selector().selected, {'kg'});
+    expect(selector().showSelectedIcon, isFalse);
+    final context = tester.element(find.text('Weight unit'));
+    expect(
+      selector().style!.backgroundColor!.resolve({WidgetState.selected}),
+      accentFillColor(context),
+    );
+    expect(
+      tester.getSize(
+        find.ancestor(of: find.text('Pounds'), matching: find.byType(TextButton)),
+      ).height,
+      greaterThanOrEqualTo(48),
+    );
+
+    await tester.tap(find.text('Pounds'));
+    await tester.pumpAndSettle();
+    expect(settings.weightUnit, 'lbs');
+    expect(selector().selected, {'lbs'});
+    expect(
+      (await SharedPreferences.getInstance()).getString('weight_unit'),
+      'lbs',
+    );
+
+    await tester.tap(find.text('Kilograms'));
+    await tester.pumpAndSettle();
+    expect(settings.weightUnit, 'kg');
   });
 
   testWidgets('settings rows expose 48px hit regions', (tester) async {

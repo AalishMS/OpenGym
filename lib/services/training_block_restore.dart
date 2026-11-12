@@ -505,7 +505,8 @@ class TrainingBlockRestore {
       throw const FormatException('Invalid backup accent.');
     }
     if (values.containsKey('weightUnit') &&
-        !['kg', 'lb'].contains(values['weightUnit'])) {
+        // The app stores and exports `lbs`; `lb` is kept for older files.
+        !['kg', 'lbs', 'lb'].contains(values['weightUnit'])) {
       throw const FormatException('Invalid backup weight unit.');
     }
     if (values.containsKey('autoFillLast') && values['autoFillLast'] is! bool) {

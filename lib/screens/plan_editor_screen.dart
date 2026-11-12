@@ -9,6 +9,7 @@ import '../models/set.dart' as gym;
 import '../models/set_template.dart';
 import '../models/workout_plan.dart';
 import '../navigation/app_navigation_observer.dart';
+import '../providers/settings_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/split_provider.dart';
 import '../services/hive_service.dart';
@@ -22,6 +23,7 @@ import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../utils/set_history.dart';
+import '../utils/weight_units.dart';
 import '../widgets/workout/workout_dialogs.dart';
 import '../widgets/workout/training_block_dialogs.dart';
 import '../models/training_block.dart';
@@ -868,7 +870,13 @@ class _ExerciseEditorSection extends StatelessWidget {
   /// Spans rather than a plain string because the numbers carry the line and the
   /// units step back out of the way — the same hierarchy as the entry table, so a collapsed card
   /// previews its own contents in the voice they are written in.
-  List<InlineSpan> _targetSpans(TextStyle number, TextStyle unit) {
+  ///
+  /// Weights read in [weightUnit]; the targets themselves stay kilograms.
+  List<InlineSpan> _targetSpans(
+    TextStyle number,
+    TextStyle unit,
+    String weightUnit,
+  ) {
     final sets = exercise.sets;
     if (sets.isEmpty) return [TextSpan(text: 'No sets', style: unit)];
     final first = sets.first;
@@ -885,8 +893,11 @@ class _ExerciseEditorSection extends StatelessWidget {
         TextSpan(text: '${first.reps}', style: number),
         if (first.weight > 0) ...[
           TextSpan(text: '  ·  ', style: unit),
-          TextSpan(text: entryWeight(first.weight), style: number),
-          TextSpan(text: ' kg', style: unit),
+          TextSpan(
+            text: formatEntryWeight(first.weight, weightUnit),
+            style: number,
+          ),
+          TextSpan(text: ' ${weightUnitLabel(weightUnit)}', style: unit),
         ],
         if (first.rpe != null)
           TextSpan(text: '  ·  RPE ${first.rpe}', style: unit),
@@ -898,7 +909,10 @@ class _ExerciseEditorSection extends StatelessWidget {
       for (var i = 0; i < sets.length && i < shown; i++) ...[
         if (i > 0) TextSpan(text: ', ', style: unit),
         if (weighted) ...[
-          TextSpan(text: entryWeight(sets[i].weight), style: number),
+          TextSpan(
+            text: formatEntryWeight(sets[i].weight, weightUnit),
+            style: number,
+          ),
           TextSpan(text: ' × ', style: unit),
         ],
         TextSpan(text: '${sets[i].reps}', style: number),
@@ -913,7 +927,7 @@ class _ExerciseEditorSection extends StatelessWidget {
 
   /// The best set from the last time this exercise was trained in this split,
   /// or null when it never was — so a new exercise doesn't get an empty line.
-  String? _lastLine(List<gym.Set> previous) {
+  String? _lastLine(List<gym.Set> previous, String weightUnit) {
     final done = previous.where((set) => set.reps > 0);
     if (done.isEmpty) return null;
     final top = done.reduce(
@@ -923,7 +937,8 @@ class _ExerciseEditorSection extends StatelessWidget {
               : a,
     );
     return top.weight > 0
-        ? 'Last: ${entryWeight(top.weight)} kg × ${top.reps}'
+        ? 'Last: ${formatEntryWeight(top.weight, weightUnit)} '
+            '${weightUnitLabel(weightUnit)} × ${top.reps}'
         : 'Last: ${top.reps} reps';
   }
 
@@ -982,7 +997,8 @@ class _ExerciseEditorSection extends StatelessWidget {
       height: 1.4,
       color: textSecondary,
     );
-    final last = _lastLine(previous);
+    final weightUnit = SettingsProvider.unitOf(context);
+    final last = _lastLine(previous, weightUnit);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -996,6 +1012,7 @@ class _ExerciseEditorSection extends StatelessWidget {
                 color: textPrimaryColor(context),
               ),
               unit,
+              weightUnit,
             ),
           ),
         ),

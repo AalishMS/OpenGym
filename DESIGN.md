@@ -193,6 +193,17 @@ logging a workout all read it, so they cannot disagree.
   matched it with as many reps and as much weight. 70 kg × 5 after 70 kg × 8 is
   not a record; 75 kg × 5 is. With no earlier set of N or more reps there is
   nothing to beat.
+- Every record needs an earlier value of its own kind to beat. Heaviest
+  weight, set volume, rep bests and estimated 1RM come only from weighted sets
+  (weight above 0), so the first loaded set after bodyweight-only workouts sets
+  a baseline instead of beating 0. A set at weight 0 with reps is a bodyweight
+  set (decided by the data, for library and custom lifts alike); its best is
+  *most reps*, against the most reps in an earlier bodyweight set.
+- Built-in exercises carry a kind in `ExerciseLibrary` (`kindOf`, `isTimed`,
+  `categoryOf`; custom names are weighted). A timed lift (Plank, Side Plank)
+  stores seconds in `reps`: it counts as sets but stays out of rep totals,
+  volume load, estimated 1RM and block gains, and only earns *longest hold*.
+  Volume load stays weight × reps, so bodyweight sets add 0.
 - Each record carries the value it beat and the exercise and set index of the
   set that broke it. Workout details marks exactly that set; a set note that
   says "PR" is only a note.
@@ -482,7 +493,9 @@ signature:
   note hangs off an accent rule, and sets below in the ruled table. Sets saved
   at zero reps stay on the record in the secondary ink. The set that broke a
   personal record (see Personal records) carries a *PR* badge beside its
-  weight, and its weight is read aloud with ", Personal record". Set notes,
+  weight, and its weight is read aloud with ", Personal record". A timed
+  exercise heads its count column *Time* and shows holds as `45 s`, or `1:30`
+  from 90 seconds up; its summary gives the longest hold. Set notes,
   including ones that say "PR", always show as notes.
 - A plan's menu (long press, or *Plan actions* in Manage) is a modal bottom
   sheet with a drag handle, not a dialog. *Delete plan* is always the last
@@ -507,6 +520,19 @@ signature:
   in. Danger zone is always last. *Load sample data* replaces the active
   split's workouts, so it is a development tool. It only appears in debug
   builds (`SettingsScreen.showSampleData`, which defaults to `kDebugMode`).
+- Settings → Workout → *Weight unit* (Kilograms / Pounds, styled like the theme
+  selector) sets `SettingsProvider.weightUnit` (`kg` or `lbs`, stored as
+  `weight_unit`, backed up as `weightUnit`). **Storage is always kilograms**:
+  Hive, sync rows, backups and the Coach's request and response never change.
+  The unit only converts at the interface edge, and every conversion goes
+  through `lib/utils/weight_units.dart`. The set table and keypad, the edit-set
+  and add-set dialogs, the History edit screen, the plan editor previews, the
+  desktop dashboard tiles and the Coach diff card show and accept the chosen
+  unit; Stats, History and Workout details convert through
+  `statistics_format.dart`. The keypad steps by ±2.5/±1 in kilograms and
+  ±5/±2.5 in pounds (reps keep ±1). Values keep full precision in storage and
+  are rounded only for display; retyping the figure a cell showed keeps the
+  stored kilograms exactly, so opening a pounds cell never drifts a value.
 - Appearance defaults to *System* on a new installation. An installation from
   before that default whose user never picked a theme keeps *Light*, so an
   update never changes how the app looks. `main` settles this before the first
@@ -530,7 +556,16 @@ signature:
   keep a 48px tap target around compact pills. Exercise progress gives each
   measure a one-line plain explanation and lists every lift with its latest
   value, sparkline, and change. Tapping a lift opens it in the detailed
-  chart. Weekly charts label weeks by date, never by ISO week number. The
+  chart. A lift whose sets in range are all at weight 0 falls back to its
+  best reps in one set under the weight-based measures, and a timed lift
+  shows its longest hold under every measure but sets; both are labelled as
+  reps or time (`ProgressFallback`, helpers in `statistics_format.dart`).
+  Recent records print each record's value and what it beat. Derived Stats
+  values are memoised on their inputs (sessions, split, period, measure,
+  weekly exercise, blocks, weeks, current week), so an unrelated rebuild of
+  the hidden tab recomputes nothing, and records are worked out once and
+  handed to `blockStatistics`. Weekly charts label weeks by date, never by
+  ISO week number. The
   weekly-training shortcut lands on Weekly training, below the blocks.
 - Home labels the rotation bar with “Workout N of M”. The same workout
   numbers appear in the plan list's coloured markers. Muscle groups sit on

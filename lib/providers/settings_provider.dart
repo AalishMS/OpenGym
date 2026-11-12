@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/tutorial_preferences.dart';
+import '../utils/weight_units.dart';
 
 /// A user-selectable accent, stored as a single **seed**.
 ///
@@ -67,12 +69,14 @@ class SettingsProvider with ChangeNotifier {
 
   ThemeMode _themeMode = defaultThemeMode;
   int _accentIndex = defaultAccentIndex;
-  String _weightUnit = 'kg';
+  String _weightUnit = kWeightUnitKg;
   bool _autoFillLast = true;
   bool _coachEnabled = false;
 
   ThemeMode get themeMode => _themeMode;
   int get accentIndex => _accentIndex;
+  /// `kg` or `lbs`: how weights are shown and typed. Storage is always
+  /// kilograms; see `utils/weight_units.dart`.
   String get weightUnit => _weightUnit;
   bool get autoFillLast => _autoFillLast;
 
@@ -95,6 +99,13 @@ class SettingsProvider with ChangeNotifier {
   SettingsProvider() {
     _loadSettings();
   }
+
+  /// The weight unit for [context], or kilograms where no provider is in
+  /// scope (isolated widget tests, previews). [listen] as for `Provider.of`.
+  static String unitOf(BuildContext context, {bool listen = true}) =>
+      normalizeWeightUnit(
+        Provider.of<SettingsProvider?>(context, listen: listen)?.weightUnit,
+      );
 
   Future<void> reload() => _loadSettings();
 
@@ -140,7 +151,7 @@ class SettingsProvider with ChangeNotifier {
       _accentIndex = accentColorIndex;
     }
 
-    _weightUnit = prefs.getString(_weightUnitKey) ?? 'kg';
+    _weightUnit = normalizeWeightUnit(prefs.getString(_weightUnitKey));
     _autoFillLast = prefs.getBool(_autoFillKey) ?? true;
     _coachEnabled = prefs.getBool(_coachEnabledKey) ?? false;
 
@@ -164,9 +175,9 @@ class SettingsProvider with ChangeNotifier {
   }
 
   Future<void> setWeightUnit(String unit) async {
-    _weightUnit = unit;
+    _weightUnit = normalizeWeightUnit(unit);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_weightUnitKey, unit);
+    await prefs.setString(_weightUnitKey, _weightUnit);
     notifyListeners();
   }
 

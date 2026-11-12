@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../data/plan_colors.dart';
+import '../../providers/settings_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import '../../utils/plan_stats.dart';
+import '../../utils/weight_units.dart';
 
 /// Per-plan status lines — last trained, session count, cumulative volume.
 class PlanStatusTile extends StatelessWidget {
@@ -18,6 +20,7 @@ class PlanStatusTile extends StatelessWidget {
     final accent = accentColor(context);
     final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
+    final weightUnit = SettingsProvider.unitOf(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -54,7 +57,7 @@ class PlanStatusTile extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            _subtitle(stat),
+                            _subtitle(stat, weightUnit),
                             style: GoogleFonts.jetBrainsMono(
                               fontSize: 9,
                               color: textSecondary,
@@ -85,11 +88,14 @@ class PlanStatusTile extends StatelessWidget {
     );
   }
 
-  String _subtitle(PlanStat stat) {
+  String _subtitle(PlanStat stat, String weightUnit) {
     final parts = <String>['${stat.plan.exercises.length} EX'];
     if (stat.sessionCount > 0) {
       parts.add('${stat.sessionCount} SESSIONS');
-      parts.add('${formatVolume(stat.volumeKg)} KG');
+      parts.add(
+        '${formatVolumeIn(stat.volumeKg, weightUnit)} '
+        '${weightUnitLabel(weightUnit).toUpperCase()}',
+      );
     }
     return parts.join('  ·  ');
   }

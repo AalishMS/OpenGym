@@ -117,4 +117,38 @@ void main() {
     await waitForSettingsLoad(reloaded);
     expect(reloaded.coachEnabled, isTrue);
   });
+
+  test('weights default to kilograms and a pounds choice persists', () async {
+    SharedPreferences.setMockInitialValues({});
+
+    final settings = SettingsProvider();
+    await waitForSettingsLoad(settings);
+    expect(settings.weightUnit, 'kg');
+
+    await settings.setWeightUnit('lbs');
+    final reloaded = SettingsProvider();
+    await waitForSettingsLoad(reloaded);
+    expect(reloaded.weightUnit, 'lbs');
+  });
+
+  test('a stored unit reads as kg or lbs and nothing else', () async {
+    for (final (stored, expected) in [
+      ('lbs', 'lbs'),
+      ('lb', 'lbs'),
+      ('kg', 'kg'),
+      ('stone', 'kg'),
+    ]) {
+      SharedPreferences.setMockInitialValues({'weight_unit': stored});
+      final settings = SettingsProvider();
+      await waitForSettingsLoad(settings);
+      expect(settings.weightUnit, expected, reason: stored);
+    }
+
+    SharedPreferences.setMockInitialValues({});
+    final settings = SettingsProvider();
+    await waitForSettingsLoad(settings);
+    await settings.setWeightUnit('lb');
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString('weight_unit'), 'lbs');
+  });
 }
