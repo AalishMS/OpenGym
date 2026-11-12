@@ -382,14 +382,23 @@ void main() {
         body: WorkoutExerciseDetails(
           exercise: Exercise(
             name: 'Bench press',
-            sets: [gym.Set(weight: 100, reps: 8, rpe: 9, note: 'PR')],
+            sets: [
+              gym.Set(weight: 100, reps: 8, rpe: 9, note: 'PR'),
+              gym.Set(weight: 105, reps: 8, rpe: 9),
+            ],
           ),
           weightUnit: 'lbs',
+          recordSetIndexes: const {1},
         ),
       ),
     );
     final weight = tester.getSemantics(find.bySemanticsLabel('Set 1 weight'));
-    expect(weight.value, startsWith('220.5 pounds'));
+    // A note reading "PR" is only a note; the computed record set is marked.
+    expect(weight.value, '220.5 pounds');
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Set 2 weight')).value,
+      '231.5 pounds, Personal record',
+    );
     expect(tester.getSemantics(find.bySemanticsLabel('Set 1 reps')).value, '8');
     expect(tester.getSemantics(find.bySemanticsLabel('Set 1 RPE')).value, '9');
     semantics.dispose();

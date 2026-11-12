@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
+import '../models/statistics.dart';
 import '../models/workout_session.dart';
 import '../navigation/app_navigation_observer.dart';
 import '../providers/settings_provider.dart';
@@ -232,21 +233,33 @@ class WorkoutDetailsScreen extends StatelessWidget {
         : null;
   }
 
-  /// Exercises that set a personal record in [session], by normalised name.
-  /// Uses the same split-scoped record history as the History journal.
-  Set<String> _recordExercises(
+  /// The records [session] set, from the same split-scoped record history
+  /// as the History journal and Stats.
+  List<RecordEvent> _records(
     WorkoutSessionProvider provider,
     WorkoutSession session,
   ) {
     const analytics = StatisticsAnalyticsService();
     final identity = historySessionIdentity(session);
-    return {
+    return [
       for (final event in analytics.recordEvents(
         analytics.eligibleSessions(provider.sessions, splitId: session.splitId),
       ))
-        if (historySessionIdentity(event.session) == identity)
-          event.exerciseName.trim().toLowerCase(),
-    };
+        if (historySessionIdentity(event.session) == identity) event,
+    ];
+  }
+
+  /// The sets that broke a record, by exercise index then set index.
+  static Map<int, Set<int>> _recordSets(List<RecordEvent> records) {
+    final result = <int, Set<int>>{};
+    for (final achievement in records.expand((event) => event.achievements)) {
+      final exercise = achievement.exerciseIndex;
+      final set = achievement.setIndex;
+      if (exercise != null && set != null) {
+        result.putIfAbsent(exercise, () => <int>{}).add(set);
+      }
+    }
+    return result;
   }
 
   Future<void> _edit(BuildContext context, WorkoutSession session) async {
@@ -362,9 +375,8 @@ class WorkoutDetailsScreen extends StatelessWidget {
     final session = _session(provider);
     final weightUnit = context.watch<SettingsProvider>().weightUnit;
     final records =
-        session == null
-            ? const <String>{}
-            : _recordExercises(provider, session);
+        session == null ? const <RecordEvent>[] : _records(provider, session);
+    final recordSets = _recordSets(records);
     return Scaffold(
       backgroundColor: backgroundColor(context),
       appBar: AppHeader(
@@ -466,9 +478,7 @@ class WorkoutDetailsScreen extends StatelessWidget {
                           exercise: exercise,
                           exerciseNumber: index + 1,
                           weightUnit: weightUnit,
-                          isRecord: records.contains(
-                            exercise.name.trim().toLowerCase(),
-                          ),
+                          recordSetIndexes: recordSets[index] ?? const {},
                         ),
                     ],
                   ),

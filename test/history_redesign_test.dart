@@ -199,7 +199,17 @@ void main() {
 
       expect(summary.statistics.totalSets, 1);
       expect(summary.statistics.volumeLoad, 36.75);
-      expect(summary.hasPersonalRecord, isTrue);
+      // The first workout with a lift only sets its baseline.
+      expect(summary.hasPersonalRecord, isFalse);
+
+      // The search hides the baseline workout, but the later one is still
+      // judged against it.
+      final found =
+          buildHistoryJournalData([
+            later,
+            first,
+          ], query: 'Later').groups.single.workouts.single;
+      expect(found.hasPersonalRecord, isTrue);
     },
   );
 
@@ -208,12 +218,16 @@ void main() {
   ) async {
     final summary =
         buildHistoryJournalData([
+          session(id: 'baseline', name: 'Baseline', date: DateTime(2026, 9, 4)),
           session(
             id: 'accent-pr',
             name: 'Accent day',
             date: DateTime(2026, 9, 11),
+            weight: 85,
           ),
-        ]).groups.single.workouts.single;
+        ]).groups.single.workouts.first;
+    expect(summary.session.id, 'accent-pr');
+    expect(summary.hasPersonalRecord, isTrue);
 
     for (final brightness in Brightness.values) {
       for (final accent in SettingsProvider.accents) {
@@ -547,27 +561,69 @@ void main() {
     expect(betweenCardAndDate, findsNothing);
   });
 
-  testWidgets('saved PR note is a compact marker beside the set weight', (
+  testWidgets('details mark the set that broke a record, not a PR note', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
     final provider = _Sessions([
+      session(
+        id: 'baseline',
+        name: 'Base day',
+        date: DateTime(2026, 9, 4),
+        weight: 70,
+        setNote: 'PR',
+      ),
       session(
         id: 'pr-attempt',
         name: 'Strength day',
         date: DateTime(2026, 9, 11),
-        setNote: 'New PR!',
+      ).copyWith(
+        exercises: [
+          Exercise(
+            name: 'Bench Press',
+            sets: [
+              Set(weight: 75, reps: 5, note: 'New PR!'),
+              Set(weight: 80, reps: 5),
+            ],
+          ),
+        ],
       ),
     ]);
     await tester.pumpWidget(host(provider));
     await tester.tap(find.text('Strength day'));
     await tester.pumpAndSettle();
 
-    expect(find.text('New PR!'), findsNothing);
+    // The note is an ordinary note; the marker sits on the heavier set.
+    expect(find.text('New PR!'), findsOneWidget);
     expect(find.text('PR'), findsOneWidget);
+    expect(find.text('1 personal record'), findsOneWidget);
     expect(
       tester.getCenter(find.text('PR')).dy,
       moreOrLessEquals(tester.getCenter(find.text('80')).dy, epsilon: 1),
     );
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Set 2 weight')).value,
+      endsWith(', Personal record'),
+    );
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Set 1 weight')).value,
+      isNot(contains('Personal record')),
+    );
+
+    // The first workout with the lift sets the baseline: its "PR" note is
+    // shown as written and nothing is marked.
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Base day'));
+    await tester.pumpAndSettle();
+    expect(find.text('PR'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('Set 1 note')), findsOneWidget);
+    expect(find.textContaining('personal record'), findsNothing);
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Set 1 weight')).value,
+      isNot(contains('Personal record')),
+    );
+    semantics.dispose();
   });
 
   testWidgets('exercise readouts exclude zero-rep sets and handle empty logs', (
@@ -608,7 +664,7 @@ void main() {
     expect(find.text('200 kg'), findsOneWidget);
     expect(find.text('100'), findsOneWidget);
     expect(find.text('Pause at the bottom.'), findsOneWidget);
-        expect(find.text('No sets recorded'), findsOneWidget);
+    expect(find.text('No sets recorded'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

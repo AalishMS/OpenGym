@@ -436,7 +436,7 @@ class SampleDataSeeder {
           Exercise(
             name: 'Deadlift',
             sets: [
-              Set(reps: 5, weight: 105, rpe: 7, note: 'PR attempt'),
+              Set(reps: 5, weight: 105, rpe: 7, note: 'Belt on'),
               Set(reps: 5, weight: 105, rpe: 8),
               Set(reps: 5, weight: 105, rpe: 9),
               Set(reps: 4, weight: 105, rpe: 10),
@@ -566,7 +566,7 @@ class SampleDataSeeder {
           Exercise(
             name: 'Bench Press',
             sets: [
-              Set(reps: 8, weight: 65, rpe: 7, note: 'New PR!'),
+              Set(reps: 8, weight: 65, rpe: 7, note: 'Paused the first rep'),
               Set(reps: 8, weight: 65, rpe: 8),
               Set(reps: 7, weight: 65, rpe: 9),
               Set(reps: 6, weight: 65, rpe: 10),
@@ -621,7 +621,7 @@ class SampleDataSeeder {
           Exercise(
             name: 'Deadlift',
             sets: [
-              Set(reps: 5, weight: 110, rpe: 8, note: 'New PR!'),
+              Set(reps: 5, weight: 110, rpe: 8, note: 'Grip held up'),
               Set(reps: 5, weight: 110, rpe: 8),
               Set(reps: 4, weight: 110, rpe: 9),
               Set(reps: 3, weight: 110, rpe: 10),
@@ -741,7 +741,7 @@ class SampleDataSeeder {
           Exercise(
             name: 'Squat',
             sets: [
-              Set(reps: 6, weight: 90, rpe: 8, note: 'Almost hit PR'),
+              Set(reps: 6, weight: 90, rpe: 8, note: 'Depth felt solid'),
               Set(reps: 6, weight: 90, rpe: 8),
               Set(reps: 5, weight: 90, rpe: 9),
               Set(reps: 4, weight: 90, rpe: 10),
@@ -847,7 +847,7 @@ class SampleDataSeeder {
           Exercise(
             name: 'Bench Press',
             sets: [
-              Set(reps: 8, weight: 70, rpe: 8, note: 'New PR!'),
+              Set(reps: 8, weight: 70, rpe: 8, note: 'Smooth bar path'),
               Set(reps: 8, weight: 70, rpe: 8),
               Set(reps: 7, weight: 70, rpe: 9),
               Set(reps: 5, weight: 70, rpe: 10),
@@ -902,7 +902,7 @@ class SampleDataSeeder {
           Exercise(
             name: 'Deadlift',
             sets: [
-              Set(reps: 5, weight: 120, rpe: 8, note: 'New PR!'),
+              Set(reps: 5, weight: 120, rpe: 8, note: 'Hook grip'),
               Set(reps: 5, weight: 120, rpe: 9),
               Set(reps: 3, weight: 120, rpe: 10),
             ],
@@ -941,7 +941,7 @@ class SampleDataSeeder {
           Exercise(
             name: 'Squat',
             sets: [
-              Set(reps: 6, weight: 95, rpe: 8, note: 'New PR!'),
+              Set(reps: 6, weight: 95, rpe: 8, note: 'Fast out of the hole'),
               Set(reps: 6, weight: 95, rpe: 9),
               Set(reps: 4, weight: 95, rpe: 10),
             ],

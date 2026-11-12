@@ -15,16 +15,6 @@ import '../../utils/workout_context.dart';
 import '../read_only_value.dart';
 import '../readable_table_viewport.dart';
 
-bool _isPrMarker(String? note) {
-  final normalized = note?.trim().toLowerCase().replaceAll(
-    RegExp(r'[.!]+$'),
-    '',
-  );
-  return normalized == 'pr' ||
-      normalized == 'new pr' ||
-      normalized == 'pr attempt';
-}
-
 String _plural(int count, String noun) =>
     '$count $noun${count == 1 ? '' : 's'}';
 
@@ -299,16 +289,21 @@ class WorkoutExerciseDetails extends StatelessWidget {
   final String weightUnit;
   final int? exerciseNumber;
 
-  /// Whether this exercise set a personal record in the workout.
-  final bool isRecord;
+  /// Indexes into [exercise]'s sets of the sets that broke a personal
+  /// record in the workout, as `StatisticsAnalyticsService.recordEvents`
+  /// computes them. A set note never marks a record.
+  final Set<int> recordSetIndexes;
 
   const WorkoutExerciseDetails({
     required this.exercise,
     required this.weightUnit,
     this.exerciseNumber,
-    this.isRecord = false,
+    this.recordSetIndexes = const {},
     super.key,
   });
+
+  /// Whether this exercise set a personal record in the workout.
+  bool get isRecord => recordSetIndexes.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -482,6 +477,7 @@ class WorkoutExerciseDetails extends StatelessWidget {
                     context,
                     exercise,
                     weightUnit,
+                    recordSetIndexes,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -509,10 +505,9 @@ class WorkoutExerciseDetails extends StatelessWidget {
                                 weight: displayWeight(set.weight, weightUnit),
                                 reps: set.reps,
                                 rpe: set.rpe,
-                                isPrAttempt: _isPrMarker(set.note),
+                                isRecord: recordSetIndexes.contains(index),
                               ),
-                              if ((set.note?.trim().isNotEmpty ?? false) &&
-                                  !_isPrMarker(set.note))
+                              if (set.note?.trim().isNotEmpty ?? false)
                                 Padding(
                                   padding: EdgeInsets.only(
                                     left: gutter + AppSpacing.sm,
@@ -589,19 +584,20 @@ double _minimumSavedTableWidth(
   BuildContext context,
   Exercise exercise,
   String unit,
+  Set<int> recordSetIndexes,
 ) {
   final style = ReadOnlyValue.style(context);
-  final weightWidth = exercise.sets.fold<double>(
+  final weightWidth = exercise.sets.indexed.fold<double>(
     48,
-    (width, set) => math.max(
+    (width, entry) => math.max(
       width,
       readableTextWidth(
             context,
-            formatWeight(displayWeight(set.weight, unit)),
+            formatWeight(displayWeight(entry.$2.weight, unit)),
             style,
           ) +
           16 +
-          (_isPrMarker(set.note)
+          (recordSetIndexes.contains(entry.$1)
               ? readableTextWidth(
                     context,
                     'PR',
@@ -672,7 +668,9 @@ class _SetValues extends StatelessWidget {
   final double weight;
   final int reps;
   final int? rpe;
-  final bool isPrAttempt;
+
+  /// Whether this set broke a personal record in its workout.
+  final bool isRecord;
 
   const _SetValues({
     required this.index,
@@ -680,7 +678,7 @@ class _SetValues extends StatelessWidget {
     required this.weight,
     required this.reps,
     required this.rpe,
-    required this.isPrAttempt,
+    required this.isRecord,
   });
 
   @override
@@ -708,9 +706,9 @@ class _SetValues extends StatelessWidget {
           muted: skipped,
           semanticsLabel: 'Set ${index + 1} weight',
           semanticsValue:
-              '${formatWeight(weight)} ${weightUnit == 'lbs' ? 'pounds' : 'kilograms'}${isPrAttempt ? ', Personal record' : ''}',
+              '${formatWeight(weight)} ${weightUnit == 'lbs' ? 'pounds' : 'kilograms'}${isRecord ? ', Personal record' : ''}',
           trailing:
-              isPrAttempt
+              isRecord
                   ? Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.xs,

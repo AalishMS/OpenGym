@@ -111,12 +111,28 @@ class WeeklyTrainingValue {
   });
 }
 
+/// One record a set broke. See `StatisticsAnalyticsService.recordEvents` for
+/// the rules that decide what counts.
 class RecordAchievement {
   final RecordType type;
   final double value;
   final double setWeight;
   final int setReps;
+
+  /// The rep count a [RecordType.repBest] is for; null for the other types.
   final int? reps;
+
+  /// The best this record beat, in the same unit as [value]: the heaviest
+  /// weight, estimated 1RM or set volume before this workout, or for a rep
+  /// best the heaviest weight lifted for [reps] or more reps. Null when the
+  /// producer did not supply one.
+  final double? previousValue;
+
+  /// Where the set that broke the record sits in its workout: the index into
+  /// `WorkoutSession.exercises`, then into that exercise's `sets` (counting
+  /// sets saved at zero reps, so it matches the saved row).
+  final int? exerciseIndex;
+  final int? setIndex;
 
   const RecordAchievement({
     required this.type,
@@ -124,9 +140,14 @@ class RecordAchievement {
     required this.setWeight,
     required this.setReps,
     this.reps,
+    this.previousValue,
+    this.exerciseIndex,
+    this.setIndex,
   });
 }
 
+/// The records one exercise set in one workout. An exercise logged twice in a
+/// workout under the same name still yields one event.
 class RecordEvent {
   final String exerciseName;
   final WorkoutSession session;

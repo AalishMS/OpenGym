@@ -139,78 +139,84 @@ class StatisticsAnalyticsService {
     );
   }
 
+  /// Every personal record in [sessions], newest workout first. This is the
+  /// app's one definition of a record: Stats, History, Workout details and
+  /// the result of logging a workout all read it.
+  ///
+  /// - Only completed, live workouts count, oldest first, and only sets with
+  ///   reps above zero.
+  /// - Lifts are matched by trimmed, case-insensitive name.
+  /// - The first workout with performed sets of a lift sets its baselines and
+  ///   yields no records, not even between its own sets.
+  /// - After that, each workout is compared with the workouts before it, never
+  ///   with its own sets, so one workout breaks each record at most once:
+  ///   - heaviest weight, best set volume (weight × reps) and estimated 1RM
+  ///     go to the workout's best set when it beats the previous best. An
+  ///     estimated 1RM needs an earlier one to beat (a lift trained only above
+  ///     12 reps has none yet);
+  ///   - a set of N reps at weight W is a rep best when W beats the heaviest
+  ///     weight previously lifted for N or more reps, and no other set in the
+  ///     workout matched it with at least as many reps and as much weight.
+  ///     With no earlier set of N or more reps there is nothing to beat.
   List<RecordEvent> recordEvents(Iterable<WorkoutSession> sessions) {
-    final ordered = eligibleSessions(sessions).reversed.toList();
+    final ordered = eligibleSessions(sessions).toList()..sort(_chronological);
     final states = <String, _RecordState>{};
     final events = <RecordEvent>[];
     for (final session in ordered) {
-      for (final exercise in session.exercises) {
-        final key = exercise.name.trim().toLowerCase();
-        final state = states.putIfAbsent(key, _RecordState.new);
-        final achievements = <RecordAchievement>[];
-        for (final set in exercise.sets.where((set) => set.reps > 0)) {
-          final setVolume = set.weight * set.reps;
-          final e1rm = estimatedOneRepMax(set);
-          if (e1rm > state.estimatedOneRepMax) {
-            achievements.add(
-              RecordAchievement(
-                type: RecordType.estimatedOneRepMax,
-                value: e1rm,
-                setWeight: set.weight,
-                setReps: set.reps,
-              ),
-            );
-            state.estimatedOneRepMax = e1rm;
-          }
-          if (set.weight > state.heaviestWeight) {
-            achievements.add(
-              RecordAchievement(
-                type: RecordType.heaviestWeight,
-                value: set.weight,
-                setWeight: set.weight,
-                setReps: set.reps,
-              ),
-            );
-            state.heaviestWeight = set.weight;
-          }
-          final repBest = state.repBests[set.reps] ?? 0;
-          if (set.weight > repBest) {
-            achievements.add(
-              RecordAchievement(
-                type: RecordType.repBest,
-                value: set.weight,
-                setWeight: set.weight,
-                setReps: set.reps,
-                reps: set.reps,
-              ),
-            );
-            state.repBests[set.reps] = set.weight;
-          }
-          if (setVolume > state.bestSetVolume) {
-            achievements.add(
-              RecordAchievement(
-                type: RecordType.setVolume,
-                value: setVolume,
-                setWeight: set.weight,
-                setReps: set.reps,
-              ),
-            );
-            state.bestSetVolume = setVolume;
-          }
-        }
-        if (achievements.isNotEmpty) {
-          events.add(
-            RecordEvent(
-              exerciseName: exercise.name,
-              session: session,
-              achievements: List.unmodifiable(achievements),
-            ),
-          );
+      final lifts = <String, _PerformedLift>{};
+      for (final (exerciseIndex, exercise) in session.exercises.indexed) {
+        for (final (setIndex, set) in exercise.sets.indexed) {
+          if (set.reps <= 0) continue;
+          lifts
+              .putIfAbsent(
+                exercise.name.trim().toLowerCase(),
+                () => _PerformedLift(exercise.name),
+              )
+              .sets
+              .add(_PerformedSet(exerciseIndex, setIndex, set));
         }
       }
+      for (final MapEntry(:key, value: lift) in lifts.entries) {
+        final state = states[key];
+        if (state == null) {
+          states[key] = _RecordState()..absorb(lift.sets);
+          continue;
+        }
+        final achievements = state.achievements(lift.sets);
+        state.absorb(lift.sets);
+        if (achievements.isEmpty) continue;
+        events.add(
+          RecordEvent(
+            exerciseName: lift.name,
+            session: session,
+            achievements: List.unmodifiable(achievements),
+          ),
+        );
+      }
     }
-    events.sort((a, b) => b.session.date.compareTo(a.session.date));
+    events.sort((a, b) => _chronological(b.session, a.session));
     return List.unmodifiable(events);
+  }
+
+  /// The records [session] set, judged against the other workouts in
+  /// [sessions] exactly as [recordEvents] judges them. [session] matches by
+  /// id, or by identity when either id is missing.
+  List<RecordEvent> sessionRecords(
+    Iterable<WorkoutSession> sessions,
+    WorkoutSession session,
+  ) => List.unmodifiable(
+    recordEvents(
+      sessions,
+    ).where((event) => _sameSession(event.session, session)),
+  );
+
+  static bool _sameSession(WorkoutSession a, WorkoutSession b) =>
+      a.id != null && b.id != null ? a.id == b.id : identical(a, b);
+
+  /// Oldest first, with a stable order for workouts logged at the same time.
+  static int _chronological(WorkoutSession a, WorkoutSession b) {
+    final date = a.date.compareTo(b.date);
+    return date != 0 ? date : (a.id ?? '').compareTo(b.id ?? '');
   }
 
   List<String> exerciseNames(Iterable<WorkoutSession> sessions) {
@@ -413,20 +419,24 @@ class StatisticsAnalyticsService {
     Iterable<WorkoutSession> sessions,
     ExerciseMetric metric,
   ) {
-    final summaries = [
-      for (final name in exerciseNames(sessions))
-        LiftSummary(
-          exerciseName: name,
-          progress: exerciseProgress(sessions, name, metric),
-        ),
-    ].where((lift) => lift.progress.points.isNotEmpty).toList()..sort((a, b) {
-      final date = b.progress.points.last.session.date.compareTo(
-        a.progress.points.last.session.date,
-      );
-      return date != 0
-          ? date
-          : a.exerciseName.toLowerCase().compareTo(b.exerciseName.toLowerCase());
-    });
+    final summaries =
+        [
+            for (final name in exerciseNames(sessions))
+              LiftSummary(
+                exerciseName: name,
+                progress: exerciseProgress(sessions, name, metric),
+              ),
+          ].where((lift) => lift.progress.points.isNotEmpty).toList()
+          ..sort((a, b) {
+            final date = b.progress.points.last.session.date.compareTo(
+              a.progress.points.last.session.date,
+            );
+            return date != 0
+                ? date
+                : a.exerciseName.toLowerCase().compareTo(
+                  b.exerciseName.toLowerCase(),
+                );
+          });
     return List.unmodifiable(summaries);
   }
 
@@ -437,9 +447,146 @@ class StatisticsAnalyticsService {
   }
 }
 
+/// One lift's performed sets in one workout, gathered across every exercise
+/// entry that shares its name.
+class _PerformedLift {
+  final String name;
+  final List<_PerformedSet> sets = [];
+
+  _PerformedLift(this.name);
+}
+
+class _PerformedSet {
+  final int exerciseIndex;
+  final int setIndex;
+  final gym.Set set;
+
+  const _PerformedSet(this.exerciseIndex, this.setIndex, this.set);
+
+  double get weight => set.weight;
+  int get reps => set.reps;
+  double get volume => set.weight * set.reps;
+  double get estimatedOneRepMax =>
+      StatisticsAnalyticsService.estimatedOneRepMax(set);
+
+  RecordAchievement achievement(
+    RecordType type,
+    double value,
+    double previous, {
+    int? reps,
+  }) => RecordAchievement(
+    type: type,
+    value: value,
+    setWeight: weight,
+    setReps: this.reps,
+    reps: reps,
+    previousValue: previous,
+    exerciseIndex: exerciseIndex,
+    setIndex: setIndex,
+  );
+}
+
+/// One lift's bests from the workouts judged so far.
 class _RecordState {
-  double estimatedOneRepMax = 0;
   double heaviestWeight = 0;
   double bestSetVolume = 0;
+
+  /// Null until a set of 1–12 reps with weight gives an estimate.
+  double? estimatedOneRepMax;
+
+  /// The heaviest weight lifted for exactly each rep count.
   final Map<int, double> repBests = {};
+
+  /// The heaviest weight lifted for [reps] or more reps, if any.
+  double? bestForAtLeast(int reps) {
+    double? best;
+    for (final MapEntry(key: count, value: weight) in repBests.entries) {
+      if (count >= reps && (best == null || weight > best)) best = weight;
+    }
+    return best;
+  }
+
+  /// What [sets] beat, against the bests before them. Does not update them.
+  List<RecordAchievement> achievements(List<_PerformedSet> sets) {
+    // The first set wins a tie, so a repeated best set is reported once.
+    _PerformedSet top(double Function(_PerformedSet set) measure) =>
+        sets.reduce((a, b) => measure(b) > measure(a) ? b : a);
+    final result = <RecordAchievement>[];
+
+    final heaviest = top((set) => set.weight);
+    if (heaviest.weight > heaviestWeight) {
+      result.add(
+        heaviest.achievement(
+          RecordType.heaviestWeight,
+          heaviest.weight,
+          heaviestWeight,
+        ),
+      );
+    }
+
+    final strongest = top((set) => set.estimatedOneRepMax);
+    final previousE1rm = estimatedOneRepMax;
+    if (previousE1rm != null && strongest.estimatedOneRepMax > previousE1rm) {
+      result.add(
+        strongest.achievement(
+          RecordType.estimatedOneRepMax,
+          strongest.estimatedOneRepMax,
+          previousE1rm,
+        ),
+      );
+    }
+
+    final repBestSets = <_PerformedSet>[];
+    for (final (index, set) in sets.indexed) {
+      final matched = sets.indexed.any(
+        (other) =>
+            other.$1 != index &&
+            other.$2.reps >= set.reps &&
+            other.$2.weight >= set.weight &&
+            (other.$2.reps > set.reps ||
+                other.$2.weight > set.weight ||
+                other.$1 < index),
+      );
+      if (matched) continue;
+      final previous = bestForAtLeast(set.reps);
+      if (previous != null && set.weight > previous) repBestSets.add(set);
+    }
+    repBestSets.sort((a, b) => a.reps.compareTo(b.reps));
+    for (final set in repBestSets) {
+      result.add(
+        set.achievement(
+          RecordType.repBest,
+          set.weight,
+          bestForAtLeast(set.reps)!,
+          reps: set.reps,
+        ),
+      );
+    }
+
+    final biggest = top((set) => set.volume);
+    if (biggest.volume > bestSetVolume) {
+      result.add(
+        biggest.achievement(
+          RecordType.setVolume,
+          biggest.volume,
+          bestSetVolume,
+        ),
+      );
+    }
+    return result;
+  }
+
+  void absorb(List<_PerformedSet> sets) {
+    for (final set in sets) {
+      if (set.weight > heaviestWeight) heaviestWeight = set.weight;
+      if (set.volume > bestSetVolume) bestSetVolume = set.volume;
+      final e1rm = set.estimatedOneRepMax;
+      if (e1rm > 0 && e1rm > (estimatedOneRepMax ?? 0)) {
+        estimatedOneRepMax = e1rm;
+      }
+      if (set.weight > (repBests[set.reps] ?? double.negativeInfinity)) {
+        repBests[set.reps] = set.weight;
+      }
+    }
+  }
 }

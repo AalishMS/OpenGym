@@ -64,7 +64,8 @@ class _RecordEventRowState extends State<RecordEventRow> {
     final tagStyle = Theme.of(
       context,
     ).textTheme.bodySmall?.copyWith(color: textSecondaryColor(context));
-    final producer = event.achievements.last;
+    // The set shown is the one behind the leading tag.
+    final producer = achievements.first;
     return Container(
       constraints: const BoxConstraints(minHeight: 64),
       padding: const EdgeInsets.symmetric(vertical: 12),
