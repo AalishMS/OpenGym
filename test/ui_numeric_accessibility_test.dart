@@ -225,7 +225,10 @@ void main() {
           for (final field in [
             weight,
             reps,
-            find.bySemanticsLabel('Set 1 RPE value 10'),
+            find.descendant(
+              of: find.byType(SetEntryTable),
+              matching: find.bySemanticsLabel('Set 1 RPE'),
+            ),
           ]) {
             target(tester, field);
             await tester.ensureVisible(field);

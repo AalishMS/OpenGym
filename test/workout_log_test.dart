@@ -22,7 +22,6 @@ import 'package:gymapp/utils/training_block_identity.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
 import 'package:gymapp/widgets/workout/training_block_strip.dart';
 import 'package:hive/hive.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -237,7 +236,7 @@ void main() {
             );
             expect(tester.getRect(title).top, greaterThanOrEqualTo(0));
             expect(find.byTooltip('Delete set'), findsNothing);
-            expect(find.bySemanticsLabel('Set 1 RPE value 8'), findsWidgets);
+            expect(find.bySemanticsLabel('Set 1 RPE'), findsWidgets);
             final card = find.byType(ExerciseCard).first;
             final menu = find.descendant(
               of: card,
@@ -265,7 +264,7 @@ void main() {
               of: row,
               matching: find.bySemanticsLabel('Set 1 Kg'),
             );
-            for (final label in ['Set 1 Reps', 'Set 1 RPE value 8']) {
+            for (final label in ['Set 1 Reps', 'Set 1 RPE']) {
               expect(
                 tester
                     .getCenter(
@@ -292,7 +291,7 @@ void main() {
               find.descendant(of: card, matching: find.byType(Scrollbar)),
               findsNothing,
             );
-            final finish = find.widgetWithIcon(IconButton, LucideIcons.check);
+            final finish = find.widgetWithText(TextButton, 'Finish workout');
             expect(finish, findsOneWidget);
             expect(
               tester
@@ -478,7 +477,7 @@ void main() {
       await tester.runAsync(() => seed());
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
-      final finish = find.widgetWithIcon(IconButton, LucideIcons.check);
+      final finish = find.widgetWithText(TextButton, 'Finish workout');
       // Nothing to finish before Start, so the header leaves Finish out.
       expect(finish, findsNothing);
       expect(find.textContaining('Tap Start in the toolbar'), findsNothing);
@@ -496,9 +495,11 @@ void main() {
       await tester.runAsync(() => seed(started: true));
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
-      expect(tester.widget<IconButton>(finish).onPressed, isNotNull);
+      expect(tester.widget<TextButton>(finish).onPressed, isNotNull);
       expect(
-        tester.widget<IconButton>(finish).color,
+        Theme.of(
+          tester.element(finish),
+        ).textButtonTheme.style?.foregroundColor?.resolve({}),
         accentColor(tester.element(finish)),
       );
       await tester.tap(finish);

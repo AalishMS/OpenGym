@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/theme/app_theme.dart';
-import 'package:gymapp/theme/semantic_colors.dart';
 import 'package:gymapp/widgets/workout/set_entry_table.dart';
 
 void main() {
@@ -154,7 +153,7 @@ void main() {
   });
 
   testWidgets(
-    'workout rows show a compact RPE field for every value, accent, and theme',
+    'workout rows show a readable RPE input for every value, accent, and theme',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(320, 800);
@@ -175,10 +174,10 @@ void main() {
             await tester.pumpAndSettle();
 
             final reps = find.bySemanticsLabel('Set 1 Reps');
-            final effort = find.bySemanticsLabel('Set 1 RPE value $rpe');
+            final effort = find.bySemanticsLabel('Set 1 RPE');
             final effortText = find.descendant(
               of: effort,
-              matching: find.text('@$rpe'),
+              matching: find.text('$rpe'),
             );
             final context = tester.element(effortText);
 
@@ -188,12 +187,9 @@ void main() {
             );
             expect(
               tester.widget<Text>(effortText).style!.color,
-              rpeColor(rpe, context),
+              textPrimaryColor(context),
             );
-            expect(
-              tester.widget<Text>(effortText).style!.fontSize,
-              Theme.of(context).textTheme.labelLarge!.fontSize,
-            );
+            expect(tester.widget<Text>(effortText).style!.fontSize, 20);
             expect(
               find.descendant(
                 of: effort,
@@ -201,7 +197,7 @@ void main() {
                   (widget) => widget is Container && widget.decoration != null,
                 ),
               ),
-              findsNothing,
+              findsOneWidget,
             );
             expect(tester.takeException(), isNull);
           }

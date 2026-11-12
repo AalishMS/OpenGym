@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../data/exercise_library.dart';
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
 import '../models/statistics.dart';
@@ -787,7 +788,14 @@ class _EditSessionScreenState extends State<EditSessionScreen>
           reps: exercise.sets[index].reps,
           previous:
               index < previous.length && previous[index].reps > 0
-                  ? '${formatEntryWeight(previous[index].weight, weightUnit)} × ${previous[index].reps}'
+                  ? ExerciseLibrary.isTimed(exercise.name)
+                      ? formatSetSummary(
+                        previous[index].weight,
+                        previous[index].reps,
+                        weightUnit,
+                        timed: true,
+                      )
+                      : '${formatEntryWeight(previous[index].weight, weightUnit)} × ${previous[index].reps}'
                   : null,
           annotation: exercise.sets[index].note,
           rpe: exercise.sets[index].rpe,
@@ -809,6 +817,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
   void _showAddSetDialog(int exerciseIndex) {
     WorkoutDialogs.showAddSetDialog(
       context,
+      exerciseName: _session.exercises[exerciseIndex].name,
       onAdd: (set) {
         _replaceSets(exerciseIndex, [
           ..._session.exercises[exerciseIndex].sets,
@@ -821,6 +830,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
   void _showEditSetDialog(int exerciseIndex, int setIndex, gym.Set set) {
     WorkoutDialogs.showEditSetDialog(
       context,
+      exerciseName: _session.exercises[exerciseIndex].name,
       set: set,
       onSave: (updated) {
         final sets = List<gym.Set>.of(_session.exercises[exerciseIndex].sets);
@@ -903,6 +913,7 @@ class _EditableExerciseCard extends StatelessWidget {
             IgnorePointer(
               ignoring: !enabled,
               child: SetEntryTable(
+                isTimed: ExerciseLibrary.isTimed(exercise.name),
                 hostReservesSpace: true,
                 sets: entries,
                 onChanged: onChanged,

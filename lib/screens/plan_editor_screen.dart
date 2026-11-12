@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
+import '../data/exercise_library.dart';
 import '../data/plan_colors.dart';
 import '../models/exercise_set_data.dart';
 import '../models/exercise_template.dart';
@@ -299,7 +300,15 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     setState(() {
       final sets = _exercises[exerciseIndex].sets;
       final lastSet =
-          sets.isNotEmpty ? sets.last : ExerciseSetData(reps: 8, weight: 0);
+          sets.isNotEmpty
+              ? sets.last
+              : ExerciseSetData(
+                reps:
+                    ExerciseLibrary.isTimed(_exercises[exerciseIndex].name)
+                        ? 30
+                        : 8,
+                weight: 0,
+              );
       sets.add(
         ExerciseSetData(
           reps: lastSet.reps,
@@ -354,7 +363,12 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
         _EditorExercise(
           id: _nextExerciseId++,
           name: name,
-          sets: [ExerciseSetData(reps: 8, weight: 0)],
+          sets: [
+            ExerciseSetData(
+              reps: ExerciseLibrary.isTimed(name) ? 30 : 8,
+              weight: 0,
+            ),
+          ],
           expanded: true,
         ),
       );
@@ -532,7 +546,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                                   bottom: AppSpacing.md,
                                 ),
                                 child: Text(
-                                  'Weight, Reps, and RPE. Hold a set to delete it.',
+                                  'Weight, reps or seconds, and RPE. Hold a set to delete it.',
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
                               ),
@@ -891,6 +905,8 @@ class _ExerciseEditorSection extends StatelessWidget {
         TextSpan(text: '${sets.length}', style: number),
         TextSpan(text: ' × ', style: unit),
         TextSpan(text: '${first.reps}', style: number),
+        if (ExerciseLibrary.isTimed(exercise.name))
+          TextSpan(text: ' s', style: unit),
         if (first.weight > 0) ...[
           TextSpan(text: '  ·  ', style: unit),
           TextSpan(
@@ -916,10 +932,13 @@ class _ExerciseEditorSection extends StatelessWidget {
           TextSpan(text: ' × ', style: unit),
         ],
         TextSpan(text: '${sets[i].reps}', style: number),
+        if (ExerciseLibrary.isTimed(exercise.name))
+          TextSpan(text: ' s', style: unit),
         if (sets[i].rpe != null)
           TextSpan(text: ' @${sets[i].rpe}', style: unit),
       ],
-      if (!weighted) TextSpan(text: ' reps', style: unit),
+      if (!weighted && !ExerciseLibrary.isTimed(exercise.name))
+        TextSpan(text: ' reps', style: unit),
       if (sets.length > shown)
         TextSpan(text: '  +${sets.length - shown}', style: unit),
     ];
@@ -938,8 +957,8 @@ class _ExerciseEditorSection extends StatelessWidget {
     );
     return top.weight > 0
         ? 'Last: ${formatEntryWeight(top.weight, weightUnit)} '
-            '${weightUnitLabel(weightUnit)} × ${top.reps}'
-        : 'Last: ${top.reps} reps';
+            '${weightUnitLabel(weightUnit)} \u00d7 ${top.reps}${ExerciseLibrary.isTimed(exercise.name) ? ' s' : ''}'
+        : 'Last: ${top.reps} ${ExerciseLibrary.isTimed(exercise.name) ? 's' : 'reps'}';
   }
 
   @override
@@ -970,6 +989,7 @@ class _ExerciseEditorSection extends StatelessWidget {
                 ),
               ),
             SetEntryTable(
+              isTimed: ExerciseLibrary.isTimed(exercise.name),
               continuousLog: true,
               scrollWideTable: true,
               hostReservesSpace: true,
@@ -1217,7 +1237,7 @@ class _EmptyExercises extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Pick from the exercise library or create your own, then set '
-            'target weights, reps and optional RPE for each set.',
+            'target weights, reps or seconds and optional RPE for each set.',
             textAlign: TextAlign.center,
             style: textTheme.bodyMedium?.copyWith(color: secondary),
           ),

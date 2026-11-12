@@ -464,6 +464,12 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Log workout'));
       await waitFor(
         tester,
+        () => find.text('Workout logged').evaluate().isNotEmpty,
+      );
+      await tester.tap(find.widgetWithText(TextButton, 'Done'));
+      await tester.pumpAndSettle();
+      await waitFor(
+        tester,
         () =>
             tester
                 .widget<TrainingBlockStrip>(find.byType(TrainingBlockStrip))
@@ -1183,7 +1189,10 @@ void main() {
           of: find.byType(AppBar),
           matching: find.byType(TextButton),
         );
-        expect(tester.widget<TextButton>(button).onPressed, isNull);
+        expect(button, findsNWidgets(2));
+        for (final action in tester.widgetList<TextButton>(button)) {
+          expect(action.onPressed, isNull);
+        }
       },
     );
 

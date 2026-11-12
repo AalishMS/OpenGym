@@ -154,6 +154,36 @@ void main() {
     ]);
   });
 
+  workoutTest('rename rejects changing reps to seconds before saving', (
+    tester,
+  ) async {
+    await open(tester);
+    await openMenu(tester, 'Bench Press');
+    await tester.tap(find.text('Rename exercise'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Plank');
+    await tester.tap(find.text('Rename'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Timed exercises need a timed exercise name.'),
+      findsOneWidget,
+    );
+    expect(find.text('Rename exercise'), findsOneWidget);
+    expect(
+      names(HiveService.getPlanById('push')!.exercises).first,
+      'Bench Press',
+    );
+    expect(
+      names(HiveService.getSessionById('push-1')!.exercises).first,
+      'Bench Press',
+    );
+    expect(
+      HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split'),
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   workoutTest('rename everywhere updates plans, history and providers', (
     tester,
   ) async {

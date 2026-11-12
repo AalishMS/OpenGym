@@ -1,3 +1,4 @@
+import '../data/exercise_library.dart';
 import '../models/exercise.dart';
 import '../models/exercise_template.dart';
 import '../models/workout_plan.dart';
@@ -38,8 +39,23 @@ class ExerciseRenameService {
   ExerciseRenameService._();
 
   /// Case-insensitive, ignoring surrounding and repeated whitespace.
-  static String normalize(String name) =>
-      name.trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+  static String normalize(String name) => canonicalName(name).toLowerCase();
+
+  /// Keep saved names consistent with the identity used by merge previews.
+  static String canonicalName(String name) =>
+      name.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+  /// A rename keeps existing set values, so it cannot change their unit.
+  /// Timed identity currently comes from the catalog name; changing to or
+  /// from a timed name would reinterpret seconds as reps (or vice versa).
+  static String? validationMessage({required String from, required String to}) {
+    if (canonicalName(to).isEmpty) return 'Enter an exercise name.';
+    if (ExerciseLibrary.isTimed(from) != ExerciseLibrary.isTimed(to)) {
+      return 'Timed exercises need a timed exercise name. '
+          'Use Replace exercise to change how an exercise is measured.';
+    }
+    return null;
+  }
 
   /// Counts what [rename] would change without writing anything.
   static ExerciseRenameImpact impact({
@@ -83,8 +99,9 @@ class ExerciseRenameService {
     required String from,
     required String to,
   }) async {
-    final name = to.trim();
-    if (name.isEmpty) throw ArgumentError('Enter an exercise name.');
+    final name = canonicalName(to);
+    final error = validationMessage(from: from, to: name);
+    if (error != null) throw ArgumentError(error);
     final source = normalize(from);
     final result = await SyncService.instance.runExclusiveLocalMutation(
       () async {

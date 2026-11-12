@@ -129,6 +129,77 @@ void main() {
     expect(HiveService.getSessionById('log')!.dirty, isFalse);
   });
 
+  test(
+    'incompatible renames preserve stored measurement and sync state',
+    () async {
+      await seed(
+        plans: [
+          plan('p1', ['Plank', 'Bench Press']),
+        ],
+        sessions: [
+          session('log', ['Plank', 'Bench Press']),
+        ],
+      );
+      for (final change in [
+        ('Plank', 'Front plank'),
+        ('Bench Press', 'Plank'),
+      ]) {
+        await expectLater(
+          ExerciseRenameService.rename(
+            splitId: 'split-a',
+            from: change.$1,
+            to: change.$2,
+          ),
+          throwsArgumentError,
+        );
+      }
+      expect(planNames('p1'), ['Plank', 'Bench Press']);
+      expect(sessionNames('log'), ['Plank', 'Bench Press']);
+      expect(HiveService.getPlanById('p1')!.dirty, isFalse);
+      expect(HiveService.getSessionById('log')!.dirty, isFalse);
+      expect(HiveService.getSessionById('log')!.updatedAt, old);
+    },
+  );
+
+  test(
+    'merge saves the same identity despite repeated target spaces',
+    () async {
+      await seed(
+        plans: [
+          plan('p1', ['Squat', 'Bench Press']),
+        ],
+        sessions: [
+          session('log', ['Squat', 'Bench Press']),
+        ],
+      );
+      final changed = await ExerciseRenameService.rename(
+        splitId: 'split-a',
+        from: 'Squat',
+        to: '  Bench   Press  ',
+      );
+      expect(changed.merges, isTrue);
+      expect(planNames('p1'), ['Bench Press', 'Bench Press']);
+      expect(sessionNames('log'), ['Bench Press', 'Bench Press']);
+    },
+  );
+
+  test('renaming between timed names keeps hold values', () async {
+    await seed(
+      sessions: [
+        session('log', ['Plank']),
+      ],
+    );
+    await ExerciseRenameService.rename(
+      splitId: 'split-a',
+      from: 'Plank',
+      to: 'Side Plank',
+    );
+    final exercise = HiveService.getSessionById('log')!.exercises.single;
+    expect(exercise.name, 'Side Plank');
+    expect(exercise.sets.single.reps, 8);
+    expect(exercise.sets.single.weight, 60);
+  });
+
   test('renames plans, drafts and logs and marks them for sync', () async {
     await seed(
       plans: [

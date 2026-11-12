@@ -164,6 +164,11 @@ editable; completed logs are read-only in the logger.
   held both names keeps both entries. The open workout is renamed and saved
   first, then the plan and session providers reload. Unchecked, only this
   workout changes.
+- Rename saves names with surrounding and repeated whitespace removed. It
+  rejects changes between timed and repetition-based names, since timed
+  measurement currently comes from the catalog name and existing seconds must
+  not be reinterpreted as reps. Replace exercise is the action for changing
+  measurement; it does not rewrite history.
 - *Replace exercise* opens the exercise library in single-choice mode and swaps
   the choice into this workout only. It keeps the set count. Weight and reps
   come from the new exercise's latest logged performance in the split, or
@@ -510,6 +515,18 @@ signature:
   RPE from 1 to 10 and supports clearing it. Wide editor tables scroll at large
   text sizes. The plan colour palette opens from Change color to leave more room
   for training targets; Add exercise stays pinned at the bottom.
+- Timed exercises use *Seconds* in editable set tables and the shared keypad,
+  including History and set dialogs. Counts remain integer seconds in the
+  existing reps field. Ordinary and custom exercises retain *Reps*. RPE uses
+  the same editable cell treatment as weight and count, with an accessible
+  label and optional value.
+- Once the timer has started, the workout header offers a labelled *Finish
+  workout* action. Confirming and successfully saving opens a scrollable
+  summary with duration, performed sets, weighted volume, bodyweight reps,
+  timed work and the shared personal-record results in the chosen weight unit.
+  Comparisons use the latest earlier completed session with the same plan ID,
+  split and owner; seconds never contribute to reps or weight-based volume.
+  Failed saves keep the draft available and do not show a success summary.
 - A collapsed plan-editor row previews its sets in `figures`: the target
   (*3 × 12 · 70 kg*, or up to four mixed sets and then *+N*) and, only when
   the exercise has been trained in this split, *Last:* with the best set from

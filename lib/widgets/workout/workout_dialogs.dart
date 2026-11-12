@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
+
+import '../../data/exercise_library.dart';
 import '../../models/set.dart' as gym;
 import '../../providers/settings_provider.dart';
 import '../../services/exercise_rename_service.dart';
@@ -9,10 +11,12 @@ import '../../theme/app_typography.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../../utils/weight_units.dart';
 import 'set_entry_table.dart';
 
 class WorkoutDialogs {
   static void showPRDialog(BuildContext context, List<PRResult> prs) {
+    final unit = SettingsProvider.unitOf(context);
     showDialog(
       context: context,
       builder:
@@ -41,7 +45,7 @@ class WorkoutDialogs {
                               style: Theme.of(context).textTheme.titleSmall,
                             ),
                             Text(
-                              '${pr.newPR} kg · was ${pr.previousPR} kg',
+                              '${formatWeightWithUnit(pr.newPR, unit)} (previous ${formatWeightWithUnit(pr.previousPR, unit)})',
                               style: Theme.of(
                                 context,
                               ).textTheme.bodyMedium?.copyWith(
@@ -105,12 +109,17 @@ class WorkoutDialogs {
   static void showAddSetDialog(
     BuildContext context, {
     gym.Set? lastSet,
+    String? exerciseName,
     required void Function(gym.Set newSet) onAdd,
   }) {
+    final isTimed = ExerciseLibrary.isTimed(exerciseName ?? '');
     final settings = context.read<SettingsProvider>();
 
     // Kilograms, as stored; the entry table shows them in the chosen unit.
-    final draft = _SetDraft(weight: lastSet?.weight, reps: lastSet?.reps ?? 8);
+    final draft = _SetDraft(
+      weight: lastSet?.weight,
+      reps: lastSet?.reps ?? (isTimed ? 30 : 8),
+    );
     int? selectedRpe = settings.autoFillLast ? lastSet?.rpe : null;
 
     showDialog(
@@ -136,7 +145,11 @@ class WorkoutDialogs {
                         style: Theme.of(context).dialogTheme.titleTextStyle,
                       ),
                       const SizedBox(height: 12),
-                      _DialogSetEntry(draft: draft, showHistoryColumns: false),
+                      _DialogSetEntry(
+                        draft: draft,
+                        isTimed: isTimed,
+                        showHistoryColumns: false,
+                      ),
                       const SizedBox(height: 12),
                       Text(
                         'RPE (Rate of Perceived Exertion)',
@@ -227,8 +240,10 @@ class WorkoutDialogs {
                               if (reps == null || reps <= 0) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: const Text(
-                                      'Reps must be greater than 0',
+                                    content: Text(
+                                      isTimed
+                                          ? 'Seconds must be greater than 0'
+                                          : 'Reps must be greater than 0',
                                     ),
                                     backgroundColor: errorColor(context),
                                   ),
@@ -268,6 +283,7 @@ class WorkoutDialogs {
   static void showEditSetDialog(
     BuildContext context, {
     required gym.Set set,
+    String? exerciseName,
     required void Function(gym.Set updatedSet) onSave,
     required VoidCallback onDelete,
   }) {
@@ -278,7 +294,12 @@ class WorkoutDialogs {
       backgroundColor: surfaceColor(context),
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
       builder:
-          (_) => _EditSetSheet(set: set, onSave: onSave, onDelete: onDelete),
+          (_) => _EditSetSheet(
+            set: set,
+            isTimed: ExerciseLibrary.isTimed(exerciseName ?? ''),
+            onSave: onSave,
+            onDelete: onDelete,
+          ),
     );
   }
 
@@ -531,11 +552,13 @@ class WorkoutDialogs {
 /// the system text keyboard. The surrounding dialog owns save/cancel behavior.
 class _EditSetSheet extends StatefulWidget {
   final gym.Set set;
+  final bool isTimed;
   final ValueChanged<gym.Set> onSave;
   final VoidCallback onDelete;
 
   const _EditSetSheet({
     required this.set,
+    this.isTimed = false,
     required this.onSave,
     required this.onDelete,
   });
@@ -567,7 +590,13 @@ class _EditSetSheetState extends State<_EditSetSheet> {
     final weight = _draft.weight;
     final reps = _draft.reps;
     if (weight == null || weight < 0 || reps == null || reps <= 0) {
-      setState(() => _error = 'Enter a valid weight and at least one rep.');
+      setState(
+        () =>
+            _error =
+                widget.isTimed
+                    ? 'Enter a valid weight and at least one second.'
+                    : 'Enter a valid weight and at least one rep.',
+      );
       return;
     }
     final updated = gym.Set(
@@ -593,7 +622,11 @@ class _EditSetSheetState extends State<_EditSetSheet> {
           children: [
             Text('Edit set', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: AppSpacing.lg),
-            _DialogSetEntry(draft: _draft, showHistoryColumns: false),
+            _DialogSetEntry(
+              draft: _draft,
+              isTimed: widget.isTimed,
+              showHistoryColumns: false,
+            ),
             const SizedBox(height: AppSpacing.md),
             Text('RPE', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: AppSpacing.sm),
@@ -716,9 +749,14 @@ class _SetDraft {
 
 class _DialogSetEntry extends StatefulWidget {
   final _SetDraft draft;
+  final bool isTimed;
   final bool showHistoryColumns;
 
-  const _DialogSetEntry({required this.draft, this.showHistoryColumns = true});
+  const _DialogSetEntry({
+    required this.draft,
+    this.isTimed = false,
+    this.showHistoryColumns = true,
+  });
 
   @override
   State<_DialogSetEntry> createState() => _DialogSetEntryState();
@@ -727,6 +765,7 @@ class _DialogSetEntry extends StatefulWidget {
 class _DialogSetEntryState extends State<_DialogSetEntry> {
   @override
   Widget build(BuildContext context) => SetEntryTable(
+    isTimed: widget.isTimed,
     showHistoryColumns: widget.showHistoryColumns,
     sets: [
       SetEntry(weight: widget.draft.weight ?? 0, reps: widget.draft.reps ?? 0),
@@ -774,9 +813,13 @@ class _RenameExerciseDialogState extends State<_RenameExerciseDialog> {
       '$value ${value == 1 ? noun : '${noun}s'}';
 
   void _submit() {
-    final name = _name.text.trim();
-    if (name.isEmpty) {
-      setState(() => _error = 'Enter an exercise name');
+    final name = ExerciseRenameService.canonicalName(_name.text);
+    final error = ExerciseRenameService.validationMessage(
+      from: widget.currentName,
+      to: name,
+    );
+    if (error != null) {
+      setState(() => _error = error);
       return;
     }
     Navigator.pop(context);
@@ -793,7 +836,7 @@ class _RenameExerciseDialogState extends State<_RenameExerciseDialog> {
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
     final impactFor = widget.impactFor;
-    final name = _name.text.trim();
+    final name = ExerciseRenameService.canonicalName(_name.text);
     final impact = impactFor?.call(name.isEmpty ? widget.currentName : name);
     return AlertDialog(
       title: const Text('Rename exercise'),

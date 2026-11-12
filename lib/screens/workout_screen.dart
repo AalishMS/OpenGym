@@ -23,7 +23,6 @@ import '../providers/workout_session_provider.dart';
 import '../repositories/training_block_repository.dart';
 import '../services/exercise_rename_service.dart';
 import '../services/hive_service.dart';
-import '../services/pr_tracking_service.dart';
 import '../services/sync_service.dart';
 import '../services/workout_progression_service.dart';
 import '../services/workout_session_initializer.dart';
@@ -46,6 +45,7 @@ import '../widgets/workout/training_block_dialogs.dart';
 import '../widgets/workout/training_block_strip.dart';
 import '../widgets/workout/training_boundary_sheet.dart';
 import '../widgets/workout/workout_dialogs.dart';
+import '../widgets/workout/workout_finish_summary.dart';
 
 class WorkoutScreen extends StatefulWidget {
   final WorkoutPlan plan;
@@ -478,10 +478,6 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     child: child,
   );
 
-  void _showPRDialog(List<PRResult> prs) {
-    WorkoutDialogs.showPRDialog(context, prs);
-  }
-
   String get _currentWeek => _weeks[_currentWeekIndex];
   TrainingWeek get _selectedWeek => _weekById[_currentWeek]!;
   WorkoutProgress? get _progress => _training.progressByPlan[widget.plan.id];
@@ -753,6 +749,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final draft = _getOrCreateSession();
     if (draft.isCompleted || !draft.hasStarted) return;
     final duration = formatDuration(draft.elapsedSeconds());
+    final summaryUnit = SettingsProvider.unitOf(context, listen: false);
+    Widget? finishSummary;
     setState(() {
       _timerAction = 'Logging workout';
       _confirmingFinish = true;
@@ -802,12 +800,15 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         );
         if (!mounted) return;
         setState(() {});
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Workout logged')));
-        if (result.personalRecords.isNotEmpty) {
-          _showPRDialog(result.personalRecords);
-        }
+        finishSummary = WorkoutFinishSummary(
+          session: result.session,
+          previous: WorkoutFinishWork.previous(
+            result.session,
+            HiveService.getCompletedSessions(splitId: widget.plan.splitId),
+          ),
+          records: result.records,
+          weightUnit: summaryUnit,
+        );
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -816,6 +817,13 @@ class _WorkoutScreenState extends State<WorkoutScreen>
               'Workout could not be logged. Your draft is unchanged.',
             ),
           ),
+        );
+      }
+      if (mounted && finishSummary != null) {
+        setState(() => _timerAction = null);
+        await showDialog<void>(
+          context: context,
+          builder: (_) => finishSummary!,
         );
       }
     } finally {
@@ -925,6 +933,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       context,
       currentName: exercise.name,
       onRename: (name) {
+        name = ExerciseRenameService.canonicalName(name);
         final updatedExercises = List<Exercise>.from(session.exercises);
         updatedExercises[exerciseIndex] = Exercise(
           name: name,
@@ -957,6 +966,12 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     String from,
     String to,
   ) async {
+    to = ExerciseRenameService.canonicalName(to);
+    final validation = ExerciseRenameService.validationMessage(
+      from: from,
+      to: to,
+    );
+    if (validation != null) throw ArgumentError(validation);
     if (to == from) return;
     final source = ExerciseRenameService.normalize(from);
     final session = _getOrCreateSession();
@@ -1714,6 +1729,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     );
     final titleStyle = Theme.of(context).textTheme.headlineSmall!;
     final textScaler = MediaQuery.textScalerOf(context);
+    final planTabs = _buildPlanTabBar(accent, plans, currentPlanIndex);
     // Give the two-line title breathing room without returning to the tall
     // header. Grow with accessibility text while keeping the same padding.
     final toolbarHeight = (textScaler.scale(titleStyle.fontSize!) *
@@ -1783,26 +1799,6 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                           ? null
                           : _toggleTimer,
                 ),
-                // Nothing to finish before Start, so Finish waits for it.
-                if (session.hasStarted)
-                  IconButton(
-                    tooltip: 'Finish workout',
-                    onPressed:
-                        !_isSaving &&
-                                _timerAction == null &&
-                                _canUseTimer(session)
-                            ? _stopWorkout
-                            : null,
-                    color: accent,
-                    disabledColor: textSecondaryColor(context),
-                    constraints: const BoxConstraints(
-                      minWidth: 48,
-                      minHeight: 48,
-                    ),
-                    icon: const Icon(LucideIcons.check, size: 22),
-                  )
-                else
-                  const SizedBox(width: AppSpacing.xs),
                 PopupMenuButton<String>(
                   tooltip: 'Workout actions',
                   icon: Icon(
@@ -1828,7 +1824,45 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                 // Nothing to act on once finished; keep the title off the edge.
                 const SizedBox(width: AppSpacing.lg),
             ],
-            bottom: _buildPlanTabBar(accent, plans, currentPlanIndex),
+            bottom: PreferredSize(
+              preferredSize: Size.fromHeight(
+                (planTabs?.preferredSize.height ?? 0) +
+                    (!session.isCompleted && session.hasStarted
+                        ? math.max(48, textScaler.scale(20) + 16) + 8
+                        : 0),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (!session.isCompleted && session.hasStarted)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.lg,
+                        vertical: AppSpacing.xxs,
+                      ),
+                      child: SizedBox(
+                        width: double.infinity,
+                        child: TextButton(
+                          onPressed:
+                              !_isSaving &&
+                                      _timerAction == null &&
+                                      _canUseTimer(session)
+                                  ? _stopWorkout
+                                  : null,
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(48, 48),
+                          ),
+                          child: const Tooltip(
+                            message: 'Finish workout',
+                            child: Text('Finish workout'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (planTabs != null) planTabs,
+                ],
+              ),
+            ),
           ),
           bottomNavigationBar: _buildWeekNavBar(accent),
           body: Column(

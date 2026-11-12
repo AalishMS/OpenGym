@@ -855,6 +855,69 @@ void main() {
     },
   );
 
+  testWidgets(
+    'history edits timed sets in seconds and keeps saved values until Save',
+    (tester) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1000, 900);
+      addTearDown(tester.view.reset);
+      final original = session(
+        id: 'hold',
+        name: 'Core',
+        date: DateTime(2026, 9, 12),
+        exerciseName: 'Plank',
+        weight: 0,
+        reps: 45,
+      );
+      final provider = _Sessions([
+        original,
+        session(
+          id: 'previous-hold',
+          name: 'Core',
+          date: DateTime(2026, 9, 11),
+          exerciseName: 'Plank',
+          weight: 0,
+          reps: 30,
+        ),
+      ]);
+      await tester.pumpWidget(
+        host(
+          provider,
+          screen: EditSessionScreen(session: original),
+          size: const Size(1000, 900),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Seconds'), findsOneWidget);
+      expect(find.text('30 s'), findsOneWidget);
+      expect(find.text('Reps'), findsNothing);
+      await tester.tap(find.bySemanticsLabel('Set 1 Seconds'));
+      await tester.pumpAndSettle();
+      for (final digit in ['6', '0']) {
+        await tester.tap(find.widgetWithText(InkWell, digit).last);
+        await tester.pump();
+      }
+      await tester.tap(
+        find.descendant(
+          of: find.bySemanticsLabel('Hide keypad'),
+          matching: find.byType(InkWell),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(provider.sessions.first.exercises.single.sets.single.reps, 45);
+      await tester.tap(find.byTooltip('Set 1 details'));
+      await tester.pumpAndSettle();
+      expect(find.text('Seconds'), findsNWidgets(2));
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(provider.sessions.first.exercises.single.sets.single.reps, 60);
+      expect(original.exercises.single.sets.single.reps, 45);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('editor PR controls fit small screens and enlarged text', (
     tester,
   ) async {

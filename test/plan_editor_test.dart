@@ -770,7 +770,7 @@ void main() {
         ],
       );
       await pumpEditorWithProvider(tester, plan: plan);
-      expect(find.bySemanticsLabel('Set 1 RPE value 8'), findsOneWidget);
+      expect(find.bySemanticsLabel('Set 1 RPE'), findsOneWidget);
       await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
       await tester.pumpAndSettle();
       for (final key in ['9', '0']) {
@@ -781,7 +781,7 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Add set'));
       await tester.pumpAndSettle();
-      expect(find.bySemanticsLabel('Set 2 RPE value 8'), findsOneWidget);
+      expect(find.bySemanticsLabel('Set 2 RPE'), findsOneWidget);
       await tester.runAsync(() async {
         await tester.tap(find.text('Save'));
         await Hive.box<WorkoutPlan>(HiveService.plansBox).flush();
@@ -838,14 +838,14 @@ void main() {
       ],
     );
     await pumpEditorWithPlan(tester, plan);
-    await tester.ensureVisible(find.bySemanticsLabel('Set 1 RPE value 8'));
-    await tester.tap(find.bySemanticsLabel('Set 1 RPE value 8'));
+    await tester.ensureVisible(find.bySemanticsLabel('Set 1 RPE'));
+    await tester.tap(find.bySemanticsLabel('Set 1 RPE'));
     await tester.pumpAndSettle();
     await tester.longPress(find.bySemanticsLabel('Delete digit'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Done').last);
     await tester.pumpAndSettle();
-    expect(find.bySemanticsLabel('Set 1 RPE value, not set'), findsOneWidget);
+    expect(find.bySemanticsLabel('Set 1 RPE'), findsOneWidget);
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
     expect(find.text('Discard changes?'), findsOneWidget);

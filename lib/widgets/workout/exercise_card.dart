@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/exercise_library.dart';
 import '../../models/exercise.dart';
 import '../../models/set.dart' as gym;
 import '../../providers/settings_provider.dart';
@@ -180,6 +181,7 @@ class ExerciseCard extends StatelessWidget {
               ignoring: readOnly,
               child: SetEntryTable(
                 continuousLog: true,
+                isTimed: ExerciseLibrary.isTimed(exercise.name),
                 weightUnit: weightUnit,
                 onEntryFinished: onEntryFinished,
                 onDelete:
@@ -193,7 +195,7 @@ class ExerciseCard extends StatelessWidget {
                       reps: exercise.sets[i].reps,
                       previous:
                           i < previousSets.length && previousSets[i].reps > 0
-                              ? '${formatEntryWeight(previousSets[i].weight, weightUnit)} × ${previousSets[i].reps}'
+                              ? '${formatEntryWeight(previousSets[i].weight, weightUnit)} × ${previousSets[i].reps}${ExerciseLibrary.isTimed(exercise.name) ? ' s' : ''}'
                               : null,
                       rpe: exercise.sets[i].rpe,
                     ),

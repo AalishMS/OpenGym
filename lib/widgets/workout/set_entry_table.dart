@@ -197,6 +197,7 @@ class SetEntryTable extends StatefulWidget {
   static ValueListenable<double> get keyboardHeight => _keyboardHeight;
 
   final List<SetEntry> sets;
+  final bool isTimed;
   final void Function(int index, double weight, int reps) onChanged;
   final void Function(int index, int? rpe)? onRpeChanged;
   final ValueChanged<int>? onDetails;
@@ -221,6 +222,7 @@ class SetEntryTable extends StatefulWidget {
   const SetEntryTable({
     super.key,
     required this.sets,
+    this.isTimed = false,
     required this.onChanged,
     this.onRpeChanged,
     this.onDetails,
@@ -452,6 +454,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
                     (_) => _SetKeyboard(
                       key: owner._keyboardKey,
                       weightUnit: owner._weightUnit,
+                      isTimed: owner.widget.isTimed,
                       sets: List.of(owner.sets),
                       initialIndex: session.index,
                       initialField: session.field,
@@ -609,6 +612,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
       final table = Column(
         children: [
           _EntryHeader(
+            isTimed: widget.isTimed,
             weightUnit: weightUnit,
             trailing: showTrailing,
             showHistoryColumns: showHistoryColumns,
@@ -652,6 +656,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
                                     )
                                     : null,
                             child: _EntryRow(
+                              isTimed: widget.isTimed,
                               key: _rowKeys.putIfAbsent(
                                 index,
                                 () => GlobalKey(),
@@ -849,6 +854,7 @@ Widget _columns(
 );
 
 class _EntryHeader extends StatelessWidget {
+  final bool isTimed;
   final String weightUnit;
   final bool trailing;
   final bool showHistoryColumns;
@@ -857,6 +863,7 @@ class _EntryHeader extends StatelessWidget {
   final bool showPrevious;
   final bool continuousLog;
   const _EntryHeader({
+    this.isTimed = false,
     required this.weightUnit,
     this.trailing = false,
     this.showHistoryColumns = true,
@@ -875,7 +882,7 @@ class _EntryHeader extends StatelessWidget {
           'Set',
           continuousLog ? 'Previous' : 'Prev',
           weightColumnLabel(weightUnit),
-          'Reps',
+          isTimed ? 'Seconds' : 'Reps',
           if (showRpe) 'RPE',
         ])
           Text(
@@ -903,6 +910,7 @@ class _EntryRow extends StatelessWidget {
   final int index;
   final _SetKeyboardState? editing;
   final String? previous;
+  final bool isTimed;
   final String weightUnit;
   final String weight;
   final String reps;
@@ -922,6 +930,7 @@ class _EntryRow extends StatelessWidget {
     required this.index,
     this.editing,
     this.previous,
+    this.isTimed = false,
     required this.weightUnit,
     required this.weight,
     required this.reps,
@@ -963,7 +972,15 @@ class _EntryRow extends StatelessWidget {
           _SetField.weight,
         ),
       ),
-      _valueFieldTarget(_field(context, reps, 'Reps', onReps, _SetField.reps)),
+      _valueFieldTarget(
+        _field(
+          context,
+          reps,
+          isTimed ? 'Seconds' : 'Reps',
+          onReps,
+          _SetField.reps,
+        ),
+      ),
       if (onRpe != null) _valueFieldTarget(_rpeReadout(context)),
     ],
     trailing: trailing,
@@ -1043,50 +1060,13 @@ class _EntryRow extends StatelessWidget {
   bool _active(_SetField field) =>
       editing?._index == index && editing?._field == field;
 
-  Widget _rpeReadout(BuildContext context) {
-    if (_active(_SetField.rpe)) {
-      return _field(context, editing!._input, 'RPE', onRpe!, _SetField.rpe);
-    }
-    final value =
-        continuousLog ? '${rpe ?? '—'}' : (rpe == null ? '@—' : '@$rpe');
-    return Semantics(
-      label:
-          rpe == null
-              ? 'Set ${index + 1} RPE value, not set'
-              : 'Set ${index + 1} RPE value $rpe',
-      value: value,
-      button: true,
-      container: true,
-      excludeSemantics: true,
-      onTap: onRpe,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: AppRadius.field,
-        child: InkWell(
-          onTap: onRpe,
-          borderRadius: AppRadius.field,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Center(
-              child:
-                  continuousLog || rpe == null
-                      ? Text(
-                        value,
-                        maxLines: 1,
-                        softWrap: false,
-                        style: Theme.of(context).textTheme.labelLarge!.copyWith(
-                          fontWeight:
-                              continuousLog ? FontWeight.w400 : FontWeight.w700,
-                          color: textSecondaryColor(context),
-                        ),
-                      )
-                      : _effort(context, rpe!),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  Widget _rpeReadout(BuildContext context) => _field(
+    context,
+    rpe?.toString() ?? '\u2014',
+    'RPE',
+    onRpe!,
+    _SetField.rpe,
+  );
 
   Widget _field(
     BuildContext context,
@@ -1105,7 +1085,11 @@ class _EntryRow extends StatelessWidget {
                 ? (editing!._input.isEmpty
                     ? 'Not set'
                     : '${editing!._input} out of 10')
-                : '${editing!._input.isEmpty ? '0' : editing!._input} ${field == _SetField.weight ? weightUnitSpoken(weightUnit) : 'repetitions'}')
+                : '${editing!._input.isEmpty ? '0' : editing!._input} ${field == _SetField.weight ? weightUnitSpoken(weightUnit) : (isTimed ? 'seconds' : 'repetitions')}')
+            : field == _SetField.rpe
+            ? (rpe == null ? 'Not set' : '$rpe out of 10')
+            : field == _SetField.reps
+            ? '$value ${isTimed ? 'seconds' : 'repetitions'}'
             : value,
     selected: _active(field),
     liveRegion: _active(field),
@@ -1156,6 +1140,7 @@ class _EntryRow extends StatelessWidget {
 
 class _SetKeyboard extends StatefulWidget {
   final List<SetEntry> sets;
+  final bool isTimed;
   final String weightUnit;
   final int initialIndex;
   final _SetField initialField;
@@ -1168,6 +1153,7 @@ class _SetKeyboard extends StatefulWidget {
   const _SetKeyboard({
     super.key,
     required this.sets,
+    this.isTimed = false,
     required this.weightUnit,
     required this.initialIndex,
     required this.initialField,
@@ -1433,7 +1419,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
 
   String get _fieldLabel => switch (_field) {
     _SetField.weight => weightFieldLabel(_unit),
-    _SetField.reps => 'Reps',
+    _SetField.reps => widget.isTimed ? 'Seconds' : 'Reps',
     _SetField.rpe => 'RPE (1–10)',
   };
 
@@ -1617,7 +1603,9 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                 delta.abs() == weightSteps(_unit).large) ||
             (_field == _SetField.reps && delta.abs() == 1));
     final unit =
-        _field == _SetField.reps ? 'reps' : weightUnitSpoken(_unit);
+        _field == _SetField.reps
+            ? (widget.isTimed ? 'seconds' : 'reps')
+            : weightUnitSpoken(_unit);
     return Semantics(
       label: '$label $unit',
       child: _key(
