@@ -225,9 +225,10 @@ class _ExerciseTrendChartState extends State<ExerciseTrendChart> {
     final found = points.indexWhere((point) => point.session.id == _sessionId);
     final selected = found < 0 ? points.length - 1 : found;
     final point = points[selected];
-    final weighted =
-        widget.metric != ExerciseMetric.totalReps &&
-        widget.metric != ExerciseMetric.totalSets;
+    final fallback = widget.progress.fallback;
+    final weighted = progressValueIsWeight(widget.metric, fallback);
+    String format(double value) =>
+        formatProgressValue(value, widget.metric, fallback, widget.weightUnit);
     final values =
         points
             .map(
@@ -248,12 +249,7 @@ class _ExerciseTrendChartState extends State<ExerciseTrendChart> {
     final step = _niceStep((upper - lower) / 3);
     final maximum = math.max(3 * step, (upper / step).ceil() * step);
     final minimum = math.max(0.0, maximum - 3 * step);
-    final unit =
-        weighted
-            ? widget.weightUnit
-            : widget.metric == ExerciseMetric.totalReps
-            ? 'reps'
-            : 'sets';
+    final unit = progressAxisUnit(widget.metric, fallback, widget.weightUnit);
     final scale = MediaQuery.textScalerOf(context).scale(1);
     final slot = math.max(80.0, 80 * scale);
     return Column(
@@ -305,7 +301,7 @@ class _ExerciseTrendChartState extends State<ExerciseTrendChart> {
                         button: true,
                         selected: i == selected,
                         label:
-                            '${formatStatisticsDate(points[i].session.date)}, ${formatChartExerciseValue(points[i].value, widget.metric, widget.weightUnit)}, ${points[i].session.planName}',
+                            '${formatStatisticsDate(points[i].session.date)}, ${format(points[i].value)}, ${points[i].session.planName}',
                         child: InkWell(
                           borderRadius: AppRadius.control,
                           key: ValueKey('progress-point-$i'),
@@ -361,11 +357,7 @@ class _ExerciseTrendChartState extends State<ExerciseTrendChart> {
         ),
         const SizedBox(height: 16),
         ChartReadout(
-          value: formatChartExerciseValue(
-            point.value,
-            widget.metric,
-            widget.weightUnit,
-          ),
+          value: format(point.value),
           label:
               selected == points.length - 1
                   ? 'Latest workout'

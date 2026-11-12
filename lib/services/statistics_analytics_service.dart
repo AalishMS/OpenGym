@@ -1,3 +1,4 @@
+import '../data/exercise_library.dart';
 import '../models/set.dart' as gym;
 import '../models/statistics.dart';
 import '../models/training_block.dart';
@@ -8,6 +9,7 @@ class StatisticsAnalyticsService {
   const StatisticsAnalyticsService();
 
   /// Exercise volume across calendar weeks, including gaps through this week.
+  /// Timed sets count toward a week being trained but add no volume.
   List<WeeklyTrainingValue> weeklyVolume(
     Iterable<WorkoutSession> sessions, {
     String? exerciseName,
@@ -19,25 +21,25 @@ class StatisticsAnalyticsService {
     final totals = <DateTime, double>{};
     for (final session in eligibleSessions(sessions, splitId: splitId)) {
       if (!session.date.isBefore(end)) continue;
-      final sets = session.exercises
-          .where(
-            (exercise) =>
-                exerciseName == null ||
-                exercise.name.trim().toLowerCase() ==
-                    exerciseName.trim().toLowerCase(),
-          )
-          .expand((exercise) => exercise.sets)
-          .where((set) => set.reps > 0);
-      if (sets.isEmpty) continue;
-      final week = startOfWeek(session.date);
+      var performed = false;
+      var volume = 0.0;
+      for (final exercise in session.exercises) {
+        if (exerciseName != null &&
+            exercise.name.trim().toLowerCase() !=
+                exerciseName.trim().toLowerCase()) {
+          continue;
+        }
+        final timed = ExerciseLibrary.isTimed(exercise.name);
+        for (final set in exercise.sets.where((set) => set.reps > 0)) {
+          performed = true;
+          if (!timed) volume += set.weight * set.reps;
+        }
+      }
+      if (!performed) continue;
       totals.update(
-        week,
-        (value) =>
-            value +
-            sets.fold<double>(0, (sum, set) => sum + set.weight * set.reps),
-        ifAbsent:
-            () =>
-                sets.fold<double>(0, (sum, set) => sum + set.weight * set.reps),
+        startOfWeek(session.date),
+        (value) => value + volume,
+        ifAbsent: () => volume,
       );
     }
     final first = totals.keys.fold(current, (a, b) => a.isBefore(b) ? a : b);
@@ -83,6 +85,10 @@ class StatisticsAnalyticsService {
     return set.weight * (1 + set.reps / 30);
   }
 
+  /// A performed set with no added load. Decided by the data, for library
+  /// and custom exercises alike.
+  static bool isBodyweightSet(gym.Set set) => set.weight <= 0 && set.reps > 0;
+
   List<WorkoutSession> eligibleSessions(
     Iterable<WorkoutSession> sessions, {
     String? splitId,
@@ -105,8 +111,11 @@ class StatisticsAnalyticsService {
     var reps = 0;
     var sets = 0;
     for (final exercise in session.exercises) {
+      // A timed set's reps are seconds: it counts as a set, not as reps.
+      final timed = ExerciseLibrary.isTimed(exercise.name);
       for (final set in exercise.sets.where((set) => set.reps > 0)) {
         sets++;
+        if (timed) continue;
         reps += set.reps;
         volume += set.weight * set.reps;
       }
@@ -149,15 +158,24 @@ class StatisticsAnalyticsService {
   /// - The first workout with performed sets of a lift sets its baselines and
   ///   yields no records, not even between its own sets.
   /// - After that, each workout is compared with the workouts before it, never
-  ///   with its own sets, so one workout breaks each record at most once:
+  ///   with its own sets, so one workout breaks each record at most once.
+  ///   Every record needs an earlier value of its own kind to beat:
   ///   - heaviest weight, best set volume (weight × reps) and estimated 1RM
-  ///     go to the workout's best set when it beats the previous best. An
-  ///     estimated 1RM needs an earlier one to beat (a lift trained only above
-  ///     12 reps has none yet);
-  ///   - a set of N reps at weight W is a rep best when W beats the heaviest
-  ///     weight previously lifted for N or more reps, and no other set in the
-  ///     workout matched it with at least as many reps and as much weight.
-  ///     With no earlier set of N or more reps there is nothing to beat.
+  ///     go to the workout's best weighted set when it beats the previous
+  ///     best. They need an earlier weighted set (weight above 0), so the
+  ///     first loaded set after bodyweight-only workouts sets a baseline
+  ///     instead of beating 0. An estimated 1RM likewise needs an earlier one
+  ///     (a lift trained only above 12 reps has none yet);
+  ///   - a weighted set of N reps at weight W is a rep best when W beats the
+  ///     heaviest weight previously lifted for N or more reps, and no other
+  ///     weighted set in the workout matched it with at least as many reps
+  ///     and as much weight. With no earlier weighted set of N or more reps
+  ///     there is nothing to beat;
+  ///   - most reps goes to the workout's best bodyweight set (weight 0) when
+  ///     it beats the most reps in an earlier bodyweight set.
+  /// - A timed lift (`ExerciseLibrary.isTimed`) stores seconds in `reps`. It
+  ///   only earns *longest hold*, against its earlier longest hold, and never
+  ///   a weight, rep or estimated-1RM record.
   List<RecordEvent> recordEvents(Iterable<WorkoutSession> sessions) {
     final ordered = eligibleSessions(sessions).toList()..sort(_chronological);
     final states = <String, _RecordState>{};
@@ -170,7 +188,10 @@ class StatisticsAnalyticsService {
           lifts
               .putIfAbsent(
                 exercise.name.trim().toLowerCase(),
-                () => _PerformedLift(exercise.name),
+                () => _PerformedLift(
+                  exercise.name,
+                  timed: ExerciseLibrary.isTimed(exercise.name),
+                ),
               )
               .sets
               .add(_PerformedSet(exerciseIndex, setIndex, set));
@@ -179,11 +200,11 @@ class StatisticsAnalyticsService {
       for (final MapEntry(:key, value: lift) in lifts.entries) {
         final state = states[key];
         if (state == null) {
-          states[key] = _RecordState()..absorb(lift.sets);
+          states[key] = _RecordState()..absorb(lift);
           continue;
         }
-        final achievements = state.achievements(lift.sets);
-        state.absorb(lift.sets);
+        final achievements = state.achievements(lift);
+        state.absorb(lift);
         if (achievements.isEmpty) continue;
         events.add(
           RecordEvent(
@@ -235,51 +256,73 @@ class StatisticsAnalyticsService {
     return List.unmodifiable(result);
   }
 
+  /// One lift's value per workout in [sessions], oldest first.
+  ///
+  /// A measure that can't describe the lift falls back, as
+  /// [ExerciseProgress.fallback] says: a timed lift shows its longest hold
+  /// under every measure but sets, and a lift whose sets in [sessions] are
+  /// all at weight 0 shows its best reps in one set under the weight-based
+  /// measures. Either way the lift stays listed and charted.
   ExerciseProgress exerciseProgress(
     Iterable<WorkoutSession> sessions,
     String exerciseName,
     ExerciseMetric metric,
   ) {
-    final ordered = eligibleSessions(sessions).reversed;
-    final points = <ExerciseProgressPoint>[];
-    double? overallBestWeight;
-    int? overallBestReps;
-    var overallBestVolume = -1.0;
-    for (final session in ordered) {
-      final matching = session.exercises.where(
-        (exercise) =>
-            exercise.name.trim().toLowerCase() ==
-            exerciseName.trim().toLowerCase(),
-      );
+    final key = exerciseName.trim().toLowerCase();
+    final performed = <(WorkoutSession, List<gym.Set>)>[];
+    for (final session in eligibleSessions(sessions).reversed) {
       final sets =
-          matching
+          session.exercises
+              .where((exercise) => exercise.name.trim().toLowerCase() == key)
               .expand((exercise) => exercise.sets)
               .where((set) => set.reps > 0)
               .toList();
-      if (sets.isEmpty) continue;
-      final bestSet = sets.reduce(
-        (a, b) => a.weight * a.reps >= b.weight * b.reps ? a : b,
-      );
-      final bestWeight = sets
-          .map((set) => set.weight)
-          .reduce((a, b) => a > b ? a : b);
+      if (sets.isNotEmpty) performed.add((session, sets));
+    }
+    final fallback = progressFallback(
+      metric,
+      timed: ExerciseLibrary.isTimed(exerciseName),
+      bodyweight: performed.every(
+        (entry) => entry.$2.every((set) => set.weight <= 0),
+      ),
+    );
+    // The set a point stands for: the biggest by weight × reps, or the most
+    // reps (seconds for a hold) when the lift falls back.
+    double size(gym.Set set) =>
+        fallback == ProgressFallback.none
+            ? set.weight * set.reps
+            : set.reps.toDouble();
+    final points = <ExerciseProgressPoint>[];
+    double? overallBestWeight;
+    int? overallBestReps;
+    var overallBest = -1.0;
+    for (final (session, sets) in performed) {
+      final bestSet = sets.reduce((a, b) => size(a) >= size(b) ? a : b);
       final bestE1rm = sets
           .map(estimatedOneRepMax)
           .reduce((a, b) => a > b ? a : b);
-      if (metric == ExerciseMetric.estimatedOneRepMax && bestE1rm == 0) {
+      if (fallback == ProgressFallback.none &&
+          metric == ExerciseMetric.estimatedOneRepMax &&
+          bestE1rm == 0) {
         continue;
       }
-      final value = switch (metric) {
-        ExerciseMetric.estimatedOneRepMax => bestE1rm,
-        ExerciseMetric.bestWeight => bestWeight,
-        ExerciseMetric.bestSetVolume => bestSet.weight * bestSet.reps,
-        ExerciseMetric.sessionVolume => sets.fold<double>(
-          0,
-          (sum, set) => sum + set.weight * set.reps,
-        ),
-        ExerciseMetric.totalReps =>
-          sets.fold<int>(0, (sum, set) => sum + set.reps).toDouble(),
-        ExerciseMetric.totalSets => sets.length.toDouble(),
+      final value = switch (fallback) {
+        ProgressFallback.bestReps ||
+        ProgressFallback.bestTime => bestSet.reps.toDouble(),
+        ProgressFallback.none => switch (metric) {
+          ExerciseMetric.estimatedOneRepMax => bestE1rm,
+          ExerciseMetric.bestWeight => sets
+              .map((set) => set.weight)
+              .reduce((a, b) => a > b ? a : b),
+          ExerciseMetric.bestSetVolume => bestSet.weight * bestSet.reps,
+          ExerciseMetric.sessionVolume => sets.fold<double>(
+            0,
+            (sum, set) => sum + set.weight * set.reps,
+          ),
+          ExerciseMetric.totalReps =>
+            sets.fold<int>(0, (sum, set) => sum + set.reps).toDouble(),
+          ExerciseMetric.totalSets => sets.length.toDouble(),
+        },
       };
       points.add(
         ExerciseProgressPoint(
@@ -289,9 +332,8 @@ class StatisticsAnalyticsService {
           bestSetReps: bestSet.reps,
         ),
       );
-      final bestVolume = bestSet.weight * bestSet.reps;
-      if (bestVolume > overallBestVolume) {
-        overallBestVolume = bestVolume;
+      if (size(bestSet) > overallBest) {
+        overallBest = size(bestSet);
         overallBestWeight = bestSet.weight;
         overallBestReps = bestSet.reps;
       }
@@ -303,19 +345,46 @@ class StatisticsAnalyticsService {
       bestSetWeight: overallBestWeight,
       bestSetReps: overallBestReps,
       sessionCount: points.length,
+      fallback: points.isEmpty ? ProgressFallback.none : fallback,
     );
+  }
+
+  /// What a lift shows under [metric]: a [timed] lift its longest hold under
+  /// every measure but sets, and a [bodyweight] lift (every set at weight 0)
+  /// its best reps in one set under the weight-based measures.
+  static ProgressFallback progressFallback(
+    ExerciseMetric metric, {
+    required bool timed,
+    required bool bodyweight,
+  }) {
+    final weightBased = switch (metric) {
+      ExerciseMetric.estimatedOneRepMax ||
+      ExerciseMetric.bestWeight ||
+      ExerciseMetric.bestSetVolume ||
+      ExerciseMetric.sessionVolume => true,
+      ExerciseMetric.totalReps || ExerciseMetric.totalSets => false,
+    };
+    if (metric == ExerciseMetric.totalSets) return ProgressFallback.none;
+    if (timed) return ProgressFallback.bestTime;
+    return bodyweight && weightBased
+        ? ProgressFallback.bestReps
+        : ProgressFallback.none;
   }
 
   /// One summary per block, in block order. Sessions find their block through
   /// their training week; ones whose week is gone stay out of every block.
+  ///
+  /// [records] are the [recordEvents] of [sessions] when the caller already
+  /// has them, so they aren't worked out twice.
   List<BlockStatistics> blockStatistics(
     Iterable<WorkoutSession> sessions, {
     required List<TrainingBlock> blocks,
     required Map<String, List<TrainingWeek>> weeksByBlock,
+    Iterable<RecordEvent>? records,
   }) {
     final eligible = eligibleSessions(sessions);
     final recordsBySession = Map<WorkoutSession, int>.identity();
-    for (final event in recordEvents(eligible)) {
+    for (final event in records ?? recordEvents(eligible)) {
       recordsBySession.update(
         event.session,
         (count) => count + 1,
@@ -389,12 +458,14 @@ class StatisticsAnalyticsService {
   }
 
   /// Lifts whose best estimated 1RM rose from their first to their latest
-  /// workout in [ordered] (oldest first), biggest relative gain first.
+  /// workout in [ordered] (oldest first), biggest relative gain first. Timed
+  /// lifts have no estimate.
   List<LiftGain> _gains(List<WorkoutSession> ordered) {
     final firsts = <String, (String, double)>{};
     final lasts = <String, double>{};
     for (final session in ordered) {
       for (final exercise in session.exercises) {
+        if (ExerciseLibrary.isTimed(exercise.name)) continue;
         var best = 0.0;
         for (final set in exercise.sets) {
           final e1rm = estimatedOneRepMax(set);
@@ -451,9 +522,20 @@ class StatisticsAnalyticsService {
 /// entry that shares its name.
 class _PerformedLift {
   final String name;
+
+  /// A hold: its sets' reps are seconds.
+  final bool timed;
   final List<_PerformedSet> sets = [];
 
-  _PerformedLift(this.name);
+  _PerformedLift(this.name, {required this.timed});
+
+  /// Sets with added load (weight above 0).
+  List<_PerformedSet> get weighted =>
+      sets.where((set) => set.weight > 0).toList();
+
+  /// Sets at weight 0.
+  List<_PerformedSet> get bodyweight =>
+      sets.where((set) => set.weight <= 0).toList();
 }
 
 class _PerformedSet {
@@ -486,16 +568,25 @@ class _PerformedSet {
   );
 }
 
-/// One lift's bests from the workouts judged so far.
+/// One lift's bests from the workouts judged so far. Each stays null until a
+/// set of its own kind gives it a value, and a record needs a value to beat.
 class _RecordState {
-  double heaviestWeight = 0;
-  double bestSetVolume = 0;
+  /// From weighted sets only (weight above 0).
+  double? heaviestWeight;
+  double? bestSetVolume;
 
   /// Null until a set of 1–12 reps with weight gives an estimate.
   double? estimatedOneRepMax;
 
-  /// The heaviest weight lifted for exactly each rep count.
+  /// The heaviest weight lifted for exactly each rep count, from weighted
+  /// sets only.
   final Map<int, double> repBests = {};
+
+  /// The most reps in one bodyweight set (weight 0).
+  int? mostReps;
+
+  /// The longest hold in seconds, for a timed lift.
+  int? longestHold;
 
   /// The heaviest weight lifted for [reps] or more reps, if any.
   double? bestForAtLeast(int reps) {
@@ -506,80 +597,121 @@ class _RecordState {
     return best;
   }
 
-  /// What [sets] beat, against the bests before them. Does not update them.
-  List<RecordAchievement> achievements(List<_PerformedSet> sets) {
-    // The first set wins a tie, so a repeated best set is reported once.
-    _PerformedSet top(double Function(_PerformedSet set) measure) =>
-        sets.reduce((a, b) => measure(b) > measure(a) ? b : a);
+  /// The first set wins a tie, so a repeated best set is reported once.
+  static _PerformedSet _top(
+    List<_PerformedSet> sets,
+    num Function(_PerformedSet set) measure,
+  ) => sets.reduce((a, b) => measure(b) > measure(a) ? b : a);
+
+  /// What [lift] beat, against the bests before it. Does not update them.
+  List<RecordAchievement> achievements(_PerformedLift lift) {
+    if (lift.timed) {
+      final held = _top(lift.sets, (set) => set.reps);
+      final previous = longestHold;
+      if (previous == null || held.reps <= previous) return const [];
+      return [
+        held.achievement(
+          RecordType.longestHold,
+          held.reps.toDouble(),
+          previous.toDouble(),
+        ),
+      ];
+    }
     final result = <RecordAchievement>[];
+    final sets = lift.weighted;
+    if (sets.isNotEmpty) {
+      final heaviest = _top(sets, (set) => set.weight);
+      final previousWeight = heaviestWeight;
+      if (previousWeight != null && heaviest.weight > previousWeight) {
+        result.add(
+          heaviest.achievement(
+            RecordType.heaviestWeight,
+            heaviest.weight,
+            previousWeight,
+          ),
+        );
+      }
 
-    final heaviest = top((set) => set.weight);
-    if (heaviest.weight > heaviestWeight) {
-      result.add(
-        heaviest.achievement(
-          RecordType.heaviestWeight,
-          heaviest.weight,
-          heaviestWeight,
-        ),
-      );
+      final strongest = _top(sets, (set) => set.estimatedOneRepMax);
+      final previousE1rm = estimatedOneRepMax;
+      if (previousE1rm != null &&
+          strongest.estimatedOneRepMax > previousE1rm) {
+        result.add(
+          strongest.achievement(
+            RecordType.estimatedOneRepMax,
+            strongest.estimatedOneRepMax,
+            previousE1rm,
+          ),
+        );
+      }
+
+      final repBestSets = <_PerformedSet>[];
+      for (final (index, set) in sets.indexed) {
+        final matched = sets.indexed.any(
+          (other) =>
+              other.$1 != index &&
+              other.$2.reps >= set.reps &&
+              other.$2.weight >= set.weight &&
+              (other.$2.reps > set.reps ||
+                  other.$2.weight > set.weight ||
+                  other.$1 < index),
+        );
+        if (matched) continue;
+        final previous = bestForAtLeast(set.reps);
+        if (previous != null && set.weight > previous) repBestSets.add(set);
+      }
+      repBestSets.sort((a, b) => a.reps.compareTo(b.reps));
+      for (final set in repBestSets) {
+        result.add(
+          set.achievement(
+            RecordType.repBest,
+            set.weight,
+            bestForAtLeast(set.reps)!,
+            reps: set.reps,
+          ),
+        );
+      }
+
+      final biggest = _top(sets, (set) => set.volume);
+      final previousVolume = bestSetVolume;
+      if (previousVolume != null && biggest.volume > previousVolume) {
+        result.add(
+          biggest.achievement(
+            RecordType.setVolume,
+            biggest.volume,
+            previousVolume,
+          ),
+        );
+      }
     }
 
-    final strongest = top((set) => set.estimatedOneRepMax);
-    final previousE1rm = estimatedOneRepMax;
-    if (previousE1rm != null && strongest.estimatedOneRepMax > previousE1rm) {
-      result.add(
-        strongest.achievement(
-          RecordType.estimatedOneRepMax,
-          strongest.estimatedOneRepMax,
-          previousE1rm,
-        ),
-      );
-    }
-
-    final repBestSets = <_PerformedSet>[];
-    for (final (index, set) in sets.indexed) {
-      final matched = sets.indexed.any(
-        (other) =>
-            other.$1 != index &&
-            other.$2.reps >= set.reps &&
-            other.$2.weight >= set.weight &&
-            (other.$2.reps > set.reps ||
-                other.$2.weight > set.weight ||
-                other.$1 < index),
-      );
-      if (matched) continue;
-      final previous = bestForAtLeast(set.reps);
-      if (previous != null && set.weight > previous) repBestSets.add(set);
-    }
-    repBestSets.sort((a, b) => a.reps.compareTo(b.reps));
-    for (final set in repBestSets) {
-      result.add(
-        set.achievement(
-          RecordType.repBest,
-          set.weight,
-          bestForAtLeast(set.reps)!,
-          reps: set.reps,
-        ),
-      );
-    }
-
-    final biggest = top((set) => set.volume);
-    if (biggest.volume > bestSetVolume) {
-      result.add(
-        biggest.achievement(
-          RecordType.setVolume,
-          biggest.volume,
-          bestSetVolume,
-        ),
-      );
+    final bodyweight = lift.bodyweight;
+    if (bodyweight.isNotEmpty) {
+      final most = _top(bodyweight, (set) => set.reps);
+      final previous = mostReps;
+      if (previous != null && most.reps > previous) {
+        result.add(
+          most.achievement(
+            RecordType.mostReps,
+            most.reps.toDouble(),
+            previous.toDouble(),
+          ),
+        );
+      }
     }
     return result;
   }
 
-  void absorb(List<_PerformedSet> sets) {
-    for (final set in sets) {
-      if (set.weight > heaviestWeight) heaviestWeight = set.weight;
-      if (set.volume > bestSetVolume) bestSetVolume = set.volume;
+  void absorb(_PerformedLift lift) {
+    if (lift.timed) {
+      for (final set in lift.sets) {
+        if (set.reps > (longestHold ?? 0)) longestHold = set.reps;
+      }
+      return;
+    }
+    for (final set in lift.weighted) {
+      if (set.weight > (heaviestWeight ?? 0)) heaviestWeight = set.weight;
+      if (set.volume > (bestSetVolume ?? 0)) bestSetVolume = set.volume;
       final e1rm = set.estimatedOneRepMax;
       if (e1rm > 0 && e1rm > (estimatedOneRepMax ?? 0)) {
         estimatedOneRepMax = e1rm;
@@ -587,6 +719,9 @@ class _RecordState {
       if (set.weight > (repBests[set.reps] ?? double.negativeInfinity)) {
         repBests[set.reps] = set.weight;
       }
+    }
+    for (final set in lift.bodyweight) {
+      if (set.reps > (mostReps ?? 0)) mostReps = set.reps;
     }
   }
 }

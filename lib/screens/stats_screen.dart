@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../models/statistics.dart';
+import '../models/workout_session.dart';
 import '../providers/settings_provider.dart';
 import '../providers/split_provider.dart';
 import '../providers/training_block_provider.dart';
@@ -27,9 +29,14 @@ class StatsScreen extends StatefulWidget {
   /// in the shell's IndexedStack, so without this it would keep its offset.
   final int visitRequest;
 
+  /// Works out every figure on the screen. Replaceable so tests can count
+  /// how often it runs.
+  final StatisticsAnalyticsService analytics;
+
   const StatsScreen({
     this.weeklyTrainingRequest = 0,
     this.visitRequest = 0,
+    this.analytics = const StatisticsAnalyticsService(),
     super.key,
   });
 
@@ -38,7 +45,6 @@ class StatsScreen extends StatefulWidget {
 }
 
 class _StatsScreenState extends State<StatsScreen> {
-  static const _analytics = StatisticsAnalyticsService();
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _weeklyKey = GlobalKey();
   StatisticsPeriod _period = StatisticsPeriod.fourWeeks;
@@ -50,6 +56,16 @@ class _StatsScreenState extends State<StatsScreen> {
   bool _allExercises = true;
   bool _showsBlocks = false;
   String? _lastSplit;
+
+  // The screen lives in the shell's IndexedStack and rebuilds on every
+  // provider notification, even while hidden. Each derived value is kept
+  // until one of its own inputs changes. Provider lists are replaced, never
+  // mutated, on reload, so identity is a sound key.
+  final _eligible = _Memo<List<WorkoutSession>>();
+  final _overview = _Memo<_Overview>();
+  final _weekly = _Memo<List<WeeklyTrainingValue>>();
+  final _lifts = _Memo<List<LiftSummary>>();
+  final _blocks = _Memo<List<BlockStatistics>>();
 
   @override
   void didUpdateWidget(covariant StatsScreen oldWidget) {
@@ -78,13 +94,18 @@ class _StatsScreenState extends State<StatsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final analytics = widget.analytics;
     final splitId = context.watch<SplitProvider?>()?.activeSplitId;
     final unit = context.watch<SettingsProvider?>()?.weightUnit ?? 'kg';
     final training = context.watch<TrainingBlockProvider?>();
-    final sessions = _analytics.eligibleSessions(
-      context.watch<WorkoutSessionProvider>().sessions,
-      splitId: splitId,
-    );
+    final all = context.watch<WorkoutSessionProvider>().sessions;
+    // Keyed on the workouts themselves, not the list that holds them, so a
+    // provider that adds to its list in place still refreshes the screen.
+    final sessions = _eligible([
+      analytics,
+      splitId,
+      ...all,
+    ], () => analytics.eligibleSessions(all, splitId: splitId));
     if (_lastSplit != splitId) {
       _lastSplit = splitId;
       _blockId = null;
@@ -92,36 +113,58 @@ class _StatsScreenState extends State<StatsScreen> {
       _progressExercise = null;
       _allExercises = true;
     }
-    final names = _analytics.exerciseNames(sessions);
-    final defaultExercise = _analytics.latestExercise(sessions);
-    final weekly =
-        names.contains(_weeklyExercise) ? _weeklyExercise : defaultExercise;
-    final weeks = _analytics.weeklyVolume(
-      sessions,
-      exerciseName: _allExercises ? null : weekly,
+    // Weekly charts and periods end with the current week.
+    final thisWeek = StatisticsAnalyticsService.startOfWeek(DateTime.now());
+    final overview = _overview(
+      [analytics, sessions],
+      () => _Overview(
+        names: analytics.exerciseNames(sessions),
+        defaultExercise: analytics.latestExercise(sessions),
+        records: analytics.recordEvents(sessions),
+      ),
     );
-    final lifts = _analytics.liftSummaries(
-      _analytics.sessionsInPeriod(sessions, _period),
-      _metric,
+    final names = overview.names;
+    final weekly =
+        names.contains(_weeklyExercise)
+            ? _weeklyExercise
+            : overview.defaultExercise;
+    final weeklyName = _allExercises ? null : weekly;
+    final weeks = _weekly([
+      analytics,
+      sessions,
+      weeklyName,
+      thisWeek,
+    ], () => analytics.weeklyVolume(sessions, exerciseName: weeklyName));
+    final lifts = _lifts(
+      [analytics, sessions, _period, _metric, thisWeek],
+      () => analytics.liftSummaries(
+        analytics.sessionsInPeriod(sessions, _period),
+        _metric,
+      ),
     );
     final lift =
         lifts
             .where((lift) => lift.exerciseName == _progressExercise)
             .firstOrNull ??
         lifts.firstOrNull;
-    final records = _analytics.recordEvents(sessions).take(8).toList();
+    final records = overview.records.take(8).toList();
 
     final blocks =
         training == null
             ? const <BlockStatistics>[]
-            : _analytics
-                .blockStatistics(
-                  sessions,
-                  blocks: training.blocks,
-                  weeksByBlock: training.weeksByBlock,
-                )
-                .where((block) => block.workouts > 0)
-                .toList();
+            : _blocks(
+              [analytics, sessions, training.blocks, training.weeksByBlock],
+              () =>
+                  analytics
+                      .blockStatistics(
+                        sessions,
+                        blocks: training.blocks,
+                        weeksByBlock: training.weeksByBlock,
+                        records: overview.records,
+                      )
+                      .where((block) => block.workouts > 0)
+                      .toList(),
+            );
     final latestWeekId = sessions.firstOrNull?.trainingWeekId;
     final currentBlockId =
         latestWeekId == null ? null : training?.weekById[latestWeekId]?.blockId;
@@ -368,7 +411,7 @@ class _StatsScreenState extends State<StatsScreen> {
                                 ),
                                 const SizedBox(height: AppSpacing.xs),
                                 Text(
-                                  '${_metric.label} · ${_period.label}',
+                                  '${progressMeasureLabel(_metric, lift.progress.fallback)} · ${_period.label}',
                                   style: Theme.of(
                                     context,
                                   ).textTheme.bodySmall?.copyWith(
@@ -545,15 +588,17 @@ class _ProgressSummary extends StatelessWidget {
         .map((point) => point.value)
         .reduce((a, b) => a > b ? a : b);
     final change = progress.change;
+    String format(double value) =>
+        formatProgressValue(value, metric, progress.fallback, unit);
     // The latest value is already the readout under the chart.
     final values = [
       (
         'Change',
         change == null
             ? 'Need 2 workouts'
-            : '${change > 0 ? '+' : ''}${formatChartExerciseValue(change, metric, unit)}',
+            : '${change > 0 ? '+' : ''}${format(change)}',
       ),
-      ('Best in period', formatChartExerciseValue(best, metric, unit)),
+      ('Best in period', format(best)),
     ];
     return Wrap(
       spacing: 24,
@@ -582,5 +627,36 @@ class _ProgressSummary extends StatelessWidget {
           ),
       ],
     );
+  }
+}
+
+/// The parts of the screen that depend only on the split's workouts.
+class _Overview {
+  final List<String> names;
+  final String? defaultExercise;
+
+  /// Every record, newest first: Recent records shows the first few and the
+  /// blocks count them, so they are worked out once.
+  final List<RecordEvent> records;
+
+  const _Overview({
+    required this.names,
+    required this.defaultExercise,
+    required this.records,
+  });
+}
+
+/// One derived value, kept until its inputs change. Inputs compare with
+/// `==`, which for lists and maps is identity.
+class _Memo<T> {
+  List<Object?>? _inputs;
+  late T _value;
+
+  T call(List<Object?> inputs, T Function() compute) {
+    final previous = _inputs;
+    if (previous != null && listEquals(previous, inputs)) return _value;
+    _value = compute();
+    _inputs = inputs;
+    return _value;
   }
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/exercise_library.dart';
 import '../../models/statistics.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
@@ -35,13 +36,15 @@ class RecordEventRow extends StatefulWidget {
 }
 
 class _RecordEventRowState extends State<RecordEventRow> {
-  /// The tag a row leads with: the record most people recognise first.
-  static const _priority = [
-    RecordType.heaviestWeight,
-    RecordType.estimatedOneRepMax,
-    RecordType.repBest,
-    RecordType.setVolume,
-  ];
+  /// The order of a row's tags: the record most people recognise first.
+  static int _priority(RecordType type) => switch (type) {
+    RecordType.heaviestWeight => 0,
+    RecordType.mostReps => 1,
+    RecordType.longestHold => 2,
+    RecordType.estimatedOneRepMax => 3,
+    RecordType.repBest => 4,
+    RecordType.setVolume => 5,
+  };
 
   bool _expanded = false;
 
@@ -49,23 +52,28 @@ class _RecordEventRowState extends State<RecordEventRow> {
   Widget build(BuildContext context) {
     final event = widget.event;
     final weightUnit = widget.weightUnit;
+    // A stable sort keeps rep bests in their rep order.
     final achievements = [
-      for (final type in _priority)
-        ...event.achievements.where((achievement) => achievement.type == type),
-    ];
+      for (final (index, achievement) in event.achievements.indexed)
+        (index, achievement),
+    ]..sort((a, b) {
+      final type = _priority(a.$2.type).compareTo(_priority(b.$2.type));
+      return type != 0 ? type : a.$1.compareTo(b.$1);
+    });
     final labels = <String>[];
-    for (final achievement in achievements) {
-      final raw = achievement.type
-          .label(achievement.reps)
-          .replaceFirst('New ', '');
-      final label = '${raw[0].toUpperCase()}${raw.substring(1)}';
+    for (final (_, achievement) in achievements) {
+      final previous = formatRecordPreviousValue(achievement, weightUnit);
+      final label =
+          '${formatRecordTitle(achievement)} · '
+          '${formatRecordValue(achievement, weightUnit)}'
+          '${previous == null ? '' : ', up from $previous'}';
       if (!labels.contains(label)) labels.add(label);
     }
     final tagStyle = Theme.of(
       context,
     ).textTheme.bodySmall?.copyWith(color: textSecondaryColor(context));
     // The set shown is the one behind the leading tag.
-    final producer = achievements.first;
+    final producer = achievements.first.$2;
     return Container(
       constraints: const BoxConstraints(minHeight: 64),
       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -94,8 +102,8 @@ class _RecordEventRowState extends State<RecordEventRow> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${formatAnalyticsWeight(producer.setWeight, weightUnit)} × '
-                  '${producer.setReps} · ${event.session.planName} · '
+                  '${formatSetSummary(producer.setWeight, producer.setReps, weightUnit, timed: ExerciseLibrary.isTimed(event.exerciseName))} · '
+                  '${event.session.planName} · '
                   '${formatStatisticsDate(event.session.date)}',
                   style: AppTypography.figures(
                     fontSize: 12,
