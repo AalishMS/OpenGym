@@ -198,7 +198,11 @@ void main() {
                     onDelete: (_) {},
                     onRpeChanged: (_, __) {},
                   ),
-                  WorkoutExerciseDetails(exercise: exercise, weightUnit: 'kg'),
+                  WorkoutExerciseDetails(
+                    exercise: exercise,
+                    weightUnit: 'kg',
+                    recordSetIndexes: const {0},
+                  ),
                   TrainingSnapshot(
                     plans: [plan],
                     sessions: [session],
@@ -245,8 +249,26 @@ void main() {
             ),
             scale,
           );
+          // The week strip shares the card width between seven contiguous
+          // targets so Sunday always fits. On a narrow phone each target is
+          // narrower than 48 dp, so hold it to the 24 dp WCAG 2.5.8 minimum,
+          // keep it 48 dp tall, and prove no width is lost to gaps.
+          final strip = tester.getRect(
+            find
+                .ancestor(
+                  of: find.byKey(const ValueKey('training-day-0')),
+                  matching: find.byType(Row),
+                )
+                .first,
+          );
           for (var day = 0; day < 7; day++) {
-            target(tester, find.byKey(ValueKey('training-day-$day')));
+            final cell = tester.getRect(
+              find.byKey(ValueKey('training-day-$day')),
+            );
+            expect(cell.height, greaterThanOrEqualTo(48));
+            expect(cell.width, greaterThanOrEqualTo(24));
+            expect(cell.width, closeTo(strip.width / 7, .01));
+            expect(cell.left, closeTo(strip.left + day * strip.width / 7, .01));
           }
           final day = find.byKey(const ValueKey('training-day-0'));
           await tester.ensureVisible(day);

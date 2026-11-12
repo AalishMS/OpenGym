@@ -27,6 +27,9 @@ void main() async {
   bool showIntro = false;
   try {
     showIntro = await loadIntroPending();
+    // Needs the intro flag just recorded: an installation from before the
+    // system default keeps light instead of changing appearance on update.
+    await SettingsProvider.resolveStoredThemeMode();
     await Future.wait([HiveService.init(), SupabaseService.init()]);
     await AdoptLocalData.prepareLocal();
   } catch (e) {

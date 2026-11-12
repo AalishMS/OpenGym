@@ -1094,6 +1094,41 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('week strip fits all seven days on a 360 dp phone', (
+    tester,
+  ) async {
+    await pumpHome(
+      tester,
+      size: const Size(360, 800),
+      plans: rotationPlans(),
+      sessions: [pullSession(DateTime.now())],
+    );
+    final snapshot = find.byType(TrainingSnapshot);
+    expect(snapshot, findsOneWidget);
+    expect(
+      find.descendant(of: snapshot, matching: find.byType(Scrollable)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: snapshot, matching: find.byType(Scrollbar)),
+      findsNothing,
+    );
+    final bounds = tester.getRect(snapshot);
+    // Home pads the list by 16 dp each side: 328 dp shared by seven days.
+    expect(bounds.width, closeTo(360 - 2 * AppSpacing.lg, .01));
+    for (var day = 0; day < 7; day++) {
+      final cell = tester.getRect(find.byKey(ValueKey('training-day-$day')));
+      expect(cell.left, greaterThanOrEqualTo(bounds.left - .01));
+      expect(cell.right, lessThanOrEqualTo(bounds.right + .01));
+      expect(cell.width, closeTo(bounds.width / 7, .01));
+      expect(cell.height, greaterThanOrEqualTo(48));
+    }
+    expect(
+      tester.getRect(find.byKey(const ValueKey('training-day-6'))).right,
+      closeTo(bounds.right, .01),
+    );
+  });
+
   testWidgets('up next and plans fit every width, theme, and text size', (
     tester,
   ) async {

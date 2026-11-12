@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/tutorial_preferences.dart';
+
 /// A user-selectable accent, stored as a single **seed**.
 ///
 /// There used to be a hand-picked `dark`/`light` pair here, and both were wrong
@@ -21,7 +23,14 @@ class AppAccent {
 }
 
 class SettingsProvider with ChangeNotifier {
-  static const ThemeMode defaultThemeMode = ThemeMode.light;
+  /// What a new installation starts on: the phone's own appearance.
+  static const ThemeMode defaultThemeMode = ThemeMode.system;
+
+  /// What an installation from before [defaultThemeMode] became `system` keeps
+  /// when its user never chose a theme. Those users have always seen light, so
+  /// an update must not flip their appearance.
+  static const ThemeMode legacyThemeMode = ThemeMode.light;
+
   static const int defaultAccentIndex = 4;
 
   static const String _themeKey = 'theme_mode';
@@ -29,6 +38,10 @@ class SettingsProvider with ChangeNotifier {
   static const String _weightUnitKey = 'weight_unit';
   static const String _autoFillKey = 'auto_fill_last';
   static const String _coachEnabledKey = 'coach_enabled';
+
+  /// Written by `HiveService.init` on every installation since the id-key
+  /// migration, so its presence marks an installation that has run before.
+  static const String _legacyInstallMarkerKey = 'idkey_migration_v1_done';
 
   /// **Order is persisted.** `_accentIndex` is stored as an integer, so indices
   /// Each index keeps its original color family so saved preferences survive
@@ -85,14 +98,41 @@ class SettingsProvider with ChangeNotifier {
 
   Future<void> reload() => _loadSettings();
 
+  /// Settle the theme for an installation that has never stored one, and
+  /// persist the answer so it never has to be guessed again.
+  ///
+  /// `main` calls this before the first frame, so an existing installation is
+  /// never drawn in the new default for a frame. The provider also calls it on
+  /// load, where it is a no-op once a theme is stored.
+  static Future<ThemeMode> resolveStoredThemeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final stored = prefs.getInt(_themeKey);
+    if (stored != null && stored >= 0 && stored < ThemeMode.values.length) {
+      return ThemeMode.values[stored];
+    }
+    final mode = _usedBefore(prefs) ? legacyThemeMode : defaultThemeMode;
+    await prefs.setInt(_themeKey, mode.index);
+    return mode;
+  }
+
+  /// Whether this installation was in use before the theme default changed.
+  ///
+  /// The first-run intro flag is the signal: `main` records it before any
+  /// other startup work, `false` once the intro is finished or for an install
+  /// that predates the intro. If it has not been recorded yet, fall back to
+  /// the same Hive migration marker the intro uses to recognise an old install.
+  static bool _usedBefore(SharedPreferences prefs) {
+    final introPending = prefs.getBool(TutorialPreferences.introPendingKey);
+    if (introPending != null) return !introPending;
+    return prefs.containsKey(_legacyInstallMarkerKey);
+  }
+
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
 
     // These fallbacks apply only when a preference has never been written, so
     // existing users keep their chosen theme and accent.
-    final themeIndex =
-        prefs.getInt(_themeKey) ?? SettingsProvider.defaultThemeMode.index;
-    _themeMode = ThemeMode.values[themeIndex];
+    _themeMode = await resolveStoredThemeMode();
 
     final accentColorIndex =
         prefs.getInt(_accentColorKey) ?? SettingsProvider.defaultAccentIndex;

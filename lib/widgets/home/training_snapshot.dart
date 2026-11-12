@@ -9,7 +9,6 @@ import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
-import '../readable_table_viewport.dart';
 
 /// Completed sets by calendar day, with an outline identifying today.
 class TrainingSnapshot extends StatelessWidget {
@@ -131,34 +130,39 @@ class TrainingSnapshot extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Semantics(
             label: 'Completed sets by day. The outlined day is today.',
-            child: ReadableTableViewport(
-              minimumWidth: 7 * 48 + 6 * AppSpacing.sm,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  for (var index = 0; index < 7; index++) ...[
-                    if (index > 0) const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Semantics(
-                        label:
-                            '${names[index]}: ${dailyWorkouts[index]} workouts, '
-                            '${dailySets[index]} sets${index == todayIndex ? ', today' : ''}',
-                        button:
-                            latestByDay[index] != null &&
-                            onOpenLastWorkout != null,
-                        child: Tooltip(
-                          message:
-                              '${names[index]} · ${dailyWorkouts[index]} workouts · ${dailySets[index]} sets',
-                          child: InkWell(
-                            key: ValueKey('training-day-$index'),
-                            onTap:
-                                latestByDay[index] == null ||
-                                        onOpenLastWorkout == null
-                                    ? null
-                                    : () =>
-                                        onOpenLastWorkout!(latestByDay[index]!),
-                            borderRadius: AppRadius.control,
-                            child: ExcludeSemantics(
+            // Seven contiguous, equal-width tap targets always fit the card,
+            // so Sunday is never pushed off a phone screen. The visual gap
+            // between bars is padding inside each target, which keeps every
+            // target as wide as the strip allows.
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var index = 0; index < 7; index++)
+                  Expanded(
+                    child: Semantics(
+                      label:
+                          '${names[index]}: ${dailyWorkouts[index]} workouts, '
+                          '${dailySets[index]} sets${index == todayIndex ? ', today' : ''}',
+                      button:
+                          latestByDay[index] != null &&
+                          onOpenLastWorkout != null,
+                      child: Tooltip(
+                        message:
+                            '${names[index]} · ${dailyWorkouts[index]} workouts · ${dailySets[index]} sets',
+                        child: InkWell(
+                          key: ValueKey('training-day-$index'),
+                          onTap:
+                              latestByDay[index] == null ||
+                                      onOpenLastWorkout == null
+                                  ? null
+                                  : () =>
+                                      onOpenLastWorkout!(latestByDay[index]!),
+                          borderRadius: AppRadius.control,
+                          child: ExcludeSemantics(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: AppSpacing.xs,
+                              ),
                               child: Column(
                                 children: [
                                   SizedBox(
@@ -237,9 +241,8 @@ class TrainingSnapshot extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ],
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ],
