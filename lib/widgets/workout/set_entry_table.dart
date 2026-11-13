@@ -262,6 +262,10 @@ class _SetKeypadSession {
   late final OverlayEntry dismissOverlay;
   late final LocalHistoryEntry history;
 
+  /// Set once the keypad is dismissed: the sheet slides back down, ignoring
+  /// input, and its overlay is removed when the slide ends.
+  bool closing = false;
+
   _SetKeypadSession(this.owner, this.index, this.field);
 }
 
@@ -269,6 +273,10 @@ class _SetEntryTableState extends State<SetEntryTable> {
   static _SetEntryTableState? _activeKeyboard;
   final _keyboardKey = GlobalKey<_SetKeyboardState>();
   _SetKeypadSession? _keypad;
+
+  /// A dismissed sheet still sliding out. It holds [_keyboardKey], so it is
+  /// removed outright before this table opens a sheet again.
+  _SetKeypadSession? _exiting;
   OverlayEntry? get _overlay => _keypad?.overlay;
   Offset? _tapStart;
   int? _tapPointer;
@@ -314,19 +322,42 @@ class _SetEntryTableState extends State<SetEntryTable> {
         SetEntryTable._keyboardHeight.value = 0;
       }
     }
-    _removeOverlays();
+    _removeOverlays(animate: true);
     if (mounted && !_disposing) {
       setState(() {});
       if (_changed) widget.onEntryFinished?.call();
     }
   }
 
-  void _removeOverlays() {
-    for (final entry in [_keypad?.dismissOverlay, _overlay]) {
-      entry?.remove();
-      entry?.dispose();
-    }
+  void _removeOverlays({bool animate = false}) {
+    _finishExit();
+    final session = _keypad;
     _keypad = null;
+    if (session == null) return;
+    session.dismissOverlay
+      ..remove()
+      ..dispose();
+    // The sheet's own builder runs the slide; under reduced motion it ends at
+    // once and removes the overlay on the next frame.
+    if (animate && mounted && !_disposing) {
+      _keyboardKey.currentState?._keyboardFocus.unfocus();
+      session.closing = true;
+      _exiting = session;
+      session.overlay.markNeedsBuild();
+    } else {
+      session.overlay
+        ..remove()
+        ..dispose();
+    }
+  }
+
+  void _finishExit([_SetKeypadSession? session]) {
+    final exiting = _exiting;
+    if (exiting == null || (session != null && session != exiting)) return;
+    _exiting = null;
+    exiting.overlay
+      ..remove()
+      ..dispose();
   }
 
   // A tap is a pointer that goes down and up without travelling. It closes the
@@ -387,6 +418,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
   }
 
   void _open(BuildContext context, int index, _SetField field) {
+    _finishExit();
     if (_overlay != null) {
       _keyboardKey.currentState?._select(index, field);
       return;
@@ -441,55 +473,65 @@ class _SetEntryTableState extends State<SetEntryTable> {
           bottom: 0,
           child: Theme(
             data: Theme.of(context),
-            // Slides up once on open; all tables reuse the same sheet.
+            // Slides up once on open, and back down on close; all tables
+            // reuse the same sheet while it is open.
             child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 1, end: 0),
+              tween: Tween(begin: 1, end: session.closing ? 1 : 0),
               duration:
                   MediaQuery.disableAnimationsOf(overlayContext)
                       ? Duration.zero
-                      : const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
+                      : Duration(milliseconds: session.closing ? 180 : 220),
+              curve: session.closing ? Curves.easeInCubic : Curves.easeOutCubic,
+              onEnd: () {
+                if (session.closing) owner._finishExit(session);
+              },
               builder:
                   (_, offset, child) => FractionalTranslation(
                     translation: Offset(0, offset),
                     child: child,
                   ),
-              child: BottomSheet(
-                onClosing: () => session.owner._close(),
-                backgroundColor: _keypadTrayColor(context),
-                shape: RoundedRectangleBorder(
-                  borderRadius: AppRadius.sheet,
-                  side: BorderSide(color: borderColor(context)),
-                ),
-                clipBehavior: Clip.antiAlias,
-                enableDrag: false,
-                builder:
-                    (_) => _SetKeyboard(
-                      key: owner._keyboardKey,
-                      weightUnit: owner._weightUnit,
-                      isTimed: owner.widget.isTimed,
-                      sets: List.of(owner.sets),
-                      initialIndex: session.index,
-                      initialField: session.field,
-                      onClose: owner._close,
-                      onEditingChanged: () {
-                        if (owner.mounted) {
-                          owner.setState(() {});
-                        }
-                      },
-                      onSelectionChanged: owner._revealRow,
-                      onChanged: (index, weight, reps) {
-                        owner._changed = true;
-                        owner.onChanged(index, weight, reps);
-                      },
-                      onRpeChanged:
-                          owner.onRpeChanged == null
-                              ? null
-                              : (index, rpe) {
-                                owner._changed = true;
-                                owner.onRpeChanged!(index, rpe);
-                              },
+              child: IgnorePointer(
+                ignoring: session.closing,
+                child: ExcludeSemantics(
+                  excluding: session.closing,
+                  child: BottomSheet(
+                    onClosing: () => session.owner._close(),
+                    backgroundColor: _keypadTrayColor(context),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: AppRadius.sheet,
+                      side: BorderSide(color: borderColor(context)),
                     ),
+                    clipBehavior: Clip.antiAlias,
+                    enableDrag: false,
+                    builder:
+                        (_) => _SetKeyboard(
+                          key: owner._keyboardKey,
+                          weightUnit: owner._weightUnit,
+                          isTimed: owner.widget.isTimed,
+                          sets: List.of(owner.sets),
+                          initialIndex: session.index,
+                          initialField: session.field,
+                          onClose: owner._close,
+                          onEditingChanged: () {
+                            if (owner.mounted) {
+                              owner.setState(() {});
+                            }
+                          },
+                          onSelectionChanged: owner._revealRow,
+                          onChanged: (index, weight, reps) {
+                            owner._changed = true;
+                            owner.onChanged(index, weight, reps);
+                          },
+                          onRpeChanged:
+                              owner.onRpeChanged == null
+                                  ? null
+                                  : (index, rpe) {
+                                    owner._changed = true;
+                                    owner.onRpeChanged!(index, rpe);
+                                  },
+                        ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -1506,7 +1548,12 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                       width: width,
                       child: Column(
                         children: [
-                          _header(context),
+                          _header(
+                            context,
+                            columnWidth:
+                                (width - 2 * _kKeypadPadding - 4 * _kKeyGap) /
+                                5,
+                          ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(
                               _kKeypadPadding,
@@ -1537,14 +1584,20 @@ class _SetKeyboardState extends State<_SetKeyboard> {
 
   /// Names what the keys are editing above the value at a readable size,
   /// plus the one action that targets another set and so reads better as a
-  /// sentence than as a key.
-  Widget _header(BuildContext context) {
+  /// sentence than as a key. A done tick closes the keypad from the top right,
+  /// sized to the action column beneath it.
+  Widget _header(BuildContext context, {required double columnWidth}) {
     final style = Theme.of(context).textTheme.labelLarge!;
     final hasNextSet = _index + 1 < widget.sets.length;
     return SizedBox(
       height: _headerHeight(context),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.xs, 0),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          0,
+          _kKeypadPadding,
+          0,
+        ),
         child: Row(
           children: [
             Expanded(
@@ -1600,6 +1653,27 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                 icon: const Icon(Icons.content_copy_outlined, size: 18),
                 label: Text('Copy to set ${_index + 2}'),
               ),
+            const SizedBox(width: _kKeyGap),
+            SizedBox(
+              width: columnWidth,
+              height: 48,
+              child: Tooltip(
+                message: 'Close keypad',
+                excludeFromSemantics: true,
+                child: Semantics(
+                  label: 'Close keypad',
+                  button: true,
+                  excludeSemantics: true,
+                  onTap: widget.onClose,
+                  child: _key(
+                    context,
+                    tone: _KeyTone.emphasized,
+                    onPressed: widget.onClose,
+                    child: const Icon(Icons.check_rounded, size: 24),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
