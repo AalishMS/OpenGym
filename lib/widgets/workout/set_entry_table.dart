@@ -529,7 +529,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
                         MediaQuery.disableAnimationsOf(context)
                             ? Duration.zero
                             : Duration(
-                              milliseconds: session.closing ? 180 : 220,
+                              milliseconds: session.closing ? 144 : 176,
                             ),
                     curve:
                         session.closing
