@@ -45,6 +45,10 @@ void main() {
     await Supabase.initialize(
       url: 'https://example.supabase.co',
       publishableKey: 'test-key',
+      // The deep-link observer listens on the app_links channel, which has no
+      // test plugin. Its MissingPluginException arrives asynchronously and
+      // lands in whichever test is running, failing takeException() below.
+      authOptions: const FlutterAuthClientOptions(detectSessionInUri: false),
     );
   });
   for (final fails in [false, true]) {
