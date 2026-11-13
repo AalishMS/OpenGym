@@ -9,7 +9,6 @@ import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
-import '../readable_table_viewport.dart';
 
 /// Completed sets by calendar day, with a dot under today's letter.
 class TrainingSnapshot extends StatelessWidget {
@@ -130,52 +129,48 @@ class TrainingSnapshot extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Semantics(
             label: 'Completed sets by day. Today is marked with a dot.',
-            // Seven 48dp targets fit a 390dp phone without gaps between them;
-            // the bars are inset inside their targets instead. Only narrower
-            // screens scroll.
-            child: ReadableTableViewport(
-              minimumWidth: 7 * 48,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  for (var index = 0; index < 7; index++)
-                    Expanded(
-                      child: Semantics(
-                        label:
-                            '${names[index]}: ${dailyWorkouts[index]} workouts, '
-                            '${dailySets[index]} sets${index == todayIndex ? ', today' : ''}',
-                        button:
-                            latestByDay[index] != null &&
-                            onOpenLastWorkout != null,
-                        child: Tooltip(
-                          message:
-                              '${names[index]} · ${dailyWorkouts[index]} workouts · ${dailySets[index]} sets',
-                          child: InkWell(
-                            key: ValueKey('training-day-$index'),
-                            onTap:
-                                latestByDay[index] == null ||
-                                        onOpenLastWorkout == null
-                                    ? null
-                                    : () =>
-                                        onOpenLastWorkout!(latestByDay[index]!),
-                            borderRadius: AppRadius.control,
-                            child: ExcludeSemantics(
-                              child: _DayColumn(
-                                letter: letters[index],
-                                trained: dailyWorkouts[index] > 0,
-                                today: index == todayIndex,
-                                share:
-                                    maxSets == 0
-                                        ? 0
-                                        : dailySets[index] / maxSets,
-                              ),
+            // Seven contiguous, equal targets always share the card width, so
+            // Sunday never scrolls off a phone: 48dp each from a 390dp phone,
+            // about 47dp at 360dp, never under the 24dp minimum. The bars are
+            // inset inside their targets instead of gapped between them.
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                for (var index = 0; index < 7; index++)
+                  Expanded(
+                    child: Semantics(
+                      label:
+                          '${names[index]}: ${dailyWorkouts[index]} workouts, '
+                          '${dailySets[index]} sets${index == todayIndex ? ', today' : ''}',
+                      button:
+                          latestByDay[index] != null &&
+                          onOpenLastWorkout != null,
+                      child: Tooltip(
+                        message:
+                            '${names[index]} · ${dailyWorkouts[index]} workouts · ${dailySets[index]} sets',
+                        child: InkWell(
+                          key: ValueKey('training-day-$index'),
+                          onTap:
+                              latestByDay[index] == null ||
+                                      onOpenLastWorkout == null
+                                  ? null
+                                  : () =>
+                                      onOpenLastWorkout!(latestByDay[index]!),
+                          borderRadius: AppRadius.control,
+                          child: ExcludeSemantics(
+                            child: _DayColumn(
+                              letter: letters[index],
+                              trained: dailyWorkouts[index] > 0,
+                              today: index == todayIndex,
+                              share:
+                                  maxSets == 0 ? 0 : dailySets[index] / maxSets,
                             ),
                           ),
                         ),
                       ),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ],
@@ -241,7 +236,9 @@ class _DayColumn extends StatelessWidget {
             letter,
             style: textTheme.labelSmall?.copyWith(
               color:
-                  today ? textPrimaryColor(context) : textSecondaryColor(context),
+                  today
+                      ? textPrimaryColor(context)
+                      : textSecondaryColor(context),
               fontWeight: today ? FontWeight.w700 : null,
             ),
           ),

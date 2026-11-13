@@ -27,7 +27,7 @@ void showExercisePickerSheet(
 }) {
   final navigator = Navigator.of(context);
   navigator.push(
-    _ExercisePickerRoute(
+    _ExercisePickerRoute<void>(
       capturedThemes: InheritedTheme.capture(
         from: context,
         to: navigator.context,
@@ -51,9 +51,48 @@ void showExercisePickerSheet(
   );
 }
 
+/// One catalog choice: the label to snapshot and its stable identity.
+typedef PickedExercise = ({String name, String exerciseId});
+
+/// The same library, but choosing one exercise closes it with that choice.
+///
+/// Resolves to null when the picker closes without a choice. Movements in
+/// [unavailableExerciseIds] (canonical or redirected IDs) read as *Added* and
+/// cannot be chosen, as in the multi-select flow.
+Future<PickedExercise?> pickSingleExercise(
+  BuildContext context, {
+  required String title,
+  Iterable<String> unavailableExerciseIds = const <String>[],
+  String? userId,
+}) {
+  final navigator = Navigator.of(context);
+  return navigator.push<PickedExercise>(
+    _ExercisePickerRoute<PickedExercise>(
+      capturedThemes: InheritedTheme.capture(
+        from: context,
+        to: navigator.context,
+      ),
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      backgroundColor: surfaceColor(context),
+      builder:
+          (sheetContext) => _ExercisePickerSheet(
+            title: title,
+            singlePick: true,
+            selectedExerciseNames: const <String>[],
+            alreadyAddedExerciseNames: const <String>[],
+            alreadyAddedExerciseIds: unavailableExerciseIds,
+            userId: userId,
+            onAdd: (_) {},
+            onRemove: (_) {},
+            selectionOwner: 'workout',
+          ),
+    ),
+  );
+}
+
 /// Outside taps explicitly close the picker, like Close and dragging it down.
 /// Only system Back follows the internal muscle-group navigation.
-class _ExercisePickerRoute extends ModalBottomSheetRoute<void> {
+class _ExercisePickerRoute<T> extends ModalBottomSheetRoute<T> {
   _ExercisePickerRoute({
     required super.builder,
     required super.capturedThemes,
@@ -85,6 +124,11 @@ class _ExercisePickerSheet extends StatefulWidget {
   final void Function(String name) onAdd;
   final void Function(String name) onRemove;
   final String selectionOwner;
+  final String title;
+
+  /// Choosing an exercise closes the picker with its name instead of
+  /// toggling a selection; there is no selection list or footer.
+  final bool singlePick;
   final String? userId;
   final Iterable<String>? selectedExerciseIds;
   final Iterable<String>? alreadyAddedExerciseIds;
@@ -97,6 +141,8 @@ class _ExercisePickerSheet extends StatefulWidget {
     required this.onAdd,
     required this.onRemove,
     required this.selectionOwner,
+    this.title = 'Add exercises',
+    this.singlePick = false,
     this.userId,
     this.selectedExerciseIds,
     this.alreadyAddedExerciseIds,
@@ -146,6 +192,13 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
   void _toggleExercise(_ExerciseResult result) {
     final key = ExerciseCatalog.canonicalId(result.id);
     if (_alreadyAddedNames.contains(key)) return;
+    if (widget.singlePick) {
+      Navigator.pop<PickedExercise>(context, (
+        name: result.name,
+        exerciseId: key,
+      ));
+      return;
+    }
     final selectedName = _selectedNames.remove(key);
     if (selectedName != null) {
       if (widget.onRemoveIdentified != null) {
@@ -414,7 +467,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                   ),
                 ),
                 Expanded(child: _buildContent()),
-                _buildFooter(),
+                if (!widget.singlePick) _buildFooter(),
               ],
             ),
           ),
@@ -435,7 +488,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
         children: [
           Expanded(
             child: Text(
-              'Add exercises',
+              widget.title,
               style: Theme.of(context).textTheme.headlineSmall,
             ),
           ),
@@ -561,6 +614,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
             selectedNames: _selectedNames,
             alreadyAddedNames: _alreadyAddedNames,
             onToggle: _toggleExercise,
+            singlePick: widget.singlePick,
             showCategory: false,
           ),
         ),
@@ -591,6 +645,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
             selectedNames: _selectedNames,
             alreadyAddedNames: _alreadyAddedNames,
             onToggle: _toggleExercise,
+            singlePick: widget.singlePick,
             showCategory: true,
           ),
         ),
@@ -628,6 +683,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                     selectedNames: _selectedNames,
                     alreadyAddedNames: _alreadyAddedNames,
                     onToggle: _toggleExercise,
+                    singlePick: widget.singlePick,
                     showCategory: true,
                   ),
         ),
@@ -960,6 +1016,7 @@ class _ExerciseList extends StatelessWidget {
   final Set<String> alreadyAddedNames;
   final ValueChanged<_ExerciseResult> onToggle;
   final bool showCategory;
+  final bool singlePick;
 
   const _ExerciseList({
     required this.results,
@@ -967,6 +1024,7 @@ class _ExerciseList extends StatelessWidget {
     required this.alreadyAddedNames,
     required this.onToggle,
     required this.showCategory,
+    this.singlePick = false,
   });
 
   @override
@@ -996,6 +1054,7 @@ class _ExerciseList extends StatelessWidget {
           selected: selected,
           alreadyAdded: alreadyAdded,
           showCategory: showCategory,
+          singlePick: singlePick,
           onTap: () => onToggle(result),
         );
       },
@@ -1008,6 +1067,7 @@ class _ExerciseRow extends StatelessWidget {
   final bool selected;
   final bool alreadyAdded;
   final bool showCategory;
+  final bool singlePick;
   final VoidCallback onTap;
 
   const _ExerciseRow({
@@ -1016,6 +1076,7 @@ class _ExerciseRow extends StatelessWidget {
     required this.alreadyAdded,
     required this.showCategory,
     required this.onTap,
+    this.singlePick = false,
   });
 
   @override
@@ -1024,7 +1085,8 @@ class _ExerciseRow extends StatelessWidget {
       button: !alreadyAdded,
       selected: selected,
       label:
-          '${result.name}${showCategory ? ', ${result.category}' : ''}, ${alreadyAdded ? 'already added' : (selected ? 'selected' : 'not selected')}',
+          '${result.name}${showCategory ? ', ${result.category}' : ''}'
+          '${alreadyAdded ? ', already added' : (singlePick ? '' : (selected ? ', selected' : ', not selected'))}',
       child: InkWell(
         onTap: alreadyAdded ? null : onTap,
         borderRadius: AppRadius.button,
@@ -1072,7 +1134,7 @@ class _ExerciseRow extends StatelessWidget {
                     color: textSecondaryColor(context),
                   ),
                 )
-              else
+              else if (!singlePick)
                 Checkbox(
                   value: selected,
                   onChanged: (_) => onTap(),

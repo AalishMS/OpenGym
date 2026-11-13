@@ -73,22 +73,48 @@ extension ExerciseMetricLabel on ExerciseMetric {
   };
 }
 
-enum RecordType { estimatedOneRepMax, heaviestWeight, repBest, setVolume }
+enum RecordType {
+  estimatedOneRepMax,
+  heaviestWeight,
+  repBest,
+  setVolume,
+
+  /// The most reps in one bodyweight set (weight 0).
+  mostReps,
+
+  /// The longest hold of a timed exercise, in seconds.
+  longestHold,
+}
 
 extension RecordTypeLabel on RecordType {
-  String label([int? reps]) => switch (this) {
-    RecordType.estimatedOneRepMax => 'New estimated 1RM',
-    RecordType.heaviestWeight => 'New heaviest weight',
-    RecordType.repBest =>
-      reps == null ? 'New rep-count best' : 'New $reps-rep best',
-    RecordType.setVolume => 'New best set volume',
+  /// The record's name, such as `Heaviest weight` or `5-rep best`.
+  String title([int? reps]) => switch (this) {
+    RecordType.estimatedOneRepMax => 'Estimated 1RM',
+    RecordType.heaviestWeight => 'Heaviest weight',
+    RecordType.repBest => reps == null ? 'Rep-count best' : '$reps-rep best',
+    RecordType.setVolume => 'Best set volume',
+    RecordType.mostReps => 'Most reps',
+    RecordType.longestHold => 'Longest hold',
   };
+
+  /// [title] announced as new: `New heaviest weight`.
+  String label([int? reps]) {
+    final name = title(reps);
+    return 'New ${name[0].toLowerCase()}${name.substring(1)}';
+  }
 }
 
 class SessionStatistics {
   final WorkoutSession session;
+
+  /// Weight × reps over performed sets. Bodyweight sets add 0 and timed sets
+  /// are left out, since their reps are seconds.
   final double volumeLoad;
+
+  /// Reps over performed sets, leaving out timed sets.
   final int totalReps;
+
+  /// Every performed set, timed ones included.
   final int totalSets;
 
   const SessionStatistics({
@@ -111,12 +137,32 @@ class WeeklyTrainingValue {
   });
 }
 
+/// One record a set broke. See `StatisticsAnalyticsService.recordEvents` for
+/// the rules that decide what counts.
 class RecordAchievement {
   final RecordType type;
+
+  /// The new best: kilograms for the weight records, kilograms for set
+  /// volume, reps for [RecordType.mostReps] and seconds for
+  /// [RecordType.longestHold].
   final double value;
   final double setWeight;
   final int setReps;
+
+  /// The rep count a [RecordType.repBest] is for; null for the other types.
   final int? reps;
+
+  /// The best this record beat, in the same unit as [value]: the heaviest
+  /// weight, estimated 1RM, set volume, most bodyweight reps or longest hold
+  /// before this workout, or for a rep best the heaviest weight lifted for
+  /// [reps] or more reps. Null when the producer did not supply one.
+  final double? previousValue;
+
+  /// Where the set that broke the record sits in its workout: the index into
+  /// `WorkoutSession.exercises`, then into that exercise's `sets` (counting
+  /// sets saved at zero reps, so it matches the saved row).
+  final int? exerciseIndex;
+  final int? setIndex;
 
   const RecordAchievement({
     required this.type,
@@ -124,9 +170,14 @@ class RecordAchievement {
     required this.setWeight,
     required this.setReps,
     this.reps,
+    this.previousValue,
+    this.exerciseIndex,
+    this.setIndex,
   });
 }
 
+/// The records one exercise set in one workout. An exercise logged twice in a
+/// workout under the same name still yields one event.
 class RecordEvent {
   final String exerciseName;
   final String? exerciseId;
@@ -155,6 +206,20 @@ class ExerciseProgressPoint {
   });
 }
 
+/// What an [ExerciseProgress] counts instead of the chosen measure, for a lift
+/// the measure can't describe.
+enum ProgressFallback {
+  /// The chosen measure.
+  none,
+
+  /// Best reps in one set: a lift whose sets in range are all at weight 0,
+  /// under a weight-based measure.
+  bestReps,
+
+  /// Longest hold in seconds: a timed lift under any measure but sets.
+  bestTime,
+}
+
 class ExerciseProgress {
   final List<ExerciseProgressPoint> points;
   final double? currentValue;
@@ -163,6 +228,9 @@ class ExerciseProgress {
   final int? bestSetReps;
   final int sessionCount;
 
+  /// What [points] measure when it isn't the measure asked for.
+  final ProgressFallback fallback;
+
   const ExerciseProgress({
     required this.points,
     required this.currentValue,
@@ -170,6 +238,7 @@ class ExerciseProgress {
     required this.bestSetWeight,
     required this.bestSetReps,
     required this.sessionCount,
+    this.fallback = ProgressFallback.none,
   });
 }
 

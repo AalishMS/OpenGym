@@ -223,8 +223,10 @@ void main() {
         const ExerciseDefinition(id: customId, name: 'DB Press'),
       );
       await ExerciseCatalog.merge(customId, pressId);
-      final original = session('DB Press', 20, 1, exerciseId: customId);
+      final original = session('DB Press', 20, 2, exerciseId: customId);
       final data = [
+        // A lift's first workout is its baseline, so give it one to beat.
+        session('Dumbbell Press', 15, 1, exerciseId: pressId),
         original.copyWith(
           exercises: [
             ...original.exercises,
@@ -236,12 +238,18 @@ void main() {
           ],
         ),
       ];
-      expect(analytics.recordEvents(data), hasLength(1));
+      final event = analytics.recordEvents(data).single;
+      expect(event.exerciseId, pressId);
+      final heaviest = event.achievements.firstWhere(
+        (a) => a.type == RecordType.heaviestWeight,
+      );
+      expect(heaviest.value, 25);
+      expect(heaviest.previousValue, 15);
       expect(
         analytics
             .exerciseProgress(data, pressId, ExerciseMetric.sessionVolume)
             .points
-            .single
+            .last
             .value,
         360,
       );

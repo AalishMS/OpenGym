@@ -1,17 +1,21 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../models/statistics.dart';
+import '../models/workout_session.dart';
 import '../providers/settings_provider.dart';
 import '../providers/split_provider.dart';
 import '../providers/training_block_provider.dart';
 import '../providers/workout_session_provider.dart';
+import '../services/exercise_catalog.dart';
 import '../services/statistics_analytics_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/scroll_to_top.dart';
+import '../utils/statistics_format.dart';
 import '../widgets/app_header.dart';
 import '../widgets/statistics/block_statistics.dart';
 import '../widgets/statistics/lift_list.dart';
@@ -38,10 +42,15 @@ class StatsScreen extends StatefulWidget {
   /// Bumped when the Stats tab is tapped while showing.
   final int scrollToTopRequest;
 
+  /// Works out every figure on the screen. Replaceable so tests can count
+  /// how often it runs.
+  final StatisticsAnalyticsService analytics;
+
   const StatsScreen({
     this.weeklyTrainingRequest = 0,
     this.visitRequest = 0,
     this.scrollToTopRequest = 0,
+    this.analytics = const StatisticsAnalyticsService(),
     super.key,
   });
 
@@ -50,7 +59,19 @@ class StatsScreen extends StatefulWidget {
 }
 
 class StatsScreenState extends State<StatsScreen> {
-  static const _analytics = StatisticsAnalyticsService();
+  StatisticsAnalyticsService get _analytics => widget.analytics;
+
+  // The screen lives in the shell's IndexedStack and rebuilds on every
+  // provider notification, even while hidden. Each derived value is kept
+  // until one of its own inputs changes. Provider lists are replaced, never
+  // mutated, on reload, so identity is a sound key; the workouts themselves
+  // key the eligible list so an in-place addition still refreshes.
+  final _eligible = _Memo<List<WorkoutSession>>();
+  final _directory = _Memo<Map<String, String>>();
+  final _records = _Memo<List<RecordEvent>>();
+  final _weekly = _Memo<List<WeeklyTrainingValue>>();
+  final _lifts = _Memo<List<LiftSummary>>();
+  final _blocks = _Memo<List<BlockStatistics>>();
   final ScrollController _scrollController = ScrollController();
   _StatisticsView _view = _StatisticsView.overview;
   StatisticsPeriod _period = StatisticsPeriod.fourWeeks;
@@ -110,7 +131,18 @@ class StatsScreenState extends State<StatsScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    ExerciseCatalog.changes.addListener(_catalogChanged);
+  }
+
+  void _catalogChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    ExerciseCatalog.changes.removeListener(_catalogChanged);
     _scrollController.dispose();
     super.dispose();
   }
@@ -211,10 +243,15 @@ class StatsScreenState extends State<StatsScreen> {
     final splitId = context.watch<SplitProvider?>()?.activeSplitId;
     final unit = context.watch<SettingsProvider?>()?.weightUnit ?? 'kg';
     final training = context.watch<TrainingBlockProvider?>();
-    final sessions = _analytics.eligibleSessions(
-      context.watch<WorkoutSessionProvider>().sessions,
-      splitId: splitId,
-    );
+    final analytics = _analytics;
+    final all = context.watch<WorkoutSessionProvider>().sessions;
+    final sessions = _eligible([
+      analytics,
+      splitId,
+      ...all,
+    ], () => analytics.eligibleSessions(all, splitId: splitId));
+    // Periods and weekly charts end with the current week.
+    final thisWeek = StatisticsAnalyticsService.startOfWeek(DateTime.now());
     _hasSections = sessions.isNotEmpty;
     if (_lastSplit != splitId) {
       _lastSplit = splitId;
@@ -225,13 +262,31 @@ class StatsScreenState extends State<StatsScreen> {
       _recordLimit = 12;
       _resetScroll();
     }
-    final directory = _analytics.exerciseDirectory(sessions);
+    // Renames and merges change what a logged lift resolves to without
+    // touching the workouts, so everything named or grouped by lift also
+    // keys on the catalog.
+    final catalog = ExerciseCatalog.revision;
+    final directory = _directory([
+      analytics,
+      sessions,
+      catalog,
+    ], () => analytics.exerciseDirectory(sessions));
+    // Every record, newest first: Records lists them and blocks count them,
+    // so they are worked out once per change to the split's workouts.
+    final records = _records([
+      analytics,
+      sessions,
+      catalog,
+    ], () => analytics.recordEvents(sessions));
     final names = directory.keys.toList();
     final weeklyExercise =
         names.contains(_weeklyExercise) ? _weeklyExercise : null;
-    final lifts = _analytics.liftSummaries(
-      _analytics.sessionsInPeriod(sessions, _period),
-      _metric,
+    final lifts = _lifts(
+      [analytics, sessions, catalog, _period, _metric, thisWeek],
+      () => analytics.liftSummaries(
+        analytics.sessionsInPeriod(sessions, _period),
+        _metric,
+      ),
     );
     final lift =
         lifts
@@ -244,14 +299,25 @@ class StatsScreenState extends State<StatsScreen> {
     final blocks =
         training == null
             ? const <BlockStatistics>[]
-            : _analytics
-                .blockStatistics(
-                  sessions,
-                  blocks: training.blocks,
-                  weeksByBlock: training.weeksByBlock,
-                )
-                .where((block) => block.workouts > 0)
-                .toList();
+            : _blocks(
+              [
+                analytics,
+                sessions,
+                records,
+                training.blocks,
+                training.weeksByBlock,
+              ],
+              () =>
+                  analytics
+                      .blockStatistics(
+                        sessions,
+                        blocks: training.blocks,
+                        weeksByBlock: training.weeksByBlock,
+                        records: records,
+                      )
+                      .where((block) => block.workouts > 0)
+                      .toList(),
+            );
     final latestWeekId = sessions.firstOrNull?.trainingWeekId;
     final currentBlockId =
         latestWeekId == null ? null : training?.weekById[latestWeekId]?.blockId;
@@ -271,9 +337,10 @@ class StatsScreenState extends State<StatsScreen> {
           ),
           sessions: sessions,
           showCurrentWeek: _showCurrentWeek,
-          weeks: _analytics.weeklyVolume(
-            sessions,
-            exerciseName: weeklyExercise,
+          weeks: _weekly(
+            [analytics, sessions, catalog, weeklyExercise, thisWeek],
+            () =>
+                analytics.weeklyVolume(sessions, exerciseName: weeklyExercise),
           ),
           exercise: weeklyExercise,
           exerciseLabel: directory[weeklyExercise],
@@ -370,7 +437,16 @@ class StatsScreenState extends State<StatsScreen> {
                         ),
                     icon: const Icon(LucideIcons.chevronDown, size: 14),
                     iconAlignment: IconAlignment.end,
-                    label: Text(_metric.label),
+                    // A timed or bodyweight-only lift falls back to the
+                    // measure it can show, and says so.
+                    label: Text(
+                      lift == null
+                          ? _metric.label
+                          : progressMeasureLabel(
+                            _metric,
+                            lift.progress.fallback,
+                          ),
+                    ),
                   ),
                 ),
                 IconButton(
@@ -436,7 +512,6 @@ class StatsScreenState extends State<StatsScreen> {
                   weightUnit: unit,
                 );
       case _StatisticsView.records:
-        final records = _analytics.recordEvents(sessions);
         content = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -657,4 +732,19 @@ class _EmptyStatistics extends StatelessWidget {
           ),
         ),
   );
+}
+
+/// One derived value, kept until its inputs change. Inputs compare with
+/// `==`, which for lists and maps is identity.
+class _Memo<T> {
+  List<Object?>? _inputs;
+  late T _value;
+
+  T call(List<Object?> inputs, T Function() compute) {
+    final previous = _inputs;
+    if (previous != null && listEquals(previous, inputs)) return _value;
+    _value = compute();
+    _inputs = inputs;
+    return _value;
+  }
 }

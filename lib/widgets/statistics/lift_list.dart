@@ -100,12 +100,14 @@ class _LiftRow extends StatelessWidget {
     final points = lift.progress.points;
     final latest = points.last;
     final change = lift.progress.change;
-    final value = formatChartExerciseValue(latest.value, metric, unit);
+    // A bodyweight or timed lift reads in reps or time, whatever the measure.
+    final fallback = lift.progress.fallback;
+    final value = formatProgressValue(latest.value, metric, fallback, unit);
     final changeText =
         change == null || change == 0
             ? null
             : '${change > 0 ? '+' : '−'}'
-                '${formatChartExerciseValue(change.abs(), metric, unit)}';
+                '${formatProgressValue(change.abs(), metric, fallback, unit)}';
     final changeColor =
         change != null && change > 0
             ? successColor(context)
@@ -145,7 +147,7 @@ class _LiftRow extends StatelessWidget {
       button: true,
       selected: selected,
       label:
-          '${lift.exerciseName}, ${metric.label} $value'
+          '${lift.exerciseName}, ${progressMeasureLabel(metric, fallback)} $value'
           '${changeText == null ? '' : ', change $changeText'}',
       child: ExcludeSemantics(
         child: InkWell(

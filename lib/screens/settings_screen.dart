@@ -25,6 +25,7 @@ import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../theme/radii.dart';
 import '../utils/scroll_to_top.dart';
+import '../utils/weight_units.dart';
 import '../widgets/app_header.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/action_progress.dart';
@@ -271,6 +272,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildThemeSection(context, settings),
                         _buildAccentColorSection(context, settings),
                         const _SectionHeader(title: 'Workout'),
+                        _buildWeightUnitSection(context, settings),
                         _buildSettingsTile(
                           icon: LucideIcons.dumbbell,
                           title: 'Manage exercises',
@@ -293,9 +295,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildSwitchTile(
                           context: context,
                           icon: LucideIcons.zap,
-                          title: 'Auto-fill last weights',
+                          title: "Start from last week's sets",
+                          // Both states have to read clearly, since off
+                          // changes what a new week opens with.
                           subtitle:
-                              'Automatically fill weight from previous workout',
+                              settings.autoFillLast
+                                  ? 'New weeks open with the weights and reps '
+                                      'you logged the week before'
+                                  : "New weeks open with the plan's targets",
                           value: settings.autoFillLast,
                           onChanged:
                               (value) => _runSettingsAction(
@@ -565,6 +572,65 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   (selection) => _runSettingsAction(
                     context,
                     () => settings.setThemeMode(selection.first),
+                  ),
+              multiSelectionEnabled: false,
+              showSelectedIcon: false,
+              style: SegmentedButton.styleFrom(
+                backgroundColor: surfaceColor(context),
+                foregroundColor: textPrimaryColor(context),
+                selectedBackgroundColor: accentFillColor(context),
+                selectedForegroundColor: onAccentColor(context),
+                side: BorderSide(color: borderColor(context)),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: AppRadius.control,
+                ),
+                minimumSize: const Size(72, 48),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 12,
+                ),
+                textStyle: Theme.of(context).textTheme.labelLarge,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Styled like the theme selector. Switching converts what is shown and how
+  /// typed weights are read; stored weights stay in kilograms.
+  Widget _buildWeightUnitSection(
+    BuildContext context,
+    SettingsProvider settings,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Weight unit', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(
+            'Weights are shown and entered in this unit. Switching '
+            'converts them; nothing you logged changes.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 12),
+          Semantics(
+            label: 'Weight unit',
+            child: SegmentedButton<String>(
+              key: const ValueKey('weight-unit-selector'),
+              expandedInsets: EdgeInsets.zero,
+              segments: const [
+                ButtonSegment(value: kWeightUnitKg, label: Text('Kilograms')),
+                ButtonSegment(value: kWeightUnitLbs, label: Text('Pounds')),
+              ],
+              selected: {normalizeWeightUnit(settings.weightUnit)},
+              onSelectionChanged:
+                  (selection) => _runSettingsAction(
+                    context,
+                    () => settings.setWeightUnit(selection.first),
                   ),
               multiSelectionEnabled: false,
               showSelectedIcon: false,

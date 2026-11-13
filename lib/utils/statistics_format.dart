@@ -1,5 +1,6 @@
 import '../models/statistics.dart';
 import 'format.dart';
+import 'weight_units.dart';
 
 const double _poundsPerKilogram = 2.2046226218;
 
@@ -24,17 +25,18 @@ String formatAnalyticsNumber(double value, {int decimals = 0}) {
 /// A signed change with a true minus sign (U+2212). A hyphen is narrower than
 /// the plus sign and sits low, so a negative change read as a typo next to a
 /// positive one.
-String formatSignedChange(num change, String Function(double magnitude) format) {
+String formatSignedChange(
+  num change,
+  String Function(double magnitude) format,
+) {
   final magnitude = format(change.abs().toDouble());
   // A change that rounds away reads as no change, not as "−0%".
   if (change == 0 || magnitude == format(0)) return magnitude;
   return '${change > 0 ? '+' : '\u2212'}$magnitude';
 }
 
-String formatAnalyticsWeight(double kilograms, String weightUnit) {
-  final converted = displayWeight(kilograms, weightUnit);
-  return '${formatWeight(converted)} $weightUnit';
-}
+String formatAnalyticsWeight(double kilograms, String weightUnit) =>
+    '${formatWeightIn(kilograms, weightUnit)} $weightUnit';
 
 String formatVolumeLoad(double kilograms, String weightUnit) {
   if (weightUnit == 'kg' && kilograms >= 1000) {
@@ -140,9 +142,140 @@ String formatChartExerciseValue(
   ExerciseMetric metric,
   String unit,
 ) => switch (metric) {
+  // A weight in pounds reads to the quarter pound, like everywhere else.
+  ExerciseMetric.bestWeight || ExerciseMetric.estimatedOneRepMax
+      when isPounds(unit) =>
+    formatAnalyticsWeight(value, unit),
   ExerciseMetric.bestWeight ||
   ExerciseMetric.estimatedOneRepMax ||
   ExerciseMetric.bestSetVolume ||
   ExerciseMetric.sessionVolume => formatExactVolume(value, unit),
   _ => formatExerciseValue(value, metric, unit),
+};
+
+/// A hold of [seconds], as timed sets store it in `reps`: `45 s` under 90
+/// seconds, `1:30` from 90 seconds up. Negative values (a change) keep their
+/// sign.
+String formatHoldTime(int seconds) {
+  final sign = seconds < 0 ? '-' : '';
+  final value = seconds.abs();
+  if (value < 90) return '$sign$value s';
+  return '$sign${value ~/ 60}:${(value % 60).toString().padLeft(2, '0')}';
+}
+
+/// [formatHoldTime] for a screen reader: `45 seconds`, `1 minute 30 seconds`.
+String formatHoldTimeSpoken(int seconds) {
+  String unit(int count, String noun) => '$count $noun${count == 1 ? '' : 's'}';
+  final sign = seconds < 0 ? 'minus ' : '';
+  final value = seconds.abs();
+  if (value < 90) return '$sign${unit(value, 'second')}';
+  final rest = value % 60;
+  return '$sign${unit(value ~/ 60, 'minute')}'
+      '${rest == 0 ? '' : ' ${unit(rest, 'second')}'}';
+}
+
+/// `1 rep`, `12 reps`.
+String formatRepCount(int reps) => '$reps rep${reps.abs() == 1 ? '' : 's'}';
+
+/// The heading over a set's count column: `Time` for a timed exercise,
+/// `Reps` otherwise.
+String setCountLabel({required bool timed}) => timed ? 'Time' : 'Reps';
+
+/// A set's count cell: the reps, or the hold time for a timed exercise.
+String formatSetCount(int reps, {required bool timed}) =>
+    timed ? formatHoldTime(reps) : '$reps';
+
+/// One performed set on one line: `80 kg × 5`, `12 reps` at weight 0, or for
+/// a timed exercise `45 s` (`10 kg · 45 s` when loaded).
+String formatSetSummary(
+  double kilograms,
+  int reps,
+  String weightUnit, {
+  required bool timed,
+}) {
+  if (timed) {
+    final time = formatHoldTime(reps);
+    return kilograms > 0
+        ? '${formatAnalyticsWeight(kilograms, weightUnit)} · $time'
+        : time;
+  }
+  if (kilograms <= 0) return formatRepCount(reps);
+  return '${formatAnalyticsWeight(kilograms, weightUnit)} × $reps';
+}
+
+/// The record's name for display: `Heaviest weight`, `5-rep best`.
+String formatRecordTitle(RecordAchievement achievement) =>
+    achievement.type.title(achievement.reps);
+
+String _recordAmount(RecordType type, double value, String weightUnit) =>
+    switch (type) {
+      RecordType.estimatedOneRepMax ||
+      RecordType.heaviestWeight ||
+      RecordType.repBest => formatAnalyticsWeight(value, weightUnit),
+      RecordType.setVolume => formatVolumeLoad(value, weightUnit),
+      RecordType.mostReps => formatRepCount(value.round()),
+      RecordType.longestHold => formatHoldTime(value.round()),
+    };
+
+/// The new best a record set, in display units: `100 kg`, `12 reps`, `1:30`.
+String formatRecordValue(RecordAchievement achievement, String weightUnit) =>
+    _recordAmount(achievement.type, achievement.value, weightUnit);
+
+/// The best a record beat, in the same display units as
+/// [formatRecordValue], or null when it isn't known.
+String? formatRecordPreviousValue(
+  RecordAchievement achievement,
+  String weightUnit,
+) {
+  final previous = achievement.previousValue;
+  return previous == null
+      ? null
+      : _recordAmount(achievement.type, previous, weightUnit);
+}
+
+/// What an Exercise progress value measures, for headings and screen
+/// readers: the measure's own label, or what the lift fell back to.
+String progressMeasureLabel(ExerciseMetric metric, ProgressFallback fallback) =>
+    switch (fallback) {
+      ProgressFallback.none => metric.label,
+      ProgressFallback.bestReps => 'Best reps in one set',
+      ProgressFallback.bestTime => 'Longest hold',
+    };
+
+/// An Exercise progress value (or a change in one) in its display unit:
+/// reps or a hold time when the lift fell back, otherwise as
+/// [formatChartExerciseValue] prints the measure.
+String formatProgressValue(
+  double value,
+  ExerciseMetric metric,
+  ProgressFallback fallback,
+  String weightUnit,
+) => switch (fallback) {
+  ProgressFallback.none => formatChartExerciseValue(value, metric, weightUnit),
+  ProgressFallback.bestReps => formatRepCount(value.round()),
+  ProgressFallback.bestTime => formatHoldTime(value.round()),
+};
+
+/// Whether an Exercise progress value is a weight, so it is converted to the
+/// display unit before it is plotted.
+bool progressValueIsWeight(ExerciseMetric metric, ProgressFallback fallback) =>
+    fallback == ProgressFallback.none &&
+    metric != ExerciseMetric.totalReps &&
+    metric != ExerciseMetric.totalSets;
+
+/// The plot's unit for an Exercise progress chart: the weight unit, `reps`,
+/// `sets`, or `s` for a hold.
+String progressAxisUnit(
+  ExerciseMetric metric,
+  ProgressFallback fallback,
+  String weightUnit,
+) => switch (fallback) {
+  ProgressFallback.bestReps => 'reps',
+  ProgressFallback.bestTime => 's',
+  ProgressFallback.none =>
+    metric == ExerciseMetric.totalReps
+        ? 'reps'
+        : metric == ExerciseMetric.totalSets
+        ? 'sets'
+        : weightUnit,
 };

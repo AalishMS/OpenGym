@@ -244,7 +244,7 @@ void main() {
             );
             expect(tester.getRect(title).top, greaterThanOrEqualTo(0));
             expect(find.byTooltip('Delete set'), findsNothing);
-            expect(find.bySemanticsLabel('Set 1 RPE value 8'), findsWidgets);
+            expect(find.bySemanticsLabel('Set 1 RPE'), findsWidgets);
             final card = find.byType(ExerciseCard).first;
             final menu = find.descendant(
               of: card,
@@ -272,7 +272,7 @@ void main() {
               of: row,
               matching: find.bySemanticsLabel('Set 1 Kg'),
             );
-            for (final label in ['Set 1 Reps', 'Set 1 RPE value 8']) {
+            for (final label in ['Set 1 Reps', 'Set 1 RPE']) {
               expect(
                 tester
                     .getCenter(

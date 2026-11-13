@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart' as gym;
+import 'package:gymapp/models/statistics.dart';
 import 'package:gymapp/models/set_template.dart';
 import 'package:gymapp/models/training_week.dart';
 import 'package:gymapp/models/workout_plan.dart';
@@ -13,6 +14,7 @@ import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/pr_tracking_service.dart';
+import 'package:gymapp/services/statistics_analytics_service.dart';
 import 'package:gymapp/services/workout_completion_service.dart';
 import 'package:gymapp/services/workout_session_initializer.dart';
 import 'package:gymapp/services/workout_timer_notification_service.dart';
@@ -215,6 +217,92 @@ void main() {
       Exercise(name: 'Squat', sets: [gym.Set(reps: 0, weight: 0)]),
     ], const []);
     expect(results, isEmpty);
+  });
+
+  group('records at completion', () {
+    final start = DateTime(2026, 9, 5, 10);
+    WorkoutSession logged(String id, DateTime date, List<gym.Set> sets) =>
+        WorkoutSession(
+          id: id,
+          date: date,
+          planName: 'Strength',
+          splitId: 'split-a',
+          exercises: [Exercise(name: 'Squat', sets: sets)],
+        );
+
+    Future<WorkoutCompletionResult> complete(
+      List<gym.Set> sets,
+      List<WorkoutSession> history,
+    ) => WorkoutCompletionService.complete(
+      draft(startedAt: start, timerStartedAt: start, sets: sets),
+      now: start.add(const Duration(minutes: 5)),
+      history: history,
+      upsert: (_) async {},
+    );
+
+    test('a first-ever lift sets no record and no "was 0 kg" PR', () async {
+      final result = await complete([gym.Set(reps: 5, weight: 100)], const []);
+      expect(result.records, isEmpty);
+      expect(result.personalRecords, isEmpty);
+    });
+
+    test('a heavy set with no reps is not a PR', () async {
+      final result = await complete(
+        [gym.Set(reps: 0, weight: 200), gym.Set(reps: 5, weight: 90)],
+        [
+          logged('older', DateTime(2026, 8), [gym.Set(reps: 5, weight: 90)]),
+        ],
+      );
+      expect(result.records, isEmpty);
+      expect(result.personalRecords, isEmpty);
+    });
+
+    test(
+      'records equal the analytics records for the logged workout',
+      () async {
+        final history = [
+          logged('older', DateTime(2026, 8), [gym.Set(reps: 8, weight: 90)]),
+          // Another split's heavier squat never counts here.
+          logged('other-split', DateTime(2026, 8, 2), [
+            gym.Set(reps: 5, weight: 200),
+          ]).copyWith(splitId: 'split-b'),
+        ];
+        final result = await complete([
+          gym.Set(reps: 5, weight: 90),
+          gym.Set(reps: 5, weight: 100),
+        ], history);
+
+        const analytics = StatisticsAnalyticsService();
+        final expected = analytics.sessionRecords([
+          ...history.where((s) => s.splitId == 'split-a'),
+          result.session,
+        ], result.session);
+        Object describe(RecordAchievement r) => (
+          r.type,
+          r.value,
+          r.previousValue,
+          r.setReps,
+          r.reps,
+          r.exerciseIndex,
+          r.setIndex,
+        );
+        expect(result.records.single.session, same(result.session));
+        expect(
+          result.records.single.achievements.map(describe),
+          expected.single.achievements.map(describe),
+        );
+        // The legacy dialog shape is the heaviest-weight subset of the same
+        // result: 100 kg, was 90 kg, set 2.
+        final heaviest = result.records.single.achievements.singleWhere(
+          (r) => r.type == RecordType.heaviestWeight,
+        );
+        expect(heaviest.setIndex, 1);
+        expect(heaviest.previousValue, 90);
+        expect(result.personalRecords.single.newPR, 100);
+        expect(result.personalRecords.single.previousPR, 90);
+        expect(result.personalRecords.single.reps, 5);
+      },
+    );
   });
 
   test('failed completion leaves the original draft retryable', () async {

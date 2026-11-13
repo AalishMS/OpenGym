@@ -154,7 +154,7 @@ void main() {
   });
 
   testWidgets(
-    'workout rows show a compact RPE field for every value, accent, and theme',
+    'workout rows show a readable RPE input for every value, accent, and theme',
     (tester) async {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(320, 800);
@@ -175,7 +175,9 @@ void main() {
             await tester.pumpAndSettle();
 
             final reps = find.bySemanticsLabel('Set 1 Reps');
-            final effort = find.bySemanticsLabel('Set 1 RPE value $rpe');
+            final effort = find.bySemanticsLabel('Set 1 RPE');
+            // Effort sits bare as its coloured `@7`; only the cell being
+            // edited gets a ground, so a resting one has no visible box.
             final effortText = find.descendant(
               of: effort,
               matching: find.text('@$rpe'),
@@ -190,19 +192,24 @@ void main() {
               tester.widget<Text>(effortText).style!.color,
               rpeColor(rpe, context),
             );
-            expect(
-              tester.widget<Text>(effortText).style!.fontSize,
-              Theme.of(context).textTheme.labelLarge!.fontSize,
-            );
-            expect(
-              find.descendant(
-                of: effort,
-                matching: find.byWidgetPredicate(
-                  (widget) => widget is Container && widget.decoration != null,
-                ),
-              ),
-              findsNothing,
-            );
+            final ground =
+                tester
+                        .widget<Container>(
+                          find
+                              .descendant(
+                                of: effort,
+                                matching: find.byWidgetPredicate(
+                                  (widget) =>
+                                      widget is Container &&
+                                      widget.decoration is BoxDecoration,
+                                ),
+                              )
+                              .first,
+                        )
+                        .decoration!
+                    as BoxDecoration;
+            expect(ground.color!.a, 0);
+            expect(ground.border, isNull);
             expect(tester.takeException(), isNull);
           }
         }

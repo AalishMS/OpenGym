@@ -67,7 +67,7 @@ The app is split into small layers:
 | Models | `lib/models/` | Hive objects and JSON serialization |
 | Providers | `lib/providers/` | UI-facing state and `notifyListeners()` |
 | Repositories | `lib/repositories/` | Thin split and training-structure data access |
-| Services | `lib/services/` | Storage, sync, backup, PR tracking, seeding |
+| Services | `lib/services/` | Storage, sync, backup, statistics and personal records, seeding |
 | Screens | `lib/screens/` | Page-level UI |
 | Widgets | `lib/widgets/` | Reusable UI components |
 | Theme | `lib/theme/` | Colors, typography, spacing, breakpoints, corner radii, theme helpers |
@@ -82,7 +82,7 @@ Provider is the only app-wide state pattern.
 | `WorkoutPlanProvider` | Workout plan list and plan CRUD for the active split |
 | `WorkoutSessionProvider` | Completed-session list and session mutations for the active split |
 | `TrainingBlockProvider` | Split structure, per-plan progress and session indexes |
-| `SettingsProvider` | Theme mode, accent color, units, auto-fill |
+| `SettingsProvider` | Theme mode, accent color, units, start from last week's sets |
 | `UpdateProvider` | Self-update from GitHub Releases: checks at launch and on resume, Wi-Fi prefetch, snoozed prompt, session install |
 
 Providers mutate data through `HiveService` (`SplitProvider` goes through
@@ -137,6 +137,94 @@ Exercises match by canonical exercise ID and occurrence; current order/guidance 
 set values/RPE/count are deep-copied, and past set notes are not inherited.
 Untouched previews never create logs. Previous-set references instead follow
 earlier structural slots; plan-editor Last and analytics remain date-based.
+The copying above is Settings → Workout → *Start from last week's sets*, on by
+default (stored as `auto_fill_last`, backed up as `autoFillLast`). Off, a week
+with no saved data opens with the plan's current targets instead; saved drafts
+and logs are never changed, and the Previous column still shows the earlier
+logged sets. Discarding a draft rebuilds the week exactly as a fresh open would,
+under the same setting. The logger builds new weeks from the plan as currently
+saved, not the copy it was opened with.
+
+### Exercise identity
+
+Occurrences are identified by their stable catalog `exerciseId`, never by the
+name snapshot they carry (see [exercise identity](docs/exercises.md)). Plan
+templates, workout initialization, Previous values, history, Stats, records and
+timed measurement all resolve `ExerciseCatalog.identity(name, exerciseId)`, so
+an occurrence keeps its history whatever it is called. The workout's exercise
+menu is Exercise note, Rename exercise, Replace exercise (drafts only), Move
+up/down, and Delete exercise last.
+
+- *Rename exercise* changes the occurrence's label and keeps its ID, so
+  history, Previous values, records and measurement stay together. It saves
+  names without surrounding or repeated whitespace. *Also rename in plans and
+  past workouts*, checked by default, shows how many plans and workouts in the
+  split contain the same movement. Checked, `ExerciseRenameService` rewrites
+  the label of every live plan and workout occurrence in the split that
+  resolves to the same canonical ID. It keeps each `exerciseId`, filling a
+  legacy null with the resolved identity, and leaves sets, notes and targets
+  alone. Writes run under the sync gate, mark changed rows dirty with a fresh
+  `updatedAt`, and schedule a sync; other splits and tombstones are untouched.
+  An owned custom catalog movement is also relabelled through
+  `ExerciseCatalog.rename`, so the picker and Stats agree. Bundled labels are
+  permanent. Renaming never merges identities: when the new name already
+  belongs to another movement, the dialog says the histories stay separate and
+  points to Settings → Manage exercises, where merging is explicit.
+- *Replace exercise* opens the library in single-choice mode and swaps the
+  chosen movement, with its catalog ID, into this workout only. It keeps the
+  set count. Weight and reps come from that movement's latest logged
+  performance in the split, or weight 0 with the same reps when there is none.
+  RPE, set notes and the exercise note are cleared. Movements already in the
+  workout show as *Added* and can't be chosen.
+- Built-in movements carry a kind in `ExerciseLibrary` (weighted, bodyweight
+  or timed), keyed by their permanent ID. `ExerciseCatalog.kindOf`/`isTimed`
+  resolve an occurrence's canonical ID, so a renamed hold still stores
+  seconds, a merge into a hold follows the hold, and a custom movement is
+  weighted whatever it is called.
+
+### Personal records
+
+Records are derived, never stored, and have one definition:
+`StatisticsAnalyticsService.recordEvents`. Stats (Records and each block's
+Records figure), the History PR pill, Workout details, live workout marks and
+the summary after logging all read it, so they cannot disagree.
+
+- Only completed, live workouts in the split count, in date order, and only
+  sets with reps above zero. Lifts match by canonical catalog ID; a movement
+  logged twice in one workout is one lift there.
+- The first workout with performed sets of a lift sets its baselines and is
+  never a record, not even between its own sets. Records start from the second
+  workout with that lift.
+- Each later workout is compared with the workouts before it, not with its own
+  sets, so it breaks each record at most once. Its best set is a *heaviest
+  weight*, *best set volume* (weight × reps) or *estimated 1RM* record when it
+  beats the previous best. An estimated 1RM needs an earlier one to beat.
+- A set of N reps at weight W is an *N-rep best* when W beats the heaviest
+  weight previously lifted for N or more reps, and no other set in the workout
+  matched it with as many reps and as much weight. 70 kg × 5 after 70 kg × 8 is
+  not a record; 75 kg × 5 is. With no earlier set of N or more reps there is
+  nothing to beat.
+- Set volume, rep bests and estimated 1RM come only from weighted sets (weight
+  above 0), so the first loaded set after bodyweight-only workouts sets their
+  baseline. Heaviest weight treats earlier performed bodyweight sets as a
+  baseline of 0, so the first added load after them is a record, as the live
+  mark has always shown. A set at weight 0 with reps is a bodyweight set
+  (decided by the data, for library and custom lifts alike); its best is *most
+  reps*, against the most reps in an earlier bodyweight set.
+- A timed lift (Plank, Side Plank) stores seconds in `reps`: it counts as sets
+  but stays out of rep totals, volume load, estimated 1RM and block gains, and
+  only earns *longest hold*. Volume load stays weight × reps, so bodyweight
+  sets add 0.
+- Each record carries the value it beat and the exercise and set index of the
+  set that broke it. Workout details marks exactly that set; a set note that
+  says "PR" is only a note.
+- The logger's live PR mark is the heaviest-weight subset, judged with
+  `StatisticsAnalyticsService.recordJudge` against the split's other logs (a
+  logged workout being edited compares only with earlier ones). One set per
+  lift is marked, never on the lift's first workout and never for a hold.
+- `WorkoutCompletionService` judges the just-logged workout with the same rules
+  and returns `records`; its `personalRecords` (`PRResult`) is the
+  heaviest-weight subset that the workout summary lists.
 
 Exercise definitions are shared across splits within one account. Bundled IDs
 are permanent; custom entries are reusable offline. Names and reviewed aliases
@@ -473,16 +561,22 @@ signature:
   exercise is its own numbered card: the accent number sits in the set-number
   gutter, volume trails the name (or joins the summary line when narrow), the
   note hangs off an accent rule, and sets below in the ruled table. Sets saved
-  at zero reps stay on the record in the secondary ink.
+  at zero reps stay on the record in the secondary ink. The set that broke a
+  personal record (see Personal records) carries a *PR* badge beside its
+  weight, and its weight is read aloud with ", Personal record". A timed
+  exercise heads its count column *Time* and shows holds as `45 s`, or `1:30`
+  from 90 seconds up; its summary gives the longest hold. Set notes,
+  including ones that say "PR", always show as notes.
 - A plan's menu (long press, or *Plan actions* in Manage) is a modal bottom
   sheet with a drag handle, not a dialog. *Delete plan* is always the last
   row, set apart by a rule and the error colour. In Manage, the drag grip
   leads each card and *Plan actions* trails it, so the two targets sit at
   opposite ends.
-- The workout marks records while you lift. A set whose entered weight
-  beats the heaviest weight logged for that exercise before this workout (the
-  same check Finish makes) gets the PR badge, which pops in, and a heavy haptic
-  when the entry closes. A set that goes past its Previous set (more weight, or
+- The workout marks records while you lift. The set that would be the
+  workout's heaviest-weight record if logged as entered (see Personal
+  records: one set per lift, judged against earlier logs, never on a lift's
+  first workout or for a hold) gets the PR badge, which pops in, and a heavy
+  haptic when the entry closes. A set that goes past its Previous set (more weight, or
   more reps at the same weight) shows an accent arrow beside Previous.
   Exercises with no history are never marked.
 - Finish in the workout header is labelled, not a bare check; large text on a
@@ -511,6 +605,11 @@ signature:
   RPE from 1 to 10 and supports clearing it. Wide editor tables scroll at large
   text sizes. The plan colour palette opens from Change color to leave more room
   for training targets; Add exercise stays pinned at the bottom.
+- Timed exercises use *Seconds* in editable set tables and the shared keypad,
+  including History and set dialogs. Counts remain integer seconds in the
+  existing reps field. Ordinary and custom exercises retain *Reps*. RPE uses
+  the same editable cell treatment as weight and count, with an accessible
+  label and optional value.
 - A collapsed plan-editor row previews its sets in `figures`: the target
   (*3 × 12 · 70 kg*, or up to four mixed sets and then *+N*) and, only when
   the exercise has been trained in this split, *Last:* with the best set from
@@ -521,6 +620,24 @@ signature:
   in. Danger zone is always last. *Load sample data* replaces the active
   split's workouts, so it is a development tool. It only appears in debug
   builds (`SettingsScreen.showSampleData`, which defaults to `kDebugMode`).
+- Settings → Workout → *Weight unit* (Kilograms / Pounds, styled like the theme
+  selector) sets `SettingsProvider.weightUnit` (`kg` or `lbs`, stored as
+  `weight_unit`, backed up as `weightUnit`). **Storage is always kilograms**:
+  Hive, sync rows, backups and the Coach's request and response never change.
+  The unit only converts at the interface edge, and every conversion goes
+  through `lib/utils/weight_units.dart`. The set table and keypad, the edit-set
+  and add-set dialogs, the History edit screen, the plan editor previews, the
+  desktop dashboard tiles and the Coach diff card show and accept the chosen
+  unit; Stats, History, Workout details and the workout summary convert through
+  `statistics_format.dart`. The keypad steps by ±2.5/±1 in kilograms and
+  ±5/±2.5 in pounds (reps keep ±1). Values keep full precision in storage and
+  are rounded only for display; retyping the figure a cell showed keeps the
+  stored kilograms exactly, so opening a pounds cell never drifts a value.
+- Appearance defaults to *System* on a new installation. An installation from
+  before that default whose user never picked a theme keeps *Light*, so an
+  update never changes how the app looks. `main` settles this before the first
+  frame (`SettingsProvider.resolveStoredThemeMode`), using the first-run intro
+  flag as the sign of an earlier install, and stores the answer.
   The sample is about three months of a five-day week (Push, Pull, Legs,
   Upper, Full body): Foundation and Hypertrophy blocks ending in deloads, a
   week off, then a Strength block in progress where the plans sit on
@@ -554,7 +671,15 @@ signature:
   minus sign (`formatSignedChange`), and a change that rounds to zero has none.
   The four view controls remain visible while content scrolls; text can grow
   and scroll naturally on small screens. Returning to Stats resets its vertical
-  offset. See [statistics design](docs/statistics-design.md) for references.
+  offset. A lift whose sets in range are all at weight 0 falls back to its
+  best reps in one set under the weight-based measures, and a timed lift
+  shows its longest hold under every measure but sets; the measure label and
+  values say so (`ProgressFallback`, helpers in `statistics_format.dart`).
+  Derived values (eligible workouts, lift directory, records, weekly volume,
+  lift summaries, blocks) are memoised on their inputs, so a rebuild of the
+  hidden tab recomputes nothing, and records are worked out once and handed to
+  `blockStatistics`. See [statistics design](docs/statistics-design.md) for
+  references.
 - Home's weekly strip gives each day a full 48dp target without gaps, so all
   seven fit a 390dp phone; bars are inset inside their targets and grow in
   when the week changes. Today is marked by its bold letter and a small accent
@@ -574,7 +699,8 @@ not part of the product identity. Figures that need to line up or hold their
 width (Stats numbers and chart axes, record rows, the update status, the app
 version, plan-editor rows) use `AppTypography.figures`: Manrope with tabular figures, so digits
 align without a change of typeface. JetBrains Mono (`trainingData`) remains
-only in a few compact training-data spots outside Stats and Settings. The `>` symbol is reserved for the OpenGym wordmark rather
+only in a few compact training-data spots outside Stats, Settings and the
+workout dialogs. The `>` symbol is reserved for the OpenGym wordmark rather
 than used as a general interface decoration.
 
 UI code should use theme helpers from `lib/theme/app_theme.dart` instead of

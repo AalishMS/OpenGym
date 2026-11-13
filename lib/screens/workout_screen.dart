@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../services/exercise_catalog.dart';
 import '../data/plan_colors.dart';
 import '../models/exercise.dart';
+import '../models/statistics.dart';
 import '../models/set.dart' as gym;
 import '../models/training_block.dart';
 import '../models/training_week.dart';
@@ -16,11 +18,14 @@ import '../models/workout_progress.dart';
 import '../models/workout_session.dart';
 import '../navigation/app_navigation_observer.dart';
 import '../navigation/workout_destination.dart';
+import '../providers/settings_provider.dart';
 import '../providers/training_block_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../repositories/training_block_repository.dart';
+import '../services/exercise_rename_service.dart';
 import '../services/hive_service.dart';
+import '../services/statistics_analytics_service.dart';
 import '../services/sync_service.dart';
 import '../services/workout_progression_service.dart';
 import '../services/workout_session_initializer.dart';
@@ -110,7 +115,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   final ValueNotifier<DateTime> _now = ValueNotifier(DateTime.now());
   List<WorkoutSession> _previousRows = [];
   final Map<String, List<gym.Set>> _previousSets = {};
-  Map<String, double>? _recordCache;
+  RecordJudge? _recordCache;
 
   /// Record sets already felt, so each new one buzzes once. Null until the
   /// week's log is first shown, so records it opened with stay quiet.
@@ -260,17 +265,9 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   Set<String> _recordSetsIn(WorkoutSession session) {
     if (session.isCompleted) return {};
     return {
-      for (final exercise in session.exercises)
-        for (final (index, set) in exercise.sets.indexed)
-          if (ExerciseCard.isRecord(
-            set,
-            _recordWeights[ExerciseCatalog.identity(
-              exercise.name,
-              exercise.exerciseId,
-            )],
-          ))
-            '${ExerciseCatalog.identity(exercise.name, exercise.exerciseId)}'
-                '#$index',
+      for (final MapEntry(key: exercise, value: sets)
+          in _liveRecords(session).entries)
+        for (final set in sets) '$exercise#$set',
     };
   }
 
@@ -283,37 +280,46 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     _celebratedRecords = current;
   }
 
-  /// Heaviest weight per exercise before this workout, matching how Finish
-  /// decides a record, so a live PR mark agrees with the summary.
-  /// A logged workout being edited compares only against workouts logged
-  /// before it, so a later session never hides one of its records.
-  Map<String, double> get _recordWeights =>
+  /// Bests from the workouts this one is judged against: the split's other
+  /// logs ordered before it, exactly the window Finish judges it in - by
+  /// date, then by ID for logs at the same time. A logged workout being
+  /// edited therefore never has a record hidden by a later session.
+  RecordJudge get _recordJudge =>
       _recordCache ??= () {
         final current = _weekSessions[_currentWeek];
         final currentId = current?.id;
-        final loggedAt = current?.isCompleted == true ? current!.date : null;
-        final best = <String, double>{};
-        for (final session in HiveService.getCompletedSessions(
-          splitId: widget.plan.splitId,
-        )) {
-          if (session.deletedAt != null || session.id == currentId) continue;
-          if (loggedAt != null && !session.date.isBefore(loggedAt)) continue;
-          for (final exercise in session.exercises) {
-            final key = ExerciseCatalog.identity(
-              exercise.name,
-              exercise.exerciseId,
-            );
-            for (final set in exercise.sets) {
-              if (set.reps == 0 && set.weight == 0) continue;
-              // Performed bodyweight sets establish history at zero, distinct
-              // from an exercise that has never been logged.
-              best.putIfAbsent(key, () => 0);
-              if (set.weight > (best[key] ?? 0)) best[key] = set.weight;
-            }
-          }
-        }
-        return best;
+        return const StatisticsAnalyticsService().recordJudge(
+          HiveService.getCompletedSessions(splitId: widget.plan.splitId).where(
+            (session) =>
+                session.deletedAt == null &&
+                session.id != currentId &&
+                (current == null ||
+                    StatisticsAnalyticsService.isLoggedBefore(
+                      session,
+                      current,
+                    )),
+          ),
+        );
       }();
+
+  /// Set indexes, by exercise index, that would be heaviest-weight records if
+  /// [session] were logged as entered. Judged by the app's one record
+  /// definition, so a live mark is exactly a record the summary, History and
+  /// Stats will show: none on a lift's first workout, one per lift, and none
+  /// for timed holds.
+  Map<int, Set<int>> _liveRecords(WorkoutSession session) {
+    final marks = <int, Set<int>>{};
+    for (final event in _recordJudge.recordsFor(session)) {
+      for (final achievement in event.achievements) {
+        if (achievement.type != RecordType.heaviestWeight) continue;
+        final exercise = achievement.exerciseIndex;
+        final set = achievement.setIndex;
+        if (exercise == null || set == null) continue;
+        marks.putIfAbsent(exercise, () => {}).add(set);
+      }
+    }
+    return marks;
+  }
 
   WorkoutSession? _savedSessionForWeek(String week) {
     final selected = _weekSessions[week];
@@ -565,19 +571,44 @@ class _WorkoutScreenState extends State<WorkoutScreen>
           session.id != null &&
           session.hasStarted);
 
+  /// The plan as saved now. Renaming an exercise everywhere rewrites the saved
+  /// plan while this screen is open, so a week opened afterwards must not be
+  /// built from the copy this screen was pushed with.
+  WorkoutPlan get _livePlan {
+    final id = widget.plan.id;
+    final saved = id == null ? null : HiveService.getPlanById(id);
+    return saved != null &&
+            saved.deletedAt == null &&
+            saved.splitId == widget.plan.splitId
+        ? saved
+        : widget.plan;
+  }
+
   WorkoutSession _getOrCreateSession() {
     if (_weekSessions[_currentWeek] case final session?) return session;
-    final session = WorkoutSessionInitializer.initialize(
-      plan: widget.plan,
-      week: _selectedWeek,
+    final session = _initializeSession(
       existingSession: _savedSessionForWeek(_currentWeek),
-      previousSession:
-          widget.plan.id == null
-              ? null
-              : _training.source(widget.plan.id!, _currentWeek),
     );
     _weekSessions[_currentWeek] = session;
     return session;
+  }
+
+  /// Builds the selected week's workout, or returns [existingSession] when it
+  /// is saved. A week with no saved data starts from the previous week's
+  /// logged sets while *Start from last week's sets* is on, and from the
+  /// plan's targets while it is off. Saved drafts and logs are never changed.
+  WorkoutSession _initializeSession({WorkoutSession? existingSession}) {
+    final startFromLastWeek =
+        context.read<SettingsProvider?>()?.autoFillLast ?? true;
+    return WorkoutSessionInitializer.initialize(
+      plan: _livePlan,
+      week: _selectedWeek,
+      existingSession: existingSession,
+      previousSession:
+          !startFromLastWeek || widget.plan.id == null
+              ? null
+              : _training.source(widget.plan.id!, _currentWeek),
+    );
   }
 
   void _updateSession(WorkoutSession session) {
@@ -917,10 +948,9 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         await WorkoutTimerNotificationService.instance.dismiss();
       }
     }
-    final clean = WorkoutSessionInitializer.initialize(
-      plan: widget.plan,
-      week: _selectedWeek,
-    );
+    // The discarded draft is gone, so the week opens exactly as it would on a
+    // fresh visit: the same starting values reopening it later would show.
+    final clean = _initializeSession();
     setState(() {
       _weekSessions[_currentWeek] = clean;
       _hasUnsavedChanges = false;
@@ -981,22 +1011,157 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   void _showExerciseRenameDialog(int exerciseIndex) {
     final session = _getOrCreateSession();
     final exercise = session.exercises[exerciseIndex];
+    final splitId = widget.plan.splitId;
+    // The occurrence keeps this identity whatever it is called, so its
+    // history, Previous values, records and measurement stay together.
+    final identity = ExerciseCatalog.identity(
+      exercise.name,
+      exercise.exerciseId,
+    );
     WorkoutDialogs.showRenameExerciseDialog(
       context,
       currentName: exercise.name,
       onRename: (name) {
-        final updatedExercises = List<Exercise>.from(session.exercises);
-        updatedExercises[exerciseIndex] = Exercise(
-          name: name,
-          exerciseId:
-              exercise.exerciseId ?? ExerciseCatalog.identity(exercise.name),
-          sets: exercise.sets,
-          note: exercise.note,
-        );
-        _updateSession(session.copyWith(exercises: updatedExercises));
+        name = ExerciseRenameService.canonicalName(name);
+        final current = _getOrCreateSession();
+        if (exerciseIndex >= current.exercises.length) return;
+        final updatedExercises = List<Exercise>.from(current.exercises);
+        updatedExercises[exerciseIndex] = current.exercises[exerciseIndex]
+            .copyWith(name: name, exerciseId: exercise.exerciseId ?? identity);
+        _updateSession(current.copyWith(exercises: updatedExercises));
         _autoSave();
       },
+      impactFor:
+          splitId == null
+              ? null
+              : (name) => ExerciseRenameService.impact(
+                splitId: splitId,
+                exerciseId: identity,
+                to: name,
+              ),
+      onRenameEverywhere:
+          splitId == null
+              ? null
+              : (name) => _renameExerciseEverywhere(splitId, identity, name),
     );
+  }
+
+  /// Renames movement [exerciseId] in this workout, then its labels in every
+  /// plan and workout of the split. Identities are kept, so nothing about the
+  /// movement's history changes except what it is called.
+  Future<void> _renameExerciseEverywhere(
+    String splitId,
+    String exerciseId,
+    String to,
+  ) async {
+    to = ExerciseRenameService.canonicalName(to);
+    if (ExerciseRenameService.validationMessage(to) case final message?) {
+      throw ArgumentError(message);
+    }
+    final session = _getOrCreateSession();
+    bool matches(Exercise e) =>
+        ExerciseCatalog.identity(e.name, e.exerciseId) == exerciseId;
+    // This workout first: it may hold entries that are not saved yet.
+    _updateSession(
+      session.copyWith(
+        exercises: [
+          for (final e in session.exercises)
+            matches(e)
+                ? e.copyWith(name: to, exerciseId: e.exerciseId ?? exerciseId)
+                : e,
+        ],
+      ),
+    );
+    if (!await _autoSave() || !mounted) return;
+    try {
+      await ExerciseRenameService.rename(
+        splitId: splitId,
+        exerciseId: exerciseId,
+        to: to,
+        userId: session.userId,
+      );
+    } catch (error) {
+      debugPrint('Failed to rename exercise everywhere: $error');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Renamed in this workout only. Plans and past workouts could not '
+            'be updated. Try again.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
+    // Reload every reader. A completed log being edited has just been saved,
+    // so re-read it rather than keep the pre-rename copy.
+    if (session.id case final id?) {
+      if (HiveService.getSessionById(id) case final saved?) {
+        _weekSessions[_currentWeek] = saved;
+      }
+    }
+    context.read<WorkoutPlanProvider>().loadPlans();
+    context.read<WorkoutSessionProvider>().loadSessions();
+    _training.reload();
+    setState(() {});
+  }
+
+  /// Swaps another movement into this workout only, keeping the set count.
+  ///
+  /// Sets take the new movement's latest logged weights and reps in this
+  /// split, or weight 0 with the replaced exercise's reps when it has none.
+  /// RPE, set notes and the exercise note are cleared. The replacement gets
+  /// the chosen catalog identity, so its own history and measurement apply.
+  Future<void> _replaceExercise(int exerciseIndex) async {
+    final session = _getOrCreateSession();
+    if (session.isCompleted) return;
+    final replaced = session.exercises[exerciseIndex];
+    String key(Exercise e) => ExerciseCatalog.identity(e.name, e.exerciseId);
+    final replacedId = key(replaced);
+    final picked = await pickSingleExercise(
+      context,
+      title: 'Replace ${replaced.name}',
+      unavailableExerciseIds: session.exercises.map(key),
+      userId: session.userId,
+    );
+    if (picked == null || !mounted) return;
+    final current = _getOrCreateSession();
+    final pickedId = ExerciseCatalog.canonicalId(picked.exerciseId);
+    if (current.isCompleted ||
+        exerciseIndex >= current.exercises.length ||
+        key(current.exercises[exerciseIndex]) != replacedId) {
+      return;
+    }
+    if (current.exercises.any((e) => key(e) == pickedId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${picked.name} is already in this workout.')),
+      );
+      return;
+    }
+    final history = previousExerciseSets(
+      HiveService.getCompletedSessions(splitId: widget.plan.splitId),
+      // A catalog ID resolves exactly like a stored occurrence identity.
+      picked.exerciseId,
+      splitId: widget.plan.splitId,
+      excludingSessionId: current.id,
+    );
+    final updated = List<Exercise>.from(current.exercises);
+    updated[exerciseIndex] = Exercise(
+      name: picked.name,
+      exerciseId: picked.exerciseId,
+      sets: [
+        for (var i = 0; i < replaced.sets.length; i++)
+          history.isEmpty
+              ? gym.Set(weight: 0, reps: replaced.sets[i].reps)
+              : gym.Set(
+                weight: history[math.min(i, history.length - 1)].weight,
+                reps: history[math.min(i, history.length - 1)].reps,
+              ),
+      ],
+    );
+    _updateSession(current.copyWith(exercises: updated));
+    await _autoSave();
   }
 
   void _addSet(int exerciseIndex) {
@@ -1673,6 +1838,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     }
     final session = _getOrCreateSession();
     _celebratedRecords ??= _recordSetsIn(session);
+    final liveRecords = _liveRecords(session);
     final accent = accentColor(context);
 
     final planProvider = context.watch<WorkoutPlanProvider>();
@@ -1981,11 +2147,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                   ),
                                   onSetChanged: _changeSetValues,
                                   onSetRpeChanged: _changeSetRpe,
-                                  recordWeight:
-                                      _recordWeights[ExerciseCatalog.identity(
-                                        exercise.name,
-                                        exercise.exerciseId,
-                                      )],
+                                  recordSetIndexes:
+                                      liveRecords[index] ?? const <int>{},
                                   onEntryFinished: () {
                                     if (!mounted) return;
                                     _celebrateNewRecords();
@@ -1996,6 +2159,10 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                       (i, setIndex) => _deleteSet(i, setIndex),
                                   onAddNote: _addExerciseNote,
                                   onRename: _showExerciseRenameDialog,
+                                  onReplace:
+                                      session.isCompleted
+                                          ? null
+                                          : _replaceExercise,
                                   onDeleteExercise: _deleteExercise,
                                 ),
                               );

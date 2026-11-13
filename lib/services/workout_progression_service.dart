@@ -3,6 +3,7 @@ import 'package:hive/hive.dart';
 import '../models/training_block.dart';
 
 import '../models/completion_transition.dart';
+import '../models/statistics.dart';
 import '../models/training_week.dart';
 import '../models/workout_progress.dart';
 import '../models/workout_session.dart';
@@ -213,6 +214,7 @@ class WorkoutProgressionService {
           }
           return WorkoutCompletionResult(
             session: draft,
+            records: const [],
             personalRecords: const [],
             progressPending: pending,
           );
@@ -273,6 +275,14 @@ class WorkoutProgressionService {
         }
         return WorkoutCompletionResult(
           session: saved,
+          records: [
+            for (final event in result.records)
+              RecordEvent(
+                exerciseName: event.exerciseName,
+                session: saved,
+                achievements: event.achievements,
+              ),
+          ],
           personalRecords: result.personalRecords,
           progressPending: pending,
         );

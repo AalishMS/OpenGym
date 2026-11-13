@@ -23,6 +23,19 @@ be renamed in Settings; their previous names remain search aliases. Existing
 plan and log snapshots are retained, while the picker and statistics use catalog
 labels.
 
+In the workout, *Rename exercise* changes only an occurrence's snapshot and
+keeps its ID. Its optional *Also rename in plans and past workouts* step
+(`ExerciseRenameService`) relabels every live occurrence in the split that
+resolves to the same canonical ID. It keeps or fills in each `exerciseId` and
+relabels an owned custom definition through `ExerciseCatalog.rename`. A rename
+never merges two IDs, even when the new label belongs to another movement.
+*Replace exercise* stores the chosen movement's catalog ID.
+
+How a movement is measured follows its ID as well: `ExerciseLibrary` gives each
+bundled ID a kind (weighted, bodyweight or timed), and `ExerciseCatalog.kindOf`
+and `isTimed` resolve the canonical ID. A renamed Plank still stores seconds; a
+custom exercise is weighted whatever it is called.
+
 ## Migration and merging
 
 `ExerciseIdentityMigration.prepare` is pure and repeatable. It links normalized

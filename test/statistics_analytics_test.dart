@@ -8,6 +8,18 @@ import 'package:gymapp/services/statistics_analytics_service.dart';
 import 'package:gymapp/utils/plan_stats.dart';
 import 'package:gymapp/utils/statistics_format.dart';
 
+/// Every field of an achievement, so two can be compared by value.
+Object describeRecord(RecordAchievement record) => (
+  record.type,
+  record.value,
+  record.previousValue,
+  record.setWeight,
+  record.setReps,
+  record.reps,
+  record.exerciseIndex,
+  record.setIndex,
+);
+
 void main() {
   const analytics = StatisticsAnalyticsService();
 
@@ -166,7 +178,9 @@ void main() {
         date: DateTime(2026, 8, 8),
         sets: [Set(weight: 70, reps: 5)],
       );
-      expect(analytics.recordEvents([first, edited]).first.session.id, 'first');
+      // The first workout only sets baselines, so a weaker second one leaves
+      // no records at all.
+      expect(analytics.recordEvents([first, edited]), isEmpty);
 
       final deleted = session(
         id: 'second',
@@ -174,10 +188,217 @@ void main() {
         deletedAt: DateTime(2026, 8, 9),
         sets: [Set(weight: 90, reps: 5)],
       );
+      expect(analytics.recordEvents([first, deleted]), isEmpty);
+    });
+
+    test('the first workout with a lift sets baselines and no records', () {
+      final events = analytics.recordEvents([
+        session(
+          id: 'first',
+          date: DateTime(2026, 8, 1),
+          sets: [
+            Set(weight: 60, reps: 5),
+            Set(weight: 70, reps: 5),
+            Set(weight: 80, reps: 8),
+          ],
+        ),
+      ]);
+      expect(events, isEmpty);
+    });
+
+    test('a heavier second workout is a record against the first', () {
+      final events = analytics.recordEvents([
+        session(
+          id: 'first',
+          date: DateTime(2026, 8, 1),
+          sets: [Set(weight: 80, reps: 5)],
+        ),
+        session(
+          id: 'second',
+          date: DateTime(2026, 8, 8),
+          sets: [
+            Set(weight: 60, reps: 5),
+            Set(weight: 85, reps: 5),
+            Set(weight: 85, reps: 5),
+          ],
+        ),
+      ]);
+      final heaviest =
+          events.single.achievements
+              .where((item) => item.type == RecordType.heaviestWeight)
+              .single;
+      expect(events.single.session.id, 'second');
+      expect(heaviest.value, 85);
+      expect(heaviest.previousValue, 80);
+      expect(heaviest.exerciseIndex, 0);
+      // The first of two equal best sets broke the record.
+      expect(heaviest.setIndex, 1);
       expect(
-        analytics.recordEvents([first, deleted]).first.session.id,
-        'first',
+        events.single.achievements.map((item) => item.type),
+        containsAll([
+          RecordType.heaviestWeight,
+          RecordType.estimatedOneRepMax,
+          RecordType.repBest,
+          RecordType.setVolume,
+        ]),
       );
+      // Each record is broken at most once per workout.
+      expect(events.single.achievements, hasLength(4));
+    });
+
+    test(
+      'a rep best must beat every set of as many reps or more before it',
+      () {
+        final base = session(
+          id: 'base',
+          date: DateTime(2026, 8, 1),
+          sets: [Set(weight: 70, reps: 8)],
+        );
+        List<RecordAchievement> repBests(Set set) =>
+            analytics
+                .recordEvents([
+                  base,
+                  session(id: 'next', date: DateTime(2026, 8, 8), sets: [set]),
+                ])
+                .expand((event) => event.achievements)
+                .where((item) => item.type == RecordType.repBest)
+                .toList();
+
+        expect(repBests(Set(weight: 70, reps: 5)), isEmpty);
+        final best = repBests(Set(weight: 75, reps: 5)).single;
+        expect(best.reps, 5);
+        expect(best.value, 75);
+        expect(best.previousValue, 70);
+        // Nothing earlier was lifted for 10 or more reps, so there is no
+        // 10-rep best to beat yet.
+        expect(repBests(Set(weight: 60, reps: 10)), isEmpty);
+      },
+    );
+
+    test('a set matched in the same workout is not a rep best', () {
+      final events = analytics.recordEvents([
+        session(
+          id: 'base',
+          date: DateTime(2026, 8, 1),
+          sets: [Set(weight: 70, reps: 8)],
+        ),
+        session(
+          id: 'next',
+          date: DateTime(2026, 8, 8),
+          sets: [Set(weight: 75, reps: 5), Set(weight: 75, reps: 8)],
+        ),
+      ]);
+      final repBests = events.single.achievements.where(
+        (item) => item.type == RecordType.repBest,
+      );
+      expect(repBests.map((item) => (item.reps, item.setIndex)), [(8, 1)]);
+    });
+
+    test('a heavy set with no reps is never a record', () {
+      final events = analytics.recordEvents([
+        session(
+          id: 'base',
+          date: DateTime(2026, 8, 1),
+          sets: [Set(weight: 80, reps: 5)],
+        ),
+        session(
+          id: 'next',
+          date: DateTime(2026, 8, 8),
+          sets: [Set(weight: 200, reps: 0), Set(weight: 80, reps: 5)],
+        ),
+      ]);
+      expect(events, isEmpty);
+
+      // Nor does a workout of only unperformed sets become the baseline.
+      expect(
+        analytics.recordEvents([
+          session(
+            id: 'skipped',
+            date: DateTime(2026, 7, 1),
+            sets: [Set(weight: 200, reps: 0)],
+          ),
+          session(
+            id: 'first',
+            date: DateTime(2026, 8, 1),
+            sets: [Set(weight: 80, reps: 5)],
+          ),
+        ]),
+        isEmpty,
+      );
+    });
+
+    test('a lift logged twice in one workout yields one event', () {
+      final events = analytics.recordEvents([
+        session(
+          id: 'base',
+          date: DateTime(2026, 8, 1),
+          sets: [Set(weight: 80, reps: 5)],
+        ),
+        WorkoutSession(
+          id: 'next',
+          splitId: 'active',
+          planName: 'Push Day',
+          date: DateTime(2026, 8, 8),
+          exercises: [
+            Exercise(name: 'Bench Press', sets: [Set(weight: 80, reps: 5)]),
+            Exercise(name: 'Squat', sets: [Set(weight: 100, reps: 5)]),
+            Exercise(name: ' bench press', sets: [Set(weight: 90, reps: 3)]),
+          ],
+        ),
+      ]);
+      final heaviest = events.single.achievements.firstWhere(
+        (item) => item.type == RecordType.heaviestWeight,
+      );
+      expect(events.single.exerciseName, 'Bench Press');
+      expect((heaviest.exerciseIndex, heaviest.setIndex), (2, 0));
+    });
+
+    test('an estimated 1RM needs an earlier one to beat', () {
+      final events = analytics.recordEvents([
+        session(
+          id: 'high-reps',
+          date: DateTime(2026, 8, 1),
+          sets: [Set(weight: 40, reps: 15)],
+        ),
+        session(
+          id: 'first-estimate',
+          date: DateTime(2026, 8, 8),
+          sets: [Set(weight: 45, reps: 10)],
+        ),
+      ]);
+      expect(
+        events.single.achievements.map((item) => item.type),
+        isNot(contains(RecordType.estimatedOneRepMax)),
+      );
+    });
+
+    test('session records match the full feed for that workout', () {
+      final first = session(
+        id: 'first',
+        date: DateTime(2026, 8, 1),
+        sets: [Set(weight: 80, reps: 5)],
+      );
+      final second = session(
+        id: 'second',
+        date: DateTime(2026, 8, 8),
+        sets: [Set(weight: 85, reps: 5)],
+      );
+      final third = session(
+        id: 'third',
+        date: DateTime(2026, 8, 15),
+        sets: [Set(weight: 90, reps: 5)],
+      );
+      final records = analytics.sessionRecords([third, first, second], second);
+      expect(records.single.session.id, 'second');
+      expect(
+        records.single.achievements.map(describeRecord),
+        analytics
+            .recordEvents([first, second, third])
+            .singleWhere((event) => event.session.id == 'second')
+            .achievements
+            .map(describeRecord),
+      );
+      expect(analytics.sessionRecords([first, second], first), isEmpty);
     });
   });
 

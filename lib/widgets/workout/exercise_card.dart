@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../services/exercise_catalog.dart';
 import '../../models/exercise.dart';
 import '../../models/set.dart' as gym;
+import '../../providers/settings_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../../utils/weight_units.dart';
 import 'set_entry_table.dart';
 
-enum _ExerciseAction { note, rename, moveUp, moveDown, deleteExercise }
+enum _ExerciseAction { note, rename, replace, moveUp, moveDown, deleteExercise }
 
 /// An expanded exercise section in the continuous workout log.
 class ExerciseCard extends StatelessWidget {
@@ -28,11 +31,19 @@ class ExerciseCard extends StatelessWidget {
   final void Function(int, int) onDeleteSet;
   final void Function(int) onAddNote;
   final void Function(int) onRename;
+
+  /// Swaps another exercise into this workout. Hidden when null.
+  final void Function(int)? onReplace;
   final void Function(int) onDeleteExercise;
 
   /// The heaviest weight logged for this exercise before this workout, or
   /// null without history. A set entered above it is marked as a record.
   final double? recordWeight;
+
+  /// The sets the shared record rules mark as records, by set index. When
+  /// given, it decides the marks instead of [recordWeight], so a live mark
+  /// is exactly what Finish, History and Stats will report.
+  final Set<int>? recordSetIndexes;
 
   const ExerciseCard({
     super.key,
@@ -51,8 +62,10 @@ class ExerciseCard extends StatelessWidget {
     required this.onDeleteSet,
     required this.onAddNote,
     required this.onRename,
+    this.onReplace,
     required this.onDeleteExercise,
     this.recordWeight,
+    this.recordSetIndexes,
   });
 
   /// Whether [set] would be a record if logged as entered. Matches Finish:
@@ -73,6 +86,8 @@ class ExerciseCard extends StatelessWidget {
         onAddNote(exerciseIndex);
       case _ExerciseAction.rename:
         onRename(exerciseIndex);
+      case _ExerciseAction.replace:
+        onReplace?.call(exerciseIndex);
       case _ExerciseAction.moveUp:
         onMoveUp?.call();
       case _ExerciseAction.moveDown:
@@ -84,6 +99,7 @@ class ExerciseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final weightUnit = SettingsProvider.unitOf(context);
     final title = Semantics(
       header: true,
       child: Padding(
@@ -126,6 +142,8 @@ class ExerciseCard extends StatelessWidget {
                 onSelected: _onAction,
                 itemBuilder:
                     (context) => [
+                      // The note, then what the exercise is, then where it
+                      // sits; Delete stays last.
                       const PopupMenuItem(
                         value: _ExerciseAction.note,
                         height: 48,
@@ -136,6 +154,12 @@ class ExerciseCard extends StatelessWidget {
                         height: 48,
                         child: Text('Rename exercise'),
                       ),
+                      if (onReplace != null)
+                        const PopupMenuItem(
+                          value: _ExerciseAction.replace,
+                          height: 48,
+                          child: Text('Replace exercise'),
+                        ),
                       if (onMoveUp != null)
                         const PopupMenuItem(
                           value: _ExerciseAction.moveUp,
@@ -180,6 +204,11 @@ class ExerciseCard extends StatelessWidget {
               ignoring: readOnly,
               child: SetEntryTable(
                 continuousLog: true,
+                isTimed: ExerciseCatalog.isTimed(
+                  exercise.name,
+                  exercise.exerciseId,
+                ),
+                weightUnit: weightUnit,
                 onEntryFinished: onEntryFinished,
                 onDelete:
                     readOnly
@@ -192,11 +221,13 @@ class ExerciseCard extends StatelessWidget {
                       reps: exercise.sets[i].reps,
                       previous:
                           i < previousSets.length && previousSets[i].reps > 0
-                              ? '${entryWeight(previousSets[i].weight)} × ${previousSets[i].reps}'
+                              ? '${formatEntryWeight(previousSets[i].weight, weightUnit)} × ${previousSets[i].reps}${ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId) ? ' s' : ''}'
                               : null,
                       rpe: exercise.sets[i].rpe,
                       record:
-                          !readOnly && isRecord(exercise.sets[i], recordWeight),
+                          !readOnly &&
+                          (recordSetIndexes?.contains(i) ??
+                              isRecord(exercise.sets[i], recordWeight)),
                       beatsPrevious:
                           !readOnly &&
                           _beats(

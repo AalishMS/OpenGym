@@ -3,9 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../services/exercise_catalog.dart';
 import '../../models/workout_session.dart';
+import '../../providers/settings_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
+import '../../utils/weight_units.dart';
 
 /// One exercise's personal record and the day it was first set.
 class PrEntry {
@@ -75,6 +77,7 @@ class RecentPrsTile extends StatelessWidget {
     final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
     final shown = entries.take(limit).toList();
+    final weightUnit = SettingsProvider.unitOf(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -98,7 +101,8 @@ class RecentPrsTile extends StatelessWidget {
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 Text(
-                  '${formatWeight(e.weight)}KG',
+                  '${formatWeightIn(e.weight, weightUnit)}'
+                  '${weightUnitLabel(weightUnit).toUpperCase()}',
                   style: GoogleFonts.jetBrainsMono(
                     fontSize: 10,
                     fontWeight: FontWeight.bold,

@@ -466,6 +466,7 @@ void main() {
       final done = find.byKey(const ValueKey('summary-done'));
       await waitFor(tester, () => done.evaluate().isNotEmpty);
       await tester.tap(done);
+      await tester.pumpAndSettle();
       await waitFor(
         tester,
         () =>

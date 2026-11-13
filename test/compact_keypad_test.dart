@@ -237,7 +237,7 @@ void main() {
     expect(headerValue, findsOneWidget);
     expect(tester.widget<Text>(headerValue).style!.fontSize, 28);
     expect(tester.widget<Text>(headerValue).style!.backgroundColor, isNull);
-    final ring =
+    final wash =
         tester
                 .widget<Container>(
                   find
@@ -253,9 +253,9 @@ void main() {
                 )
                 .decoration!
             as BoxDecoration;
-    final ringSide = (ring.border! as Border).top;
-    expect(ringSide.color, accentColor(tester.element(activeCell)));
-    expect(ringSide.width, 2);
+    // The cell the keys edit lifts into the opaque accent wash, unboxed.
+    expect(wash.color, accentMutedColor(tester.element(activeCell)));
+    expect(wash.border, isNull);
     // Replace mode is the header value's accent underline.
     final underline =
         tester
@@ -555,4 +555,125 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  for (final width in [320.0, 400.0]) {
+    testWidgets('the close tick sits above the action column at $width', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = Size(width, 640);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SetEntryTable(
+              sets: const [
+                SetEntry(weight: 70, reps: 8),
+                SetEntry(weight: 70, reps: 8),
+              ],
+              onChanged: (_, _, _) {},
+              onRpeChanged: (_, _) {},
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+      await tester.pumpAndSettle();
+
+      final tick = tester.getRect(find.bySemanticsLabel('Close keypad'));
+      final rpe = tester.getRect(find.widgetWithText(TextButton, 'RPE'));
+      final copy = tester.getRect(
+        find.widgetWithText(TextButton, 'Copy to set 2'),
+      );
+      expect(tick.left, moreOrLessEquals(rpe.left));
+      expect(tick.right, moreOrLessEquals(rpe.right));
+      expect(tick.height, greaterThanOrEqualTo(48));
+      expect(tick.bottom, lessThan(rpe.top));
+      expect(copy.right, lessThanOrEqualTo(tick.left));
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('a slow first frame does not swallow the slide', (tester) async {
+    var finishes = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SetEntryTable(
+            sets: const [SetEntry(weight: 70, reps: 8)],
+            onChanged: (_, _, _) {},
+            onEntryFinished: () => finishes++,
+          ),
+        ),
+      ),
+    );
+    final screen = tester.getSize(find.byType(Scaffold)).height;
+    // Opening and closing rebuild the table and its list, which on a phone
+    // can take longer than the slide. Each 300ms pump stands in for that.
+    await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.getRect(find.byType(BottomSheet)).top, screen);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    final rising = tester.getRect(find.byType(BottomSheet)).top;
+    expect(rising, lessThan(screen));
+    await tester.pumpAndSettle();
+    final open = tester.getRect(find.byType(BottomSheet));
+    expect(rising, greaterThan(open.top));
+
+    await tester.tap(find.widgetWithText(TextButton, '5'));
+    await tester.tap(find.bySemanticsLabel('Close keypad'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.getRect(find.byType(BottomSheet)).top, open.top);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 90));
+    // Still on screen mid-slide, lower than it rests, and no longer a target.
+    final sliding = tester.getRect(find.byType(BottomSheet));
+    expect(sliding.top, greaterThan(open.top));
+    expect(sliding.top, lessThan(open.bottom));
+    expect(find.bySemanticsLabel('Close keypad').hitTestable(), findsNothing);
+    expect(finishes, 1);
+    // A tap on a value field mid-slide opens a fresh sheet without a clash.
+    await tester.tap(find.bySemanticsLabel('Set 1 Reps'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Close keypad'));
+    await tester.pumpAndSettle();
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('reduced motion closes the keypad without a slide', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        builder:
+            (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(disableAnimations: true),
+              child: child!,
+            ),
+        home: Scaffold(
+          body: SetEntryTable(
+            sets: const [SetEntry(weight: 70, reps: 8)],
+            onChanged: (_, _, _) {},
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+    for (var i = 0; i < 3; i++) {
+      await tester.pump();
+    }
+    final open = tester.getRect(find.byType(BottomSheet));
+    expect(open.bottom, tester.getSize(find.byType(Scaffold)).height);
+    await tester.tap(find.bySemanticsLabel('Close keypad'));
+    for (var i = 0; i < 4; i++) {
+      await tester.pump();
+    }
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 }

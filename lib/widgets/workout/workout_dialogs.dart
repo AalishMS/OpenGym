@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
+
 import '../../models/set.dart' as gym;
 import '../../providers/settings_provider.dart';
+import '../../services/exercise_catalog.dart';
+import '../../services/exercise_rename_service.dart';
+import '../../theme/app_typography.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
@@ -14,100 +17,18 @@ class WorkoutDialogs {
     BuildContext context, {
     required String currentName,
     required void Function(String name) onRename,
+    ExerciseRenameImpact Function(String name)? impactFor,
+    void Function(String name)? onRenameEverywhere,
   }) {
-    final accent = accentColor(context);
-    final nameController = TextEditingController(text: currentName);
-
-    showDialog(
+    final offerEverywhere = impactFor != null && onRenameEverywhere != null;
+    showDialog<void>(
       context: context,
       builder:
-          (context) => Dialog(
-            backgroundColor: surfaceColor(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: borderColor(context), width: 1),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Rename exercise',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: accent,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: nameController,
-                      autofocus: true,
-                      decoration: InputDecoration(
-                        labelText: 'Exercise name',
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: AppRadius.field,
-                          borderSide: BorderSide(
-                            color: borderColor(context),
-                            width: 1,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: AppRadius.field,
-                          borderSide: BorderSide(color: accent, width: 1),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    OverflowBar(
-                      alignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: Text(
-                            'Cancel',
-                            style: GoogleFonts.jetBrainsMono(
-                              color: textSecondaryColor(context),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () {
-                            final name = nameController.text.trim();
-                            if (name.isEmpty) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    'Enter an exercise name',
-                                    style: GoogleFonts.jetBrainsMono(),
-                                  ),
-                                  backgroundColor: errorColor(context),
-                                ),
-                              );
-                              return;
-                            }
-                            Navigator.pop(context);
-                            onRename(name);
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: accentFillColor(context),
-                            foregroundColor: onAccentColor(context),
-                          ),
-                          child: Text(
-                            'Rename',
-                            style: GoogleFonts.jetBrainsMono(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          (_) => _RenameExerciseDialog(
+            currentName: currentName,
+            onRename: onRename,
+            impactFor: offerEverywhere ? impactFor : null,
+            onRenameEverywhere: offerEverywhere ? onRenameEverywhere : null,
           ),
     );
   }
@@ -115,16 +36,17 @@ class WorkoutDialogs {
   static void showAddSetDialog(
     BuildContext context, {
     gym.Set? lastSet,
+    String? exerciseName,
+    String? exerciseId,
     required void Function(gym.Set newSet) onAdd,
   }) {
+    final isTimed = ExerciseCatalog.isTimed(exerciseName ?? '', exerciseId);
     final settings = context.read<SettingsProvider>();
-    final accent = accentColor(context);
 
-    final weightController = TextEditingController(
-      text: lastSet?.weight.toString() ?? '',
-    );
-    final repsController = TextEditingController(
-      text: lastSet?.reps.toString() ?? '8',
+    // Kilograms, as stored; the entry table shows them in the chosen unit.
+    final draft = _SetDraft(
+      weight: lastSet?.weight,
+      reps: lastSet?.reps ?? (isTimed ? 30 : 8),
     );
     int? selectedRpe = settings.autoFillLast ? lastSet?.rpe : null;
 
@@ -148,22 +70,18 @@ class WorkoutDialogs {
                     children: [
                       Text(
                         'Add set',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: accent,
-                        ),
+                        style: Theme.of(context).dialogTheme.titleTextStyle,
                       ),
                       const SizedBox(height: 12),
                       _DialogSetEntry(
-                        weightController: weightController,
-                        repsController: repsController,
+                        draft: draft,
+                        isTimed: isTimed,
                         showHistoryColumns: false,
                       ),
                       const SizedBox(height: 12),
                       Text(
                         'RPE (Rate of Perceived Exertion)',
-                        style: GoogleFonts.jetBrainsMono(fontSize: 12),
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -207,7 +125,7 @@ class WorkoutDialogs {
                                 child: Center(
                                   child: Text(
                                     '$rpe',
-                                    style: GoogleFonts.jetBrainsMono(
+                                    style: AppTypography.figures(
                                       fontSize: 12,
                                       color:
                                           selectedRpe == rpe
@@ -227,27 +145,19 @@ class WorkoutDialogs {
                         children: [
                           TextButton(
                             onPressed: () => Navigator.pop(context),
-                            child: Text(
-                              'Cancel',
-                              style: GoogleFonts.jetBrainsMono(
-                                color: textSecondaryColor(context),
-                              ),
-                            ),
+                            child: const Text('Cancel'),
                           ),
                           const SizedBox(width: 8),
                           ElevatedButton(
                             onPressed: () {
-                              final weight = double.tryParse(
-                                weightController.text,
-                              );
-                              final reps = int.tryParse(repsController.text);
+                              final weight = draft.weight;
+                              final reps = draft.reps;
 
                               if (weight == null || weight < 0) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text(
+                                    content: const Text(
                                       'Weight must be 0 or more',
-                                      style: GoogleFonts.jetBrainsMono(),
                                     ),
                                     backgroundColor: errorColor(context),
                                   ),
@@ -259,8 +169,9 @@ class WorkoutDialogs {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      'Reps must be greater than 0',
-                                      style: GoogleFonts.jetBrainsMono(),
+                                      isTimed
+                                          ? 'Seconds must be greater than 0'
+                                          : 'Reps must be greater than 0',
                                     ),
                                     backgroundColor: errorColor(context),
                                   ),
@@ -282,10 +193,7 @@ class WorkoutDialogs {
                               backgroundColor: accentFillColor(context),
                               foregroundColor: onAccentColor(context),
                             ),
-                            child: Text(
-                              'Add',
-                              style: GoogleFonts.jetBrainsMono(),
-                            ),
+                            child: const Text('Add'),
                           ),
                         ],
                       ),
@@ -303,6 +211,8 @@ class WorkoutDialogs {
   static void showEditSetDialog(
     BuildContext context, {
     required gym.Set set,
+    String? exerciseName,
+    String? exerciseId,
     required void Function(gym.Set updatedSet) onSave,
     required VoidCallback onDelete,
   }) {
@@ -313,7 +223,12 @@ class WorkoutDialogs {
       backgroundColor: surfaceColor(context),
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
       builder:
-          (_) => _EditSetSheet(set: set, onSave: onSave, onDelete: onDelete),
+          (_) => _EditSetSheet(
+            set: set,
+            isTimed: ExerciseCatalog.isTimed(exerciseName ?? '', exerciseId),
+            onSave: onSave,
+            onDelete: onDelete,
+          ),
     );
   }
 
@@ -323,7 +238,6 @@ class WorkoutDialogs {
     required void Function(String? note) onSave,
   }) {
     final noteController = TextEditingController(text: currentNote ?? '');
-    final accent = accentColor(context);
 
     showDialog(
       context: context,
@@ -343,11 +257,7 @@ class WorkoutDialogs {
                 children: [
                   Text(
                     'Note',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: accent,
-                    ),
+                    style: Theme.of(context).dialogTheme.titleTextStyle,
                   ),
                   const SizedBox(height: 16),
                   TextField(
@@ -364,12 +274,7 @@ class WorkoutDialogs {
                     children: [
                       TextButton(
                         onPressed: () => Navigator.pop(context),
-                        child: Text(
-                          'Cancel',
-                          style: GoogleFonts.jetBrainsMono(
-                            color: textSecondaryColor(context),
-                          ),
-                        ),
+                        child: const Text('Cancel'),
                       ),
                       const SizedBox(width: 8),
                       ElevatedButton(
@@ -385,7 +290,7 @@ class WorkoutDialogs {
                           backgroundColor: accentFillColor(context),
                           foregroundColor: onAccentColor(context),
                         ),
-                        child: Text('Save', style: GoogleFonts.jetBrainsMono()),
+                        child: const Text('Save'),
                       ),
                     ],
                   ),
@@ -576,11 +481,13 @@ class WorkoutDialogs {
 /// the system text keyboard. The surrounding dialog owns save/cancel behavior.
 class _EditSetSheet extends StatefulWidget {
   final gym.Set set;
+  final bool isTimed;
   final ValueChanged<gym.Set> onSave;
   final VoidCallback onDelete;
 
   const _EditSetSheet({
     required this.set,
+    this.isTimed = false,
     required this.onSave,
     required this.onDelete,
   });
@@ -590,11 +497,11 @@ class _EditSetSheet extends StatefulWidget {
 }
 
 class _EditSetSheetState extends State<_EditSetSheet> {
-  late final TextEditingController _weight = TextEditingController(
-    text: entryWeight(widget.set.weight),
-  );
-  late final TextEditingController _reps = TextEditingController(
-    text: '${widget.set.reps}',
+  // The stored kilograms at full precision. A text field in between rounded
+  // them to two decimals, which rewrote a weight typed in pounds on every save.
+  late final _SetDraft _draft = _SetDraft(
+    weight: widget.set.weight,
+    reps: widget.set.reps,
   );
   late final TextEditingController _note = TextEditingController(
     text: widget.set.note ?? '',
@@ -604,17 +511,21 @@ class _EditSetSheetState extends State<_EditSetSheet> {
 
   @override
   void dispose() {
-    _weight.dispose();
-    _reps.dispose();
     _note.dispose();
     super.dispose();
   }
 
   void _save() {
-    final weight = double.tryParse(_weight.text);
-    final reps = int.tryParse(_reps.text);
+    final weight = _draft.weight;
+    final reps = _draft.reps;
     if (weight == null || weight < 0 || reps == null || reps <= 0) {
-      setState(() => _error = 'Enter a valid weight and at least one rep.');
+      setState(
+        () =>
+            _error =
+                widget.isTimed
+                    ? 'Enter a valid weight and at least one second.'
+                    : 'Enter a valid weight and at least one rep.',
+      );
       return;
     }
     final updated = gym.Set(
@@ -641,8 +552,8 @@ class _EditSetSheetState extends State<_EditSetSheet> {
             Text('Edit set', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: AppSpacing.lg),
             _DialogSetEntry(
-              weightController: _weight,
-              repsController: _reps,
+              draft: _draft,
+              isTimed: widget.isTimed,
               showHistoryColumns: false,
             ),
             const SizedBox(height: AppSpacing.md),
@@ -757,14 +668,22 @@ class _EditSetSheetState extends State<_EditSetSheet> {
   );
 }
 
+/// A set being drafted in a dialog: kilograms and reps, null until known.
+class _SetDraft {
+  double? weight;
+  int? reps;
+
+  _SetDraft({this.weight, this.reps});
+}
+
 class _DialogSetEntry extends StatefulWidget {
-  final TextEditingController weightController;
-  final TextEditingController repsController;
+  final _SetDraft draft;
+  final bool isTimed;
   final bool showHistoryColumns;
 
   const _DialogSetEntry({
-    required this.weightController,
-    required this.repsController,
+    required this.draft,
+    this.isTimed = false,
     this.showHistoryColumns = true,
   });
 
@@ -775,17 +694,136 @@ class _DialogSetEntry extends StatefulWidget {
 class _DialogSetEntryState extends State<_DialogSetEntry> {
   @override
   Widget build(BuildContext context) => SetEntryTable(
+    isTimed: widget.isTimed,
     showHistoryColumns: widget.showHistoryColumns,
     sets: [
-      SetEntry(
-        weight: double.tryParse(widget.weightController.text) ?? 0,
-        reps: int.tryParse(widget.repsController.text) ?? 0,
-      ),
+      SetEntry(weight: widget.draft.weight ?? 0, reps: widget.draft.reps ?? 0),
     ],
     onChanged:
         (index, weight, reps) => setState(() {
-          widget.weightController.text = entryWeight(weight);
-          widget.repsController.text = '$reps';
+          widget.draft
+            ..weight = weight
+            ..reps = reps;
         }),
   );
+}
+
+class _RenameExerciseDialog extends StatefulWidget {
+  final String currentName;
+  final void Function(String name) onRename;
+  final ExerciseRenameImpact Function(String name)? impactFor;
+  final void Function(String name)? onRenameEverywhere;
+
+  const _RenameExerciseDialog({
+    required this.currentName,
+    required this.onRename,
+    required this.impactFor,
+    required this.onRenameEverywhere,
+  });
+
+  @override
+  State<_RenameExerciseDialog> createState() => _RenameExerciseDialogState();
+}
+
+class _RenameExerciseDialogState extends State<_RenameExerciseDialog> {
+  late final TextEditingController _name = TextEditingController(
+    text: widget.currentName,
+  );
+  bool _everywhere = true;
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    super.dispose();
+  }
+
+  String _count(int value, String noun) =>
+      '$value ${value == 1 ? noun : '${noun}s'}';
+
+  void _submit() {
+    final name = ExerciseRenameService.canonicalName(_name.text);
+    final error = ExerciseRenameService.validationMessage(name);
+    if (error != null) {
+      setState(() => _error = error);
+      return;
+    }
+    Navigator.pop(context);
+    final everywhere = widget.onRenameEverywhere;
+    if (everywhere != null && _everywhere) {
+      everywhere(name);
+    } else {
+      widget.onRename(name);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final secondary = textSecondaryColor(context);
+    final impactFor = widget.impactFor;
+    final name = ExerciseRenameService.canonicalName(_name.text);
+    final impact = impactFor?.call(name.isEmpty ? widget.currentName : name);
+    return AlertDialog(
+      title: const Text('Rename exercise'),
+      scrollable: true,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _name,
+            autofocus: true,
+            textCapitalization: TextCapitalization.sentences,
+            onChanged: (_) => setState(() => _error = null),
+            onSubmitted: (_) => _submit(),
+            decoration: InputDecoration(
+              labelText: 'Exercise name',
+              errorText: _error,
+            ),
+          ),
+          if (impact != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            CheckboxListTile(
+              key: const ValueKey('rename-everywhere'),
+              value: _everywhere,
+              onChanged: (value) => setState(() => _everywhere = value ?? true),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Also rename in plans and past workouts'),
+              subtitle: Text(
+                impact.isEmpty
+                    ? 'No plans or other workouts in this split use '
+                        '${widget.currentName}.'
+                    : '${_count(impact.plans, 'plan')} and '
+                        '${_count(impact.workouts, 'workout')} in this split '
+                        'use ${widget.currentName}.',
+                style: textTheme.bodySmall?.copyWith(color: secondary),
+              ),
+            ),
+            if (impact.otherMovement case final other?)
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xs),
+                child: Text(
+                  '$other is a different exercise, so its history stays '
+                  'separate. To combine them, merge them in Settings → '
+                  'Manage exercises.',
+                  key: const ValueKey('rename-merge-note'),
+                  style: textTheme.bodySmall?.copyWith(
+                    color: textPrimaryColor(context),
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(onPressed: _submit, child: const Text('Rename')),
+      ],
+    );
+  }
 }

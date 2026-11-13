@@ -5,16 +5,23 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
+import '../../providers/settings_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../theme/semantic_colors.dart';
+import '../../utils/weight_units.dart';
 import '../readable_table_viewport.dart';
 
 /// A display snapshot. Editing it never mutates a session or a plan implicitly.
+///
+/// [weight] is kilograms, as stored. The table shows it in the chosen unit and
+/// hands kilograms back through `onChanged`. [previous] is already formatted,
+/// so callers build it with `formatEntryWeight` in the same unit.
 class SetEntry {
   final double weight;
   final int reps;
@@ -49,8 +56,9 @@ class SetEntry {
   }
 }
 
-String entryWeight(double weight) =>
-    weight.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
+/// A figure at set-table precision, with no unit conversion. Weights that
+/// came from storage go through `formatEntryWeight` instead.
+String entryWeight(double weight) => formatEntryValue(weight);
 
 enum _SetField { weight, reps, rpe }
 
@@ -94,6 +102,7 @@ double _detailsWidth(BuildContext context) => math.max(
 double _minimumTableWidth(
   BuildContext context,
   List<SetEntry> sets, {
+  required String weightUnit,
   required bool showHistoryColumns,
   required bool showPrevious,
   required bool showRpe,
@@ -112,7 +121,7 @@ double _minimumTableWidth(
   );
   final weight = widest([
     '999.99',
-    ...sets.map((set) => entryWeight(set.weight)),
+    ...sets.map((set) => formatEntryWeight(set.weight, weightUnit)),
   ], valueStyle);
   final reps = widest(['999', ...sets.map((set) => '${set.reps}')], valueStyle);
   final previous = widest(
@@ -122,7 +131,10 @@ double _minimumTableWidth(
       fontFeatures: const [FontFeature.tabularFigures()],
     ),
   );
-  final rpe = widest(['@10', 'RPE'], Theme.of(context).textTheme.labelLarge!);
+  final rpe = widest([
+    '@10',
+    'RPE',
+  ], Theme.of(context).textTheme.labelLarge!.copyWith(fontSize: 20));
   final unit = [
     weight / _kWeightFlex,
     reps / (showRpe ? _kRepsFlex : _kWeightFlex),
@@ -199,6 +211,7 @@ class SetEntryTable extends StatefulWidget {
   static ValueListenable<double> get keyboardHeight => _keyboardHeight;
 
   final List<SetEntry> sets;
+  final bool isTimed;
   final void Function(int index, double weight, int reps) onChanged;
   final void Function(int index, int? rpe)? onRpeChanged;
   final ValueChanged<int>? onDetails;
@@ -216,9 +229,14 @@ class SetEntryTable extends StatefulWidget {
   /// not pad itself. Without it the padding sits inside the table's card.
   final bool hostReservesSpace;
 
+  /// `kg` or `lbs` for display and entry. Null follows `SettingsProvider`,
+  /// or kilograms when none is in scope. Values in and out stay kilograms.
+  final String? weightUnit;
+
   const SetEntryTable({
     super.key,
     required this.sets,
+    this.isTimed = false,
     required this.onChanged,
     this.onRpeChanged,
     this.onDetails,
@@ -229,6 +247,7 @@ class SetEntryTable extends StatefulWidget {
     this.continuousLog = false,
     this.scrollWideTable = false,
     this.hostReservesSpace = false,
+    this.weightUnit,
   });
 
   @override
@@ -244,18 +263,72 @@ class _SetKeypadSession {
   late final OverlayEntry dismissOverlay;
   late final LocalHistoryEntry history;
 
+  /// Set once the keypad is dismissed: the sheet slides back down, ignoring
+  /// input, and its overlay is removed when the slide ends.
+  bool closing = false;
+
+  /// Where the sheet is heading, as a fraction of its height below its resting
+  /// place: 1 is off screen, 0 is open.
+  final ValueNotifier<double> slide = ValueNotifier(1);
+
+  /// The overlay is gone, so nothing may rebuild it.
+  bool removed = false;
+
+  /// The latest [slideTo] wins, so a close cannot be undone by an open that
+  /// was still waiting for its frames.
+  int _slideRequest = 0;
+
   _SetKeypadSession(this.owner, this.index, this.field);
+
+  /// Opening or closing the keypad rebuilds the table and the list around it,
+  /// which can take longer than the slide itself on a slower phone. A slide
+  /// started in that frame would count it and arrive finished, so the sheet
+  /// would jump. Starting it once the next two frames are drawn lets every
+  /// step of the slide reach the screen.
+  void slideTo(double target, {VoidCallback? onSettled}) {
+    final request = ++_slideRequest;
+    var frames = 2;
+    void wait() => SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (removed || request != _slideRequest) return;
+      if (--frames > 0) {
+        SchedulerBinding.instance.scheduleFrame();
+        wait();
+        return;
+      }
+      if (slide.value == target) {
+        onSettled?.call();
+        return;
+      }
+      slide.value = target;
+    });
+    wait();
+  }
+
+  void remove() {
+    if (removed) return;
+    removed = true;
+    overlay
+      ..remove()
+      ..dispose();
+    // The sheet may still be listening until the overlay unmounts.
+    SchedulerBinding.instance.addPostFrameCallback((_) => slide.dispose());
+  }
 }
 
 class _SetEntryTableState extends State<SetEntryTable> {
   static _SetEntryTableState? _activeKeyboard;
   final _keyboardKey = GlobalKey<_SetKeyboardState>();
   _SetKeypadSession? _keypad;
+
+  /// A dismissed sheet still sliding out. It holds [_keyboardKey], so it is
+  /// removed outright before this table opens a sheet again.
+  _SetKeypadSession? _exiting;
   OverlayEntry? get _overlay => _keypad?.overlay;
   Offset? _tapStart;
   int? _tapPointer;
   bool _changed = false;
   bool _disposing = false;
+  String _weightUnit = kWeightUnitKg;
   final Map<int, GlobalKey> _rowKeys = {};
   List<SetEntry> get sets => widget.sets;
   void Function(int, double, int) get onChanged => widget.onChanged;
@@ -295,19 +368,40 @@ class _SetEntryTableState extends State<SetEntryTable> {
         SetEntryTable._keyboardHeight.value = 0;
       }
     }
-    _removeOverlays();
+    _removeOverlays(animate: true);
     if (mounted && !_disposing) {
       setState(() {});
       if (_changed) widget.onEntryFinished?.call();
     }
   }
 
-  void _removeOverlays() {
-    for (final entry in [_keypad?.dismissOverlay, _overlay]) {
-      entry?.remove();
-      entry?.dispose();
-    }
+  void _removeOverlays({bool animate = false}) {
+    _finishExit();
+    final session = _keypad;
     _keypad = null;
+    if (session == null) return;
+    session.dismissOverlay
+      ..remove()
+      ..dispose();
+    // The sheet's own builder runs the slide; under reduced motion it ends at
+    // once and removes the overlay on the next frame.
+    if (animate && mounted && !_disposing) {
+      _keyboardKey.currentState?._keyboardFocus.unfocus();
+      session.closing = true;
+      _exiting = session;
+      session.overlay.markNeedsBuild();
+      // Closed before it had begun to rise: there is nothing to slide away.
+      session.slideTo(1, onSettled: () => _finishExit(session));
+    } else {
+      session.remove();
+    }
+  }
+
+  void _finishExit([_SetKeypadSession? session]) {
+    final exiting = _exiting;
+    if (exiting == null || (session != null && session != exiting)) return;
+    _exiting = null;
+    exiting.remove();
   }
 
   // A tap is a pointer that goes down and up without travelling. It closes the
@@ -368,6 +462,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
   }
 
   void _open(BuildContext context, int index, _SetField field) {
+    _finishExit();
     if (_overlay != null) {
       _keyboardKey.currentState?._select(index, field);
       return;
@@ -422,53 +517,78 @@ class _SetEntryTableState extends State<SetEntryTable> {
           bottom: 0,
           child: Theme(
             data: Theme.of(context),
-            // Slides up once on open; all tables reuse the same sheet.
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 1, end: 0),
-              duration:
-                  MediaQuery.disableAnimationsOf(overlayContext)
-                      ? Duration.zero
-                      : const Duration(milliseconds: 220),
-              curve: Curves.easeOutCubic,
+            // Slides up once on open, and back down on close; all tables
+            // reuse the same sheet while it is open. Only this wrapper
+            // listens to the slide, so starting it never rebuilds the keys.
+            child: ValueListenableBuilder<double>(
+              valueListenable: session.slide,
               builder:
-                  (_, offset, child) => FractionalTranslation(
-                    translation: Offset(0, offset),
+                  (context, target, child) => TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 1, end: target),
+                    duration:
+                        MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : Duration(
+                              milliseconds: session.closing ? 144 : 176,
+                            ),
+                    curve:
+                        session.closing
+                            ? Curves.easeInCubic
+                            : Curves.easeOutCubic,
+                    onEnd: () {
+                      if (session.closing && session.slide.value == 1) {
+                        session.owner._finishExit(session);
+                      }
+                    },
+                    builder:
+                        (_, offset, child) => FractionalTranslation(
+                          translation: Offset(0, offset),
+                          child: child,
+                        ),
                     child: child,
                   ),
-              child: BottomSheet(
-                onClosing: () => session.owner._close(),
-                backgroundColor: _keypadTrayColor(context),
-                shape: RoundedRectangleBorder(
-                  borderRadius: AppRadius.sheet,
-                  side: BorderSide(color: borderColor(context)),
-                ),
-                clipBehavior: Clip.antiAlias,
-                enableDrag: false,
-                builder:
-                    (_) => _SetKeyboard(
-                      key: owner._keyboardKey,
-                      sets: List.of(owner.sets),
-                      initialIndex: session.index,
-                      initialField: session.field,
-                      onClose: owner._close,
-                      onEditingChanged: () {
-                        if (owner.mounted) {
-                          owner.setState(() {});
-                        }
-                      },
-                      onSelectionChanged: owner._revealRow,
-                      onChanged: (index, weight, reps) {
-                        owner._changed = true;
-                        owner.onChanged(index, weight, reps);
-                      },
-                      onRpeChanged:
-                          owner.onRpeChanged == null
-                              ? null
-                              : (index, rpe) {
-                                owner._changed = true;
-                                owner.onRpeChanged!(index, rpe);
-                              },
+              child: IgnorePointer(
+                ignoring: session.closing,
+                child: ExcludeSemantics(
+                  excluding: session.closing,
+                  child: BottomSheet(
+                    onClosing: () => session.owner._close(),
+                    backgroundColor: _keypadTrayColor(context),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: AppRadius.sheet,
+                      side: BorderSide(color: borderColor(context)),
                     ),
+                    clipBehavior: Clip.antiAlias,
+                    enableDrag: false,
+                    builder:
+                        (_) => _SetKeyboard(
+                          key: owner._keyboardKey,
+                          weightUnit: owner._weightUnit,
+                          isTimed: owner.widget.isTimed,
+                          sets: List.of(owner.sets),
+                          initialIndex: session.index,
+                          initialField: session.field,
+                          onClose: owner._close,
+                          onEditingChanged: () {
+                            if (owner.mounted) {
+                              owner.setState(() {});
+                            }
+                          },
+                          onSelectionChanged: owner._revealRow,
+                          onChanged: (index, weight, reps) {
+                            owner._changed = true;
+                            owner.onChanged(index, weight, reps);
+                          },
+                          onRpeChanged:
+                              owner.onRpeChanged == null
+                                  ? null
+                                  : (index, rpe) {
+                                    owner._changed = true;
+                                    owner.onRpeChanged!(index, rpe);
+                                  },
+                        ),
+                  ),
+                ),
               ),
             ),
           ),
@@ -476,6 +596,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
       },
     );
     Overlay.of(context).insertAll([session.dismissOverlay, session.overlay]);
+    session.slideTo(0);
     _refreshKeyboard(index);
   }
 
@@ -582,7 +703,16 @@ class _SetEntryTableState extends State<SetEntryTable> {
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
+  Widget build(BuildContext context) {
+    // Kept on the state so the keypad overlay, built from another context,
+    // reads the same unit as the rows.
+    _weightUnit = normalizeWeightUnit(
+      widget.weightUnit ?? SettingsProvider.unitOf(context),
+    );
+    return _buildTable(context, _weightUnit);
+  }
+
+  Widget _buildTable(BuildContext context, String weightUnit) => LayoutBuilder(
     builder: (context, constraints) {
       final numberIsAction = onDetails != null && onDelete != null;
       final showTrailing =
@@ -595,6 +725,8 @@ class _SetEntryTableState extends State<SetEntryTable> {
       final table = Column(
         children: [
           _EntryHeader(
+            isTimed: widget.isTimed,
+            weightUnit: weightUnit,
             trailing: showTrailing,
             showHistoryColumns: showHistoryColumns,
             showRpe: onRpeChanged != null,
@@ -637,6 +769,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
                                     )
                                     : null,
                             child: _EntryRow(
+                              isTimed: widget.isTimed,
                               key: _rowKeys.putIfAbsent(
                                 index,
                                 () => GlobalKey(),
@@ -650,7 +783,11 @@ class _SetEntryTableState extends State<SetEntryTable> {
                                       ? null
                                       : _keyboardKey.currentState,
                               previous: sets[index].previous,
-                              weight: entryWeight(sets[index].weight),
+                              weightUnit: weightUnit,
+                              weight: formatEntryWeight(
+                                sets[index].weight,
+                                weightUnit,
+                              ),
                               reps: '${sets[index].reps}',
                               rpe: sets[index].rpe,
                               isPrMarker: sets[index].isPrMarker,
@@ -749,6 +886,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
           minimumWidth: _minimumTableWidth(
             context,
             sets,
+            weightUnit: weightUnit,
             showHistoryColumns: showHistoryColumns,
             showPrevious: showPrevious,
             showRpe: onRpeChanged != null,
@@ -770,7 +908,7 @@ TextStyle _quiet(BuildContext context) =>
       fontFeatures: const [FontFeature.tabularFigures()],
     );
 
-Widget _effort(BuildContext context, int rpe) => Semantics(
+Widget _effort(BuildContext context, int rpe, {double? fontSize}) => Semantics(
   label: 'RPE $rpe',
   excludeSemantics: true,
   child: Text(
@@ -778,8 +916,10 @@ Widget _effort(BuildContext context, int rpe) => Semantics(
     maxLines: 1,
     softWrap: false,
     style: Theme.of(context).textTheme.labelLarge!.copyWith(
+      fontSize: fontSize,
       fontWeight: FontWeight.w700,
       color: rpeColor(rpe, context),
+      fontFeatures: const [FontFeature.tabularFigures()],
     ),
   ),
 );
@@ -831,6 +971,8 @@ Widget _columns(
 );
 
 class _EntryHeader extends StatelessWidget {
+  final bool isTimed;
+  final String weightUnit;
   final bool trailing;
   final bool showHistoryColumns;
   final bool showRpe;
@@ -838,6 +980,8 @@ class _EntryHeader extends StatelessWidget {
   final bool showPrevious;
   final bool continuousLog;
   const _EntryHeader({
+    this.isTimed = false,
+    required this.weightUnit,
     this.trailing = false,
     this.showHistoryColumns = true,
     this.showRpe = false,
@@ -846,6 +990,8 @@ class _EntryHeader extends StatelessWidget {
     this.continuousLog = false,
   });
 
+  // No rules here: the host already divides exercises, and rows are
+  // separated by space alone, so a header rule would stack with that divider.
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
@@ -854,8 +1000,8 @@ class _EntryHeader extends StatelessWidget {
         for (final label in [
           'Set',
           continuousLog ? 'Previous' : 'Prev',
-          'Kg',
-          'Reps',
+          weightColumnLabel(weightUnit),
+          isTimed ? 'Seconds' : 'Reps',
           if (showRpe) 'RPE',
         ])
           Text(
@@ -883,6 +1029,8 @@ class _EntryRow extends StatelessWidget {
   final int index;
   final _SetKeyboardState? editing;
   final String? previous;
+  final bool isTimed;
+  final String weightUnit;
   final String weight;
   final String reps;
   final int? rpe;
@@ -905,6 +1053,8 @@ class _EntryRow extends StatelessWidget {
     required this.index,
     this.editing,
     this.previous,
+    this.isTimed = false,
+    required this.weightUnit,
     required this.weight,
     required this.reps,
     this.rpe,
@@ -927,9 +1077,23 @@ class _EntryRow extends StatelessWidget {
       _setNumber(context),
       _previousCell(context),
       _valueFieldTarget(
-        _field(context, weight, 'Kg', onWeight, _SetField.weight),
+        _field(
+          context,
+          weight,
+          weightColumnLabel(weightUnit),
+          onWeight,
+          _SetField.weight,
+        ),
       ),
-      _valueFieldTarget(_field(context, reps, 'Reps', onReps, _SetField.reps)),
+      _valueFieldTarget(
+        _field(
+          context,
+          reps,
+          isTimed ? 'Seconds' : 'Reps',
+          onReps,
+          _SetField.reps,
+        ),
+      ),
       if (onRpe != null) _valueFieldTarget(_rpeReadout(context)),
     ],
     trailing: trailing,
@@ -1050,50 +1214,47 @@ class _EntryRow extends StatelessWidget {
   bool _active(_SetField field) =>
       editing?._index == index && editing?._field == field;
 
-  Widget _rpeReadout(BuildContext context) {
-    if (_active(_SetField.rpe)) {
-      return _field(context, editing!._input, 'RPE', onRpe!, _SetField.rpe);
-    }
-    final value =
-        continuousLog ? '${rpe ?? '—'}' : (rpe == null ? '@—' : '@$rpe');
-    return Semantics(
-      label:
-          rpe == null
-              ? 'Set ${index + 1} RPE value, not set'
-              : 'Set ${index + 1} RPE value $rpe',
-      value: value,
-      button: true,
-      container: true,
-      excludeSemantics: true,
-      onTap: onRpe,
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: AppRadius.field,
-        child: InkWell(
-          onTap: onRpe,
-          borderRadius: AppRadius.field,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Center(
-              child:
-                  continuousLog || rpe == null
-                      ? Text(
-                        value,
-                        maxLines: 1,
-                        softWrap: false,
-                        style: Theme.of(context).textTheme.labelLarge!.copyWith(
-                          fontWeight:
-                              continuousLog ? FontWeight.w400 : FontWeight.w700,
-                          color: textSecondaryColor(context),
-                        ),
-                      )
-                      : _effort(context, rpe!),
-            ),
-          ),
+  Widget _rpeReadout(BuildContext context) => _field(
+    context,
+    rpe?.toString() ?? '\u2014',
+    'RPE',
+    onRpe!,
+    _SetField.rpe,
+  );
+
+  /// What a resting cell shows. Effort reads as its coloured `@7`, and an
+  /// unset one as a faint dash under the RPE header.
+  Widget _restingValue(BuildContext context, String value, _SetField field) {
+    if (field == _SetField.rpe) {
+      // Sized with the figures beside it, so the row reads as one line.
+      if (rpe != null) {
+        return _effort(context, rpe!, fontSize: _valueStyle(context).fontSize);
+      }
+      // A quiet dash, not a repeat of the column header on every row.
+      return Text(
+        '\u2014',
+        maxLines: 1,
+        softWrap: false,
+        style: Theme.of(context).textTheme.labelLarge!.copyWith(
+          fontWeight: FontWeight.w600,
+          color: textSecondaryColor(context),
         ),
-      ),
+      );
+    }
+    return _EntryValue(
+      value: value,
+      active: false,
+      style: _valueStyle(context),
     );
   }
+
+  TextStyle _valueStyle(BuildContext context, {bool active = false}) =>
+      Theme.of(context).textTheme.titleLarge!.copyWith(
+        fontSize: continuousLog ? 18 : 20,
+        fontFeatures: const [FontFeature.tabularFigures()],
+        fontWeight: FontWeight.bold,
+        color: active ? accentColor(context) : textPrimaryColor(context),
+      );
 
   Widget _field(
     BuildContext context,
@@ -1112,7 +1273,11 @@ class _EntryRow extends StatelessWidget {
                 ? (editing!._input.isEmpty
                     ? 'Not set'
                     : '${editing!._input} out of 10')
-                : '${editing!._input.isEmpty ? '0' : editing!._input} ${field == _SetField.weight ? 'kilograms' : 'repetitions'}')
+                : '${editing!._input.isEmpty ? '0' : editing!._input} ${field == _SetField.weight ? weightUnitSpoken(weightUnit) : (isTimed ? 'seconds' : 'repetitions')}')
+            : field == _SetField.rpe
+            ? (rpe == null ? 'Not set' : '$rpe out of 10')
+            : field == _SetField.reps
+            ? '$value ${isTimed ? 'seconds' : 'repetitions'}'
             : value,
     selected: _active(field),
     liveRegion: _active(field),
@@ -1125,35 +1290,32 @@ class _EntryRow extends StatelessWidget {
         borderRadius: AppRadius.field,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
-          child: Container(
+          // Figures sit bare in a ruled table. Only the cell the keys edit
+          // lifts into an accent wash; the keypad header carries the value
+          // and replace mode.
+          child: AnimatedContainer(
+            duration:
+                MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 120),
             constraints: const BoxConstraints(minHeight: 44),
             padding: const EdgeInsets.all(AppSpacing.xs),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color:
-                  continuousLog
-                      ? surfaceColor(context)
-                      : backgroundColor(context),
-              // The ring marks the cell the keys edit; the large figure in
-              // the keypad header carries the value and replace mode.
-              border:
                   _active(field)
-                      ? Border.all(color: accentColor(context), width: 2)
-                      : continuousLog
-                      ? null
-                      : Border.all(color: borderColor(context)),
+                      ? accentMutedColor(context)
+                      : accentMutedColor(context).withAlpha(0),
               borderRadius: AppRadius.field,
             ),
-            child: _EntryValue(
-              value: _active(field) ? editing!._input : value,
-              active: _active(field),
-              style: Theme.of(context).textTheme.titleLarge!.copyWith(
-                fontSize: continuousLog ? 18 : 20,
-                fontFeatures: const [FontFeature.tabularFigures()],
-                fontWeight: FontWeight.bold,
-                color: textPrimaryColor(context),
-              ),
-            ),
+            child:
+                _active(field)
+                    ? _EntryValue(
+                      value: editing!._input,
+                      active: true,
+                      style: _valueStyle(context, active: true),
+                    )
+                    : _restingValue(context, value, field),
           ),
         ),
       ),
@@ -1186,6 +1348,8 @@ class _PopIn extends StatelessWidget {
 
 class _SetKeyboard extends StatefulWidget {
   final List<SetEntry> sets;
+  final bool isTimed;
+  final String weightUnit;
   final int initialIndex;
   final _SetField initialField;
   final VoidCallback onClose;
@@ -1197,6 +1361,8 @@ class _SetKeyboard extends StatefulWidget {
   const _SetKeyboard({
     super.key,
     required this.sets,
+    this.isTimed = false,
+    required this.weightUnit,
     required this.initialIndex,
     required this.initialField,
     required this.onClose,
@@ -1216,6 +1382,13 @@ class _SetKeyboardState extends State<_SetKeyboard> {
   late _SetField _field = widget.initialField;
   late String _input = _value;
   bool _replace = true;
+
+  /// The stored kilograms of the weight cell when it was selected. Typing back
+  /// the figure it showed restores this exactly instead of a re-converted
+  /// value, so opening a pounds cell never drifts what is stored.
+  late double _selectedWeight = _set.weight;
+
+  String get _unit => widget.weightUnit;
 
   @override
   void dispose() {
@@ -1272,7 +1445,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
 
   SetEntry get _set => widget.sets[_index];
   String get _value => switch (_field) {
-    _SetField.weight => entryWeight(_set.weight),
+    _SetField.weight => formatEntryWeight(_set.weight, _unit),
     _SetField.reps => '${_set.reps}',
     _SetField.rpe => _set.rpe?.toString() ?? '',
   };
@@ -1280,6 +1453,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
   void _select(int index, _SetField field) => setState(() {
     _index = index;
     _field = field;
+    _selectedWeight = _set.weight;
     _input = _value;
     _replace = true;
     _keyboardFocus.requestFocus();
@@ -1289,10 +1463,14 @@ class _SetKeyboardState extends State<_SetKeyboard> {
 
   void _publish() {
     // Clearing weight or reps sets it to zero. Clearing RPE removes the
-    // optional value. Reps and RPE are always integral.
+    // optional value. Reps and RPE are always integral. Weight is typed in
+    // the display unit and stored in kilograms.
     final value = double.tryParse(_input) ?? 0;
     final updated = SetEntry(
-      weight: _field == _SetField.weight ? value : _set.weight,
+      weight:
+          _field == _SetField.weight
+              ? kilogramsFromEntry(value, _unit, original: _selectedWeight)
+              : _set.weight,
       reps: _field == _SetField.reps ? value.toInt() : _set.reps,
       previous: _set.previous,
       annotation: _set.annotation,
@@ -1348,7 +1526,12 @@ class _SetKeyboardState extends State<_SetKeyboard> {
       return;
     }
     if (_field == _SetField.weight) {
-      _input = entryWeight((_set.weight + delta).clamp(0, 999).toDouble());
+      // Step from the figure on screen, so 226 + 5 reads 231, not 230.97.
+      final shown = roundShownWeight(
+        kilogramsToUnit(_set.weight, _unit),
+        _unit,
+      );
+      _input = formatEntryValue((shown + delta).clamp(0, 999).toDouble());
     } else {
       _input = (_set.reps + delta.toInt()).clamp(0, 999).toString();
     }
@@ -1393,15 +1576,18 @@ class _SetKeyboardState extends State<_SetKeyboard> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final keyHeight = _keyHeight(context);
-          final minimumKeyWidth = math.max(
+          // '−2.5' is in every unit's set, so the width holds steady while
+          // the lower pair's labels follow the selected field.
+          final minimumKeyWidth = [
             48.0,
-            readableTextWidth(
-                  context,
-                  '−2.5',
-                  Theme.of(context).textTheme.labelLarge!,
-                ) +
-                8,
-          );
+            for (final label in {'−2.5', for (final (l, _) in _adjustments) l})
+              readableTextWidth(
+                    context,
+                    label,
+                    Theme.of(context).textTheme.labelLarge!,
+                  ) +
+                  8,
+          ].reduce(math.max);
           final width = math.max(
             math.min(constraints.maxWidth, 680.0),
             5 * minimumKeyWidth + 4 * _kKeyGap + 2 * _kKeypadPadding,
@@ -1420,7 +1606,12 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                       width: width,
                       child: Column(
                         children: [
-                          _header(context),
+                          _header(
+                            context,
+                            columnWidth:
+                                (width - 2 * _kKeypadPadding - 4 * _kKeyGap) /
+                                5,
+                          ),
                           Padding(
                             padding: const EdgeInsets.fromLTRB(
                               _kKeypadPadding,
@@ -1444,21 +1635,27 @@ class _SetKeyboardState extends State<_SetKeyboard> {
   );
 
   String get _fieldLabel => switch (_field) {
-    _SetField.weight => 'Weight (kg)',
-    _SetField.reps => 'Reps',
+    _SetField.weight => weightFieldLabel(_unit),
+    _SetField.reps => widget.isTimed ? 'Seconds' : 'Reps',
     _SetField.rpe => 'RPE (1–10)',
   };
 
   /// Names what the keys are editing above the value at a readable size,
   /// plus the one action that targets another set and so reads better as a
-  /// sentence than as a key.
-  Widget _header(BuildContext context) {
+  /// sentence than as a key. A done tick closes the keypad from the top right,
+  /// centred over the action column beneath it.
+  Widget _header(BuildContext context, {required double columnWidth}) {
     final style = Theme.of(context).textTheme.labelLarge!;
     final hasNextSet = _index + 1 < widget.sets.length;
     return SizedBox(
       height: _headerHeight(context),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.xs, 0),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          0,
+          _kKeypadPadding,
+          0,
+        ),
         child: Row(
           children: [
             Expanded(
@@ -1503,8 +1700,10 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                 style: TextButton.styleFrom(
                   foregroundColor: accentColor(context),
                   minimumSize: const Size(48, 40),
+                  // Its own padding is the gap before the tick, so the set
+                  // and field label keep room on a ~380dp phone.
                   padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
+                    horizontal: AppSpacing.sm,
                   ),
                   shape: const RoundedRectangleBorder(
                     borderRadius: AppRadius.button,
@@ -1514,6 +1713,35 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                 icon: const Icon(Icons.content_copy_outlined, size: 18),
                 label: Text('Copy to set ${_index + 2}'),
               ),
+            SizedBox(
+              width: columnWidth,
+              height: 48,
+              child: Tooltip(
+                message: 'Close keypad',
+                excludeFromSemantics: true,
+                child: Semantics(
+                  label: 'Close keypad',
+                  button: true,
+                  excludeSemantics: true,
+                  onTap: widget.onClose,
+                  // A bare tick on the tray, not a key: it reads as done
+                  // rather than as one more value to type.
+                  child: TextButton(
+                    onPressed: _withHaptic(widget.onClose),
+                    style: TextButton.styleFrom(
+                      foregroundColor: accentColor(context),
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(48, 48),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: AppRadius.button,
+                      ),
+                    ),
+                    child: const Icon(Icons.check_rounded, size: 28),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -1541,12 +1769,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         column([
-          for (final (label, delta) in const [
-            ('+2.5', 2.5),
-            ('−2.5', -2.5),
-            ('+1', 1.0),
-            ('−1', -1.0),
-          ])
+          for (final (label, delta) in _adjustments)
             (1, _incrementKey(context, label: label, delta: delta)),
         ]),
         for (final keys in const [
@@ -1601,6 +1824,21 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     );
   }
 
+  /// The adjustment column, top to bottom: the unit's large weight step, then
+  /// its small one. Reps always step by one, so in pounds the lower pair
+  /// reads ±1 while reps are selected and ±2.5 for weight; in kilograms the
+  /// small weight step is already 1.
+  List<(String, double)> get _adjustments {
+    final steps = weightSteps(_unit);
+    final small = _field == _SetField.reps ? 1.0 : steps.small;
+    return [
+      for (final step in [steps.large, small]) ...[
+        ('+${formatEntryValue(step)}', step),
+        ('−${formatEntryValue(step)}', -step),
+      ],
+    ];
+  }
+
   bool _adjustmentEnabled(double delta) => switch (_field) {
     _SetField.weight => true,
     _SetField.reps => delta.abs() == 1,
@@ -1615,9 +1853,13 @@ class _SetKeyboardState extends State<_SetKeyboard> {
     final enabled = _adjustmentEnabled(delta);
     final emphasized =
         enabled &&
-        ((_field == _SetField.weight && delta.abs() == 2.5) ||
+        ((_field == _SetField.weight &&
+                delta.abs() == weightSteps(_unit).large) ||
             (_field == _SetField.reps && delta.abs() == 1));
-    final unit = _field == _SetField.reps ? 'reps' : 'kilograms';
+    final unit =
+        _field == _SetField.reps
+            ? (widget.isTimed ? 'seconds' : 'reps')
+            : weightUnitSpoken(_unit);
     return Semantics(
       label: '$label $unit',
       child: _key(

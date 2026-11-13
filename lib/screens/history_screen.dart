@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../services/exercise_catalog.dart';
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
+import '../models/statistics.dart';
 import '../models/workout_session.dart';
 import '../navigation/app_navigation_observer.dart';
 import '../providers/settings_provider.dart';
@@ -20,6 +21,7 @@ import '../theme/spacing.dart';
 import '../utils/scroll_to_top.dart';
 import '../utils/set_history.dart';
 import '../utils/statistics_format.dart';
+import '../utils/weight_units.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_header.dart';
@@ -252,21 +254,33 @@ class WorkoutDetailsScreen extends StatelessWidget {
         : null;
   }
 
-  /// Exercises that set a personal record in [session], by normalised name.
-  /// Uses the same split-scoped record history as the History journal.
-  Set<String> _recordExercises(
+  /// The records [session] set, from the same split-scoped record history
+  /// as the History journal and Stats.
+  List<RecordEvent> _records(
     WorkoutSessionProvider provider,
     WorkoutSession session,
   ) {
     const analytics = StatisticsAnalyticsService();
     final identity = historySessionIdentity(session);
-    return {
+    return [
       for (final event in analytics.recordEvents(
         analytics.eligibleSessions(provider.sessions, splitId: session.splitId),
       ))
-        if (historySessionIdentity(event.session) == identity)
-          event.exerciseId ?? ExerciseCatalog.identity(event.exerciseName),
-    };
+        if (historySessionIdentity(event.session) == identity) event,
+    ];
+  }
+
+  /// The sets that broke a record, by exercise index then set index.
+  static Map<int, Set<int>> _recordSets(List<RecordEvent> records) {
+    final result = <int, Set<int>>{};
+    for (final achievement in records.expand((event) => event.achievements)) {
+      final exercise = achievement.exerciseIndex;
+      final set = achievement.setIndex;
+      if (exercise != null && set != null) {
+        result.putIfAbsent(exercise, () => <int>{}).add(set);
+      }
+    }
+    return result;
   }
 
   Future<void> _edit(BuildContext context, WorkoutSession session) async {
@@ -382,9 +396,8 @@ class WorkoutDetailsScreen extends StatelessWidget {
     final session = _session(provider);
     final weightUnit = context.watch<SettingsProvider>().weightUnit;
     final records =
-        session == null
-            ? const <String>{}
-            : _recordExercises(provider, session);
+        session == null ? const <RecordEvent>[] : _records(provider, session);
+    final recordSets = _recordSets(records);
     return Scaffold(
       backgroundColor: backgroundColor(context),
       appBar: AppHeader(
@@ -486,12 +499,7 @@ class WorkoutDetailsScreen extends StatelessWidget {
                           exercise: exercise,
                           exerciseNumber: index + 1,
                           weightUnit: weightUnit,
-                          isRecord: records.contains(
-                            ExerciseCatalog.identity(
-                              exercise.name,
-                              exercise.exerciseId,
-                            ),
-                          ),
+                          recordSetIndexes: recordSets[index] ?? const {},
                         ),
                     ],
                   ),
@@ -711,7 +719,8 @@ class _EditSessionScreenState extends State<EditSessionScreen>
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Weights are edited in kilograms. Tap a value to edit, or a set number for notes.',
+                  'Weights are in ${weightUnitSpoken(SettingsProvider.unitOf(context))}. '
+                  'Tap a value to edit, or a set number for notes.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: AppSpacing.xl),
@@ -781,6 +790,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
   }
 
   List<SetEntry> _entriesFor(Exercise exercise) {
+    final weightUnit = SettingsProvider.unitOf(context);
     final previous = previousExerciseSets(
       context.read<WorkoutSessionProvider>().sessions.where(
         (session) => session.date.isBefore(_session.date),
@@ -797,7 +807,14 @@ class _EditSessionScreenState extends State<EditSessionScreen>
           reps: exercise.sets[index].reps,
           previous:
               index < previous.length && previous[index].reps > 0
-                  ? '${entryWeight(previous[index].weight)} × ${previous[index].reps}'
+                  ? ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId)
+                      ? formatSetSummary(
+                        previous[index].weight,
+                        previous[index].reps,
+                        weightUnit,
+                        timed: true,
+                      )
+                      : '${formatEntryWeight(previous[index].weight, weightUnit)} × ${previous[index].reps}'
                   : null,
           annotation: exercise.sets[index].note,
           rpe: exercise.sets[index].rpe,
@@ -820,6 +837,8 @@ class _EditSessionScreenState extends State<EditSessionScreen>
   void _showAddSetDialog(int exerciseIndex) {
     WorkoutDialogs.showAddSetDialog(
       context,
+      exerciseName: _session.exercises[exerciseIndex].name,
+      exerciseId: _session.exercises[exerciseIndex].exerciseId,
       onAdd: (set) {
         _replaceSets(exerciseIndex, [
           ..._session.exercises[exerciseIndex].sets,
@@ -832,6 +851,8 @@ class _EditSessionScreenState extends State<EditSessionScreen>
   void _showEditSetDialog(int exerciseIndex, int setIndex, gym.Set set) {
     WorkoutDialogs.showEditSetDialog(
       context,
+      exerciseName: _session.exercises[exerciseIndex].name,
+      exerciseId: _session.exercises[exerciseIndex].exerciseId,
       set: set,
       onSave: (updated) {
         final sets = List<gym.Set>.of(_session.exercises[exerciseIndex].sets);
@@ -914,6 +935,10 @@ class _EditableExerciseCard extends StatelessWidget {
             IgnorePointer(
               ignoring: !enabled,
               child: SetEntryTable(
+                isTimed: ExerciseCatalog.isTimed(
+                  exercise.name,
+                  exercise.exerciseId,
+                ),
                 hostReservesSpace: true,
                 sets: entries,
                 onChanged: onChanged,

@@ -3,27 +3,18 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../services/exercise_catalog.dart';
 import '../../models/exercise.dart';
 import '../../models/statistics.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
-import '../../utils/format.dart';
 import '../../utils/statistics_format.dart';
+import '../../utils/weight_units.dart';
 import '../../utils/workout_context.dart';
 import '../read_only_value.dart';
 import '../readable_table_viewport.dart';
-
-bool _isPrMarker(String? note) {
-  final normalized = note?.trim().toLowerCase().replaceAll(
-    RegExp(r'[.!]+$'),
-    '',
-  );
-  return normalized == 'pr' ||
-      normalized == 'new pr' ||
-      normalized == 'pr attempt';
-}
 
 String _plural(int count, String noun) =>
     '$count $noun${count == 1 ? '' : 's'}';
@@ -299,26 +290,41 @@ class WorkoutExerciseDetails extends StatelessWidget {
   final String weightUnit;
   final int? exerciseNumber;
 
-  /// Whether this exercise set a personal record in the workout.
-  final bool isRecord;
+  /// Indexes into [exercise]'s sets of the sets that broke a personal
+  /// record in the workout, as `StatisticsAnalyticsService.recordEvents`
+  /// computes them. A set note never marks a record.
+  final Set<int> recordSetIndexes;
 
   const WorkoutExerciseDetails({
     required this.exercise,
     required this.weightUnit,
     this.exerciseNumber,
-    this.isRecord = false,
+    this.recordSetIndexes = const {},
     super.key,
   });
+
+  /// Whether this exercise set a personal record in the workout.
+  bool get isRecord => recordSetIndexes.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
     final note = exercise.note?.trim();
+    // A timed exercise stores seconds in reps: it has a longest hold, not a
+    // rep total or a volume.
+    final timed = ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId);
     final performed = exercise.sets.where((set) => set.reps > 0).toList();
     final totalReps = performed.fold<int>(0, (sum, set) => sum + set.reps);
-    final volume = performed.fold<double>(
+    final longestHold = performed.fold<int>(
       0,
-      (sum, set) => sum + set.weight * set.reps,
+      (best, set) => math.max(best, set.reps),
     );
+    final volume =
+        timed
+            ? 0.0
+            : performed.fold<double>(
+              0,
+              (sum, set) => sum + set.weight * set.reps,
+            );
     final secondary = textSecondaryColor(context);
     final gutter = _savedSetNumberWidth(context);
     final summary =
@@ -327,7 +333,7 @@ class WorkoutExerciseDetails extends StatelessWidget {
             : performed.isEmpty
             ? 'Not performed'
             : '${_plural(performed.length, 'set')} · '
-                '${_plural(totalReps, 'rep')}';
+                '${timed ? 'longest ${formatHoldTime(longestHold)}' : _plural(totalReps, 'rep')}';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -482,13 +488,15 @@ class WorkoutExerciseDetails extends StatelessWidget {
                     context,
                     exercise,
                     weightUnit,
+                    recordSetIndexes,
+                    timed: timed,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Padding(
                         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                        child: _SetHeader(weightUnit: weightUnit),
+                        child: _SetHeader(weightUnit: weightUnit, timed: timed),
                       ),
                       for (final (index, set) in exercise.sets.indexed)
                         Container(
@@ -508,11 +516,11 @@ class WorkoutExerciseDetails extends StatelessWidget {
                                 weightUnit: weightUnit,
                                 weight: displayWeight(set.weight, weightUnit),
                                 reps: set.reps,
+                                timed: timed,
                                 rpe: set.rpe,
-                                isPrAttempt: _isPrMarker(set.note),
+                                isRecord: recordSetIndexes.contains(index),
                               ),
-                              if ((set.note?.trim().isNotEmpty ?? false) &&
-                                  !_isPrMarker(set.note))
+                              if (set.note?.trim().isNotEmpty ?? false)
                                 Padding(
                                   padding: EdgeInsets.only(
                                     left: gutter + AppSpacing.sm,
@@ -589,19 +597,21 @@ double _minimumSavedTableWidth(
   BuildContext context,
   Exercise exercise,
   String unit,
-) {
+  Set<int> recordSetIndexes, {
+  required bool timed,
+}) {
   final style = ReadOnlyValue.style(context);
-  final weightWidth = exercise.sets.fold<double>(
+  final weightWidth = exercise.sets.indexed.fold<double>(
     48,
-    (width, set) => math.max(
+    (width, entry) => math.max(
       width,
       readableTextWidth(
             context,
-            formatWeight(displayWeight(set.weight, unit)),
+            formatShownWeight(displayWeight(entry.$2.weight, unit), unit),
             style,
           ) +
           16 +
-          (_isPrMarker(set.note)
+          (recordSetIndexes.contains(entry.$1)
               ? readableTextWidth(
                     context,
                     'PR',
@@ -615,8 +625,15 @@ double _minimumSavedTableWidth(
   );
   final repsWidth = exercise.sets.fold<double>(
     48,
-    (width, set) =>
-        math.max(width, readableTextWidth(context, '${set.reps}', style) + 16),
+    (width, set) => math.max(
+      width,
+      readableTextWidth(
+            context,
+            formatSetCount(set.reps, timed: timed),
+            style,
+          ) +
+          16,
+    ),
   );
   final rpeWidth = math.max(
     48.0,
@@ -650,11 +667,19 @@ Widget _setColumns(BuildContext context, List<Widget> cells) => Row(
 class _SetHeader extends StatelessWidget {
   final String weightUnit;
 
-  const _SetHeader({required this.weightUnit});
+  /// Heads the count column *Time* instead of *Reps*.
+  final bool timed;
+
+  const _SetHeader({required this.weightUnit, required this.timed});
 
   @override
   Widget build(BuildContext context) => _setColumns(context, [
-    for (final label in ['Set', 'Weight ($weightUnit)', 'Reps', 'RPE'])
+    for (final label in [
+      'Set',
+      'Weight ($weightUnit)',
+      setCountLabel(timed: timed),
+      'RPE',
+    ])
       Text(
         label,
         textAlign: TextAlign.center,
@@ -671,16 +696,22 @@ class _SetValues extends StatelessWidget {
   final String weightUnit;
   final double weight;
   final int reps;
+
+  /// [reps] holds seconds: shown as a time.
+  final bool timed;
   final int? rpe;
-  final bool isPrAttempt;
+
+  /// Whether this set broke a personal record in its workout.
+  final bool isRecord;
 
   const _SetValues({
     required this.index,
     required this.weightUnit,
     required this.weight,
     required this.reps,
+    required this.timed,
     required this.rpe,
-    required this.isPrAttempt,
+    required this.isRecord,
   });
 
   @override
@@ -704,13 +735,13 @@ class _SetValues extends StatelessWidget {
           ),
         ),
         ReadOnlyValue(
-          formatWeight(weight),
+          formatShownWeight(weight, weightUnit),
           muted: skipped,
           semanticsLabel: 'Set ${index + 1} weight',
           semanticsValue:
-              '${formatWeight(weight)} ${weightUnit == 'lbs' ? 'pounds' : 'kilograms'}${isPrAttempt ? ', Personal record' : ''}',
+              '${formatShownWeight(weight, weightUnit)} ${weightUnit == 'lbs' ? 'pounds' : 'kilograms'}${isRecord ? ', Personal record' : ''}',
           trailing:
-              isPrAttempt
+              isRecord
                   ? Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: AppSpacing.xs,
@@ -731,9 +762,10 @@ class _SetValues extends StatelessWidget {
                   : null,
         ),
         ReadOnlyValue(
-          '$reps',
+          formatSetCount(reps, timed: timed),
           muted: skipped,
-          semanticsLabel: 'Set ${index + 1} reps',
+          semanticsLabel: 'Set ${index + 1} ${timed ? 'time' : 'reps'}',
+          semanticsValue: timed ? formatHoldTimeSpoken(reps) : null,
         ),
         Semantics(
           label: 'Set ${index + 1} RPE',

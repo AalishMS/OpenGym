@@ -16,12 +16,66 @@ import 'package:gymapp/widgets/statistics/training_charts.dart';
 import 'package:gymapp/utils/statistics_format.dart';
 
 class _Sessions extends WorkoutSessionProvider {
-  final List<WorkoutSession> data;
+  List<WorkoutSession> data;
   _Sessions(this.data);
   @override
   void loadSessions() {}
   @override
   List<WorkoutSession> get sessions => data;
+}
+
+/// Counts how often the screen asks for each derived value.
+class _CountingAnalytics extends StatisticsAnalyticsService {
+  final Map<String, int> calls = {};
+
+  void _count(String name) =>
+      calls.update(name, (n) => n + 1, ifAbsent: () => 1);
+
+  @override
+  List<WorkoutSession> eligibleSessions(
+    Iterable<WorkoutSession> sessions, {
+    String? splitId,
+  }) {
+    _count('eligibleSessions');
+    return super.eligibleSessions(sessions, splitId: splitId);
+  }
+
+  @override
+  List<RecordEvent> recordEvents(Iterable<WorkoutSession> sessions) {
+    _count('recordEvents');
+    return super.recordEvents(sessions);
+  }
+
+  @override
+  List<String> exerciseNames(Iterable<WorkoutSession> sessions) {
+    _count('exerciseNames');
+    return super.exerciseNames(sessions);
+  }
+
+  @override
+  List<WeeklyTrainingValue> weeklyVolume(
+    Iterable<WorkoutSession> sessions, {
+    String? exerciseName,
+    String? splitId,
+    DateTime? now,
+  }) {
+    _count('weeklyVolume');
+    return super.weeklyVolume(
+      sessions,
+      exerciseName: exerciseName,
+      splitId: splitId,
+      now: now,
+    );
+  }
+
+  @override
+  List<LiftSummary> liftSummaries(
+    Iterable<WorkoutSession> sessions,
+    ExerciseMetric metric,
+  ) {
+    _count('liftSummaries');
+    return super.liftSummaries(sessions, metric);
+  }
 }
 
 void main() {
@@ -462,6 +516,66 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('an unrelated rebuild reuses every derived value', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final today = DateTime.now();
+    final data = _Sessions([
+      session('one', today.subtract(const Duration(days: 2))),
+      session('two', today),
+    ]);
+    final counting = _CountingAnalytics();
+    await tester.pumpWidget(
+      ChangeNotifierProvider<WorkoutSessionProvider>.value(
+        value: data,
+        child: host(StatsScreen(analytics: counting)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final first = Map.of(counting.calls);
+    // Records are worked out once per build, not again for the blocks.
+    expect(first['recordEvents'], 1);
+    expect(first['liftSummaries'], 1);
+    expect(first['weeklyVolume'], 1);
+
+    // The provider notifies with the same sessions, as it does when another
+    // tab changes something unrelated.
+    data.notifyListeners();
+    await tester.pump();
+    expect(counting.calls, first);
+
+    // Switching views reuses every derived value.
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
+    await tester.pumpAndSettle();
+    expect(counting.calls, first);
+
+    // A new measure recomputes the lifts and nothing else.
+    await tester.tap(find.byKey(const ValueKey('progress-metric-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(ListTile, ExerciseMetric.totalSets.label),
+    );
+    await tester.pumpAndSettle();
+    expect(counting.calls['liftSummaries'], 2);
+    expect(counting.calls['recordEvents'], 1);
+    expect(counting.calls['weeklyVolume'], 1);
+
+    // A new workout recomputes everything once. The cache follows the workouts
+    // themselves, so the same ones in a fresh list would change nothing.
+    data.data = [
+      ...data.data,
+      session('three', today.subtract(const Duration(days: 1))),
+    ];
+    data.notifyListeners();
+    await tester.pump();
+    expect(counting.calls['recordEvents'], 2);
+    expect(counting.calls['liftSummaries'], 3);
+    expect(tester.takeException(), isNull);
+  });
+
   group('record rows', () {
     RecordAchievement achievement(RecordType type, {int? reps}) =>
         RecordAchievement(
@@ -471,11 +585,35 @@ void main() {
           setReps: 8,
           reps: reps,
         );
+
     RecordEvent event(List<RecordAchievement> achievements) => RecordEvent(
       exerciseName: 'Bench press',
       session: session('record', now),
       achievements: achievements,
     );
+
+    testWidgets('say what each record beat', (tester) async {
+      await tester.pumpWidget(
+        host(
+          RecordEventRow(
+            event: event([
+              const RecordAchievement(
+                type: RecordType.heaviestWeight,
+                value: 100,
+                previousValue: 95,
+                setWeight: 100,
+                setReps: 3,
+              ),
+            ]),
+            weightUnit: 'kg',
+          ),
+        ),
+      );
+      expect(
+        find.text('Heaviest weight · 100 kg, up from 95 kg'),
+        findsOneWidget,
+      );
+    });
 
     testWidgets('lead with heaviest weight and expand in place', (
       tester,
@@ -492,20 +630,24 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Heaviest weight'), findsOneWidget);
-      expect(find.text('Estimated 1RM'), findsNothing);
-      expect(find.text('Best set volume'), findsNothing);
+      expect(find.text('Heaviest weight · 100 kg'), findsOneWidget);
+      expect(find.text('85 kg × 8 · Push day · 5 Sep 2026'), findsOneWidget);
+      expect(find.textContaining('Estimated 1RM'), findsNothing);
+      expect(find.textContaining('Best set volume'), findsNothing);
       await tester.tap(find.text('+2 more'));
       await tester.pump();
-      final heaviest = tester.getTopLeft(find.text('Heaviest weight')).dy;
-      final oneRepMax = tester.getTopLeft(find.text('Estimated 1RM')).dy;
-      final volume = tester.getTopLeft(find.text('Best set volume')).dy;
+      final heaviest =
+          tester.getTopLeft(find.textContaining('Heaviest weight')).dy;
+      final oneRepMax =
+          tester.getTopLeft(find.textContaining('Estimated 1RM')).dy;
+      final volume =
+          tester.getTopLeft(find.textContaining('Best set volume')).dy;
       expect(heaviest, lessThan(oneRepMax));
       expect(oneRepMax, lessThan(volume));
       expect(find.text('+2 more'), findsNothing);
       await tester.tap(find.text('Show less'));
       await tester.pump();
-      expect(find.text('Estimated 1RM'), findsNothing);
+      expect(find.textContaining('Estimated 1RM'), findsNothing);
       expect(find.text('+2 more'), findsOneWidget);
     });
 
@@ -523,7 +665,7 @@ void main() {
           ),
         ),
       );
-      expect(find.text('8-rep best'), findsOneWidget);
+      expect(find.text('8-rep best · 100 kg'), findsOneWidget);
       expect(find.text('+1 more'), findsOneWidget);
       await tester.pumpWidget(
         host(
@@ -534,7 +676,7 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Best set volume'), findsOneWidget);
+      expect(find.text('Best set volume · 100 kg'), findsOneWidget);
       expect(find.byType(TextButton), findsNothing);
     });
   });

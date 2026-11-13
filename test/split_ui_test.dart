@@ -798,7 +798,9 @@ WorkoutSession _session(
 ) => WorkoutSession(
   id: id,
   splitId: splitId,
-  date: DateTime(2026),
+  // Recent, so Stats lists the lift under its default four-week range. A
+  // lift's first workout sets no record, so the records list can't show it.
+  date: DateTime.now().subtract(const Duration(days: 1)),
   planName: planName,
   exercises: [
     Exercise(name: exerciseName, sets: [Set(reps: 5, weight: 50)]),

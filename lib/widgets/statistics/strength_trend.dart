@@ -47,7 +47,13 @@ class _StrengthTrendState extends State<StrengthTrend> {
     final maximum = high + spread * 0.35;
     final change = widget.progress.change;
     String value(double number) =>
-        formatChartExerciseValue(number, widget.metric, widget.weightUnit);
+    // A timed or bodyweight-only lift falls back to seconds or reps.
+    formatProgressValue(
+      number,
+      widget.metric,
+      widget.progress.fallback,
+      widget.weightUnit,
+    );
     final scale = MediaQuery.textScalerOf(context).scale(1);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
