@@ -594,7 +594,7 @@ void main() {
     });
   }
 
-  testWidgets('the tick closes the keypad with a slide down', (tester) async {
+  testWidgets('a slow first frame does not swallow the slide', (tester) async {
     var finishes = 0;
     await tester.pumpWidget(
       MaterialApp(
@@ -607,11 +607,26 @@ void main() {
         ),
       ),
     );
+    final screen = tester.getSize(find.byType(Scaffold)).height;
+    // Opening and closing rebuild the table and its list, which on a phone
+    // can take longer than the slide. Each 300ms pump stands in for that.
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.getRect(find.byType(BottomSheet)).top, screen);
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    final rising = tester.getRect(find.byType(BottomSheet)).top;
+    expect(rising, lessThan(screen));
     await tester.pumpAndSettle();
     final open = tester.getRect(find.byType(BottomSheet));
+    expect(rising, greaterThan(open.top));
+
     await tester.tap(find.widgetWithText(TextButton, '5'));
     await tester.tap(find.bySemanticsLabel('Close keypad'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.getRect(find.byType(BottomSheet)).top, open.top);
+    await tester.pump();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 90));
     // Still on screen mid-slide, lower than it rests, and no longer a target.
@@ -649,11 +664,15 @@ void main() {
       ),
     );
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
-    await tester.pump();
-    expect(find.byType(BottomSheet), findsOneWidget);
+    for (var i = 0; i < 3; i++) {
+      await tester.pump();
+    }
+    final open = tester.getRect(find.byType(BottomSheet));
+    expect(open.bottom, tester.getSize(find.byType(Scaffold)).height);
     await tester.tap(find.bySemanticsLabel('Close keypad'));
-    await tester.pump();
-    await tester.pump();
+    for (var i = 0; i < 4; i++) {
+      await tester.pump();
+    }
     expect(find.byType(BottomSheet), findsNothing);
     expect(tester.takeException(), isNull);
   });

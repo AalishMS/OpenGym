@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../providers/settings_provider.dart';
@@ -266,7 +267,52 @@ class _SetKeypadSession {
   /// input, and its overlay is removed when the slide ends.
   bool closing = false;
 
+  /// Where the sheet is heading, as a fraction of its height below its resting
+  /// place: 1 is off screen, 0 is open.
+  final ValueNotifier<double> slide = ValueNotifier(1);
+
+  /// The overlay is gone, so nothing may rebuild it.
+  bool removed = false;
+
+  /// The latest [slideTo] wins, so a close cannot be undone by an open that
+  /// was still waiting for its frames.
+  int _slideRequest = 0;
+
   _SetKeypadSession(this.owner, this.index, this.field);
+
+  /// Opening or closing the keypad rebuilds the table and the list around it,
+  /// which can take longer than the slide itself on a slower phone. A slide
+  /// started in that frame would count it and arrive finished, so the sheet
+  /// would jump. Starting it once the next two frames are drawn lets every
+  /// step of the slide reach the screen.
+  void slideTo(double target, {VoidCallback? onSettled}) {
+    final request = ++_slideRequest;
+    var frames = 2;
+    void wait() => SchedulerBinding.instance.addPostFrameCallback((_) {
+      if (removed || request != _slideRequest) return;
+      if (--frames > 0) {
+        SchedulerBinding.instance.scheduleFrame();
+        wait();
+        return;
+      }
+      if (slide.value == target) {
+        onSettled?.call();
+        return;
+      }
+      slide.value = target;
+    });
+    wait();
+  }
+
+  void remove() {
+    if (removed) return;
+    removed = true;
+    overlay
+      ..remove()
+      ..dispose();
+    // The sheet may still be listening until the overlay unmounts.
+    SchedulerBinding.instance.addPostFrameCallback((_) => slide.dispose());
+  }
 }
 
 class _SetEntryTableState extends State<SetEntryTable> {
@@ -344,10 +390,10 @@ class _SetEntryTableState extends State<SetEntryTable> {
       session.closing = true;
       _exiting = session;
       session.overlay.markNeedsBuild();
+      // Closed before it had begun to rise: there is nothing to slide away.
+      session.slideTo(1, onSettled: () => _finishExit(session));
     } else {
-      session.overlay
-        ..remove()
-        ..dispose();
+      session.remove();
     }
   }
 
@@ -355,9 +401,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
     final exiting = _exiting;
     if (exiting == null || (session != null && session != exiting)) return;
     _exiting = null;
-    exiting.overlay
-      ..remove()
-      ..dispose();
+    exiting.remove();
   }
 
   // A tap is a pointer that goes down and up without travelling. It closes the
@@ -474,20 +518,33 @@ class _SetEntryTableState extends State<SetEntryTable> {
           child: Theme(
             data: Theme.of(context),
             // Slides up once on open, and back down on close; all tables
-            // reuse the same sheet while it is open.
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 1, end: session.closing ? 1 : 0),
-              duration:
-                  MediaQuery.disableAnimationsOf(overlayContext)
-                      ? Duration.zero
-                      : Duration(milliseconds: session.closing ? 180 : 220),
-              curve: session.closing ? Curves.easeInCubic : Curves.easeOutCubic,
-              onEnd: () {
-                if (session.closing) owner._finishExit(session);
-              },
+            // reuse the same sheet while it is open. Only this wrapper
+            // listens to the slide, so starting it never rebuilds the keys.
+            child: ValueListenableBuilder<double>(
+              valueListenable: session.slide,
               builder:
-                  (_, offset, child) => FractionalTranslation(
-                    translation: Offset(0, offset),
+                  (context, target, child) => TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 1, end: target),
+                    duration:
+                        MediaQuery.disableAnimationsOf(context)
+                            ? Duration.zero
+                            : Duration(
+                              milliseconds: session.closing ? 180 : 220,
+                            ),
+                    curve:
+                        session.closing
+                            ? Curves.easeInCubic
+                            : Curves.easeOutCubic,
+                    onEnd: () {
+                      if (session.closing && session.slide.value == 1) {
+                        session.owner._finishExit(session);
+                      }
+                    },
+                    builder:
+                        (_, offset, child) => FractionalTranslation(
+                          translation: Offset(0, offset),
+                          child: child,
+                        ),
                     child: child,
                   ),
               child: IgnorePointer(
@@ -539,6 +596,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
       },
     );
     Overlay.of(context).insertAll([session.dismissOverlay, session.overlay]);
+    session.slideTo(0);
     _refreshKeyboard(index);
   }
 
@@ -1585,7 +1643,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
   /// Names what the keys are editing above the value at a readable size,
   /// plus the one action that targets another set and so reads better as a
   /// sentence than as a key. A done tick closes the keypad from the top right,
-  /// sized to the action column beneath it.
+  /// centred over the action column beneath it.
   Widget _header(BuildContext context, {required double columnWidth}) {
     final style = Theme.of(context).textTheme.labelLarge!;
     final hasNextSet = _index + 1 < widget.sets.length;
@@ -1666,11 +1724,20 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                   button: true,
                   excludeSemantics: true,
                   onTap: widget.onClose,
-                  child: _key(
-                    context,
-                    tone: _KeyTone.emphasized,
-                    onPressed: widget.onClose,
-                    child: const Icon(Icons.check_rounded, size: 24),
+                  // A bare tick on the tray, not a key: it reads as done
+                  // rather than as one more value to type.
+                  child: TextButton(
+                    onPressed: _withHaptic(widget.onClose),
+                    style: TextButton.styleFrom(
+                      foregroundColor: accentColor(context),
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(48, 48),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: const RoundedRectangleBorder(
+                        borderRadius: AppRadius.button,
+                      ),
+                    ),
+                    child: const Icon(Icons.check_rounded, size: 28),
                   ),
                 ),
               ),
