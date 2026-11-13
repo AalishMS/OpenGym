@@ -38,6 +38,15 @@ double unitToKilograms(double value, String unit) =>
 /// decimals, so whatever the keypad accepts reads back unchanged.
 double roundEntryWeight(double value) => (value * 100).roundToDouble() / 100;
 
+/// A weight already in [unit], at the precision it is shown with.
+///
+/// Pounds snap to the nearest quarter pound (`226`, `225.5`, `407.75`):
+/// weights logged in kilograms convert to figures like `225.97`, which no
+/// plate pairing in a pounds gym produces. Kilograms keep two decimals.
+/// Display only: storage keeps the full-precision kilograms.
+double roundShownWeight(double value, String unit) =>
+    isPounds(unit) ? (value * 4).roundToDouble() / 4 : roundEntryWeight(value);
+
 /// A weight as the set table shows it, `135` or `61.23`: up to two decimals,
 /// no trailing zeros.
 String formatEntryValue(double value) =>
@@ -45,11 +54,18 @@ String formatEntryValue(double value) =>
 
 /// A stored weight in [unit] at set-table precision.
 String formatEntryWeight(double kilograms, String unit) =>
-    formatEntryValue(kilogramsToUnit(kilograms, unit));
+    formatEntryValue(roundShownWeight(kilogramsToUnit(kilograms, unit), unit));
 
-/// A stored weight in [unit] for summaries: one decimal at most.
+/// A weight already in [unit], for summaries: kilograms with one decimal at
+/// most, pounds to the nearest quarter pound.
+String formatShownWeight(double value, String unit) =>
+    isPounds(unit)
+        ? formatEntryValue(roundShownWeight(value, unit))
+        : formatWeight(value);
+
+/// A stored weight in [unit] for summaries; see [formatShownWeight].
 String formatWeightIn(double kilograms, String unit) =>
-    formatWeight(kilogramsToUnit(kilograms, unit));
+    formatShownWeight(kilogramsToUnit(kilograms, unit), unit);
 
 /// `70 kg` or `154.3 lbs`.
 String formatWeightWithUnit(double kilograms, String unit) =>
@@ -64,11 +80,11 @@ String formatVolumeIn(num kilograms, String unit) =>
 ///
 /// When [original] — the stored value the cell held when it was opened —
 /// shows as the same figure, it is returned untouched. Without this, opening
-/// a cell that reads `132.28` and typing `132.28` again would store
-/// 60.0004 kg instead of the 60 kg already there.
+/// a cell that reads `132.25` and typing `132.25` again would store
+/// 59.988 kg instead of the 60 kg already there.
 double kilogramsFromEntry(double entered, String unit, {double? original}) {
   if (original != null &&
-      roundEntryWeight(kilogramsToUnit(original, unit)) ==
+      roundShownWeight(kilogramsToUnit(original, unit), unit) ==
           roundEntryWeight(entered)) {
     return original;
   }
@@ -86,8 +102,7 @@ String weightColumnLabel(String unit) => isPounds(unit) ? 'Lbs' : 'Kg';
 String weightFieldLabel(String unit) => 'Weight (${weightUnitLabel(unit)})';
 
 /// The unit as a screen reader should say it.
-String weightUnitSpoken(String unit) =>
-    isPounds(unit) ? 'pounds' : 'kilograms';
+String weightUnitSpoken(String unit) => isPounds(unit) ? 'pounds' : 'kilograms';
 
 /// The keypad's quick-adjust steps for weight, larger first. Kilograms keep
 /// 2.5 and 1; pounds step by the smallest common plate pair, 5 and 2.5.

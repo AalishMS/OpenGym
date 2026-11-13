@@ -171,10 +171,10 @@ void main() {
       await tester.ensureVisible(gain);
       await tester.tap(gain);
       await tester.pumpAndSettle();
-      expect(find.text('176.4 lbs to 198.4 lbs'), findsOneWidget);
+      expect(find.text('176.25 lbs to 198.5 lbs'), findsOneWidget);
       await tester.tap(gain);
       await tester.pump();
-      expect(find.text('176.4 lbs to 198.4 lbs'), findsNothing);
+      expect(find.text('176.25 lbs to 198.5 lbs'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );

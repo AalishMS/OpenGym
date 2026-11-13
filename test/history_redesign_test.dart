@@ -375,7 +375,7 @@ void main() {
       expect(find.text('Sets'), findsOneWidget);
       expect(find.text('0'), findsWidgets);
       expect(find.text('Weight (lbs)'), findsOneWidget);
-      expect(find.text('27.0'), findsOneWidget);
+      expect(find.text('27'), findsOneWidget);
       expect(find.text('—'), findsOneWidget);
       expect(find.textContaining('tempo controlled'), findsOneWidget);
       expect(find.textContaining('Warm-up only'), findsOneWidget);

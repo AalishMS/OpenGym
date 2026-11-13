@@ -1388,7 +1388,11 @@ class _SetKeyboardState extends State<_SetKeyboard> {
       return;
     }
     if (_field == _SetField.weight) {
-      final shown = kilogramsToUnit(_set.weight, _unit);
+      // Step from the figure on screen, so 226 + 5 reads 231, not 230.97.
+      final shown = roundShownWeight(
+        kilogramsToUnit(_set.weight, _unit),
+        _unit,
+      );
       _input = formatEntryValue((shown + delta).clamp(0, 999).toDouble());
     } else {
       _input = (_set.reps + delta.toInt()).clamp(0, 999).toString();

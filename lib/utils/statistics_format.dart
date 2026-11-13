@@ -1,5 +1,6 @@
 import '../models/statistics.dart';
 import 'format.dart';
+import 'weight_units.dart';
 
 const double _poundsPerKilogram = 2.2046226218;
 
@@ -24,17 +25,18 @@ String formatAnalyticsNumber(double value, {int decimals = 0}) {
 /// A signed change with a true minus sign (U+2212). A hyphen is narrower than
 /// the plus sign and sits low, so a negative change read as a typo next to a
 /// positive one.
-String formatSignedChange(num change, String Function(double magnitude) format) {
+String formatSignedChange(
+  num change,
+  String Function(double magnitude) format,
+) {
   final magnitude = format(change.abs().toDouble());
   // A change that rounds away reads as no change, not as "−0%".
   if (change == 0 || magnitude == format(0)) return magnitude;
   return '${change > 0 ? '+' : '\u2212'}$magnitude';
 }
 
-String formatAnalyticsWeight(double kilograms, String weightUnit) {
-  final converted = displayWeight(kilograms, weightUnit);
-  return '${formatWeight(converted)} $weightUnit';
-}
+String formatAnalyticsWeight(double kilograms, String weightUnit) =>
+    '${formatWeightIn(kilograms, weightUnit)} $weightUnit';
 
 String formatVolumeLoad(double kilograms, String weightUnit) {
   if (weightUnit == 'kg' && kilograms >= 1000) {
@@ -140,6 +142,10 @@ String formatChartExerciseValue(
   ExerciseMetric metric,
   String unit,
 ) => switch (metric) {
+  // A weight in pounds reads to the quarter pound, like everywhere else.
+  ExerciseMetric.bestWeight || ExerciseMetric.estimatedOneRepMax
+      when isPounds(unit) =>
+    formatAnalyticsWeight(value, unit),
   ExerciseMetric.bestWeight ||
   ExerciseMetric.estimatedOneRepMax ||
   ExerciseMetric.bestSetVolume ||

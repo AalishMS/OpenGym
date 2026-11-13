@@ -3,7 +3,6 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../providers/settings_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/spacing.dart';
-import '../../utils/format.dart';
 import '../../utils/weight_units.dart';
 
 /// Chrome-free max-weight trend line for one exercise.
@@ -74,7 +73,7 @@ class ProgressionSparkline extends StatelessWidget {
             image: true,
             label: '$exercise maximum weight by session',
             value:
-                'Oldest to newest. ${values.indexed.map((entry) => 'Session ${entry.$1 + 1}: ${formatWeight(entry.$2)} ${weightUnitSpoken(weightUnit)}').join('; ')}',
+                'Oldest to newest. ${values.indexed.map((entry) => 'Session ${entry.$1 + 1}: ${formatShownWeight(entry.$2, weightUnit)} ${weightUnitSpoken(weightUnit)}').join('; ')}',
             child: ExcludeSemantics(
               child: CustomPaint(
                 painter: _SparklinePainter(
@@ -95,14 +94,14 @@ class ProgressionSparkline extends StatelessWidget {
           runSpacing: AppSpacing.xs,
           children: [
             Text(
-              '${formatWeight(min)}$unit → ${formatWeight(max)}$unit',
+              '${formatShownWeight(min, weightUnit)}$unit → ${formatShownWeight(max, weightUnit)}$unit',
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 9,
                 color: textSecondary,
               ),
             ),
             Text(
-              '${delta >= 0 ? '+' : ''}${formatWeight(delta)}$unit',
+              '${delta >= 0 ? '+' : ''}${formatShownWeight(delta, weightUnit)}$unit',
               style: GoogleFonts.jetBrainsMono(
                 fontSize: 9,
                 fontWeight: FontWeight.bold,

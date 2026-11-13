@@ -10,8 +10,8 @@ import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
-import '../../utils/format.dart';
 import '../../utils/statistics_format.dart';
+import '../../utils/weight_units.dart';
 import '../../utils/workout_context.dart';
 import '../read_only_value.dart';
 import '../readable_table_viewport.dart';
@@ -607,7 +607,7 @@ double _minimumSavedTableWidth(
       width,
       readableTextWidth(
             context,
-            formatWeight(displayWeight(entry.$2.weight, unit)),
+            formatShownWeight(displayWeight(entry.$2.weight, unit), unit),
             style,
           ) +
           16 +
@@ -735,11 +735,11 @@ class _SetValues extends StatelessWidget {
           ),
         ),
         ReadOnlyValue(
-          formatWeight(weight),
+          formatShownWeight(weight, weightUnit),
           muted: skipped,
           semanticsLabel: 'Set ${index + 1} weight',
           semanticsValue:
-              '${formatWeight(weight)} ${weightUnit == 'lbs' ? 'pounds' : 'kilograms'}${isRecord ? ', Personal record' : ''}',
+              '${formatShownWeight(weight, weightUnit)} ${weightUnit == 'lbs' ? 'pounds' : 'kilograms'}${isRecord ? ', Personal record' : ''}',
           trailing:
               isRecord
                   ? Container(

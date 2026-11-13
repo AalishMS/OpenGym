@@ -48,15 +48,38 @@ void main() {
     });
 
     test('retyping the figure a cell showed keeps the stored kilograms', () {
-      // 60 kg reads 132.28 lbs; typing 132.28 again must not store 60.0004.
-      expect(formatEntryWeight(60, 'lbs'), '132.28');
-      expect(kilogramsFromEntry(132.28, 'lbs', original: 60), 60);
+      // 60 kg reads 132.25 lbs; typing 132.25 again must not store 59.988.
+      expect(formatEntryWeight(60, 'lbs'), '132.25');
+      expect(kilogramsFromEntry(132.25, 'lbs', original: 60), 60);
+      // 102.5 kg (225.97 lbs) reads 226; retyping 226 keeps 102.5 kg.
+      expect(formatEntryWeight(102.5, 'lbs'), '226');
+      expect(kilogramsFromEntry(226, 'lbs', original: 102.5), 102.5);
       expect(
         kilogramsFromEntry(135, 'lbs', original: 60),
         unitToKilograms(135, 'lbs'),
       );
       expect(kilogramsFromEntry(60, 'kg', original: 60.004), 60.004);
       expect(kilogramsFromEntry(62.5, 'kg', original: 60), 62.5);
+    });
+
+    test('pounds show to the nearest quarter pound', () {
+      // Kilogram logs converted to pounds: 225.97, 203.93, 407.86, 104.72.
+      expect(formatEntryWeight(102.5, 'lbs'), '226');
+      expect(formatEntryWeight(92.5, 'lbs'), '204');
+      expect(formatEntryWeight(185, 'lbs'), '407.75');
+      expect(formatEntryWeight(47.5, 'lbs'), '104.75');
+      expect(formatEntryWeight(unitToKilograms(225.5, 'lbs'), 'lbs'), '225.5');
+      expect(
+        formatEntryWeight(unitToKilograms(225.25, 'lbs'), 'lbs'),
+        '225.25',
+      );
+      // Summaries round the same way rather than to one decimal.
+      expect(formatWeightIn(185, 'lbs'), '407.75');
+      expect(formatWeightWithUnit(102.5, 'lbs'), '226 lbs');
+      expect(formatShownWeight(203.93, 'lbs'), '204');
+      // Kilograms are untouched.
+      expect(formatEntryWeight(61.23, 'kg'), '61.23');
+      expect(formatWeightIn(61.25, 'kg'), '61.3');
     });
 
     test('units normalize, label, and step per unit', () {
@@ -83,7 +106,7 @@ void main() {
       expect(formatCoachSets(sets), '2 × 8 · 60 kg, 1 × 6');
       expect(
         formatCoachSets(sets, weightUnit: 'lbs'),
-        '2 × 8 · 132.28 lbs, 1 × 6',
+        '2 × 8 · 132.25 lbs, 1 × 6',
       );
       // The sets themselves are untouched kilograms.
       expect(sets.first.toJson(), {'reps': 8, 'kg': 60});
@@ -164,7 +187,7 @@ void main() {
       expect(find.text('Lbs'), findsOneWidget);
       expect(find.text('Kg'), findsNothing);
       expect(find.text('135'), findsOneWidget);
-      expect(find.text('132.28 × 5'), findsOneWidget);
+      expect(find.text('132.25 × 5'), findsOneWidget);
 
       await tester.tap(find.bySemanticsLabel('Set 1 Lbs'));
       await tester.pumpAndSettle();
@@ -196,6 +219,30 @@ void main() {
       await tap(tester, '+1');
       expect(entries.first.reps, 6);
       expect(changes.last, closeTo(unitToKilograms(137.5, 'lbs'), 1e-9));
+    });
+
+    testWidgets('a kilogram log steps from its rounded pound figure', (
+      tester,
+    ) async {
+      // 102.5 kg is 225.97 lbs, shown as 226.
+      final entries = [const SetEntry(weight: 102.5, reps: 5)];
+      final changes = <double>[];
+      await tester.pumpWidget(
+        host(entries, (i, weight, reps) {
+          changes.add(weight);
+          entries[i] = SetEntry(weight: weight, reps: reps);
+        }, weightUnit: 'lbs'),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('226'), findsOneWidget);
+
+      await tester.tap(find.bySemanticsLabel('Set 1 Lbs'));
+      await tester.pumpAndSettle();
+      await tap(tester, '+5');
+      expect(changes.last, closeTo(unitToKilograms(231, 'lbs'), 1e-9));
+      // Stepping back to the figure it opened on restores the exact kilograms.
+      await tap(tester, '−5');
+      expect(changes.last, 102.5);
     });
 
     testWidgets('135 typed in pounds is stored in kilograms and reads 135', (
@@ -243,7 +290,7 @@ void main() {
         }, weightUnit: 'lbs'),
       );
       await tester.pumpAndSettle();
-      expect(find.text('132.28'), findsOneWidget);
+      expect(find.text('132.25'), findsOneWidget);
 
       // Open and close: nothing is written.
       await tester.tap(find.bySemanticsLabel('Set 1 Lbs'));
@@ -251,10 +298,10 @@ void main() {
       await hide(tester);
       expect(changes, isEmpty);
 
-      // Retyping the figure it showed restores 60 exactly, not 60.0004.
+      // Retyping the figure it showed restores 60 exactly, not 59.988.
       await tester.tap(find.bySemanticsLabel('Set 1 Lbs'));
       await tester.pumpAndSettle();
-      for (final key in ['1', '3', '2', '.', '2', '8']) {
+      for (final key in ['1', '3', '2', '.', '2', '5']) {
         await tap(tester, key);
       }
       expect(changes.last, 60);

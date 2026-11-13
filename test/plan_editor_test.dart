@@ -644,7 +644,7 @@ void main() {
     );
     expect(find.text('Last: 135 lbs × 12'), findsOneWidget);
     expect(
-      find.textContaining('132.28 × 10, 132.28 × 8', findRichText: true),
+      find.textContaining('132.25 × 10, 132.25 × 8', findRichText: true),
       findsOneWidget,
     );
     expect(find.textContaining(' kg', findRichText: true), findsNothing);
