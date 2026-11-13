@@ -92,120 +92,148 @@ class HistoryMonthHeader extends StatelessWidget {
       '$count workout${count == 1 ? '' : 's'}',
       if (volume > 0) formatVolumeLoad(volume, weightUnit),
     ].join(' · ');
-    return Wrap(
-      spacing: AppSpacing.md,
-      runSpacing: AppSpacing.xxs,
-      crossAxisAlignment: WrapCrossAlignment.end,
-      alignment: WrapAlignment.spaceBetween,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Semantics(
-          header: true,
-          child: Text(
-            historyMonthLabel(group.month, group.year),
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
-          child: Text(
-            tally,
-            style: AppTypography.figures(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: textSecondaryColor(context),
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.xxs,
+          crossAxisAlignment: WrapCrossAlignment.end,
+          alignment: WrapAlignment.spaceBetween,
+          children: [
+            Semantics(
+              header: true,
+              child: Text(
+                historyMonthLabel(group.month, group.year),
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
             ),
-          ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
+              child: Text(
+                tally,
+                style: AppTypography.figures(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: textSecondaryColor(context),
+                ),
+              ),
+            ),
+          ],
         ),
+        const SizedBox(height: AppSpacing.sm),
+        Divider(height: 1, thickness: 1, color: textPrimaryColor(context)),
       ],
     );
   }
 }
 
-/// One workout in the journal: the date on a rail, the session on a card.
+/// The rule a journal row draws under itself.
+enum HistoryRowRule {
+  /// The last workout of a month: the next month header opens its own space.
+  none,
+
+  /// The next workout is on another day: the rule spans the whole row.
+  full,
+
+  /// The next workout is on the same day: the rule starts after the date
+  /// rail, so both workouts read as one day.
+  inset,
+}
+
+/// One workout in the journal, as a ruled row rather than a card.
 ///
-/// The rail draws a hairline down to the next workout of the same month, so a
-/// month reads as one continuous log. A second workout on the same day leaves
-/// its date out and hangs off the same line.
+/// The date sits on a rail at the left, the workout in the middle, and the
+/// volume and set count in a right-aligned column so they line up down the
+/// month. A second workout on the same day leaves its date out, and the rule
+/// between the two starts after the rail.
 class HistoryWorkoutRow extends StatelessWidget {
   final HistoryWorkoutSummary summary;
   final String weightUnit;
   final VoidCallback onTap;
   final bool showDate;
-  final bool continuesTimeline;
+  final HistoryRowRule rule;
 
   const HistoryWorkoutRow({
     required this.summary,
     required this.weightUnit,
     required this.onTap,
     this.showDate = true,
-    this.continuesTimeline = false,
+    this.rule = HistoryRowRule.none,
     super.key,
   });
 
   @override
   Widget build(BuildContext context) {
     final session = summary.session;
-    final card = _WorkoutCard(
-      summary: summary,
-      weightUnit: weightUnit,
-      onTap: onTap,
-    );
     return LayoutBuilder(
       builder: (context, constraints) {
         final textScale = MediaQuery.textScalerOf(context).scale(1);
-        final stackDate = constraints.maxWidth < 310 || textScale >= 1.6;
-        if (stackDate) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (showDate) ...[
-                  _HistoryDate(date: session.date, horizontal: true),
-                  const SizedBox(height: AppSpacing.sm),
-                ],
-                card,
-              ],
-            ),
-          );
-        }
-        final rule = borderColor(context);
-        return IntrinsicHeight(
-          child: Row(
+        final compact = constraints.maxWidth < 310 || textScale >= 1.6;
+        final inset = compact ? 0.0 : _railWidth + AppSpacing.md;
+        final Widget content;
+        if (compact) {
+          content = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (showDate) ...[
+                _HistoryDate(date: session.date, horizontal: true),
+                const SizedBox(height: AppSpacing.xs),
+              ],
+              _WorkoutSummary(
+                summary: summary,
+                weightUnit: weightUnit,
+                inlineFigures: true,
+              ),
+            ],
+          );
+        } else {
+          content = Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               SizedBox(
                 width: _railWidth,
-                child: Column(
-                  children: [
-                    if (showDate)
-                      _HistoryDate(date: session.date, horizontal: false),
-                    Expanded(
-                      child:
-                          continuesTimeline
-                              ? Padding(
-                                padding: EdgeInsets.only(
-                                  top: showDate ? AppSpacing.sm : 0,
-                                ),
-                                child: VerticalDivider(
-                                  width: 1,
-                                  thickness: 1,
-                                  color: rule,
-                                ),
-                              )
-                              : const SizedBox.shrink(),
-                    ),
-                  ],
-                ),
+                child:
+                    showDate
+                        ? _HistoryDate(date: session.date, horizontal: false)
+                        : null,
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                  child: Align(alignment: Alignment.topCenter, child: card),
+                child: _WorkoutSummary(
+                  summary: summary,
+                  weightUnit: weightUnit,
+                  inlineFigures: false,
                 ),
               ),
             ],
+          );
+        }
+        return Semantics(
+          button: true,
+          hint: 'Opens workout details',
+          child: InkWell(
+            onTap: onTap,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
+                  child: content,
+                ),
+                if (rule != HistoryRowRule.none)
+                  Padding(
+                    padding: EdgeInsets.only(
+                      left: rule == HistoryRowRule.inset ? inset : 0,
+                    ),
+                    child: Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: borderColor(context),
+                    ),
+                  ),
+              ],
+            ),
           ),
         );
       },
@@ -226,7 +254,7 @@ class _HistoryDate extends StatelessWidget {
       style: AppTypography.figures(
         fontSize: 22,
         fontWeight: FontWeight.w700,
-        height: 1.15,
+        height: 1.1,
         color: textPrimaryColor(context),
       ),
     );
@@ -247,7 +275,7 @@ class _HistoryDate extends StatelessWidget {
     }
     return Padding(
       key: const ValueKey('history-date'),
-      padding: const EdgeInsets.only(top: AppSpacing.md),
+      padding: EdgeInsets.zero,
       child: Column(
         children: [day, const SizedBox(height: AppSpacing.xxs), weekday],
       ),
@@ -255,173 +283,97 @@ class _HistoryDate extends StatelessWidget {
   }
 }
 
-class _WorkoutCard extends StatelessWidget {
-  final HistoryWorkoutSummary summary;
-  final String weightUnit;
-  final VoidCallback onTap;
-
-  const _WorkoutCard({
-    required this.summary,
-    required this.weightUnit,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: surfaceColor(context),
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.card,
-        side: BorderSide(color: borderColor(context)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        borderRadius: AppRadius.card,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.lg,
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.md,
-          ),
-          child: _WorkoutSummaryContent(
-            summary: summary,
-            weightUnit: weightUnit,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _WorkoutSummaryContent extends StatelessWidget {
+class _WorkoutSummary extends StatelessWidget {
   final HistoryWorkoutSummary summary;
   final String weightUnit;
 
-  const _WorkoutSummaryContent({
+  /// Large text and narrow rows put the figures on the context line instead
+  /// of in their own column.
+  final bool inlineFigures;
+
+  const _WorkoutSummary({
     required this.summary,
     required this.weightUnit,
+    required this.inlineFigures,
   });
 
   @override
   Widget build(BuildContext context) {
     final session = summary.session;
     final stats = summary.statistics;
-    final duration = knownDurationSeconds(session.durationSeconds);
+    final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
+    final duration = knownDurationSeconds(session.durationSeconds);
+    final hasSets = stats.totalSets > 0;
+    final volume = formatVolumeLoad(stats.volumeLoad, weightUnit);
+    final sets = '${stats.totalSets} set${stats.totalSets == 1 ? '' : 's'}';
     final exerciseNames = [
       for (final exercise in session.exercises)
         if (exercise.name.trim().isNotEmpty) exercise.name.trim(),
     ];
+    final details = [
+      workoutContext(session),
+      if (duration != null) formatStatisticsDuration(duration),
+      if (!hasSets) 'No sets logged',
+      if (hasSets && inlineFigures) ...[volume, sets],
+    ];
+
+    final title = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Flexible(
+          child: Text(
+            session.planName,
+            maxLines: inlineFigures ? null : 2,
+            overflow: inlineFigures ? null : TextOverflow.ellipsis,
+            style: textTheme.titleLarge,
+          ),
+        ),
+        if (summary.hasPersonalRecord) ...[
+          const SizedBox(width: AppSpacing.sm),
+          const HistoryRecordBadge(),
+        ],
+      ],
+    );
+
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        title,
+        const SizedBox(height: AppSpacing.xxs),
+        Text(
+          details.join(' · '),
+          style: AppTypography.figures(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            height: 1.45,
+            color: secondary,
+          ),
+        ),
+      ],
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.xxs),
-                child: Text(
-                  session.planName,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-            ),
-            if (summary.hasPersonalRecord)
-              const Padding(
-                padding: EdgeInsets.only(
-                  left: AppSpacing.sm,
-                  top: AppSpacing.xs,
-                ),
-                child: HistoryRecordBadge(),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(
-                left: AppSpacing.xs,
-                top: AppSpacing.xxs,
-              ),
-              child: Icon(
-                LucideIcons.chevronRight,
-                size: 20,
-                color: secondary,
-                semanticLabel: 'Open workout details',
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xxs),
-        Padding(
-          padding: const EdgeInsets.only(right: AppSpacing.xs),
-          child: Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.xxs,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Text(
-                workoutContext(session),
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              if (duration != null)
-                Semantics(
-                  label: 'Duration: ${formatStatisticsDuration(duration)}',
-                  excludeSemantics: true,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(LucideIcons.timer, size: 13, color: secondary),
-                      const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        formatStatisticsDuration(duration),
-                        style: AppTypography.figures(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: secondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        Divider(height: 1, thickness: 1, color: borderColor(context)),
-        const SizedBox(height: AppSpacing.md),
-        if (stats.totalSets > 0)
-          _HistoryFigures(
-            figures: [
-              ('Exercises', '${session.exercises.length}'),
-              ('Sets', '${stats.totalSets}'),
-              ('Volume', formatVolumeLoad(stats.volumeLoad, weightUnit)),
-            ],
-          )
+        if (inlineFigures || !hasSets)
+          heading
         else
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(LucideIcons.circleDashed, size: 14, color: secondary),
-              const SizedBox(width: AppSpacing.sm),
-              Flexible(
-                child: Text(
-                  'No sets logged',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelMedium?.copyWith(color: secondary),
-                ),
-              ),
+              Expanded(child: heading),
+              const SizedBox(width: AppSpacing.lg),
+              _HistoryFigures(volume: volume, sets: sets),
             ],
           ),
         if (exerciseNames.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.md),
-          Padding(
-            padding: const EdgeInsets.only(right: AppSpacing.xs),
-            child: Text(
-              exerciseNames.join(' · '),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            exerciseNames.join(', '),
+            maxLines: inlineFigures ? 3 : 2,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.bodyMedium?.copyWith(fontSize: 13, height: 1.45),
           ),
         ],
       ],
@@ -429,49 +381,43 @@ class _WorkoutSummaryContent extends StatelessWidget {
   }
 }
 
-/// A row of labelled training figures that keep the same columns on every
-/// card, so a month of workouts can be compared down the page.
+/// Volume over the set count, right-aligned so the figures of a month line up
+/// down the page.
 class _HistoryFigures extends StatelessWidget {
-  final List<(String, String)> figures;
+  final String volume;
+  final String sets;
 
-  const _HistoryFigures({required this.figures});
+  const _HistoryFigures({required this.volume, required this.sets});
 
   @override
   Widget build(BuildContext context) {
-    final cells = [
-      for (final (label, value) in figures)
-        Semantics(
-          label: '$label: $value',
-          excludeSemantics: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                value,
-                style: AppTypography.figures(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                  height: 1.2,
-                  color: textPrimaryColor(context),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xxs),
-              Text(label, style: Theme.of(context).textTheme.labelSmall),
-            ],
+    return Semantics(
+      label: 'Volume: $volume, $sets',
+      excludeSemantics: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(
+            volume,
+            style: AppTypography.figures(
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+              color: textPrimaryColor(context),
+            ),
           ),
-        ),
-    ];
-    if (MediaQuery.textScalerOf(context).scale(1) >= 1.3) {
-      return Wrap(
-        spacing: AppSpacing.xl,
-        runSpacing: AppSpacing.md,
-        children: cells,
-      );
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [for (final cell in cells) Expanded(child: cell)],
+          const SizedBox(height: AppSpacing.xxs),
+          Text(
+            sets,
+            style: AppTypography.figures(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              height: 1.45,
+              color: textSecondaryColor(context),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

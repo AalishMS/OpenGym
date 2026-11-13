@@ -50,14 +50,14 @@ void main() {
   test(
     'catalog contains all researched programs and expanded workout days',
     () {
-      expect(workoutPresets, hasLength(10));
-      expect(workoutPresets.map((preset) => preset.id).toSet(), hasLength(10));
-      expect(workoutPresets.expand((preset) => preset.plans), hasLength(46));
+      expect(workoutPresets, hasLength(11));
+      expect(workoutPresets.map((preset) => preset.id).toSet(), hasLength(11));
+      expect(workoutPresets.expand((preset) => preset.plans), hasLength(51));
       expect(
         workoutPresets
             .expand((preset) => preset.plans)
             .expand((plan) => plan.exercises),
-        hasLength(269),
+        hasLength(300),
       );
 
       final library = ExerciseLibrary.allExercises.toSet();

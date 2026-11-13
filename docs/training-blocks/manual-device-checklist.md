@@ -30,8 +30,9 @@ generation, or cross-device sync; those need a separately configured backend.
 - [ ] **Same-number weeks and past logs.** Give Block 1 / Week 1 and Block 2 /
   Week 1 visibly different results. Open both through the strip and History:
   each must show its own log. Opening an old log must not move active progress
-  or show a next-block prompt. Completed logs are read-only in the logger;
-  explicit History editing still works.
+  or show a next-block prompt. Editing a completed log in the logger saves
+  in place, keeps it logged and leaves progress where it was; explicit
+  History editing still works.
 - [ ] **Drafts and saving before navigation.** Change reps/weight, then switch
   weeks, plans, or leave the screen. Return and check the values were saved.
   Browsing another incomplete week may save a draft, but a new timer and Log

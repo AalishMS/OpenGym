@@ -585,17 +585,17 @@ void main() {
     ) async {
       final fixture = await _openChat(tester);
       fixture.client.answer(
-        _output('Here you go.', _editPush('Incline DB Press')),
+        _output('Here you go.', _editPush('Incline Dmbbell Pres')),
       );
       fixture.client.answer(_validProposal);
       await _send(tester, 'Swap my bench');
 
       expect(fixture.client.requests, hasLength(2));
       final retry = fixture.client.requests.last.retry!;
-      expect(retry.previousOutput, contains('Incline DB Press'));
+      expect(retry.previousOutput, contains('Incline Dmbbell Pres'));
       expect(
         retry.errors.single,
-        contains('"Incline DB Press" is not in the library'),
+        contains('"Incline Dmbbell Pres" is not in the library'),
       );
       expect(
         fixture.client.requests.last.messages.last.content,

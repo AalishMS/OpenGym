@@ -259,9 +259,7 @@ void main() {
         size: const Size(390, 800),
       );
       expect(find.textContaining('Tap Start in the toolbar'), findsNothing);
-      final finish = find.byWidgetPredicate(
-        (widget) => widget is IconButton && widget.tooltip == 'Finish workout',
-      );
+      final finish = find.byKey(const ValueKey('finish-workout'));
       // Nothing to finish yet, and no 00:00 clock beside an untouched log.
       expect(finish, findsNothing);
       expect(find.byKey(const ValueKey('workout_elapsed_time')), findsNothing);

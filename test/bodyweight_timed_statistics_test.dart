@@ -136,17 +136,25 @@ void main() {
         lift('a', 1, 'Pull-ups', [Set(weight: 0, reps: 12)]),
         lift('b', 3, 'Pull-ups', [Set(weight: 10, reps: 8)]),
       ];
-      // No heaviest weight, set volume, rep best or 1RM against nothing.
-      expect(achievements(sessions), isEmpty);
+      // Added load after performed bodyweight sets is a heaviest weight over
+      // a baseline of 0, as the live mark has always shown. Set volume, rep
+      // bests and 1RM have nothing of their own kind to beat yet.
+      final first = achievements(sessions);
+      expect(first.map((record) => record.type), [RecordType.heaviestWeight]);
+      expect(first.single.previousValue, 0);
+      expect(first.single.value, 10);
       final next = [
         ...sessions,
         lift('c', 5, 'Pull-ups', [Set(weight: 12.5, reps: 8)]),
       ];
+      // Newest first: the third workout breaks every weighted record, then
+      // the second workout's heaviest weight over the bodyweight baseline.
       expect(achievements(next).map((record) => record.type), [
         RecordType.heaviestWeight,
         RecordType.estimatedOneRepMax,
         RecordType.repBest,
         RecordType.setVolume,
+        RecordType.heaviestWeight,
       ]);
       expect(achievements(next).first.previousValue, 10);
     });
@@ -533,7 +541,9 @@ void main() {
       expect(find.text('reps'), findsOneWidget);
       expect(find.textContaining('kg'), findsNothing);
       expect(
-        tester.getSemantics(find.byKey(const ValueKey('lift-Pull-ups'))).label,
+        tester
+            .getSemantics(find.byKey(const ValueKey('lift-builtin:pull-ups')))
+            .label,
         contains('Best reps in one set 11 reps'),
       );
       expect(tester.takeException(), isNull);

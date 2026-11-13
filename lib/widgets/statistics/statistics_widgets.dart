@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../data/exercise_library.dart';
+import '../../services/exercise_catalog.dart';
 import '../../models/statistics.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
@@ -102,7 +102,7 @@ class _RecordEventRowState extends State<RecordEventRow> {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  '${formatSetSummary(producer.setWeight, producer.setReps, weightUnit, timed: ExerciseLibrary.isTimed(event.exerciseName))} · '
+                  '${formatSetSummary(producer.setWeight, producer.setReps, weightUnit, timed: ExerciseCatalog.isTimed(event.exerciseName, event.exerciseId))} · '
                   '${event.session.planName} · '
                   '${formatStatisticsDate(event.session.date)}',
                   style: AppTypography.figures(

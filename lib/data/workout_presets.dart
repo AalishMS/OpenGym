@@ -54,15 +54,21 @@ class WorkoutPresetExercise {
   final String rir;
   final String rest;
 
+  /// A program-specific cue, such as a superset pairing or an equipment
+  /// variant. It takes precedence over the generic notes below.
+  final String? cue;
+
   const WorkoutPresetExercise({
     required this.name,
     required this.prescription,
     required this.seedReps,
     required this.rir,
     required this.rest,
+    this.cue,
   });
 
   String? get note {
+    if (cue != null) return cue;
     if (seedReps.length == 3 &&
         seedReps[0] == 1 &&
         seedReps[1] == 3 &&
@@ -2432,6 +2438,279 @@ const List<WorkoutPreset> workoutPresets = [
             seedReps: [15, 15, 15, 15],
             rir: "1-2",
             rest: "1-2 min",
+          ),
+        ],
+      ),
+    ],
+  ),
+  WorkoutPreset(
+    id: "HYB-FB-5-AALISH",
+    version: 1,
+    name: "Aalish's Full body",
+    installName: "Aalish's Full body",
+    goal: WorkoutPresetGoal.hybrid,
+    splitStyle: "Full body",
+    bestFit: "Intermediate lifter training five days",
+    duration: "70–85 min",
+    summary:
+        "Squat and bench twice a week, one heavy and one volume day each, with deadlift and RDL once and every muscle trained two to four times.",
+    schedule:
+        "Sunday, Monday, Tuesday, Thursday and Friday. Rest Wednesday and Saturday. Heavy squat and deadlift sit two days apart, and the two bench days three days apart.",
+    scheduleSlots: [1, 2, null, 3, 4, null, 0],
+    plans: [
+      WorkoutPresetPlan(
+        name: "Heavy squat + upper",
+        colorSlot: 1,
+        exercises: [
+          WorkoutPresetExercise(
+            name: "Squat",
+            prescription: "1 x 1 + 4 x 4",
+            seedReps: [1, 4, 4, 4, 4],
+            rir: "2 / 2-3",
+            rest: "3-5 min",
+            cue:
+                "Top set at RPE 8, not a max. Reduce the load for the back-off sets.",
+          ),
+          WorkoutPresetExercise(
+            name: "Machine Incline Chest Press",
+            prescription: "3 x 8-10",
+            seedReps: [9, 9, 9],
+            rir: "2",
+            rest: "2 min",
+          ),
+          WorkoutPresetExercise(
+            name: "T-Bar Row",
+            prescription: "4 x 8",
+            seedReps: [8, 8, 8, 8],
+            rir: "2",
+            rest: "2 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Leg Curl",
+            prescription: "3 x 10-12",
+            seedReps: [11, 11, 11],
+            rir: "1-2",
+            rest: "1-2 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Lateral Raise",
+            prescription: "3 x 12-15",
+            seedReps: [13, 13, 13],
+            rir: "1-2",
+            rest: "1 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Hanging Leg Raise",
+            prescription: "3 x 10",
+            seedReps: [10, 10, 10],
+            rir: "1-2",
+            rest: "1 min",
+          ),
+        ],
+      ),
+      WorkoutPresetPlan(
+        name: "Heavy bench + back",
+        colorSlot: 3,
+        exercises: [
+          WorkoutPresetExercise(
+            name: "Bench Press",
+            prescription: "1 x 1 + 4 x 4",
+            seedReps: [1, 4, 4, 4, 4],
+            rir: "2 / 2-3",
+            rest: "3-5 min",
+            cue:
+                "Top set at RPE 8, not a max. Reduce the load for the back-off sets.",
+          ),
+          WorkoutPresetExercise(
+            name: "Incline Bench Press",
+            prescription: "3 x 6-8",
+            seedReps: [7, 7, 7],
+            rir: "2",
+            rest: "2-3 min",
+            cue: "Smith machine or barbell.",
+          ),
+          WorkoutPresetExercise(
+            name: "Lat Pulldown",
+            prescription: "3 x 8-12",
+            seedReps: [10, 10, 10],
+            rir: "2",
+            rest: "2 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Seated Cable Row",
+            prescription: "3 x 10",
+            seedReps: [10, 10, 10],
+            rir: "2",
+            rest: "2 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Rear Delt Fly",
+            prescription: "3 x 12-15",
+            seedReps: [13, 13, 13],
+            rir: "1-2",
+            rest: "1 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Bayesian Curl",
+            prescription: "3 x 10-12",
+            seedReps: [11, 11, 11],
+            rir: "1-2",
+            rest: "1 min",
+          ),
+        ],
+      ),
+      WorkoutPresetPlan(
+        name: "Deadlift + overhead",
+        colorSlot: 7,
+        exercises: [
+          WorkoutPresetExercise(
+            name: "Deadlift",
+            prescription: "1 x 3 + 2 x 5",
+            seedReps: [3, 5, 5],
+            rir: "2 / 2-3",
+            rest: "3-5 min",
+            cue:
+                "Top set at RPE 8, not a max. Reduce the load for the back-off sets.",
+          ),
+          WorkoutPresetExercise(
+            name: "Pull-ups",
+            prescription: "4 x 6-8",
+            seedReps: [7, 7, 7, 7],
+            rir: "1-2",
+            rest: "2 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Dumbbell Shoulder Press",
+            prescription: "3 x 8-10",
+            seedReps: [9, 9, 9],
+            rir: "2",
+            rest: "2 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Leg Press",
+            prescription: "3 x 10-12",
+            seedReps: [11, 11, 11],
+            rir: "2",
+            rest: "2 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Overhead Tricep Extension",
+            prescription: "3 x 10-12",
+            seedReps: [11, 11, 11],
+            rir: "1-2",
+            rest: "1 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Preacher Curl",
+            prescription: "3 x 8-10",
+            seedReps: [9, 9, 9],
+            rir: "1-2",
+            rest: "1 min",
+          ),
+        ],
+      ),
+      WorkoutPresetPlan(
+        name: "Bench volume + pump",
+        colorSlot: 8,
+        exercises: [
+          WorkoutPresetExercise(
+            name: "Bench Press",
+            prescription: "4 x 8",
+            seedReps: [8, 8, 8, 8],
+            rir: "2-3",
+            rest: "2-3 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Dumbbell Row",
+            prescription: "3 x 10-12",
+            seedReps: [11, 11, 11],
+            rir: "2",
+            rest: "2 min",
+            cue: "Chest-supported on an incline bench.",
+          ),
+          WorkoutPresetExercise(
+            name: "Hip Thrust",
+            prescription: "3 x 8-10",
+            seedReps: [9, 9, 9],
+            rir: "2",
+            rest: "2 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Machine Chest Fly",
+            prescription: "3 x 12-15",
+            seedReps: [13, 13, 13],
+            rir: "1-2",
+            rest: "1 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Lateral Raise",
+            prescription: "3 x 15-20",
+            seedReps: [17, 17, 17],
+            rir: "1-2",
+            rest: "1 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Hammer Curl",
+            prescription: "3 x 12",
+            seedReps: [12, 12, 12],
+            rir: "1-2",
+            rest: "None, superset",
+            cue: "Superset with Tricep Pushdown.",
+          ),
+          WorkoutPresetExercise(
+            name: "Tricep Pushdown",
+            prescription: "3 x 12",
+            seedReps: [12, 12, 12],
+            rir: "1-2",
+            rest: "1 min",
+          ),
+        ],
+      ),
+      WorkoutPresetPlan(
+        name: "Squat volume + RDL",
+        colorSlot: 4,
+        exercises: [
+          WorkoutPresetExercise(
+            name: "Squat",
+            prescription: "4 x 6",
+            seedReps: [6, 6, 6, 6],
+            rir: "3",
+            rest: "3 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Romanian Deadlift",
+            prescription: "3 x 8",
+            seedReps: [8, 8, 8],
+            rir: "2",
+            rest: "2-3 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Leg Extension",
+            prescription: "3 x 12-15",
+            seedReps: [13, 13, 13],
+            rir: "1-2",
+            rest: "1 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Tricep Dips",
+            prescription: "3 x 8-12",
+            seedReps: [10, 10, 10],
+            rir: "1-2",
+            rest: "1-2 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Cable Lateral Raise",
+            prescription: "3 x 15",
+            seedReps: [15, 15, 15],
+            rir: "1-2",
+            rest: "1 min",
+          ),
+          WorkoutPresetExercise(
+            name: "Calf Raise",
+            prescription: "4 x 12-15",
+            seedReps: [13, 13, 13, 13],
+            rir: "1-2",
+            rest: "1 min",
           ),
         ],
       ),

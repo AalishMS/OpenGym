@@ -7,16 +7,27 @@ import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/set_template.dart';
+import 'package:gymapp/models/statistics.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/services/exercise_catalog.dart';
 import 'package:gymapp/services/exercise_rename_service.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/services/statistics_analytics_service.dart';
+import 'package:gymapp/utils/set_history.dart';
 
 import 'support/hive_test_harness.dart';
 
+/// Renaming is a label change over stable catalog identities: it must never
+/// drop an occurrence's `exerciseId`, split a movement's history, or merge two
+/// movements because their names now match.
 void main() {
   final harness = HiveTestHarness();
   final old = DateTime.utc(2026, 1, 1);
+  const bench = 'builtin:bench-press';
+  const squat = 'builtin:squat';
+  const plank = 'builtin:plank';
+  const analytics = StatisticsAnalyticsService();
 
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
@@ -30,13 +41,14 @@ void main() {
   setUp(() async {
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
+    await ExerciseCatalog.clear();
   });
 
   tearDownAll(harness.close);
 
   WorkoutPlan plan(
     String id,
-    List<String> names, {
+    List<(String, String?)> exercises, {
     String splitId = 'split-a',
     DateTime? deletedAt,
   }) => WorkoutPlan(
@@ -47,9 +59,10 @@ void main() {
     deletedAt: deletedAt,
     dirty: false,
     exercises: [
-      for (final name in names)
+      for (final (name, exerciseId) in exercises)
         ExerciseTemplate(
           name: name,
+          exerciseId: exerciseId,
           sets: 2,
           setTargets: [SetTemplate(weight: 50, reps: 5)],
           note: 'Cue for $name',
@@ -59,25 +72,29 @@ void main() {
 
   WorkoutSession session(
     String id,
-    List<String> names, {
+    List<(String, String?)> exercises, {
     String splitId = 'split-a',
     bool completed = true,
+    DateTime? date,
     DateTime? deletedAt,
+    double weight = 60,
+    int reps = 8,
   }) => WorkoutSession(
     id: id,
     planName: 'Plan',
     planId: 'p1',
     splitId: splitId,
-    date: DateTime(2026, 2, 1),
+    date: date ?? DateTime(2026, 2, 1),
     isCompleted: completed,
     updatedAt: old,
     deletedAt: deletedAt,
     dirty: false,
     exercises: [
-      for (final name in names)
+      for (final (name, exerciseId) in exercises)
         Exercise(
           name: name,
-          sets: [Set(weight: 60, reps: 8, rpe: 8, note: 'set note')],
+          exerciseId: exerciseId,
+          sets: [Set(weight: weight, reps: reps, rpe: 8, note: 'set note')],
           note: 'Note for $name',
         ),
     ],
@@ -95,288 +112,280 @@ void main() {
     }
   }
 
-  List<String> planNames(String id) => [
-    for (final e in HiveService.getPlanById(id)!.exercises) e.name,
-  ];
-  List<String> sessionNames(String id) => [
-    for (final e in HiveService.getSessionById(id)!.exercises) e.name,
-  ];
-
-  test('counts matching plans and workouts without writing', () async {
+  test('counts occurrences of the same movement without writing', () async {
     await seed(
       plans: [
-        plan('p1', ['Bench press', 'Squat']),
-        plan('p2', ['Squat']),
+        plan('p1', [('Bench Press', bench), ('Squat', squat)]),
+        // A legacy row without an ID still resolves to the bundled movement.
+        plan('p2', [('bench press', null)]),
+        plan('p3', [('Squat', squat)]),
       ],
       sessions: [
-        session('log', ['Bench press']),
-        session('draft', ['bench press'], completed: false),
-        session('other', ['Squat']),
+        // An earlier occurrence rename kept the ID, so it still counts.
+        session('log', [('Flat bench', bench)]),
+        session('draft', [('Bench Press', bench)], completed: false),
+        session('other', [('Squat', squat)]),
+        session('gone', [('Bench Press', bench)], deletedAt: old),
+        session('elsewhere', [('Bench Press', bench)], splitId: 'split-b'),
       ],
     );
 
     final impact = ExerciseRenameService.impact(
       splitId: 'split-a',
-      from: 'Bench press',
-      to: 'Barbell bench press',
+      exerciseId: bench,
+      to: 'Barbell bench',
     );
 
-    expect(impact.plans, 1);
+    expect(impact.plans, 2);
     expect(impact.workouts, 2);
-    expect(impact.merges, isFalse);
-    expect(planNames('p1'), ['Bench press', 'Squat']);
-    expect(HiveService.getPlanById('p1')!.dirty, isFalse);
+    expect(impact.otherMovement, isNull);
     expect(HiveService.getSessionById('log')!.dirty, isFalse);
+    expect(HiveService.getPlanById('p1')!.exercises.first.name, 'Bench Press');
   });
 
-  test(
-    'incompatible renames preserve stored measurement and sync state',
-    () async {
-      await seed(
-        plans: [
-          plan('p1', ['Plank', 'Bench Press']),
-        ],
-        sessions: [
-          session('log', ['Plank', 'Bench Press']),
-        ],
-      );
-      for (final change in [
-        ('Plank', 'Front plank'),
-        ('Bench Press', 'Plank'),
-      ]) {
-        await expectLater(
-          ExerciseRenameService.rename(
-            splitId: 'split-a',
-            from: change.$1,
-            to: change.$2,
-          ),
-          throwsArgumentError,
-        );
-      }
-      expect(planNames('p1'), ['Plank', 'Bench Press']);
-      expect(sessionNames('log'), ['Plank', 'Bench Press']);
-      expect(HiveService.getPlanById('p1')!.dirty, isFalse);
-      expect(HiveService.getSessionById('log')!.dirty, isFalse);
-      expect(HiveService.getSessionById('log')!.updatedAt, old);
-    },
-  );
-
-  test(
-    'merge saves the same identity despite repeated target spaces',
-    () async {
-      await seed(
-        plans: [
-          plan('p1', ['Squat', 'Bench Press']),
-        ],
-        sessions: [
-          session('log', ['Squat', 'Bench Press']),
-        ],
-      );
-      final changed = await ExerciseRenameService.rename(
-        splitId: 'split-a',
-        from: 'Squat',
-        to: '  Bench   Press  ',
-      );
-      expect(changed.merges, isTrue);
-      expect(planNames('p1'), ['Bench Press', 'Bench Press']);
-      expect(sessionNames('log'), ['Bench Press', 'Bench Press']);
-    },
-  );
-
-  test('renaming between timed names keeps hold values', () async {
+  test('renames labels and keeps every exercise ID', () async {
     await seed(
+      plans: [
+        plan('p1', [('Bench Press', bench), ('Squat', squat)]),
+        plan('legacy', [('bench press', null)]),
+      ],
       sessions: [
-        session('log', ['Plank']),
+        session('log', [('Bench Press', bench), ('Squat', squat)]),
+        session('draft', [('Flat bench', bench)], completed: false),
+        session('gone', [('Bench Press', bench)], deletedAt: old),
+        session('elsewhere', [('Bench Press', bench)], splitId: 'split-b'),
       ],
     );
+
+    final result = await ExerciseRenameService.rename(
+      splitId: 'split-a',
+      exerciseId: bench,
+      to: '  Barbell   bench ',
+    );
+
+    expect(result.plans, 2);
+    expect(result.workouts, 2);
+
+    final p1 = HiveService.getPlanById('p1')!;
+    expect(p1.exercises.first.name, 'Barbell bench');
+    expect(p1.exercises.first.exerciseId, bench);
+    expect(p1.exercises.first.setTargets!.single.weight, 50);
+    expect(p1.exercises.first.note, 'Cue for Bench Press');
+    expect(p1.exercises.last.name, 'Squat');
+    expect(p1.exercises.last.exerciseId, squat);
+    expect(p1.dirty, isTrue);
+    expect(p1.updatedAt!.isAfter(old), isTrue);
+
+    // A legacy null ID is filled with the identity it already resolved to.
+    final legacy = HiveService.getPlanById('legacy')!.exercises.single;
+    expect(legacy.name, 'Barbell bench');
+    expect(legacy.exerciseId, bench);
+
+    final log = HiveService.getSessionById('log')!;
+    expect(log.exercises.first.name, 'Barbell bench');
+    expect(log.exercises.first.exerciseId, bench);
+    expect(log.exercises.first.sets.single.weight, 60);
+    expect(log.exercises.first.sets.single.note, 'set note');
+    expect(log.exercises.first.note, 'Note for Bench Press');
+    expect(log.exercises.last.exerciseId, squat);
+    expect(log.dirty, isTrue);
+
+    final draft = HiveService.getSessionById('draft')!.exercises.single;
+    expect(draft.name, 'Barbell bench');
+    expect(draft.exerciseId, bench);
+
+    // Tombstones and other splits are left exactly as they were.
+    final gone = HiveService.getSessionById('gone')!;
+    expect(gone.exercises.single.name, 'Bench Press');
+    expect(gone.dirty, isFalse);
+    final elsewhere = HiveService.getSessionById('elsewhere')!;
+    expect(elsewhere.exercises.single.name, 'Bench Press');
+    expect(elsewhere.dirty, isFalse);
+  });
+
+  test('history, records and Previous survive a rename', () async {
+    await seed(
+      sessions: [
+        session(
+          'w1',
+          [('Bench Press', bench)],
+          date: DateTime(2026, 1, 1),
+          weight: 60,
+        ),
+        session(
+          'w2',
+          [('Bench Press', bench)],
+          date: DateTime(2026, 1, 8),
+          weight: 70,
+        ),
+      ],
+    );
+    List<RecordEvent> records() =>
+        analytics.recordEvents(HiveService.getCompletedSessions());
+    expect(records().single.session.id, 'w2');
+
     await ExerciseRenameService.rename(
       splitId: 'split-a',
-      from: 'Plank',
-      to: 'Side Plank',
+      exerciseId: bench,
+      to: 'Competition bench',
     );
-    final exercise = HiveService.getSessionById('log')!.exercises.single;
-    expect(exercise.name, 'Side Plank');
-    expect(exercise.sets.single.reps, 8);
-    expect(exercise.sets.single.weight, 60);
+    // A third workout logged under the new label continues the same lift.
+    await seed(
+      sessions: [
+        session(
+          'w3',
+          [('Competition bench', bench)],
+          date: DateTime(2026, 1, 15),
+          weight: 75,
+        ),
+      ],
+    );
+
+    final sessions = HiveService.getCompletedSessions();
+    expect(analytics.exerciseNames(sessions), ['Bench Press']);
+    final events = records();
+    expect(events.map((e) => e.session.id), ['w3', 'w2']);
+    expect(events.every((e) => e.exerciseId == bench), isTrue);
+    final heaviest = events.first.achievements.firstWhere(
+      (a) => a.type == RecordType.heaviestWeight,
+    );
+    expect(heaviest.previousValue, 70);
+    expect(
+      analytics
+          .exerciseProgress(sessions, bench, ExerciseMetric.bestWeight)
+          .points
+          .length,
+      3,
+    );
+    expect(
+      previousExerciseSets(sessions, 'Bench Press').single.weight,
+      75,
+      reason: 'Previous resolves by ID, not by the old label',
+    );
   });
 
-  test('renames plans, drafts and logs and marks them for sync', () async {
+  test('a renamed hold keeps storing seconds', () async {
     await seed(
-      plans: [
-        plan('p1', ['Bench press', 'Squat']),
-        plan('untouched', ['Squat']),
-      ],
       sessions: [
-        session('log', ['Bench press', 'Squat']),
-        session('draft', ['Bench press'], completed: false),
-        session('unrelated', ['Squat']),
+        session(
+          'h1',
+          [('Plank', plank)],
+          date: DateTime(2026, 1, 1),
+          weight: 0,
+          reps: 45,
+        ),
+        session(
+          'h2',
+          [('Plank', plank)],
+          date: DateTime(2026, 1, 8),
+          weight: 0,
+          reps: 60,
+        ),
       ],
     );
 
-    final changed = await ExerciseRenameService.rename(
+    await ExerciseRenameService.rename(
       splitId: 'split-a',
-      from: 'Bench press',
-      to: '  Barbell bench press ',
+      exerciseId: plank,
+      to: 'Front hold',
     );
 
-    expect((changed.plans, changed.workouts), (1, 2));
-    expect(planNames('p1'), ['Barbell bench press', 'Squat']);
-    expect(sessionNames('log'), ['Barbell bench press', 'Squat']);
-    expect(sessionNames('draft'), ['Barbell bench press']);
-    for (final saved in [
-      HiveService.getPlanById('p1')!,
-      HiveService.getSessionById('log')!,
-      HiveService.getSessionById('draft')!,
-    ]) {
-      final (dirty, updatedAt) = switch (saved) {
-        WorkoutPlan p => (p.dirty, p.updatedAt),
-        WorkoutSession s => (s.dirty, s.updatedAt),
-        _ => throw StateError('unexpected'),
-      };
-      expect(dirty, isTrue);
-      expect(updatedAt!.isAfter(old), isTrue);
-    }
-    // Records with nothing to rename keep their sync state.
-    expect(HiveService.getPlanById('untouched')!.dirty, isFalse);
-    expect(HiveService.getSessionById('unrelated')!.dirty, isFalse);
-    expect(HiveService.getSessionById('unrelated')!.updatedAt, old);
+    final renamed = HiveService.getSessionById('h2')!.exercises.single;
+    expect(renamed.name, 'Front hold');
+    expect(ExerciseCatalog.isTimed(renamed.name, renamed.exerciseId), isTrue);
+    // A custom movement merely named like a hold is not timed.
+    expect(ExerciseCatalog.isTimed('Plank', 'custom-plank-like'), isFalse);
 
-    // Everything but the name is kept.
-    final template = HiveService.getPlanById('p1')!.exercises.first;
-    expect(template.sets, 2);
-    expect(template.setTargets!.single.weight, 50);
-    expect(template.note, 'Cue for Bench press');
-    final logged = HiveService.getSessionById('log')!;
-    expect(logged.isCompleted, isTrue);
-    expect(logged.exercises.first.note, 'Note for Bench press');
-    final set = logged.exercises.first.sets.single;
-    expect((set.weight, set.reps, set.rpe, set.note), (60, 8, 8, 'set note'));
+    final sessions = HiveService.getCompletedSessions();
+    final stats = analytics.sessionStatistics(
+      sessions.firstWhere((s) => s.id == 'h2'),
+    );
+    expect(stats.totalReps, 0, reason: 'seconds never become reps');
+    expect(stats.totalSets, 1);
+    final event = analytics.recordEvents(sessions).single;
+    expect(event.achievements.single.type, RecordType.longestHold);
+    expect(event.achievements.single.value, 60);
   });
 
-  test('matching ignores case and surrounding or repeated spaces', () async {
+  test('a name owned by another movement never merges histories', () async {
     await seed(
       plans: [
-        plan('p1', ['  BENCH   press ']),
+        plan('p1', [('Squat', squat), ('Bench Press', bench)]),
       ],
       sessions: [
-        session('log', ['bench press']),
-        session('near', ['Bench presses']),
+        session('log', [('Squat', squat), ('Bench Press', bench)]),
       ],
     );
 
-    final changed = await ExerciseRenameService.rename(
+    final impact = ExerciseRenameService.impact(
       splitId: 'split-a',
-      from: 'Bench Press',
+      exerciseId: squat,
+      to: 'bench press',
+    );
+    expect(impact.otherMovement, 'Bench Press');
+
+    await ExerciseRenameService.rename(
+      splitId: 'split-a',
+      exerciseId: squat,
+      to: 'Bench Press',
+    );
+
+    final log = HiveService.getSessionById('log')!;
+    expect(log.exercises.map((e) => e.exerciseId), [squat, bench]);
+    final sessions = HiveService.getCompletedSessions();
+    expect(
+      analytics.exerciseDirectory(sessions).keys,
+      unorderedEquals([squat, bench]),
+    );
+  });
+
+  test('an owned custom movement is relabelled in the catalog', () async {
+    final custom = await ExerciseCatalog.createCustom('Cable press');
+    await seed(
+      sessions: [
+        session('log', [('Cable press', custom.id)]),
+      ],
+    );
+
+    await ExerciseRenameService.rename(
+      splitId: 'split-a',
+      exerciseId: custom.id,
+      to: 'Standing cable press',
+    );
+
+    final definition = ExerciseCatalog.getById(custom.id)!;
+    expect(definition.name, 'Standing cable press');
+    expect(definition.aliases, contains('Cable press'));
+    expect(
+      HiveService.getSessionById('log')!.exercises.single.exerciseId,
+      custom.id,
+    );
+    // Bundled labels are permanent.
+    await ExerciseRenameService.rename(
+      splitId: 'split-a',
+      exerciseId: bench,
       to: 'Flat bench',
     );
-
-    expect((changed.plans, changed.workouts), (1, 1));
-    expect(planNames('p1'), ['Flat bench']);
-    expect(sessionNames('log'), ['Flat bench']);
-    expect(sessionNames('near'), ['Bench presses']);
+    expect(ExerciseCatalog.getById(bench)!.name, 'Bench Press');
   });
 
-  test('other splits and tombstones are untouched', () async {
-    final deleted = DateTime.utc(2026, 1, 2);
+  test('rejects empty names before writing', () async {
+    expect(ExerciseRenameService.validationMessage('   '), isNotNull);
+    expect(ExerciseRenameService.validationMessage('x' * 101), isNotNull);
+    expect(ExerciseRenameService.validationMessage('Flat bench'), isNull);
     await seed(
-      plans: [
-        plan('mine', ['Row']),
-        plan('theirs', ['Row'], splitId: 'split-b'),
-        plan('gone', ['Row'], deletedAt: deleted),
-      ],
       sessions: [
-        session('mine-log', ['Row']),
-        session('theirs-log', ['Row'], splitId: 'split-b'),
-        session('gone-log', ['Row'], deletedAt: deleted),
-      ],
-    );
-
-    final impact = ExerciseRenameService.impact(
-      splitId: 'split-a',
-      from: 'Row',
-      to: 'Cable row',
-    );
-    expect((impact.plans, impact.workouts), (1, 1));
-
-    await ExerciseRenameService.rename(
-      splitId: 'split-a',
-      from: 'Row',
-      to: 'Cable row',
-    );
-
-    expect(planNames('mine'), ['Cable row']);
-    expect(sessionNames('mine-log'), ['Cable row']);
-    for (final id in ['theirs', 'gone']) {
-      expect(planNames(id), ['Row']);
-      expect(HiveService.getPlanById(id)!.dirty, isFalse);
-      expect(HiveService.getPlanById(id)!.updatedAt, old);
-    }
-    for (final id in ['theirs-log', 'gone-log']) {
-      expect(sessionNames(id), ['Row']);
-      expect(HiveService.getSessionById(id)!.dirty, isFalse);
-      expect(HiveService.getSessionById(id)!.updatedAt, old);
-    }
-    expect(HiveService.getSessionById('gone-log')!.deletedAt, deleted);
-  });
-
-  test('renaming to an existing name merges and keeps both entries', () async {
-    await seed(
-      plans: [
-        plan('both', ['DB press', 'Dumbbell press']),
-      ],
-      sessions: [
-        session('old', ['DB press']),
-        session('new', ['Dumbbell press']),
-        session('both-log', ['DB press', 'Dumbbell press']),
-      ],
-    );
-
-    final impact = ExerciseRenameService.impact(
-      splitId: 'split-a',
-      from: 'DB press',
-      to: 'dumbbell press',
-    );
-    expect(impact.merges, isTrue);
-    expect((impact.plans, impact.workouts), (1, 2));
-
-    await ExerciseRenameService.rename(
-      splitId: 'split-a',
-      from: 'DB press',
-      to: 'Dumbbell press',
-    );
-
-    expect(planNames('both'), ['Dumbbell press', 'Dumbbell press']);
-    expect(sessionNames('old'), ['Dumbbell press']);
-    expect(sessionNames('new'), ['Dumbbell press']);
-    expect(sessionNames('both-log'), ['Dumbbell press', 'Dumbbell press']);
-    expect(HiveService.getSessionById('new')!.dirty, isFalse);
-    expect(
-      HiveService.getSessionById('both-log')!.exercises.map((e) => e.note),
-      ['Note for DB press', 'Note for Dumbbell press'],
-    );
-  });
-
-  test('a new name that only changes case is not a merge', () {
-    expect(
-      ExerciseRenameService.impact(
-        splitId: 'split-a',
-        from: 'squat',
-        to: 'Squat',
-      ).merges,
-      isFalse,
-    );
-  });
-
-  test('an empty name is refused', () async {
-    await seed(
-      plans: [
-        plan('p1', ['Squat']),
+        session('log', [('Bench Press', bench)]),
       ],
     );
     await expectLater(
-      ExerciseRenameService.rename(splitId: 'split-a', from: 'Squat', to: ' '),
+      ExerciseRenameService.rename(
+        splitId: 'split-a',
+        exerciseId: bench,
+        to: ' ',
+      ),
       throwsArgumentError,
     );
-    expect(planNames('p1'), ['Squat']);
+    expect(HiveService.getSessionById('log')!.dirty, isFalse);
   });
 }

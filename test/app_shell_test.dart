@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
@@ -14,6 +15,7 @@ import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/screens/history_screen.dart';
+import 'package:gymapp/screens/settings_screen.dart';
 import 'package:gymapp/screens/stats_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 
@@ -46,11 +48,18 @@ void main() {
   });
 
   setUp(() async {
+    // AppShell restores the native timer after its first frame. Mock the
+    // channel in every test, including when runAsync lets that work complete.
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('com.aalishms.opengym/workout_timer_notification'),
+          (_) async => null,
+        );
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
   });
 
-  Future<void> seedHomeTraining() async {
+  Future<void> seedHomeTraining({bool withLastWeek = false}) async {
     final plan = WorkoutPlan(
       id: 'shell-plan',
       name: 'Push Day',
@@ -69,6 +78,19 @@ void main() {
     await Hive.box<WorkoutSession>(
       HiveService.sessionsBox,
     ).put(session.id, session);
+    if (!withLastWeek) return;
+    final earlier = WorkoutSession(
+      id: 'shell-session-last-week',
+      planId: plan.id,
+      planName: plan.name,
+      date: DateTime.now().subtract(const Duration(days: 7)),
+      exercises: [
+        Exercise(name: 'Bench Press', sets: [Set(reps: 8, weight: 40)]),
+      ],
+    );
+    await Hive.box<WorkoutSession>(
+      HiveService.sessionsBox,
+    ).put(earlier.id, earlier);
   }
 
   Widget shellHost(double width, {double textScale = 1}) {
@@ -230,6 +252,26 @@ void main() {
 
     await tester.dragFrom(start, const Offset(-25, -200));
     await tester.pumpAndSettle();
+    // Diagonal scrolls that lean sideways must not switch tabs, whichever
+    // axis the finger moves along first.
+    for (final diagonal in const [
+      Offset(-150, -120),
+      Offset(-150, 100),
+      Offset(150, -90),
+    ]) {
+      await tester.dragFrom(start, diagonal);
+      await tester.pumpAndSettle();
+    }
+    final sideways = TestPointer(7);
+    await tester.sendEventToBinding(sideways.down(start));
+    await tester.sendEventToBinding(
+      sideways.move(start + const Offset(-30, 0)),
+    );
+    await tester.sendEventToBinding(
+      sideways.move(start + const Offset(-160, -140)),
+    );
+    await tester.sendEventToBinding(sideways.up());
+    await tester.pumpAndSettle();
     await tester.timedDragFrom(
       start,
       const Offset(-45, 0),
@@ -254,10 +296,129 @@ void main() {
     expect(find.text('Manage'), findsOneWidget);
   });
 
+  testWidgets('swipes traverse Statistics sections before adjacent tabs', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      await seedHomeTraining();
+      final sessions = Hive.box<WorkoutSession>(HiveService.sessionsBox);
+      final older = sessions
+          .get('shell-session')!
+          .copyWith(
+            id: 'shell-session-older',
+            date: DateTime.now().subtract(const Duration(days: 84)),
+          );
+      await sessions.put(older.id, older);
+    });
+    await tester.pumpWidget(shellHost(390));
+    await tester.pumpAndSettle();
+
+    int selectedTab() =>
+        tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex;
+
+    void expectSection(String label) {
+      expect(selectedTab(), 2);
+      final tab = find.byKey(ValueKey('statistics-tab-$label'));
+      final semantics = tester.widget<Semantics>(
+        find.ancestor(of: tab, matching: find.byType(Semantics)).first,
+      );
+      expect(semantics.properties.selected, isTrue, reason: label);
+    }
+
+    Future<void> swipe(double dx) async {
+      // The header is outside the charts that own horizontal browsing.
+      final start = Offset(tester.getCenter(find.byType(AppShell)).dx, 30);
+      await tester.dragFrom(start, Offset(dx, 0));
+      await tester.pumpAndSettle();
+    }
+
+    await swipe(-250);
+    expect(selectedTab(), 1);
+    for (final section in ['Overview', 'Strength', 'Blocks', 'Records']) {
+      await swipe(-250);
+      expectSection(section);
+    }
+    await swipe(-250);
+    expect(selectedTab(), 3);
+    for (final section in ['Records', 'Blocks', 'Strength', 'Overview']) {
+      await swipe(250);
+      expectSection(section);
+    }
+    await swipe(250);
+    expect(selectedTab(), 1);
+
+    // Section taps change where the next swipe goes.
+    await swipe(-250);
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Blocks')));
+    await tester.pumpAndSettle();
+    await swipe(250);
+    expectSection('Strength');
+
+    // A body swipe also changes sections and resets the vertical offset.
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Overview')));
+    await tester.pumpAndSettle();
+    final scroll =
+        tester
+            .widget<SingleChildScrollView>(
+              find.byKey(const ValueKey('statistics-scroll')),
+            )
+            .controller!;
+    scroll.jumpTo(300);
+    await tester.pump();
+    expect(scroll.offset, greaterThan(0));
+    await tester.dragFrom(
+      tester.getCenter(find.byType(AppShell)),
+      const Offset(-250, 0),
+    );
+    await tester.pumpAndSettle();
+    expectSection('Strength');
+    expect(scroll.offset, 0);
+
+    // Re-entering from either side starts at its adjacent section, even if
+    // a different section was selected when Stats was last visible.
+    Future<void> openTab(String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await openTab('Settings');
+    await swipe(250);
+    expectSection('Records');
+    await openTab('History');
+    await swipe(-250);
+    expectSection('Overview');
+
+    // Scrolling the weekly plot stays within Overview.
+    await tester.drag(
+      find.byKey(const ValueKey('training-timeline')),
+      const Offset(200, 0),
+    );
+    await tester.pumpAndSettle();
+    expectSection('Overview');
+
+    // Diagonal scrolls and short drags keep the current section.
+    final start = tester.getCenter(find.byType(AppShell));
+    await tester.dragFrom(start, const Offset(-150, -120));
+    await tester.pumpAndSettle();
+    expectSection('Overview');
+    await tester.timedDragFrom(
+      start,
+      const Offset(-45, 0),
+      const Duration(milliseconds: 600),
+    );
+    await tester.pumpAndSettle();
+    expectSection('Overview');
+  });
+
   testWidgets(
     'weekly summary opens statistics and resets its scroll on each visit',
     (tester) async {
-      await tester.runAsync(seedHomeTraining);
+      await tester.runAsync(() => seedHomeTraining(withLastWeek: true));
       await tester.pumpWidget(shellHost(390));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
@@ -309,6 +470,27 @@ void main() {
         tester.widget<AppBottomNav>(find.byType(AppBottomNav)).currentIndex,
         2,
       );
+      // The shortcut opens the week in progress…
+      expect(find.textContaining('This week  /'), findsOneWidget);
+
+      // …but an ordinary visit to Stats returns to the last complete week.
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text('Home'),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text('Stats'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.textContaining('Last week  /'), findsOneWidget);
+      expect(find.textContaining('This week  /'), findsNothing);
     },
   );
 
@@ -342,13 +524,256 @@ void main() {
     await tester.pump();
     expect(statsScroll.offset, greaterThan(0));
 
-    // A second tap on the tab that is showing leaves the position alone.
-    await openTab('Stats');
-    expect(statsScroll.offset, greaterThan(0));
-
     await openTab('History');
     await openTab('Stats');
     expect(statsScroll.offset, 0);
+  });
+
+  testWidgets('tapping the tab that is showing scrolls it to the top', (
+    tester,
+  ) async {
+    await tester.runAsync(seedHomeTraining);
+    await tester.pumpWidget(shellHost(390));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    Future<void> openTab(String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+    }
+
+    await openTab('Stats');
+    final statsScroll =
+        tester
+            .widget<SingleChildScrollView>(
+              find.byKey(const ValueKey('statistics-scroll')),
+            )
+            .controller!;
+    statsScroll.jumpTo(300);
+    await tester.pump();
+    await openTab('Stats');
+    expect(statsScroll.offset, 0);
+
+    await openTab('Settings');
+    final settingsScroll =
+        tester
+            .widget<SingleChildScrollView>(
+              find
+                  .descendant(
+                    of: find.byType(SettingsScreen),
+                    matching: find.byType(SingleChildScrollView),
+                  )
+                  .first,
+            )
+            .controller!;
+    settingsScroll.jumpTo(200);
+    await tester.pump();
+    expect(settingsScroll.offset, greaterThan(0));
+    await openTab('Settings');
+    expect(settingsScroll.offset, 0);
+  });
+
+  testWidgets('changing tabs gives a selection click, reselecting does not', (
+    tester,
+  ) async {
+    final haptics = <Object?>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'HapticFeedback.vibrate') {
+          haptics.add(call.arguments);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await tester.pumpWidget(shellHost(390));
+    await tester.pump();
+
+    Future<void> openTab(String label) async {
+      await tester.tap(
+        find.descendant(
+          of: find.byType(AppBottomNav),
+          matching: find.text(label),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    await openTab('History');
+    expect(haptics, ['HapticFeedbackType.selectionClick']);
+    await openTab('History');
+    expect(haptics, hasLength(1));
+  });
+
+  testWidgets('the selected tab is marked by a rule, not colour alone', (
+    tester,
+  ) async {
+    Alignment indicatorAt() => (tester
+                .widget<AnimatedAlign>(
+                  find.byKey(const ValueKey('bottom-nav-indicator')),
+                )
+                .alignment
+            as AlignmentDirectional)
+        .resolve(TextDirection.ltr);
+
+    await tester.pumpWidget(shellHost(390));
+    await tester.pump();
+    expect(indicatorAt().x, -1);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AppBottomNav),
+        matching: find.text('Settings'),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(indicatorAt().x, 1);
+  });
+
+  group('workout in progress strip', () {
+    Future<void> seedLive({
+      required bool running,
+      Duration startedAgo = const Duration(minutes: 20),
+    }) async {
+      final now = DateTime.now();
+      final session = WorkoutSession(
+        id: 'live-session',
+        planName: 'Leg Day',
+        date: now.subtract(startedAgo),
+        startedAt: now.subtract(startedAgo),
+        isCompleted: false,
+        timerStartedAt:
+            running ? now.subtract(const Duration(minutes: 5)) : null,
+        durationSeconds: 600,
+        exercises: [
+          Exercise(name: 'Squat', sets: [Set(reps: 5, weight: 100)]),
+        ],
+      );
+      await Hive.box<WorkoutSession>(
+        HiveService.sessionsBox,
+      ).put(session.id, session);
+    }
+
+    final strip = find.byKey(const ValueKey('active-workout-bar'));
+
+    testWidgets('shows a running workout above the bar and ticks', (
+      tester,
+    ) async {
+      await tester.runAsync(() => seedLive(running: true));
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+
+      expect(strip, findsOneWidget);
+      expect(find.text('Leg Day'), findsOneWidget);
+      expect(find.text('Workout in progress'), findsOneWidget);
+      expect(
+        tester.getBottomLeft(strip).dy,
+        lessThanOrEqualTo(tester.getTopLeft(find.byType(AppBottomNav)).dy),
+      );
+      String clock() =>
+          tester.widget<Text>(find.textContaining(RegExp(r'^15:0\d$'))).data!;
+      final before = clock();
+      // The clock reads wall time, so let real time pass, then the ticker.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 1100)),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(clock(), isNot(before));
+    });
+
+    testWidgets('a recent paused workout shows as paused', (tester) async {
+      await tester.runAsync(() => seedLive(running: false));
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+
+      expect(find.text('Workout paused'), findsOneWidget);
+      expect(find.text('10:00'), findsOneWidget);
+    });
+
+    testWidgets('a paused workout left for days is not shown', (tester) async {
+      await tester.runAsync(
+        () => seedLive(running: false, startedAgo: const Duration(days: 3)),
+      );
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+
+      expect(strip, findsNothing);
+    });
+
+    testWidgets('disappears once the workout is finished', (tester) async {
+      await tester.runAsync(() => seedLive(running: true));
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+      expect(strip, findsOneWidget);
+
+      await tester.runAsync(() async {
+        final box = Hive.box<WorkoutSession>(HiveService.sessionsBox);
+        await box.put(
+          'live-session',
+          box
+              .get('live-session')!
+              .copyWith(isCompleted: true, timerStartedAt: null),
+        );
+      });
+      await tester.pump();
+      expect(strip, findsNothing);
+    });
+
+    testWidgets('Home offers to resume the plan that is in progress', (
+      tester,
+    ) async {
+      await tester.runAsync(() async {
+        await seedHomeTraining();
+        await seedLive(running: true);
+        final box = Hive.box<WorkoutSession>(HiveService.sessionsBox);
+        await box.put(
+          'live-session',
+          box
+              .get('live-session')!
+              .copyWith(planId: 'shell-plan', planName: 'Push Day'),
+        );
+      });
+      await tester.pumpWidget(shellHost(390));
+      await tester.pump();
+
+      expect(find.text('In progress'), findsOneWidget);
+      expect(find.text('Resume workout'), findsOneWidget);
+      expect(find.text('Next up'), findsNothing);
+
+      await tester.runAsync(() async {
+        final box = Hive.box<WorkoutSession>(HiveService.sessionsBox);
+        await box.put(
+          'live-session',
+          box
+              .get('live-session')!
+              .copyWith(isCompleted: true, timerStartedAt: null),
+        );
+      });
+      await tester.pump();
+      expect(find.text('Next up'), findsOneWidget);
+      expect(find.text('Start workout'), findsOneWidget);
+    });
+
+    testWidgets('sits under the content on the desktop rail', (tester) async {
+      await tester.runAsync(() => seedLive(running: true));
+      await tester.pumpWidget(shellHost(Breakpoints.medium));
+      await tester.pump();
+      expect(strip, findsOneWidget);
+    });
   });
 
   testWidgets('a trained weekday opens its latest detail and returns to Home', (

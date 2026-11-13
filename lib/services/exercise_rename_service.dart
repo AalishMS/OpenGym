@@ -1,128 +1,122 @@
-import '../data/exercise_library.dart';
-import '../models/exercise.dart';
-import '../models/exercise_template.dart';
 import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
+import 'exercise_catalog.dart';
 import 'hive_service.dart';
 import 'sync_service.dart';
 
-/// What renaming an exercise everywhere in a split would touch.
+/// What renaming one movement's labels across a split would touch.
 class ExerciseRenameImpact {
-  /// Live plans with at least one matching exercise.
+  /// Live plans with at least one occurrence of the movement.
   final int plans;
 
-  /// Live workouts, drafts and logs alike, with at least one matching exercise.
+  /// Live workouts, drafts and logs alike, with at least one occurrence.
   final int workouts;
 
-  /// The new name already exists in the split, so the two histories combine.
-  final bool merges;
+  /// The catalog label of a *different* movement the new name already
+  /// belongs to, if any. Renaming never merges identities; that is an
+  /// explicit catalog merge in Settings → Manage exercises.
+  final String? otherMovement;
 
   const ExerciseRenameImpact({
     required this.plans,
     required this.workouts,
-    required this.merges,
+    this.otherMovement,
   });
 
   bool get isEmpty => plans == 0 && workouts == 0;
 }
 
-/// Renames an exercise across one split.
+/// Renames the label of one movement across a split.
 ///
-/// Exercises are identified by name, so renaming one inside a single workout
-/// splits its history, its *Previous* values and its records. This rewrites
-/// the name in every live plan and every live workout of the split instead.
-/// Renaming to a name the split already uses is a merge: the histories
-/// combine simply because they now share a name. A plan or workout holding
-/// both names keeps both entries, which the app already supports by
-/// occurrence.
+/// Identity is the occurrence's stable `exerciseId` (see `docs/exercises.md`),
+/// never its name snapshot. Renaming an occurrence therefore never splits its
+/// history, Previous values, records or timed measurement; this service only
+/// keeps the visible labels consistent. It rewrites the name snapshot of every
+/// live plan and workout occurrence in the split that resolves to the same
+/// canonical ID, keeping each `exerciseId` (filling a legacy null with the
+/// resolved identity). A custom catalog movement owned by the account is also
+/// relabelled through `ExerciseCatalog.rename`, so the picker and Stats agree;
+/// bundled labels are permanent and keep their catalog name.
 class ExerciseRenameService {
   ExerciseRenameService._();
 
-  /// Case-insensitive, ignoring surrounding and repeated whitespace.
-  static String normalize(String name) => canonicalName(name).toLowerCase();
-
-  /// Keep saved names consistent with the identity used by merge previews.
+  /// Saved labels drop surrounding and repeated whitespace.
   static String canonicalName(String name) =>
       name.trim().replaceAll(RegExp(r'\s+'), ' ');
 
-  /// A rename keeps existing set values, so it cannot change their unit.
-  /// Timed identity currently comes from the catalog name; changing to or
-  /// from a timed name would reinterpret seconds as reps (or vice versa).
-  static String? validationMessage({required String from, required String to}) {
-    if (canonicalName(to).isEmpty) return 'Enter an exercise name.';
-    if (ExerciseLibrary.isTimed(from) != ExerciseLibrary.isTimed(to)) {
-      return 'Timed exercises need a timed exercise name. '
-          'Use Replace exercise to change how an exercise is measured.';
-    }
+  /// Null when [to] is an acceptable label.
+  static String? validationMessage(String to) {
+    final name = canonicalName(to);
+    if (name.isEmpty) return 'Enter an exercise name.';
+    if (name.length > 100) return 'Use an exercise name of 1–100 characters.';
     return null;
   }
+
+  /// The canonical identity of an occurrence.
+  static String identityOf(String name, String? exerciseId) =>
+      ExerciseCatalog.identity(name, exerciseId);
 
   /// Counts what [rename] would change without writing anything.
   static ExerciseRenameImpact impact({
     required String splitId,
-    required String from,
+    required String exerciseId,
     required String to,
   }) {
-    final source = normalize(from);
-    final target = normalize(to);
-    final plans = _livePlans(splitId);
-    final sessions = _liveSessions(splitId);
-    final merges =
-        target != source &&
-        (plans.any(
-              (p) => p.exercises.any((e) => normalize(e.name) == target),
-            ) ||
-            sessions.any(
-              (s) => s.exercises.any((e) => normalize(e.name) == target),
-            ));
+    final id = ExerciseCatalog.canonicalId(exerciseId);
+    final other = ExerciseCatalog.findByName(canonicalName(to));
     return ExerciseRenameImpact(
       plans:
-          plans
-              .where((p) => p.exercises.any((e) => normalize(e.name) == source))
+          _livePlans(splitId)
+              .where(
+                (p) =>
+                    p.exercises.any((e) => _matches(e.name, e.exerciseId, id)),
+              )
               .length,
       workouts:
-          sessions
-              .where((s) => s.exercises.any((e) => normalize(e.name) == source))
+          _liveSessions(splitId)
+              .where(
+                (s) =>
+                    s.exercises.any((e) => _matches(e.name, e.exerciseId, id)),
+              )
               .length,
-      merges: merges,
+      otherMovement:
+          other == null || ExerciseCatalog.canonicalId(other.id) == id
+              ? null
+              : other.name,
     );
   }
 
-  /// Rewrites [from] to [to] in every live plan and workout of [splitId].
+  /// Rewrites the label of movement [exerciseId] to [to] in every live plan
+  /// and workout of [splitId], then relabels an owned custom catalog entry.
   ///
-  /// Tombstones and other splits are left alone. Changed records are marked
-  /// dirty with a fresh `updatedAt` and a sync is scheduled. The write runs
-  /// under the sync gate so a pull cannot interleave with it. Returns what
-  /// was changed.
+  /// Tombstones, other splits, sets, notes and targets are untouched. Changed
+  /// rows are marked dirty with a fresh `updatedAt` under the sync gate, and a
+  /// sync is scheduled. Returns what was changed.
   static Future<ExerciseRenameImpact> rename({
     required String splitId,
-    required String from,
+    required String exerciseId,
     required String to,
+    String? userId,
   }) async {
-    final name = canonicalName(to);
-    final error = validationMessage(from: from, to: name);
+    final error = validationMessage(to);
     if (error != null) throw ArgumentError(error);
-    final source = normalize(from);
+    final name = canonicalName(to);
+    final id = ExerciseCatalog.canonicalId(exerciseId);
     final result = await SyncService.instance.runExclusiveLocalMutation(
       () async {
-        final before = impact(splitId: splitId, from: from, to: name);
+        final before = impact(splitId: splitId, exerciseId: id, to: name);
         final now = DateTime.now();
         final plans = <String, WorkoutPlan>{};
         for (final plan in _livePlans(splitId)) {
-          if (!plan.exercises.any((e) => normalize(e.name) == source)) {
+          if (!plan.exercises.any((e) => _matches(e.name, e.exerciseId, id))) {
             continue;
           }
           plans[plan.id!] = plan.copyWith(
             exercises: [
-              for (final exercise in plan.exercises)
-                normalize(exercise.name) == source
-                    ? ExerciseTemplate(
-                      name: name,
-                      sets: exercise.sets,
-                      setTargets: exercise.setTargets,
-                      note: exercise.note,
-                    )
-                    : exercise,
+              for (final e in plan.exercises)
+                _matches(e.name, e.exerciseId, id)
+                    ? e.copyWith(name: name, exerciseId: e.exerciseId ?? id)
+                    : e,
             ],
             updatedAt: now,
             dirty: true,
@@ -130,19 +124,17 @@ class ExerciseRenameService {
         }
         final sessions = <String, WorkoutSession>{};
         for (final session in _liveSessions(splitId)) {
-          if (!session.exercises.any((e) => normalize(e.name) == source)) {
+          if (!session.exercises.any(
+            (e) => _matches(e.name, e.exerciseId, id),
+          )) {
             continue;
           }
           sessions[session.id!] = session.copyWith(
             exercises: [
-              for (final exercise in session.exercises)
-                normalize(exercise.name) == source
-                    ? Exercise(
-                      name: name,
-                      sets: exercise.sets,
-                      note: exercise.note,
-                    )
-                    : exercise,
+              for (final e in session.exercises)
+                _matches(e.name, e.exerciseId, id)
+                    ? e.copyWith(name: name, exerciseId: e.exerciseId ?? id)
+                    : e,
             ],
             updatedAt: now,
             dirty: true,
@@ -150,12 +142,43 @@ class ExerciseRenameService {
         }
         await HiveService.putPlansRaw(plans);
         await HiveService.putSessionsRaw(sessions);
+        await _renameCatalogEntry(id, name, userId);
         return before;
       },
     );
-    if (!result.isEmpty) SyncService.instance.scheduleSync();
+    SyncService.instance.scheduleSync();
     return result;
   }
+
+  /// Relabels an owned, unmerged custom definition. Bundled labels are
+  /// permanent, and a name another movement already uses stays with it.
+  static Future<void> _renameCatalogEntry(
+    String id,
+    String name,
+    String? userId,
+  ) async {
+    final definition = ExerciseCatalog.getById(id);
+    if (definition == null ||
+        definition.builtIn ||
+        definition.userId != userId ||
+        definition.mergedIntoId != null ||
+        ExerciseCatalog.normalize(definition.name) ==
+            ExerciseCatalog.normalize(name)) {
+      return;
+    }
+    try {
+      await ExerciseCatalog.rename(id, name, userId: userId);
+    } on FormatException {
+      // Another movement owns this label. Plans and logs keep the new
+      // snapshot; identities stay separate until the user merges them.
+    } on StateError {
+      // The catalog changed hands or the entry was merged meanwhile. The
+      // snapshots are still renamed; the catalog keeps its own label.
+    }
+  }
+
+  static bool _matches(String name, String? exerciseId, String id) =>
+      ExerciseCatalog.identity(name, exerciseId) == id;
 
   static List<WorkoutPlan> _livePlans(String splitId) =>
       HiveService.getAllPlansRaw()

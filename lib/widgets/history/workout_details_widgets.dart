@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import '../../data/exercise_library.dart';
+import '../../services/exercise_catalog.dart';
 import '../../models/exercise.dart';
 import '../../models/statistics.dart';
 import '../../theme/app_theme.dart';
@@ -311,7 +311,7 @@ class WorkoutExerciseDetails extends StatelessWidget {
     final note = exercise.note?.trim();
     // A timed exercise stores seconds in reps: it has a longest hold, not a
     // rep total or a volume.
-    final timed = ExerciseLibrary.isTimed(exercise.name);
+    final timed = ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId);
     final performed = exercise.sets.where((set) => set.reps > 0).toList();
     final totalReps = performed.fold<int>(0, (sum, set) => sum + set.reps);
     final longestHold = performed.fold<int>(

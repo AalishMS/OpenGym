@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/exercise_library.dart';
+import '../../services/exercise_catalog.dart';
 import '../../models/workout_plan.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
@@ -9,9 +10,14 @@ import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import '../../utils/plan_stats.dart';
 import '../app_button.dart';
+import '../plan_title_hero.dart';
 
 /// A workout launcher; weekly activity lives outside this card.
 class UpNextCard extends StatelessWidget {
+  /// Shared with the workout header, so the plan name flies between them.
+  static String heroTagFor(WorkoutPlan plan) =>
+      'up-next-title-${plan.id ?? plan.name}';
+
   final WorkoutPlan plan;
   final int day;
   final int dayCount;
@@ -20,6 +26,10 @@ class UpNextCard extends StatelessWidget {
   final Set<int> trainedDays;
   final int? durationMinutes;
   final GlobalKey? tutorialStartKey;
+
+  /// This plan's workout is already under way, so the card offers to resume
+  /// it instead of starting the next one.
+  final bool inProgress;
 
   const UpNextCard({
     required this.plan,
@@ -30,6 +40,7 @@ class UpNextCard extends StatelessWidget {
     this.trainedDays = const {},
     this.durationMinutes,
     this.tutorialStartKey,
+    this.inProgress = false,
     super.key,
   });
 
@@ -40,15 +51,23 @@ class UpNextCard extends StatelessWidget {
     // Neutral emphasis pairs with every user-selected accent.
     final nextColor = textPrimaryColor(context);
     final last = stat?.lastTrained;
-    final names = plan.exercises.map((e) => e.name.toLowerCase()).toSet();
     final groups =
-        ExerciseLibrary.categories.entries
-            .where(
-              (entry) =>
-                  entry.value.any((name) => names.contains(name.toLowerCase())),
+        plan.exercises
+            .map(
+              (e) =>
+                  ExerciseCatalog.getById(
+                    ExerciseCatalog.identity(e.name, e.exerciseId),
+                  )?.category,
             )
-            .map((entry) => entry.key)
-            .toList();
+            .whereType<String>()
+            .where((category) => category != 'Custom')
+            .toSet()
+            .toList()
+          ..sort(
+            (a, b) => ExerciseLibrary.categoryNames
+                .indexOf(a)
+                .compareTo(ExerciseLibrary.categoryNames.indexOf(b)),
+          );
     final sets = plan.exercises.fold<int>(0, (sum, e) => sum + e.sets);
     final count = plan.exercises.length;
     final meta = [
@@ -78,7 +97,7 @@ class UpNextCard extends StatelessWidget {
                 runSpacing: AppSpacing.xs,
                 children: [
                   Text(
-                    'Next up',
+                    inProgress ? 'In progress' : 'Next up',
                     style: textTheme.labelLarge?.copyWith(color: nextColor),
                   ),
                   if (last != null)
@@ -122,8 +141,9 @@ class UpNextCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
-              Text(
-                titleCase(plan.name),
+              PlanTitleHero(
+                tag: heroTagFor(plan),
+                text: titleCase(plan.name),
                 style: textTheme.headlineLarge?.copyWith(
                   color: textPrimaryColor(context),
                   fontWeight: FontWeight.w600,
@@ -151,16 +171,16 @@ class UpNextCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               AppButton.primary(
                 key: tutorialStartKey,
-                label: 'Start workout',
+                label: inProgress ? 'Resume workout' : 'Start workout',
                 onPressed: onStart,
-                child: const Row(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(LucideIcons.play, size: 18),
-                    SizedBox(width: AppSpacing.sm),
+                    const Icon(LucideIcons.play, size: 18),
+                    const SizedBox(width: AppSpacing.sm),
                     Flexible(
                       child: Text(
-                        'Start workout',
+                        inProgress ? 'Resume workout' : 'Start workout',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),

@@ -9,12 +9,13 @@ import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
+import 'block_trend.dart';
 import 'statistics_controls.dart';
+import 'statistics_widgets.dart';
+import '../rolling_figure.dart';
 
-/// The selected block at a glance: what was done, how it compares with the
-/// block before it, how each week went, and which lifts got stronger.
-class BlockOverview extends StatelessWidget {
-  /// Blocks with at least one workout, in block order.
+/// Block-to-block progression leads; roomy totals and detail follow below.
+class BlockOverview extends StatefulWidget {
   final List<BlockStatistics> blocks;
   final BlockStatistics selected;
   final String? currentBlockId;
@@ -31,677 +32,527 @@ class BlockOverview extends StatelessWidget {
   });
 
   @override
+  State<BlockOverview> createState() => _BlockOverviewState();
+}
+
+class _BlockOverviewState extends State<BlockOverview> {
+  BlockTrendMeasure _measure = BlockTrendMeasure.volume;
+  bool _perWeek = true;
+
+  @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final index = blocks.indexOf(selected);
-    final previous = index > 0 ? blocks[index - 1] : null;
-    final latest = selected.latestWeek;
-    final isCurrent = selected.block.id == currentBlockId;
-    final dates =
-        selected.firstDate == null
+    final block = widget.selected;
+    final index = widget.blocks.indexOf(block);
+    final previous = index > 0 ? widget.blocks[index - 1] : null;
+    final value = _measure.valueFor(block, perWeek: _perWeek);
+    final before =
+        previous == null
             ? null
-            : formatDateSpan(selected.firstDate!, selected.lastDate!);
+            : _measure.valueFor(previous, perWeek: _perWeek);
+    final change =
+        before == null || before == 0 ? null : (value / before - 1) * 100;
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (blocks.length > 1) ...[
-          // Blocks run oldest to newest, so the current one starts in view.
-          ScrollingPills<String>(
-            keyPrefix: 'block-chip',
-            startAtEnd: true,
-            values: [for (final stats in blocks) stats.block.id],
-            selected: selected.block.id,
-            labelFor: (id) {
-              final name =
-                  blocks.firstWhere((stats) => stats.block.id == id).block.name;
-              return id == currentBlockId ? '$name · Now' : name;
-            },
-            onSelected: onSelect,
-          ),
-          const SizedBox(height: AppSpacing.lg),
-        ],
         Semantics(
-          header: true,
-          child: Text(
-            selected.block.name,
-            key: const ValueKey('block-overview-name'),
-            style: theme.textTheme.titleLarge,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          [
-            if (latest != null)
-              isCurrent
-                  ? 'Week ${latest.number} of ${selected.plannedWeeks}'
-                  : '${selected.trainedWeeks} '
-                      '${selected.trainedWeeks == 1 ? 'week' : 'weeks'}',
-            if (dates != null) dates,
-          ].join(' · '),
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: textSecondaryColor(context),
+          container: true,
+          label: 'Block measure',
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              if (MediaQuery.textScalerOf(context).scale(1) > 1.3) {
+                return ScrollingPills<BlockTrendMeasure>(
+                  values: BlockTrendMeasure.values,
+                  selected: _measure,
+                  labelFor: (measure) => measure.label,
+                  onSelected: (measure) => setState(() => _measure = measure),
+                  keyPrefix: 'block-measure',
+                );
+              }
+              return SegmentedPills<BlockTrendMeasure>(
+                quiet: true,
+                values: BlockTrendMeasure.values,
+                selected: _measure,
+                labelFor: (measure) => measure.label,
+                onSelected: (measure) => setState(() => _measure = measure),
+                keyPrefix: 'block-measure',
+              );
+            },
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
-        _BlockFigures(block: selected, previous: previous, unit: weightUnit),
-        if (previous != null) ...[
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Arrows compare an average week with ${previous.block.name}.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: textSecondaryColor(context),
-            ),
-          ),
-        ],
-        const _Rule(),
-        Text('Sets each week', style: theme.textTheme.titleSmall),
-        const SizedBox(height: AppSpacing.sm),
-        _WeekBars(block: selected),
-        const _Rule(),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
           children: [
             Expanded(
-              child: Text('Strength gains', style: theme.textTheme.titleSmall),
+              child: Semantics(
+                header: true,
+                child: Text(
+                  block.block.name,
+                  key: const ValueKey('block-overview-name'),
+                  style: theme.textTheme.displaySmall,
+                ),
+              ),
             ),
-            Text(
-              'Estimated 1RM',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: textSecondaryColor(context),
+            const SizedBox(width: AppSpacing.sm),
+            PopupMenuButton<bool>(
+              key: const ValueKey('block-basis'),
+              tooltip: 'Calculation',
+              initialValue: _perWeek,
+              onSelected: (perWeek) => setState(() => _perWeek = perWeek),
+              itemBuilder:
+                  (context) => const [
+                    PopupMenuItem(value: true, child: Text('Per trained week')),
+                    PopupMenuItem(value: false, child: Text('Block total')),
+                  ],
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _perWeek ? 'Per week' : 'Total',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: accentColor(context),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Icon(
+                      LucideIcons.chevronDown,
+                      size: 14,
+                      color: accentColor(context),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
         ),
-        const SizedBox(height: AppSpacing.xs),
-        _Gains(gains: selected.gains, unit: weightUnit),
+        const SizedBox(height: AppSpacing.sm),
+        Semantics(
+          liveRegion: true,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              RollingFigure(
+                _measure.format(value, widget.weightUnit),
+                textKey: const ValueKey('block-trend-value'),
+                style: AppTypography.figures(
+                  fontSize: 40,
+                  height: 1.15,
+                  letterSpacing: -1.5,
+                  fontWeight: FontWeight.w600,
+                  color: textPrimaryColor(context),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                '${_measure.label} ${_perWeek ? 'per trained week' : 'in this block'}',
+                style: theme.textTheme.bodySmall,
+              ),
+              if (change != null) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  '${formatSignedChange(change, (v) => '${v.round()}%')} vs ${previous!.block.name}',
+                  style: AppTypography.figures(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: textPrimaryColor(context),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        BlockTrendChart(
+          blocks: widget.blocks,
+          selectedId: block.block.id,
+          measure: _measure,
+          perWeek: _perWeek,
+          weightUnit: widget.weightUnit,
+          onSelect: widget.onSelect,
+        ),
+        const SizedBox(height: AppSpacing.xxl),
+        const StatisticsSectionHeader(title: 'In this block'),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          [
+            if (block.block.id == widget.currentBlockId &&
+                block.latestWeek != null)
+              'Week ${block.latestWeek!.number} of ${block.plannedWeeks}',
+            if (block.firstDate != null)
+              formatDateSpan(block.firstDate!, block.lastDate!),
+          ].join(' · '),
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        _BlockTotals(block: block, unit: widget.weightUnit),
+        const SizedBox(height: AppSpacing.xxl),
+        const StatisticsSectionHeader(title: 'Weekly workload'),
+        const SizedBox(height: AppSpacing.lg),
+        _WeekBars(key: ValueKey('block-weeks-${block.block.id}'), block: block),
+        const SizedBox(height: AppSpacing.xxl),
+        Row(
+          children: [
+            const Expanded(
+              child: StatisticsSectionHeader(title: 'Strength gains'),
+            ),
+            IconButton(
+              tooltip: 'About strength gains',
+              icon: Icon(
+                LucideIcons.info,
+                size: 16,
+                color: textSecondaryColor(context),
+              ),
+              onPressed:
+                  () => showDialog<void>(
+                    context: context,
+                    builder:
+                        (context) => AlertDialog(
+                          title: const Text('Strength gains'),
+                          content: const Text(
+                            'The change in your best estimated one-rep max, from your first workout to your latest workout in this block. Tap a lift to see both values.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('Close'),
+                            ),
+                          ],
+                        ),
+                  ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        _Gains(
+          key: ValueKey('block-gains-${block.block.id}'),
+          gains: block.gains,
+          unit: widget.weightUnit,
+        ),
       ],
     );
   }
 }
 
-/// A hairline between the overview's sections, so they can sit close
-/// together without running into each other.
-class _Rule extends StatelessWidget {
-  const _Rule();
-
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-    child: Container(height: 1, color: borderColor(context)),
-  );
-}
-
-class _BlockFigures extends StatelessWidget {
+class _BlockTotals extends StatelessWidget {
   final BlockStatistics block;
-  final BlockStatistics? previous;
   final String unit;
 
-  const _BlockFigures({
-    required this.block,
-    required this.previous,
-    required this.unit,
-  });
+  const _BlockTotals({required this.block, required this.unit});
 
   @override
-  Widget build(BuildContext context) {
-    double? change(BlockMeasure measure) {
-      final before = previous?.perWeek(measure);
-      if (before == null || before == 0) return null;
-      return (block.perWeek(measure) - before) / before * 100;
-    }
-
-    final workoutRate = formatAnalyticsNumber(
-      block.perWeek(BlockMeasure.workouts),
-      decimals: 1,
-    ).replaceFirst('.0', '');
-    final setRate = formatAnalyticsNumber(block.perWeek(BlockMeasure.sets));
-    final volumeRate = formatVolumeLoad(
-      block.perWeek(BlockMeasure.volume),
-      unit,
-    );
-    // Without an earlier block to compare with, the weekly rate fills in.
-    final tiles = [
-      _Tile(
-        label: 'Workouts',
-        value: '${block.workouts}',
-        change: change(BlockMeasure.workouts),
-        note: '$workoutRate/wk',
-        spokenNote: 'about $workoutRate a week',
-      ),
-      _Tile(
-        label: 'Sets',
-        value: formatAnalyticsNumber(block.sets.toDouble()),
-        change: change(BlockMeasure.sets),
-        note: '$setRate/wk',
-        spokenNote: 'about $setRate a week',
-      ),
-      _Tile(
-        label: 'Volume',
-        value: formatVolumeLoad(block.volumeLoad, unit),
-        change: change(BlockMeasure.volume),
-        note: '$volumeRate/wk',
-        spokenNote: 'about $volumeRate a week',
-      ),
-      _Tile(
-        label: 'Records',
-        value: '${block.records}',
-        note: block.records == 1 ? 'new best' : 'new bests',
-      ),
-    ];
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // One strip of four reads at a glance; it only splits into two rows
-        // when the figures would get too cramped to read.
-        final scale = MediaQuery.textScalerOf(context).scale(1);
-        final strip = constraints.maxWidth / 4 >= 72 * scale && scale <= 1.3;
-        if (!strip) {
-          final width = (constraints.maxWidth - AppSpacing.lg) / 2;
-          return Wrap(
-            spacing: AppSpacing.lg,
-            runSpacing: AppSpacing.md,
-            children: [
-              for (final tile in tiles) SizedBox(width: width, child: tile),
-            ],
-          );
-        }
-        return IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final (index, tile) in tiles.indexed) ...[
-                if (index > 0) ...[
-                  Container(width: 1, color: borderColor(context)),
-                  const SizedBox(width: AppSpacing.md),
-                ],
-                Expanded(child: tile),
-              ],
-            ],
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _Tile extends StatelessWidget {
-  final String label;
-  final String value;
-  final double? change;
-  final String? note;
-
-  /// How [note] reads aloud, when its short form doesn't.
-  final String? spokenNote;
-
-  const _Tile({
-    required this.label,
-    required this.value,
-    this.change,
-    this.note,
-    this.spokenNote,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final secondary = textSecondaryColor(context);
-    final primary = textPrimaryColor(context);
-    final change = this.change;
-    final rounded = change?.round();
-    final quiet = spokenNote ?? note ?? '';
-    final (IconData icon, String text, String spoken) = switch (rounded) {
-      null => (LucideIcons.minus, note ?? '', quiet),
-      0 => (LucideIcons.minus, 'Same', 'about the same per week'),
-      > 0 => (LucideIcons.trendingUp, '$rounded%', '$rounded% more per week'),
-      _ => (
-        LucideIcons.trendingDown,
-        '${-rounded}%',
-        '${-rounded}% less per week',
-      ),
-    };
-    return Semantics(
-      container: true,
-      label: '$label, $value${spoken.isEmpty ? '' : ', $spoken'}',
-      child: ExcludeSemantics(
-        // No ground: these are read-only figures, and a ground means tappable.
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(color: secondary),
-            ),
-            const SizedBox(height: AppSpacing.xxs),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                value,
-                style: AppTypography.figures(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: primary,
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.xxs),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns =
+          constraints.maxWidth > 700 &&
+                  MediaQuery.textScalerOf(context).scale(1) <= 1.3
+              ? 4
+              : 2;
+      final width =
+          (constraints.maxWidth - AppSpacing.xl * (columns - 1)) / columns;
+      final values = [
+        ('Workouts', '${block.workouts}'),
+        ('Sets', formatAnalyticsNumber(block.sets.toDouble())),
+        ('Volume', formatVolumeLoad(block.volumeLoad, unit)),
+        ('Records', '${block.records}'),
+      ];
+      return Wrap(
+        spacing: AppSpacing.xl,
+        runSpacing: AppSpacing.xl,
+        children: [
+          for (final (label, value) in values)
+            SizedBox(
+              width: width,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (rounded != null) ...[
-                    Icon(icon, size: 13, color: primary),
-                    const SizedBox(width: AppSpacing.xxs),
-                  ],
                   Text(
-                    text,
-                    maxLines: 1,
+                    value,
                     style: AppTypography.figures(
-                      fontSize: 12,
-                      fontWeight:
-                          rounded == null ? FontWeight.w400 : FontWeight.w600,
-                      color: rounded == null ? secondary : primary,
+                      fontSize: 28,
+                      fontWeight: FontWeight.w600,
+                      color: textPrimaryColor(context),
                     ),
                   ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(label, style: Theme.of(context).textTheme.bodySmall),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
+        ],
+      );
+    },
+  );
 }
 
 /// One column per week of the block. Weeks ahead of the plan show as a
 /// short stub, so a block's length reads at a glance. A long run of unused
 /// weeks after the latest workout is left out instead: forty empty columns
 /// say nothing, and they would push the trained weeks out of view.
-class _WeekBars extends StatelessWidget {
-  static const double _plotHeight = 56;
+class _WeekBars extends StatefulWidget {
+  static const double _plotHeight = 88;
 
   /// Up to this many weeks, the whole planned block is drawn.
   static const int _wholeBlockWeeks = 12;
 
   final BlockStatistics block;
 
-  const _WeekBars({required this.block});
+  const _WeekBars({super.key, required this.block});
+
+  @override
+  State<_WeekBars> createState() => _WeekBarsState();
+}
+
+class _WeekBarsState extends State<_WeekBars> {
+  int? _number;
 
   List<BlockWeekStatistics> get _visibleWeeks {
-    final weeks = block.weeks;
-    if (weeks.length <= _wholeBlockWeeks) return weeks;
+    final weeks = widget.block.weeks;
+    if (weeks.length <= _WeekBars._wholeBlockWeeks) return weeks;
     final lastTrained = weeks.lastIndexWhere((week) => week.workouts > 0);
     return weeks.sublist(0, math.max(1, lastTrained + 1));
   }
 
   @override
   Widget build(BuildContext context) {
+    final block = widget.block;
     final weeks = _visibleWeeks;
+    final selected =
+        weeks.where((week) => week.number == _number).firstOrNull ??
+        block.latestWeek ??
+        weeks.firstOrNull;
+    if (selected == null) return const SizedBox.shrink();
     final maximum = math.max(
       1,
       weeks.fold<int>(0, (max, week) => math.max(max, week.sets)),
     );
     final scale = MediaQuery.textScalerOf(context).scale(1);
-    final slot = 36.0 * math.max(1, scale);
+    final slot = 52.0 * math.max(1, scale);
     final labelStyle = Theme.of(context).textTheme.labelSmall;
     Widget column(BlockWeekStatistics week, double barWidth) {
-      final latest = week.weekId != null && week.weekId == block.latestWeekId;
+      final latest = week.number == selected.number;
       final ink =
           latest ? textPrimaryColor(context) : textSecondaryColor(context);
       final height =
           week.sets == 0
               ? 0.0
-              : math.max(4.0, week.sets / maximum * _plotHeight);
+              : math.max(4.0, week.sets / maximum * _WeekBars._plotHeight);
       return Semantics(
+        button: true,
+        selected: latest,
         label:
             !week.reached
                 ? 'Week ${week.number}, not started'
                 : 'Week ${week.number}, ${week.workouts} '
                     '${week.workouts == 1 ? 'workout' : 'workouts'}, '
-                    '${week.sets} sets',
+                    '${week.sets} ${week.sets == 1 ? 'set' : 'sets'}',
         child: ExcludeSemantics(
-          child: Column(
-            children: [
-              Text(
-                week.sets > 0 ? '${week.sets}' : '',
-                style: AppTypography.figures(
-                  fontSize: 11,
-                  fontWeight: latest ? FontWeight.w700 : FontWeight.w400,
-                  color: ink,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xxs),
-              SizedBox(
-                height: _plotHeight,
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child:
-                      week.reached
-                          ? Container(
-                            key: ValueKey('block-week-bar-${week.number}'),
-                            width: barWidth,
-                            height: height,
-                            decoration: BoxDecoration(
-                              color:
-                                  latest
-                                      ? accentFillColor(context)
-                                      : accentDimColor(context),
-                              borderRadius: AppRadius.barCap,
+          child: InkWell(
+            key: ValueKey('block-week-${week.number}'),
+            borderRadius: AppRadius.control,
+            onTap: () => setState(() => _number = week.number),
+            child: Column(
+              children: [
+                SizedBox(
+                  height: _WeekBars._plotHeight,
+                  child: Align(
+                    alignment: Alignment.bottomCenter,
+                    child:
+                        week.reached
+                            ? Container(
+                              key: ValueKey('block-week-bar-${week.number}'),
+                              width: barWidth,
+                              height: height,
+                              decoration: BoxDecoration(
+                                color:
+                                    latest
+                                        ? accentFillColor(context)
+                                        : accentDimColor(context),
+                                borderRadius: AppRadius.barCap,
+                              ),
+                            )
+                            : Container(
+                              width: barWidth,
+                              height: AppSpacing.sm,
+                              decoration: BoxDecoration(
+                                border: Border.all(color: borderColor(context)),
+                                borderRadius: AppRadius.barCap,
+                              ),
                             ),
-                          )
-                          : Container(
-                            width: barWidth,
-                            height: AppSpacing.sm,
-                            decoration: BoxDecoration(
-                              border: Border.all(color: borderColor(context)),
-                              borderRadius: AppRadius.barCap,
-                            ),
-                          ),
+                  ),
                 ),
-              ),
-              Container(height: 1, color: borderColor(context)),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                'W${week.number}',
-                style: labelStyle?.copyWith(
-                  color: ink,
-                  fontWeight: latest ? FontWeight.w700 : null,
+                Container(height: 1, color: borderColor(context)),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'W${week.number}',
+                  style: labelStyle?.copyWith(
+                    color: ink,
+                    fontWeight: latest ? FontWeight.w700 : null,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Bars widen with their column, so a short block doesn't look sparse.
-        double barWidth(double column) => (column * 0.45).clamp(14, 32);
-        if (weeks.length * slot <= constraints.maxWidth) {
-          final width = barWidth(constraints.maxWidth / weeks.length);
-          return Row(
-            children: [
-              for (final week in weeks) Expanded(child: column(week, width)),
-            ],
-          );
-        }
-        return SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          reverse: true,
-          child: Row(
-            children: [
-              for (final week in weeks)
-                SizedBox(width: slot, child: column(week, barWidth(slot))),
-            ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          liveRegion: true,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+            child: Text(
+              'Week ${selected.number}  /  ${selected.reached ? '${selected.sets} ${selected.sets == 1 ? 'set' : 'sets'}' : 'Not started'}',
+              key: const ValueKey('block-week-readout'),
+              style: AppTypography.figures(
+                fontSize: 14,
+                color: textSecondaryColor(context),
+              ),
+            ),
           ),
-        );
-      },
+        ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // Bars widen with their column, so a short block doesn't look sparse.
+            double barWidth(double column) => (column * 0.45).clamp(14, 32);
+            if (weeks.length * slot <= constraints.maxWidth) {
+              final width = barWidth(constraints.maxWidth / weeks.length);
+              return Row(
+                children: [
+                  for (final week in weeks)
+                    Expanded(child: column(week, width)),
+                ],
+              );
+            }
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
+                children: [
+                  for (final week in weeks)
+                    SizedBox(width: slot, child: column(week, barWidth(slot))),
+                ],
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }
 
-class _Gains extends StatelessWidget {
+class _Gains extends StatefulWidget {
   final List<LiftGain> gains;
   final String unit;
 
-  const _Gains({required this.gains, required this.unit});
+  const _Gains({super.key, required this.gains, required this.unit});
+
+  @override
+  State<_Gains> createState() => _GainsState();
+}
+
+class _GainsState extends State<_Gains> {
+  final Set<String> _expanded = {};
+  bool _showAll = false;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    if (gains.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-        child: Text(
-          'Log a lift in two workouts of this block to see it improve.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: textSecondaryColor(context),
-          ),
-        ),
+    if (widget.gains.isEmpty) {
+      return Text(
+        'Log the same lift in two workouts to see its change.',
+        style: Theme.of(context).textTheme.bodySmall,
       );
     }
+    final gains = _showAll ? widget.gains : widget.gains.take(3);
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final gain in gains.take(3))
+        for (final gain in gains)
           Semantics(
-            container: true,
+            button: true,
+            expanded: _expanded.contains(gain.exerciseId ?? gain.exerciseName),
             label:
-                '${gain.exerciseName}, from ${formatAnalyticsWeight(gain.start, unit)} '
-                'to ${formatAnalyticsWeight(gain.end, unit)}, '
-                'up ${gain.percent.round()}%',
-            child: ExcludeSemantics(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
+                '${gain.exerciseName}, up ${gain.percent.round()}%, '
+                'from ${formatAnalyticsWeight(gain.start, widget.unit)} '
+                'to ${formatAnalyticsWeight(gain.end, widget.unit)}',
+            excludeSemantics: true,
+            child: InkWell(
+              key: ValueKey(
+                'block-gain-${gain.exerciseId ?? gain.exerciseName}',
+              ),
+              borderRadius: AppRadius.control,
+              onTap:
+                  () => setState(() {
+                    if (!_expanded.add(gain.exerciseId ?? gain.exerciseName)) {
+                      _expanded.remove(gain.exerciseId ?? gain.exerciseName);
+                    }
+                  }),
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 56),
+                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: Text(
-                        gain.exerciseName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            gain.exerciseName,
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: AppSpacing.lg),
+                        Text(
+                          '+${gain.percent.round()}%',
+                          style: AppTypography.figures(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: successColor(context),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Icon(
+                          _expanded.contains(
+                                gain.exerciseId ?? gain.exerciseName,
+                              )
+                              ? LucideIcons.chevronUp
+                              : LucideIcons.chevronDown,
+                          size: 14,
+                          color: textSecondaryColor(context),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Text(
-                      '${_bareWeight(gain.start, unit)} → '
-                      '${formatAnalyticsWeight(gain.end, unit)}',
-                      style: AppTypography.figures(
-                        fontSize: 12,
-                        color: textSecondaryColor(context),
-                      ),
-                    ),
-                    // A fixed column keeps the percentages lined up.
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 52),
-                      child: Text(
-                        '+${gain.percent.round()}%',
-                        textAlign: TextAlign.end,
+                    if (_expanded.contains(
+                      gain.exerciseId ?? gain.exerciseName,
+                    )) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        '${formatAnalyticsWeight(gain.start, widget.unit)} to ${formatAnalyticsWeight(gain.end, widget.unit)}',
                         style: AppTypography.figures(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: successColor(context),
+                          fontSize: 13,
+                          color: textSecondaryColor(context),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
             ),
           ),
-      ],
-    );
-  }
-}
-
-/// Compares blocks side by side as an average per trained week, so blocks of
-/// different lengths, and one still in progress, stay comparable.
-class BlockComparison extends StatelessWidget {
-  final List<BlockStatistics> blocks;
-  final String selectedId;
-  final String? currentBlockId;
-  final BlockMeasure measure;
-  final ValueChanged<BlockMeasure> onMeasure;
-  final ValueChanged<String> onSelect;
-  final String weightUnit;
-
-  const BlockComparison({
-    super.key,
-    required this.blocks,
-    required this.selectedId,
-    required this.currentBlockId,
-    required this.measure,
-    required this.onMeasure,
-    required this.onSelect,
-    required this.weightUnit,
-  });
-
-  String _format(double value) => switch (measure) {
-    BlockMeasure.sets => '${formatAnalyticsNumber(value)} sets',
-    BlockMeasure.volume => formatVolumeLoad(value, weightUnit),
-    BlockMeasure.workouts =>
-      '${formatAnalyticsNumber(value, decimals: 1)} workouts',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final maximum = blocks.fold<double>(
-      0,
-      (max, block) => math.max(max, block.perWeek(measure)),
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('Compare blocks', style: theme.textTheme.titleMedium),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          'Average per week trained',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: textSecondaryColor(context),
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
-        SegmentedPills<BlockMeasure>(
-          keyPrefix: 'block-measure',
-          values: BlockMeasure.values,
-          selected: measure,
-          labelFor: (option) => option.label,
-          onSelected: onMeasure,
-        ),
-        const SizedBox(height: AppSpacing.md),
-        for (final stats in blocks)
-          _ComparisonRow(
-            key: ValueKey('block-compare-${stats.block.id}'),
-            name: stats.block.name,
-            detail:
-                '${stats.trainedWeeks} ${stats.trainedWeeks == 1 ? 'week' : 'weeks'}'
-                '${stats.block.id == currentBlockId ? ' · In progress' : ''}',
-            value: _format(stats.perWeek(measure)),
-            fraction: maximum == 0 ? 0 : stats.perWeek(measure) / maximum,
-            selected: stats.block.id == selectedId,
-            onTap: () => onSelect(stats.block.id),
-          ),
-      ],
-    );
-  }
-}
-
-class _ComparisonRow extends StatelessWidget {
-  final String name;
-  final String detail;
-  final String value;
-  final double fraction;
-  final bool selected;
-  final VoidCallback onTap;
-
-  const _ComparisonRow({
-    super.key,
-    required this.name,
-    required this.detail,
-    required this.value,
-    required this.fraction,
-    required this.selected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Semantics(
-      button: true,
-      selected: selected,
-      label: '$name, $detail, $value a week',
-      child: ExcludeSemantics(
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: AppRadius.control,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.baseline,
-                    textBaseline: TextBaseline.alphabetic,
-                    children: [
-                      Expanded(
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: name,
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  fontWeight:
-                                      selected
-                                          ? FontWeight.w700
-                                          : FontWeight.w500,
-                                ),
-                              ),
-                              TextSpan(
-                                text: '  $detail',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: textSecondaryColor(context),
-                                ),
-                              ),
-                            ],
-                          ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        value,
-                        style: AppTypography.figures(
-                          fontSize: 13,
-                          fontWeight:
-                              selected ? FontWeight.w700 : FontWeight.w500,
-                          color: textPrimaryColor(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  ClipRRect(
-                    borderRadius: AppRadius.micro,
-                    child: Stack(
-                      children: [
-                        Container(height: 10, color: backgroundColor(context)),
-                        FractionallySizedBox(
-                          widthFactor: fraction.clamp(0.02, 1),
-                          child: Container(
-                            height: 10,
-                            color:
-                                selected
-                                    ? accentFillColor(context)
-                                    : accentDimColor(context),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+        if (widget.gains.length > 3)
+          TextButton(
+            onPressed: () => setState(() => _showAll = !_showAll),
+            child: Text(
+              _showAll
+                  ? 'Show fewer lifts'
+                  : 'Show all ${widget.gains.length} lifts',
             ),
           ),
-        ),
-      ),
+      ],
     );
   }
 }
-
-/// The start of a range drops its unit; the end carries it.
-String _bareWeight(double kilograms, String unit) =>
-    formatAnalyticsWeight(kilograms, unit).replaceFirst(' $unit', '');

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../services/supabase_service.dart';
 import '../data/exercise_library.dart';
+import '../models/exercise_definition.dart';
+import '../services/exercise_catalog.dart';
+import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
@@ -15,6 +19,11 @@ void showExercisePickerSheet(
   required void Function(String name) onAdd,
   required void Function(String name) onRemove,
   String selectionOwner = 'workout',
+  String? userId,
+  Iterable<String>? selectedExerciseIds,
+  Iterable<String>? alreadyAddedExerciseIds,
+  void Function(String name, String exerciseId)? onAddIdentified,
+  void Function(String name, String exerciseId)? onRemoveIdentified,
 }) {
   final navigator = Navigator.of(context);
   navigator.push(
@@ -32,24 +41,33 @@ void showExercisePickerSheet(
             onAdd: onAdd,
             onRemove: onRemove,
             selectionOwner: selectionOwner,
+            userId: userId,
+            selectedExerciseIds: selectedExerciseIds,
+            alreadyAddedExerciseIds: alreadyAddedExerciseIds,
+            onAddIdentified: onAddIdentified,
+            onRemoveIdentified: onRemoveIdentified,
           ),
     ),
   );
 }
 
-/// The same library, but choosing one exercise closes it with that name.
+/// One catalog choice: the label to snapshot and its stable identity.
+typedef PickedExercise = ({String name, String exerciseId});
+
+/// The same library, but choosing one exercise closes it with that choice.
 ///
-/// Resolves to null when the picker closes without a choice. Names in
-/// [unavailableExerciseNames] read as *Added* and cannot be chosen, as in the
-/// multi-select flow.
-Future<String?> pickSingleExercise(
+/// Resolves to null when the picker closes without a choice. Movements in
+/// [unavailableExerciseIds] (canonical or redirected IDs) read as *Added* and
+/// cannot be chosen, as in the multi-select flow.
+Future<PickedExercise?> pickSingleExercise(
   BuildContext context, {
   required String title,
-  Iterable<String> unavailableExerciseNames = const <String>[],
+  Iterable<String> unavailableExerciseIds = const <String>[],
+  String? userId,
 }) {
   final navigator = Navigator.of(context);
-  return navigator.push<String>(
-    _ExercisePickerRoute<String>(
+  return navigator.push<PickedExercise>(
+    _ExercisePickerRoute<PickedExercise>(
       capturedThemes: InheritedTheme.capture(
         from: context,
         to: navigator.context,
@@ -61,7 +79,9 @@ Future<String?> pickSingleExercise(
             title: title,
             singlePick: true,
             selectedExerciseNames: const <String>[],
-            alreadyAddedExerciseNames: unavailableExerciseNames,
+            alreadyAddedExerciseNames: const <String>[],
+            alreadyAddedExerciseIds: unavailableExerciseIds,
+            userId: userId,
             onAdd: (_) {},
             onRemove: (_) {},
             selectionOwner: 'workout',
@@ -109,6 +129,11 @@ class _ExercisePickerSheet extends StatefulWidget {
   /// Choosing an exercise closes the picker with its name instead of
   /// toggling a selection; there is no selection list or footer.
   final bool singlePick;
+  final String? userId;
+  final Iterable<String>? selectedExerciseIds;
+  final Iterable<String>? alreadyAddedExerciseIds;
+  final void Function(String name, String exerciseId)? onAddIdentified;
+  final void Function(String name, String exerciseId)? onRemoveIdentified;
 
   const _ExercisePickerSheet({
     required this.selectedExerciseNames,
@@ -118,6 +143,11 @@ class _ExercisePickerSheet extends StatefulWidget {
     required this.selectionOwner,
     this.title = 'Add exercises',
     this.singlePick = false,
+    this.userId,
+    this.selectedExerciseIds,
+    this.alreadyAddedExerciseIds,
+    this.onAddIdentified,
+    this.onRemoveIdentified,
   });
 
   @override
@@ -135,14 +165,19 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
   @override
   void initState() {
     super.initState();
-    for (final name in widget.alreadyAddedExerciseNames) {
-      _alreadyAddedNames.add(_key(name));
-    }
-    for (final name in widget.selectedExerciseNames) {
-      final key = _key(name);
-      if (!_alreadyAddedNames.contains(key)) {
-        _selectedNames.putIfAbsent(key, () => name);
-      }
+    _alreadyAddedNames.addAll(
+      (widget.alreadyAddedExerciseIds ??
+              widget.alreadyAddedExerciseNames.map(_key))
+          .map(ExerciseCatalog.canonicalId),
+    );
+    final names = widget.selectedExerciseNames.toList();
+    final ids = widget.selectedExerciseIds?.toList();
+    for (var i = 0; i < names.length; i++) {
+      final key =
+          ids != null && i < ids.length
+              ? ExerciseCatalog.canonicalId(ids[i])
+              : _key(names[i]);
+      if (!_alreadyAddedNames.contains(key)) _selectedNames[key] = names[i];
     }
   }
 
@@ -152,38 +187,48 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
     super.dispose();
   }
 
-  String _key(String name) => name.trim().toLowerCase();
+  String _key(String name) => ExerciseCatalog.identity(name);
 
-  void _toggleExercise(String name) {
-    final key = _key(name);
+  void _toggleExercise(_ExerciseResult result) {
+    final key = ExerciseCatalog.canonicalId(result.id);
     if (_alreadyAddedNames.contains(key)) return;
     if (widget.singlePick) {
-      Navigator.pop(context, name);
+      Navigator.pop<PickedExercise>(context, (
+        name: result.name,
+        exerciseId: key,
+      ));
       return;
     }
     final selectedName = _selectedNames.remove(key);
     if (selectedName != null) {
-      widget.onRemove(selectedName);
+      if (widget.onRemoveIdentified != null) {
+        widget.onRemoveIdentified!(selectedName, key);
+      } else {
+        widget.onRemove(selectedName);
+      }
     } else {
-      _selectedNames[key] = name;
-      widget.onAdd(name);
+      _selectedNames[key] = result.name;
+      if (widget.onAddIdentified != null) {
+        widget.onAddIdentified!(result.name, key);
+      } else {
+        widget.onAdd(result.name);
+      }
     }
     setState(() {});
   }
 
-  void _addCustomExercise(String name) {
-    final key = _key(name);
+  void _addDefinition(ExerciseDefinition d) {
+    final key = ExerciseCatalog.canonicalId(d.id);
     if (_selectedNames.containsKey(key) || _alreadyAddedNames.contains(key)) {
       return;
     }
-    if (widget.singlePick) {
-      Navigator.pop(context, name);
-      return;
-    }
-    _selectedNames[key] = name;
-    widget.onAdd(name);
-    setState(() {});
+    _toggleExercise(
+      _ExerciseResult(id: key, name: d.name, category: d.category),
+    );
   }
+
+  List<ExerciseDefinition> _inCategory(String category) =>
+      ExerciseCatalog.active.where((d) => d.category == category).toList();
 
   void _openCategory(String category) {
     setState(() {
@@ -219,30 +264,15 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
     });
   }
 
-  List<_ExerciseResult> get _searchResults {
-    final normalizedQuery = _key(_query);
-    if (normalizedQuery.isEmpty) return const [];
-    return [
-      for (final entry in ExerciseLibrary.exercisesByCategory.entries)
-        for (final name in entry.value)
-          if (name.toLowerCase().contains(normalizedQuery))
-            _ExerciseResult(name: name, category: entry.key),
-    ];
-  }
-
-  String? _categoryFor(String name) {
-    final key = _key(name);
-    for (final entry in ExerciseLibrary.exercisesByCategory.entries) {
-      if (entry.value.any((exercise) => _key(exercise) == key)) {
-        return entry.key;
-      }
-    }
-    return null;
-  }
+  List<_ExerciseResult> get _searchResults => [
+    for (final d in ExerciseCatalog.search(_query))
+      _ExerciseResult(id: d.id, name: d.name, category: d.category),
+  ];
 
   Future<void> _createCustomExercise({String initialName = ''}) async {
     String inputText = initialName;
     String? errorText;
+    bool saving = false;
     if (initialName.trim().isNotEmpty &&
         (_selectedNames.containsKey(_key(initialName)) ||
             _alreadyAddedNames.contains(_key(initialName)))) {
@@ -251,71 +281,145 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
 
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
             final input = inputText.trim();
             final valid = input.isNotEmpty && errorText == null;
-            return AlertDialog(
-              backgroundColor: surfaceColor(context),
-              shape: const RoundedRectangleBorder(borderRadius: AppRadius.card),
-              title: Text(
-                'Create custom exercise',
-                style: Theme.of(context).textTheme.titleLarge,
+            final suggestions = ExerciseCatalog.suggestions(input);
+            final existing = ExerciseCatalog.findByName(input);
+            return PopScope(
+              canPop: !saving,
+              child: AlertDialog(
+                backgroundColor: surfaceColor(context),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: AppRadius.card,
+                ),
+                title: Text(
+                  'Create custom exercise',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextFormField(
+                        initialValue: initialName,
+                        enabled: !saving,
+                        maxLength: 100,
+                        autofocus: true,
+                        textCapitalization: TextCapitalization.words,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                        decoration: InputDecoration(
+                          labelText: 'Exercise name',
+                          hintText: 'Enter exercise name',
+                          errorText: errorText,
+                          border: const OutlineInputBorder(
+                            borderRadius: AppRadius.field,
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: AppRadius.field,
+                            borderSide: BorderSide(color: borderColor(context)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: AppRadius.field,
+                            borderSide: BorderSide(color: accentColor(context)),
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            inputText = value;
+                            final trimmed = value.trim();
+                            if (trimmed.isEmpty) {
+                              errorText = 'Name cannot be empty';
+                            } else if (_selectedNames.containsKey(
+                                  _key(trimmed),
+                                ) ||
+                                _alreadyAddedNames.contains(_key(trimmed))) {
+                              errorText =
+                                  'Exercise with this name already exists';
+                            } else {
+                              errorText = null;
+                            }
+                          });
+                        },
+                      ),
+                      if (suggestions.isNotEmpty) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        const Text('Use an existing exercise?'),
+                        for (final d in suggestions)
+                          TextButton(
+                            onPressed:
+                                saving ||
+                                        _selectedNames.containsKey(d.id) ||
+                                        _alreadyAddedNames.contains(d.id)
+                                    ? null
+                                    : () {
+                                      Navigator.pop(dialogContext);
+                                      _addDefinition(d);
+                                    },
+                            child: Text(d.name),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed:
+                        saving ? null : () => Navigator.pop(dialogContext),
+                    child: const Text('Cancel'),
+                  ),
+                  TextButton(
+                    onPressed:
+                        valid && !saving
+                            ? () async {
+                              setDialogState(() => saving = true);
+                              try {
+                                final definition = await SyncService.instance
+                                    .runExclusiveLocalMutation(() async {
+                                      if (!mounted ||
+                                          SupabaseService.currentUserId !=
+                                              widget.userId) {
+                                        throw StateError(
+                                          'The exercise account changed.',
+                                        );
+                                      }
+                                      return ExerciseCatalog.createCustom(
+                                        inputText,
+                                        userId: widget.userId,
+                                      );
+                                    });
+                                SyncService.instance.notifyLocalChange();
+                                if (!dialogContext.mounted || !mounted) {
+                                  return;
+                                }
+                                Navigator.pop(dialogContext);
+                                _addDefinition(definition);
+                              } catch (error) {
+                                debugPrint('Could not create exercise: $error');
+                                if (dialogContext.mounted) {
+                                  setDialogState(() {
+                                    saving = false;
+                                    errorText =
+                                        'Could not save exercise. Try again.';
+                                  });
+                                }
+                              }
+                            }
+                            : null,
+                    child: Text(
+                      saving
+                          ? 'Saving…'
+                          : existing == null
+                          ? 'Create'
+                          : 'Use existing',
+                    ),
+                  ),
+                ],
               ),
-              content: TextFormField(
-                initialValue: initialName,
-                autofocus: true,
-                textCapitalization: TextCapitalization.words,
-                style: Theme.of(context).textTheme.bodyLarge,
-                decoration: InputDecoration(
-                  labelText: 'Exercise name',
-                  hintText: 'Enter exercise name',
-                  errorText: errorText,
-                  border: const OutlineInputBorder(
-                    borderRadius: AppRadius.field,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: AppRadius.field,
-                    borderSide: BorderSide(color: borderColor(context)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: AppRadius.field,
-                    borderSide: BorderSide(color: accentColor(context)),
-                  ),
-                ),
-                onChanged: (value) {
-                  setDialogState(() {
-                    inputText = value;
-                    final trimmed = value.trim();
-                    if (trimmed.isEmpty) {
-                      errorText = 'Name cannot be empty';
-                    } else if (_selectedNames.containsKey(_key(trimmed)) ||
-                        _alreadyAddedNames.contains(_key(trimmed))) {
-                      errorText = 'Exercise with this name already exists';
-                    } else {
-                      errorText = null;
-                    }
-                  });
-                },
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancel'),
-                ),
-                TextButton(
-                  onPressed:
-                      valid
-                          ? () {
-                            final name = inputText.trim();
-                            Navigator.pop(dialogContext);
-                            _addCustomExercise(name);
-                          }
-                          : null,
-                  child: const Text('Create'),
-                ),
-              ],
             );
           },
         );
@@ -415,9 +519,9 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
   }
 
   int _selectedIn(String category) =>
-      ExerciseLibrary.exercisesByCategory[category]!
-          .where((name) => _selectedNames.containsKey(_key(name)))
-          .length;
+      _inCategory(
+        category,
+      ).where((d) => _selectedNames.containsKey(d.id)).length;
 
   Widget get _customAction =>
       _CustomExerciseButton(onTap: () => _createCustomExercise());
@@ -426,11 +530,17 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
     final media = MediaQuery.of(context);
     final useSingleColumn =
         media.size.width < 360 || media.textScaler.scale(16) >= 22;
-    final categories = ExerciseLibrary.categoryNames;
+    final categories = [
+      ...ExerciseLibrary.categoryNames,
+      ...ExerciseCatalog.active
+          .map((d) => d.category)
+          .where((c) => !ExerciseLibrary.categoryNames.contains(c))
+          .toSet(),
+    ];
     final columns = useSingleColumn ? 1 : 2;
     Widget tile(String category) => _MuscleGroupTile(
       category: category,
-      count: ExerciseLibrary.exercisesByCategory[category]!.length,
+      count: _inCategory(category).length,
       selectedCount: _selectedIn(category),
       showChevron: useSingleColumn,
       onTap: () => _openCategory(category),
@@ -480,7 +590,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
 
   Widget _buildCategoryList() {
     final category = _selectedCategory!;
-    final names = ExerciseLibrary.exercisesByCategory[category]!;
+    final definitions = _inCategory(category);
     final selected = _selectedIn(category);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -491,15 +601,15 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
           title: category,
           subtitle:
               selected == 0
-                  ? '${names.length} exercises'
-                  : '${names.length} exercises · $selected selected',
+                  ? '${definitions.length} exercises'
+                  : '${definitions.length} exercises · $selected selected',
           trailing: _customAction,
         ),
         Expanded(
           child: _ExerciseList(
             results: [
-              for (final name in names)
-                _ExerciseResult(name: name, category: category),
+              for (final d in definitions)
+                _ExerciseResult(id: d.id, name: d.name, category: category),
             ],
             selectedNames: _selectedNames,
             alreadyAddedNames: _alreadyAddedNames,
@@ -545,8 +655,12 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
 
   Widget _buildSelectedList() {
     final results = [
-      for (final name in _selectedNames.values)
-        _ExerciseResult(name: name, category: _categoryFor(name) ?? 'Custom'),
+      for (final entry in _selectedNames.entries)
+        _ExerciseResult(
+          id: entry.key,
+          name: entry.value,
+          category: ExerciseCatalog.getById(entry.key)?.category ?? 'Custom',
+        ),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -646,10 +760,15 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
 }
 
 class _ExerciseResult {
+  final String id;
   final String name;
   final String category;
 
-  const _ExerciseResult({required this.name, required this.category});
+  const _ExerciseResult({
+    required this.id,
+    required this.name,
+    required this.category,
+  });
 }
 
 class _SearchField extends StatelessWidget {
@@ -895,7 +1014,7 @@ class _ExerciseList extends StatelessWidget {
   final List<_ExerciseResult> results;
   final Map<String, String> selectedNames;
   final Set<String> alreadyAddedNames;
-  final ValueChanged<String> onToggle;
+  final ValueChanged<_ExerciseResult> onToggle;
   final bool showCategory;
   final bool singlePick;
 
@@ -927,7 +1046,7 @@ class _ExerciseList extends StatelessWidget {
           ),
       itemBuilder: (context, index) {
         final result = results[index];
-        final normalizedName = result.name.trim().toLowerCase();
+        final normalizedName = ExerciseCatalog.canonicalId(result.id);
         final selected = selectedNames.containsKey(normalizedName);
         final alreadyAdded = alreadyAddedNames.contains(normalizedName);
         return _ExerciseRow(
@@ -936,7 +1055,7 @@ class _ExerciseList extends StatelessWidget {
           alreadyAdded: alreadyAdded,
           showCategory: showCategory,
           singlePick: singlePick,
-          onTap: () => onToggle(result.name),
+          onTap: () => onToggle(result),
         );
       },
     );

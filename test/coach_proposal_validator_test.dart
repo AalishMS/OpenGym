@@ -212,16 +212,32 @@ void main() {
   });
 
   group('exercises', () {
-    test('an unknown name suggests the closest library names', () {
-      final errors = errorsOf(
+    test('a reviewed exercise alias resolves to the catalog movement', () {
+      final proposal = valid(
         output(
           plans: [
             planJson(null, 'Upper', [exercise('Incline DB Press')]),
           ],
         ),
       );
+      expect(
+        proposal.plans.single.exercises.single.name,
+        'Incline Dumbbell Press',
+      );
+      expect(proposal.plans.single.exercises.single.custom, isFalse);
+    });
+
+    test('an unknown name suggests the closest library names', () {
+      final errors = errorsOf(
+        output(
+          plans: [
+            planJson(null, 'Upper', [exercise('Incline Dmbbell Pres')]),
+          ],
+        ),
+      );
       expect(errors.single, startsWith('proposal.plans[0].exercises[0].name:'));
-      expect(errors.single, contains('Closest: "Incline Dumbbell Press"'));
+      expect(errors.single, contains('Closest:'));
+      expect(errors.single, contains('"Incline Dumbbell Press"'));
     });
 
     test('custom names need the flag unless the split already uses them', () {

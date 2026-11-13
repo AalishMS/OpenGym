@@ -101,3 +101,19 @@ rejection of invalid/foreign available week references. Session JSON remains
 version 1. New lazy slots use a deterministic block/number UUIDv5 ID so two
 replicas do not turn one logical Week 2 into Weeks 2 and 3. The Python suites
 truncate only the named loopback fixture; never run them against a remote project.
+
+
+The exercise identity migration adds schema 3. Its standalone SQL proof creates
+its own temporary database on the loopback PostgreSQL instance, applies the
+base fixture and all three migrations, then drops only that database:
+
+```bash
+python3 supabase/tests/training_blocks/test_exercise_identity.py
+```
+
+Python 3 must have `psycopg` installed. The test covers custom catalog RLS and
+grants, shared IDs under different account keys, durable merge precedence over
+newer unmerged writes, stale edits, and schema 2 rejection after activation.
+The existing schema 1/2 suites remain useful compatibility proofs for accounts
+which have not activated schema 3. Apply the catalog migration to a separate
+fixture before running the current opt-in SDK trials; those now send schema 3.

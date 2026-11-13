@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Flutter-3.5%2B-02569B?logo=flutter&logoColor=white" alt="Flutter">
+  <img src="https://img.shields.io/badge/Dart-3.7%2B-02569B?logo=flutter&logoColor=white" alt="Dart SDK 3.7 or later">
   <img src="https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20Web%20%7C%20Desktop-lightgrey" alt="Platforms">
   <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
   <img src="https://img.shields.io/badge/state%20management-Provider-blueviolet" alt="Provider">
@@ -41,8 +41,9 @@ workspaces, and workout progress.
 
 ## Screenshots
 
-These refreshed screenshots show the current app with example workout data. They
-were captured from the web build, without mobile status or navigation bars.
+The gallery covers workout planning, logging, history, statistics, and settings.
+Statistics captures come from the current web build with example training history;
+no personal account data is shown.
 
 <table>
   <tr>
@@ -65,12 +66,12 @@ were captured from the web build, without mobile status or navigation bars.
       <img src="screenshots/history.png" width="300" alt="OpenGym workout history with personal records">
     </td>
     <td align="center">
-      <strong>Weekly training</strong><br>
-      <img src="screenshots/statistics.png" width="300" alt="OpenGym weekly training volume chart">
+      <strong>Statistics overview</strong><br>
+      <img src="screenshots/statistics.png" width="300" alt="OpenGym statistics Overview with weekly volume and training calendar">
     </td>
     <td align="center">
-      <strong>Consistency</strong><br>
-      <img src="screenshots/statistics_2.png" width="300" alt="OpenGym workout heatmap and exercise progress list">
+      <strong>Block progress</strong><br>
+      <img src="screenshots/statistics_2.png" width="300" alt="OpenGym training block workload and progress">
     </td>
   </tr>
   <tr>
@@ -92,7 +93,10 @@ were captured from the web build, without mobile status or navigation bars.
       <strong>Create a block</strong><br>
       <img src="screenshots/block_create.png" width="300" alt="OpenGym create block dialog with name and week count">
     </td>
-    <td></td>
+    <td align="center">
+      <strong>Personal records</strong><br>
+      <img src="screenshots/statistics_records.png" width="300" alt="OpenGym personal records with weights, reps, and workout dates">
+    </td>
     <td></td>
   </tr>
 </table>
@@ -127,6 +131,12 @@ were captured from the web build, without mobile status or navigation bars.
       <img src="screenshots/settings_dark.png" width="200" alt="OpenGym settings screen in dark mode">
     </td>
   </tr>
+  <tr>
+    <td align="center">
+      <strong>Personal records</strong><br>
+      <img src="screenshots/statistics_records_dark.png" width="200" alt="OpenGym personal records in dark mode">
+    </td>
+  </tr>
 </table>
 
 </details>
@@ -135,39 +145,39 @@ were captured from the web build, without mobile status or navigation bars.
 
 ## Features
 
-### Workout Tracking
-- **Plan Management** : Create, edit, copy, and delete custom workout plans
-- **65+ Pre-built Exercises** : Across 6 muscle categories (Chest, Back, Shoulders, Arms, Legs, Core) + custom exercise entry
-- **Set Logging** : Track weight (kg/lbs), reps, RPE (1-10), and notes per set
-- **Week-Based Periodization** : Organize sessions by week with auto-copy from previous week
-- **Auto-Save** : Workouts save on every screen change
-- **PR Detection** : Flags new personal records when you log a heavier weight
-- **Progression Suggestions** : Double-progression logic recommends the next weight/reps
-- **Auto-Fill** : Pre-fills weights from your last session for faster logging
+### Plan and train
 
-### Statistics & History
-- **Workout Frequency Chart** : Weekly bar chart showing your consistency (last 8 weeks)
-- **Exercise Progression Chart** : Line chart tracking max weight over time per exercise
-- **Summary Stats** : Total workouts, weekly count, PRs tracked
-- **Full History** : Expandable session cards with edit/delete for past workouts
+- **Split workspaces** keep separate programs, plans, and workout history.
+- **Workout presets** provide ready-made programs you can copy and customize.
+- **Training blocks and weeks** organize progression, with each workout advancing independently and future weeks allocated as needed.
+- **Set logging** tracks weight, reps, optional RPE, and notes, with a compact keypad and previous-session values.
+- **Workout timer** supports pause and resume, with Android notification controls.
+- **Exercise library** includes built-in and custom exercises with stable identities for tracking progress across renames.
 
-### Customization
-- **Dark / Light / System Theme** : Automatic or manual theming
-- **12 Accent Colors** : Choose a color that makes the app feel like yours
-- **Weight Units** : Switch between kg and lbs on the fly
-- **High Refresh Rate** : 90/120Hz display support
-- **Focused Visual Design** : Clear information, quiet surfaces, and restrained
-  plan-color details
+### Review progress
 
-### Sync
-- **Supabase Backend** : Email auth, Postgres tables, and row-level security scoped to your account
-- **Automatic Push/Pull** : Changes sync on save and when the app returns to the foreground; edits made offline drain on reconnect
-- **Last-Write-Wins** : Edits from two devices resolve to the later timestamp
+- **History** groups sessions by month, with volume, sets, records, and editable workout details.
+- **Overview** charts weekly volume and training days, with exercise filtering and exact weekly totals.
+- **Strength** tracks individual lifts across selectable periods and measures.
+- **Blocks** compares workload and strength gains across training blocks.
+- **Records** keeps a chronological log of exercise achievements.
 
-### Data
-- **On-Device First** : All records live in local Hive storage, so the app keeps working without a connection
-- **Sample Data** : Load 5 sample plans with 15 sessions across 5 weeks to explore the app
-- **Export / Clear** : Full control over your data
+### Make it yours
+
+- Light, dark, and system themes with **eight accent colors**.
+- Weight display in kilograms or pounds.
+- Optional **AI Coach** for signed-in users: chat about plans, review proposed changes, and apply only the changes you choose. See [Coach documentation](docs/coach.md) for data sharing and setup details.
+
+### Keep your data
+
+- **Offline first:** Hive stores training data on the device; an account is optional.
+- **Account sync:** Supabase email authentication and account-scoped sync, with offline changes queued for reconnect and last-write-wins conflict resolution.
+- **Backup and restore:** export or import training data and settings.
+- **Android updates:** signed APK releases with in-app update checks.
+- Debug builds offer sample data for exploring the app; loading it replaces workouts in the active split.
+
+See [DESIGN.md](DESIGN.md) for architecture and data lifecycle details, and
+[split workspaces](docs/splits.md) for program organization.
 
 ---
 
@@ -175,8 +185,8 @@ were captured from the web build, without mobile status or navigation bars.
 
 | Technology | Purpose |
 |---|---|
-| [Flutter](https://flutter.dev) 3.5+ | Cross-platform UI framework |
-| [Dart](https://dart.dev) 3.5+ | Programming language |
+| [Flutter](https://flutter.dev) | Cross-platform UI framework |
+| [Dart](https://dart.dev) 3.7+ | Programming language |
 | [Provider](https://pub.dev/packages/provider) | State management (ChangeNotifier) |
 | [Hive](https://pub.dev/packages/hive) | Local NoSQL database |
 | Flutter canvas | Lightweight dashboard sparkline rendering |
@@ -205,7 +215,7 @@ lib/
 
 ### Prerequisites
 
-- [Flutter SDK](https://docs.flutter.dev/get-started/install) 3.5 or later
+- [Flutter SDK](https://docs.flutter.dev/get-started/install) with Dart 3.7 or later
 - Dart SDK (included with Flutter)
 - Android Studio, Xcode, or VS Code (for your target platform)
 
@@ -234,6 +244,8 @@ flutter run
 ```bash
 flutter build apk --release
 ```
+Local release builds require the signing setup described below.
+
 APK output: `build/app/outputs/flutter-apk/app-release.apk`
 
 ### iOS
@@ -281,6 +293,26 @@ involved. Publishing is a tag push; GitHub Actions does the rest.
 loudly if not), runs the tests, builds a single universal signed APK, checks it
 is signed with the release key rather than the debug fallback, and publishes it
 as a GitHub Release. Installed apps pick it up on their next check.
+
+The release body is what the in-app update dialog shows as "What's changed".
+It is built from the `feat:`, `fix:`, and `perf:` commit subjects since the
+previous tag, or from the tag message if you push an annotated tag
+(`git tag -a`). Write it as a `- ` list of user-facing changes.
+
+### How installed copies update
+
+- The app checks at launch and whenever it returns to the front, at most every
+  six hours. The prompt opens by itself once per release, then waits three
+  days. In between, a dot on Settings shows that an update is waiting. It
+  never opens over a running workout.
+- With **Download updates on Wi-Fi** on (the default), a new release
+  downloads in the background on unmetered networks, so "Update now" installs
+  straight away.
+- Installs go through a `PackageInstaller` session, and the APK is checked
+  against GitHub's SHA-256 digest first. On Android 12+, once OpenGym has
+  installed itself one time, later updates install without a confirmation
+  screen. The app then closes, an "OpenGym updated" notification reopens it,
+  and the next launch shows what's new.
 
 Two things will make a release invisible to the updater, so the workflow avoids
 both: marking it as a **draft** or a **prerelease** (the `/releases/latest`
@@ -330,8 +362,8 @@ different application ID (`com.example.gymapp.offline`). Android treats the new
 release as a **different app**, so it installs alongside the old one and starts
 empty. Migrating once:
 
-1. In the old app: **Settings → EXPORT DATA**, and keep the file somewhere safe.
-2. Install the new APK, then **Settings → IMPORT DATA** and pick that file.
+1. In the old app: **Settings → Export data**, and keep the file somewhere safe.
+2. Install the new APK, then **Settings → Import data** and pick that file.
 3. Uninstall the old app.
 
 Do the export *first*. Uninstalling the old app deletes its local database.
@@ -341,7 +373,7 @@ Do the export *first*. Uninstalling the old app deletes its local database.
 ## Project Structure
 
 ```
-gymapp-offline/
+OpenGym/
 ├── lib/
 │   ├── main.dart                   # Startup: Hive, Supabase, providers
 │   ├── app_shell.dart              # Tab layout (Home / History / Stats / Settings)

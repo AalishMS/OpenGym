@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
-import '../data/exercise_library.dart';
+import '../services/exercise_catalog.dart';
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
 import '../models/statistics.dart';
@@ -18,6 +18,7 @@ import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
+import '../utils/scroll_to_top.dart';
 import '../utils/set_history.dart';
 import '../utils/statistics_format.dart';
 import '../utils/weight_units.dart';
@@ -31,7 +32,10 @@ import '../widgets/workout/set_entry_table.dart';
 import '../widgets/workout/workout_dialogs.dart';
 
 class HistoryScreen extends StatefulWidget {
-  const HistoryScreen({super.key});
+  /// Bumped when the History tab is tapped while showing.
+  final int scrollToTopRequest;
+
+  const HistoryScreen({this.scrollToTopRequest = 0, super.key});
 
   @override
   State<HistoryScreen> createState() => _HistoryScreenState();
@@ -43,6 +47,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
   String _query = '';
   String? _splitId;
   bool _hasSeenSplit = false;
+
+  @override
+  void didUpdateWidget(covariant HistoryScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.scrollToTopRequest != oldWidget.scrollToTopRequest) {
+      scrollToTop(context, _scrollController);
+    }
+  }
 
   @override
   void didChangeDependencies() {
@@ -92,7 +104,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   group.workouts[index - 1].session.date,
                   workout.session.date,
                 ),
-            continuesTimeline: index < group.workouts.length - 1,
+            rule:
+                index == group.workouts.length - 1
+                    ? HistoryRowRule.none
+                    : DateUtils.isSameDay(
+                      group.workouts[index + 1].session.date,
+                      workout.session.date,
+                    )
+                    ? HistoryRowRule.inset
+                    : HistoryRowRule.full,
           ),
       ],
     ];
@@ -162,8 +182,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             if (entry is HistoryMonthGroup) {
                               return Padding(
                                 padding: EdgeInsets.only(
-                                  top: index == 0 ? 0 : AppSpacing.xl,
-                                  bottom: AppSpacing.xs,
+                                  top: index == 0 ? 0 : AppSpacing.xxl,
                                 ),
                                 child: HistoryMonthHeader(
                                   group: entry,
@@ -180,7 +199,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               summary: row.summary,
                               weightUnit: weightUnit,
                               showDate: row.showDate,
-                              continuesTimeline: row.continuesTimeline,
+                              rule: row.rule,
                               onTap: () {
                                 Navigator.of(context).push(
                                   MaterialPageRoute<void>(
@@ -204,16 +223,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 }
 
-/// A journal row and where it sits on the month's timeline.
+/// A journal row, whether it opens a new day, and the rule beneath it.
 class _JournalEntry {
   final HistoryWorkoutSummary summary;
   final bool showDate;
-  final bool continuesTimeline;
+  final HistoryRowRule rule;
 
   const _JournalEntry({
     required this.summary,
     required this.showDate,
-    required this.continuesTimeline,
+    required this.rule,
   });
 }
 
@@ -776,7 +795,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
       context.read<WorkoutSessionProvider>().sessions.where(
         (session) => session.date.isBefore(_session.date),
       ),
-      exercise.name,
+      ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
       splitId: _session.splitId,
       planId: _session.planId,
       planName: _session.planName,
@@ -788,7 +807,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
           reps: exercise.sets[index].reps,
           previous:
               index < previous.length && previous[index].reps > 0
-                  ? ExerciseLibrary.isTimed(exercise.name)
+                  ? ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId)
                       ? formatSetSummary(
                         previous[index].weight,
                         previous[index].reps,
@@ -808,6 +827,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
     final old = exercises[exerciseIndex];
     exercises[exerciseIndex] = Exercise(
       name: old.name,
+      exerciseId: old.exerciseId,
       sets: sets,
       note: old.note,
     );
@@ -818,6 +838,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
     WorkoutDialogs.showAddSetDialog(
       context,
       exerciseName: _session.exercises[exerciseIndex].name,
+      exerciseId: _session.exercises[exerciseIndex].exerciseId,
       onAdd: (set) {
         _replaceSets(exerciseIndex, [
           ..._session.exercises[exerciseIndex].sets,
@@ -831,6 +852,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
     WorkoutDialogs.showEditSetDialog(
       context,
       exerciseName: _session.exercises[exerciseIndex].name,
+      exerciseId: _session.exercises[exerciseIndex].exerciseId,
       set: set,
       onSave: (updated) {
         final sets = List<gym.Set>.of(_session.exercises[exerciseIndex].sets);
@@ -913,7 +935,10 @@ class _EditableExerciseCard extends StatelessWidget {
             IgnorePointer(
               ignoring: !enabled,
               child: SetEntryTable(
-                isTimed: ExerciseLibrary.isTimed(exercise.name),
+                isTimed: ExerciseCatalog.isTimed(
+                  exercise.name,
+                  exercise.exerciseId,
+                ),
                 hostReservesSpace: true,
                 sets: entries,
                 onChanged: onChanged,

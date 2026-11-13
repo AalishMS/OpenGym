@@ -372,15 +372,43 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         children: [
           if (!_managing) ...[
-            UpNextCard(
-              tutorialStartKey: widget.tutorialStartKey,
-              plan: plans[nextIndex],
-              day: nextIndex + 1,
-              dayCount: plans.length,
-              stat: statsByIndex[nextIndex],
-              trainedDays: trainedDays,
-              durationMinutes: durationMinutes,
-              onStart: () => _openWorkout(context, plans[nextIndex], nextIndex),
+            // Session writes do not all pass through the provider (finishing
+            // a workout, sync), so follow the box for the in-progress state.
+            ValueListenableBuilder(
+              valueListenable: HiveService.sessionsListenable(),
+              builder: (context, _, _) {
+                final live = HiveService.getLiveSession();
+                final liveIndex =
+                    live?.planId == null
+                        ? -1
+                        : plans.indexWhere((plan) => plan.id == live!.planId);
+                final inProgress = liveIndex >= 0;
+                final index = inProgress ? liveIndex : nextIndex;
+                return UpNextCard(
+                  tutorialStartKey: widget.tutorialStartKey,
+                  plan: plans[index],
+                  day: index + 1,
+                  dayCount: plans.length,
+                  stat: statsByIndex[index],
+                  trainedDays: trainedDays,
+                  durationMinutes: inProgress ? null : durationMinutes,
+                  inProgress: inProgress,
+                  onStart:
+                      inProgress
+                          ? () => openWorkoutDestination(
+                            context,
+                            WorkoutDestination.session(live!.id!),
+                            requireIncomplete: true,
+                            heroTag: UpNextCard.heroTagFor(plans[index]),
+                          )
+                          : () => _openWorkout(
+                            context,
+                            plans[nextIndex],
+                            nextIndex,
+                            heroTag: UpNextCard.heroTagFor(plans[nextIndex]),
+                          ),
+                );
+              },
             ),
             const SizedBox(height: AppSpacing.sm),
             TrainingSnapshot(
@@ -482,8 +510,17 @@ class _HomeScreenState extends State<HomeScreen> {
     _movePlan(context, planId, plans[target].id!);
   }
 
-  void _openWorkout(BuildContext context, WorkoutPlan plan, int index) {
-    openWorkoutDestination(context, WorkoutDestination.active(plan.id!));
+  void _openWorkout(
+    BuildContext context,
+    WorkoutPlan plan,
+    int index, {
+    String? heroTag,
+  }) {
+    openWorkoutDestination(
+      context,
+      WorkoutDestination.active(plan.id!),
+      heroTag: heroTag,
+    );
   }
 
   /// `4 exercises · last trained yesterday`, for the plan menu's header.
@@ -625,6 +662,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 .map(
                                   (e) => ExerciseTemplate(
                                     name: e.name,
+                                    exerciseId: e.exerciseId,
                                     sets: e.sets,
                                     note: e.note,
                                     setTargets:

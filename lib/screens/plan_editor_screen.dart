@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
-import '../data/exercise_library.dart';
+import '../services/exercise_catalog.dart';
 import '../data/plan_colors.dart';
 import '../models/exercise_set_data.dart';
 import '../models/exercise_template.dart';
@@ -85,6 +85,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
           _EditorExercise(
             id: _nextExerciseId++,
             name: exercise.name,
+            exerciseId: exercise.exerciseId,
             note: exercise.note,
             sets: List.generate(exercise.sets, (index) {
               final target = exercise.targetAt(index);
@@ -200,6 +201,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
             .map(
               (exercise) => ExerciseTemplate(
                 name: exercise.name,
+                exerciseId: exercise.exerciseId,
                 sets: exercise.sets.length,
                 note: exercise.note,
                 setTargets:
@@ -304,7 +306,10 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
               ? sets.last
               : ExerciseSetData(
                 reps:
-                    ExerciseLibrary.isTimed(_exercises[exerciseIndex].name)
+                    ExerciseCatalog.isTimed(
+                          _exercises[exerciseIndex].name,
+                          _exercises[exerciseIndex].exerciseId,
+                        )
                         ? 30
                         : 8,
                 weight: 0,
@@ -353,9 +358,12 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     setState(() => _exercises.removeWhere((exercise) => exercise.id == id));
   }
 
-  void _addExercise(String name) {
-    final lower = name.toLowerCase();
-    if (_exercises.any((exercise) => exercise.name.toLowerCase() == lower)) {
+  void _addExercise(String name, [String? exerciseId]) {
+    final id = ExerciseCatalog.identity(name, exerciseId);
+    if (_exercises.any(
+      (exercise) =>
+          ExerciseCatalog.identity(exercise.name, exercise.exerciseId) == id,
+    )) {
       return;
     }
     setState(() {
@@ -363,9 +371,10 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
         _EditorExercise(
           id: _nextExerciseId++,
           name: name,
+          exerciseId: id,
           sets: [
             ExerciseSetData(
-              reps: ExerciseLibrary.isTimed(name) ? 30 : 8,
+              reps: ExerciseCatalog.isTimed(name, id) ? 30 : 8,
               weight: 0,
             ),
           ],
@@ -375,11 +384,13 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     });
   }
 
-  void _removeExercise(String name) {
-    final normalizedName = name.toLowerCase();
+  void _removeExercise(String name, [String? exerciseId]) {
+    final normalizedName = ExerciseCatalog.identity(name, exerciseId);
     setState(() {
       _exercises.removeWhere(
-        (exercise) => exercise.name.toLowerCase() == normalizedName,
+        (exercise) =>
+            ExerciseCatalog.identity(exercise.name, exercise.exerciseId) ==
+            normalizedName,
       );
     });
   }
@@ -391,6 +402,13 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     showExercisePickerSheet(
       context,
       selectedExerciseNames: _exercises.map((exercise) => exercise.name),
+      userId:
+          _splitId == null ? null : HiveService.getSplitById(_splitId!)?.userId,
+      selectedExerciseIds: _exercises.map(
+        (e) => ExerciseCatalog.identity(e.name, e.exerciseId),
+      ),
+      onAddIdentified: _addExercise,
+      onRemoveIdentified: _removeExercise,
       onAdd: _addExercise,
       onRemove: _removeExercise,
       selectionOwner: 'plan',
@@ -612,6 +630,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
 class _EditorExercise {
   final int id;
   String name;
+  final String? exerciseId;
   final String? note;
   List<ExerciseSetData> sets;
   bool expanded;
@@ -619,6 +638,7 @@ class _EditorExercise {
   _EditorExercise({
     required this.id,
     required this.name,
+    this.exerciseId,
     this.note,
     required this.sets,
     required this.expanded,
@@ -905,7 +925,7 @@ class _ExerciseEditorSection extends StatelessWidget {
         TextSpan(text: '${sets.length}', style: number),
         TextSpan(text: ' × ', style: unit),
         TextSpan(text: '${first.reps}', style: number),
-        if (ExerciseLibrary.isTimed(exercise.name))
+        if (ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId))
           TextSpan(text: ' s', style: unit),
         if (first.weight > 0) ...[
           TextSpan(text: '  ·  ', style: unit),
@@ -932,12 +952,13 @@ class _ExerciseEditorSection extends StatelessWidget {
           TextSpan(text: ' × ', style: unit),
         ],
         TextSpan(text: '${sets[i].reps}', style: number),
-        if (ExerciseLibrary.isTimed(exercise.name))
+        if (ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId))
           TextSpan(text: ' s', style: unit),
         if (sets[i].rpe != null)
           TextSpan(text: ' @${sets[i].rpe}', style: unit),
       ],
-      if (!weighted && !ExerciseLibrary.isTimed(exercise.name))
+      if (!weighted &&
+          !ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId))
         TextSpan(text: ' reps', style: unit),
       if (sets.length > shown)
         TextSpan(text: '  +${sets.length - shown}', style: unit),
@@ -957,8 +978,8 @@ class _ExerciseEditorSection extends StatelessWidget {
     );
     return top.weight > 0
         ? 'Last: ${formatEntryWeight(top.weight, weightUnit)} '
-            '${weightUnitLabel(weightUnit)} \u00d7 ${top.reps}${ExerciseLibrary.isTimed(exercise.name) ? ' s' : ''}'
-        : 'Last: ${top.reps} ${ExerciseLibrary.isTimed(exercise.name) ? 's' : 'reps'}';
+            '${weightUnitLabel(weightUnit)} \u00d7 ${top.reps}${ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId) ? ' s' : ''}'
+        : 'Last: ${top.reps} ${ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId) ? 's' : 'reps'}';
   }
 
   @override
@@ -967,7 +988,7 @@ class _ExerciseEditorSection extends StatelessWidget {
     final expanded = exercise.expanded;
     final previous = previousExerciseSets(
       HiveService.getSessions(),
-      exercise.name,
+      ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
       splitId: splitId,
     );
 
@@ -989,7 +1010,10 @@ class _ExerciseEditorSection extends StatelessWidget {
                 ),
               ),
             SetEntryTable(
-              isTimed: ExerciseLibrary.isTimed(exercise.name),
+              isTimed: ExerciseCatalog.isTimed(
+                exercise.name,
+                exercise.exerciseId,
+              ),
               continuousLog: true,
               scrollWideTable: true,
               hostReservesSpace: true,

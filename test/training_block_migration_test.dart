@@ -124,9 +124,16 @@ void main() {
         final old = jsonDecode(before[s.id]!) as Map<String, dynamic>;
         final current = s.toJson()..remove('trainingWeekId');
         old.remove('trainingWeekId');
+        for (final row in current['exercises'] as List) {
+          expect(row['exerciseId'], 'builtin:squat');
+          row.remove('exerciseId');
+        }
+        for (final row in old['exercises'] as List) {
+          row.remove('exerciseId');
+        }
         expect(jsonEncode(current), jsonEncode(old));
         expect(s.updatedAt, stamp);
-        expect(s.dirty, isFalse);
+        expect(s.dirty, isTrue);
       }
       expect(
         repository.progressForPlan(splitId, planId)!.activeWeekId,

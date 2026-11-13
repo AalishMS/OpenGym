@@ -30,29 +30,62 @@ Future<void> showUpdateDialog(
   );
 }
 
+/// Opens the one-time "What's new" note after the app updated itself.
+Future<void> showWhatsNewDialog(
+  BuildContext context,
+  ReleaseInfo release, {
+  ReleasePageLauncher? openRelease,
+}) {
+  return showDialog<void>(
+    context: context,
+    routeSettings: const RouteSettings(name: '/whats-new'),
+    builder: (_) => WhatsNewDialog(release: release, openRelease: openRelease),
+  );
+}
+
+/// Matches GitHub's generated-notes attribution: ` by @user in https://...`.
+final RegExp _attribution = RegExp(r'\s+by\s+@[\w-]+\s+in\s+\S+\s*$');
+
+/// A line that is a list item: `- x`, `* x`, `+ x`, or `1. x`.
+final RegExp _listItem = RegExp(r'^([-*+]|\d+[.)])\s+');
+
 /// Turns a GitHub release body into a short, readable list for the prompt.
 /// Full notes remain available through the release link.
+///
+/// When the body has list items, only those count: prose around them is
+/// install instructions or boilerplate, not a change. Everything after a `---`
+/// rule is a footer and is ignored, as are GitHub's "Full Changelog" links and
+/// "by @user in <PR>" attributions.
 List<String> releaseHighlights(String markdown, {int limit = 4}) {
   if (limit <= 0) return const [];
 
-  final highlights = <String>[];
+  final lines = <String>[];
   for (final rawLine in markdown.split(RegExp(r'\r?\n'))) {
-    var line = rawLine.trim();
+    final line = rawLine.trim();
+    if (RegExp(r'^(-{3,}|\*{3,}|_{3,})$').hasMatch(line)) break;
+    lines.add(line);
+  }
+  final hasList = lines.any(_listItem.hasMatch);
+
+  final highlights = <String>[];
+  for (var line in lines) {
     if (line.isEmpty || line.startsWith('#')) continue;
+    if (hasList && !_listItem.hasMatch(line)) continue;
 
     line =
         line
-            .replaceFirst(RegExp(r'^[-*+]\s+'), '')
-            .replaceFirst(RegExp(r'^\d+[.)]\s+'), '')
+            .replaceFirst(_listItem, '')
             .replaceFirst(RegExp(r'^\[[ xX]\]\s*'), '')
             .replaceAllMapped(
               RegExp(r'\[([^\]]+)\]\([^\)]+\)'),
               (match) => match.group(1)!,
             )
             .replaceAll(RegExp(r'[*_`]'), '')
+            .replaceFirst(_attribution, '')
             .trim();
 
     if (line.isEmpty || Uri.tryParse(line)?.hasAbsolutePath == true) continue;
+    if (line.toLowerCase().startsWith('full changelog')) continue;
     highlights.add(line);
     if (highlights.length == limit) break;
   }
@@ -128,7 +161,11 @@ class UpdateDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _ReleaseHeader(release: release, status: status),
+              _ReleaseHeader(
+                release: release,
+                status: status,
+                silent: updates.installsSilently,
+              ),
               if (failed) ...[
                 const SizedBox(height: 20),
                 _FailureMessage(
@@ -158,6 +195,7 @@ class UpdateDialog extends StatelessWidget {
                   status: status,
                   progress: updates.progress,
                   waitingForNetwork: updates.isWaitingForNetwork,
+                  silent: updates.installsSilently,
                 ),
               ],
               const SizedBox(height: 20),
@@ -171,10 +209,15 @@ class UpdateDialog extends StatelessWidget {
 }
 
 class _ReleaseHeader extends StatelessWidget {
-  const _ReleaseHeader({required this.release, required this.status});
+  const _ReleaseHeader({
+    required this.release,
+    required this.status,
+    required this.silent,
+  });
 
   final ReleaseInfo release;
   final UpdateStatus status;
+  final bool silent;
 
   @override
   Widget build(BuildContext context) {
@@ -215,8 +258,11 @@ class _ReleaseHeader extends StatelessWidget {
                 failed
                     ? 'Nothing was changed. You can retry when ready.'
                     : downloaded
-                    ? 'The update is downloaded. Android will ask you to '
-                        'confirm the install.'
+                    ? silent
+                        ? 'The update is downloaded. OpenGym will close for '
+                            'a moment to install it.'
+                        : 'The update is downloaded. Android will ask you to '
+                            'confirm the install.'
                     : 'Update OpenGym to get the latest improvements.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
@@ -345,11 +391,13 @@ class _Progress extends StatelessWidget {
     required this.status,
     required this.progress,
     required this.waitingForNetwork,
+    required this.silent,
   });
 
   final UpdateStatus status;
   final double progress;
   final bool waitingForNetwork;
+  final bool silent;
 
   @override
   Widget build(BuildContext context) {
@@ -362,7 +410,7 @@ class _Progress extends StatelessWidget {
             Expanded(
               child: Text(
                 installing
-                    ? 'Opening installer'
+                    ? 'Installing update'
                     : waitingForNetwork
                     ? 'Waiting for network'
                     : 'Downloading update',
@@ -390,13 +438,17 @@ class _Progress extends StatelessWidget {
             valueColor: AlwaysStoppedAnimation<Color>(accentColor(context)),
           ),
         ),
-        if (!installing) ...[
-          const SizedBox(height: 9),
-          Text(
-            'You can leave OpenGym. The download continues in the background.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
+        const SizedBox(height: 9),
+        Text(
+          !installing
+              ? 'You can leave OpenGym. The download continues in the '
+                  'background.'
+              : silent
+              ? 'OpenGym will close to finish. Tap the "OpenGym updated" '
+                  'notification to reopen it.'
+              : 'Android will ask you to confirm the install.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
       ],
     );
   }
@@ -477,6 +529,80 @@ class _Actions extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Shown once on the first launch after an update, with the release's notes.
+class WhatsNewDialog extends StatelessWidget {
+  const WhatsNewDialog({required this.release, this.openRelease, super.key});
+
+  final ReleaseInfo release;
+  final ReleasePageLauncher? openRelease;
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      backgroundColor: surfaceColor(context),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: AppRadius.card,
+        side: BorderSide(color: borderColor(context), width: 1),
+      ),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 440,
+          maxHeight: media.size.height - media.viewInsets.vertical - 48,
+        ),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Updated to ${release.version.displayLabel}',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 5),
+              Text(
+                'OpenGym is up to date.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 24),
+              _Highlights(changelog: release.changelog),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: AppButton.text(
+                      label: 'Release notes',
+                      onPressed: () async {
+                        try {
+                          await (openRelease ?? _launchReleasePage)(
+                            release.releasePageUri,
+                          );
+                        } catch (_) {
+                          // The notes are a nicety; the dialog stays usable.
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AppButton.primary(
+                      label: 'Done',
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

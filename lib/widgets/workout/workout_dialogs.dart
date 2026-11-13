@@ -2,90 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
-import '../../data/exercise_library.dart';
 import '../../models/set.dart' as gym;
 import '../../providers/settings_provider.dart';
+import '../../services/exercise_catalog.dart';
 import '../../services/exercise_rename_service.dart';
-import '../../services/pr_tracking_service.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
-import '../../utils/weight_units.dart';
 import 'set_entry_table.dart';
 
 class WorkoutDialogs {
-  static void showPRDialog(BuildContext context, List<PRResult> prs) {
-    final unit = SettingsProvider.unitOf(context);
-    showDialog(
-      context: context,
-      builder:
-          (context) => Dialog(
-            backgroundColor: surfaceColor(context),
-            shape: RoundedRectangleBorder(
-              borderRadius: AppRadius.card,
-              side: BorderSide(color: borderColor(context), width: 1),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 4),
-                    ...prs.map(
-                      (pr) => Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              pr.exerciseName,
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                            Text(
-                              '${formatWeightWithUnit(pr.newPR, unit)} (previous ${formatWeightWithUnit(pr.previousPR, unit)})',
-                              style: Theme.of(
-                                context,
-                              ).textTheme.bodyMedium?.copyWith(
-                                color: textSecondaryColor(context),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: accentFillColor(context),
-                          foregroundColor: onAccentColor(context),
-                        ),
-                        child: Text(
-                          'Got it',
-                          style: Theme.of(context).textTheme.labelLarge,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-    );
-  }
-
-  /// Renames an exercise in the open workout.
-  ///
-  /// With [impactFor] and [onRenameEverywhere], the dialog also offers to
-  /// rename it in the split's plans and past workouts, checked by default,
-  /// with the affected counts and a note when the new name already exists and
-  /// the two histories will merge. Unchecked, [onRename] renames this workout
-  /// only.
   static void showRenameExerciseDialog(
     BuildContext context, {
     required String currentName,
@@ -110,9 +37,10 @@ class WorkoutDialogs {
     BuildContext context, {
     gym.Set? lastSet,
     String? exerciseName,
+    String? exerciseId,
     required void Function(gym.Set newSet) onAdd,
   }) {
-    final isTimed = ExerciseLibrary.isTimed(exerciseName ?? '');
+    final isTimed = ExerciseCatalog.isTimed(exerciseName ?? '', exerciseId);
     final settings = context.read<SettingsProvider>();
 
     // Kilograms, as stored; the entry table shows them in the chosen unit.
@@ -284,6 +212,7 @@ class WorkoutDialogs {
     BuildContext context, {
     required gym.Set set,
     String? exerciseName,
+    String? exerciseId,
     required void Function(gym.Set updatedSet) onSave,
     required VoidCallback onDelete,
   }) {
@@ -296,7 +225,7 @@ class WorkoutDialogs {
       builder:
           (_) => _EditSetSheet(
             set: set,
-            isTimed: ExerciseLibrary.isTimed(exerciseName ?? ''),
+            isTimed: ExerciseCatalog.isTimed(exerciseName ?? '', exerciseId),
             onSave: onSave,
             onDelete: onDelete,
           ),
@@ -814,10 +743,7 @@ class _RenameExerciseDialogState extends State<_RenameExerciseDialog> {
 
   void _submit() {
     final name = ExerciseRenameService.canonicalName(_name.text);
-    final error = ExerciseRenameService.validationMessage(
-      from: widget.currentName,
-      to: name,
-    );
+    final error = ExerciseRenameService.validationMessage(name);
     if (error != null) {
       setState(() => _error = error);
       return;
@@ -875,12 +801,13 @@ class _RenameExerciseDialogState extends State<_RenameExerciseDialog> {
                 style: textTheme.bodySmall?.copyWith(color: secondary),
               ),
             ),
-            if (_everywhere && impact.merges)
+            if (impact.otherMovement case final other?)
               Padding(
                 padding: const EdgeInsets.only(top: AppSpacing.xs),
                 child: Text(
-                  '$name already exists, so the two histories and records '
-                  'will merge.',
+                  '$other is a different exercise, so its history stays '
+                  'separate. To combine them, merge them in Settings → '
+                  'Manage exercises.',
                   key: const ValueKey('rename-merge-note'),
                   style: textTheme.bodySmall?.copyWith(
                     color: textPrimaryColor(context),

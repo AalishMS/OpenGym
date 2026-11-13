@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import 'auth/auth_gate.dart';
@@ -23,6 +26,7 @@ import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  useBundledFonts();
 
   bool showIntro = false;
   try {
@@ -55,6 +59,20 @@ void main() async {
   }
 
   runApp(MyApp(showIntro: showIntro));
+}
+
+/// Type comes only from `assets/google_fonts/`, never from the network, so it
+/// is identical on the first offline launch and every launch after.
+void useBundledFonts() {
+  GoogleFonts.config.allowRuntimeFetching = false;
+  LicenseRegistry.addLicense(() async* {
+    for (final family in ['Manrope', 'JetBrainsMono']) {
+      final license = await rootBundle.loadString(
+        'assets/google_fonts/$family-OFL.txt',
+      );
+      yield LicenseEntryWithLineBreaks([family], license);
+    }
+  });
 }
 
 /// Decide before Hive's startup migration marks a fresh installation as old.

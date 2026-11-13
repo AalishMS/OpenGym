@@ -1,4 +1,4 @@
-import '../data/exercise_library.dart';
+import 'exercise_catalog.dart';
 import '../models/set.dart' as gym;
 import '../models/statistics.dart';
 import '../models/training_block.dart';
@@ -19,17 +19,22 @@ class StatisticsAnalyticsService {
     final current = startOfWeek(now ?? DateTime.now());
     final end = DateTime(current.year, current.month, current.day + 7);
     final totals = <DateTime, double>{};
+    final wanted =
+        exerciseName == null ? null : ExerciseCatalog.identity(exerciseName);
     for (final session in eligibleSessions(sessions, splitId: splitId)) {
       if (!session.date.isBefore(end)) continue;
       var performed = false;
       var volume = 0.0;
       for (final exercise in session.exercises) {
-        if (exerciseName != null &&
-            exercise.name.trim().toLowerCase() !=
-                exerciseName.trim().toLowerCase()) {
+        if (wanted != null &&
+            ExerciseCatalog.identity(exercise.name, exercise.exerciseId) !=
+                wanted) {
           continue;
         }
-        final timed = ExerciseLibrary.isTimed(exercise.name);
+        final timed = ExerciseCatalog.isTimed(
+          exercise.name,
+          exercise.exerciseId,
+        );
         for (final set in exercise.sets.where((set) => set.reps > 0)) {
           performed = true;
           if (!timed) volume += set.weight * set.reps;
@@ -59,25 +64,21 @@ class StatisticsAnalyticsService {
       for (final exercise in session.exercises) {
         if (exercise.sets.any((set) => set.reps > 0)) {
           latest.putIfAbsent(
-            exercise.name.trim().toLowerCase(),
+            ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
             () => session.date,
           );
         }
       }
     }
-    final names =
-        exerciseNames(
-            sessions,
-          ).where((name) => latest.containsKey(name.toLowerCase())).toList()
-          ..sort((a, b) {
-            final date = latest[b.toLowerCase()]!.compareTo(
-              latest[a.toLowerCase()]!,
-            );
-            return date == 0
-                ? a.toLowerCase().compareTo(b.toLowerCase())
-                : date;
-          });
-    return names.firstOrNull;
+    final directory = exerciseDirectory(sessions);
+    final ids =
+        latest.keys.toList()..sort((a, b) {
+          final date = latest[b]!.compareTo(latest[a]!);
+          if (date != 0) return date;
+          final name = directory[a]!.compareTo(directory[b]!);
+          return name == 0 ? a.compareTo(b) : name;
+        });
+    return ids.isEmpty ? null : directory[ids.first];
   }
 
   static double estimatedOneRepMax(gym.Set set) {
@@ -112,7 +113,7 @@ class StatisticsAnalyticsService {
     var sets = 0;
     for (final exercise in session.exercises) {
       // A timed set's reps are seconds: it counts as a set, not as reps.
-      final timed = ExerciseLibrary.isTimed(exercise.name);
+      final timed = ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId);
       for (final set in exercise.sets.where((set) => set.reps > 0)) {
         sets++;
         if (timed) continue;
@@ -154,7 +155,8 @@ class StatisticsAnalyticsService {
   ///
   /// - Only completed, live workouts count, oldest first, and only sets with
   ///   reps above zero.
-  /// - Lifts are matched by trimmed, case-insensitive name.
+  /// - Lifts are matched by canonical catalog identity (`ExerciseCatalog`),
+  ///   so renamed and merged occurrences share one history.
   /// - The first workout with performed sets of a lift sets its baselines and
   ///   yields no records, not even between its own sets.
   /// - After that, each workout is compared with the workouts before it, never
@@ -162,10 +164,12 @@ class StatisticsAnalyticsService {
   ///   Every record needs an earlier value of its own kind to beat:
   ///   - heaviest weight, best set volume (weight × reps) and estimated 1RM
   ///     go to the workout's best weighted set when it beats the previous
-  ///     best. They need an earlier weighted set (weight above 0), so the
-  ///     first loaded set after bodyweight-only workouts sets a baseline
-  ///     instead of beating 0. An estimated 1RM likewise needs an earlier one
-  ///     (a lift trained only above 12 reps has none yet);
+  ///     best. Set volume and estimated 1RM need an earlier weighted set
+  ///     (weight above 0), so the first loaded set after bodyweight-only
+  ///     workouts sets their baseline; an estimated 1RM likewise needs an
+  ///     earlier one (a lift trained only above 12 reps has none yet).
+  ///     Heaviest weight also accepts earlier bodyweight sets as a baseline
+  ///     of 0, so the first added load after them is a record;
   ///   - a weighted set of N reps at weight W is a rep best when W beats the
   ///     heaviest weight previously lifted for N or more reps, and no other
   ///     weighted set in the workout matched it with at least as many reps
@@ -173,50 +177,79 @@ class StatisticsAnalyticsService {
   ///     there is nothing to beat;
   ///   - most reps goes to the workout's best bodyweight set (weight 0) when
   ///     it beats the most reps in an earlier bodyweight set.
-  /// - A timed lift (`ExerciseLibrary.isTimed`) stores seconds in `reps`. It
+  /// - A timed lift (`ExerciseCatalog.isTimed`) stores seconds in `reps`. It
   ///   only earns *longest hold*, against its earlier longest hold, and never
   ///   a weight, rep or estimated-1RM record.
   List<RecordEvent> recordEvents(Iterable<WorkoutSession> sessions) {
     final ordered = eligibleSessions(sessions).toList()..sort(_chronological);
     final states = <String, _RecordState>{};
-    final events = <RecordEvent>[];
-    for (final session in ordered) {
-      final lifts = <String, _PerformedLift>{};
-      for (final (exerciseIndex, exercise) in session.exercises.indexed) {
-        for (final (setIndex, set) in exercise.sets.indexed) {
-          if (set.reps <= 0) continue;
-          lifts
-              .putIfAbsent(
-                exercise.name.trim().toLowerCase(),
-                () => _PerformedLift(
-                  exercise.name,
-                  timed: ExerciseLibrary.isTimed(exercise.name),
-                ),
-              )
-              .sets
-              .add(_PerformedSet(exerciseIndex, setIndex, set));
-        }
-      }
-      for (final MapEntry(:key, value: lift) in lifts.entries) {
-        final state = states[key];
-        if (state == null) {
-          states[key] = _RecordState()..absorb(lift);
-          continue;
-        }
-        final achievements = state.achievements(lift);
-        state.absorb(lift);
-        if (achievements.isEmpty) continue;
-        events.add(
-          RecordEvent(
-            exerciseName: lift.name,
-            session: session,
-            achievements: List.unmodifiable(achievements),
-          ),
-        );
-      }
-    }
+    final events = <RecordEvent>[
+      for (final session in ordered) ..._judge(states, session, absorb: true),
+    ];
     events.sort((a, b) => _chronological(b.session, a.session));
     return List.unmodifiable(events);
+  }
+
+  /// The bests [history] sets, to judge a workout logged after all of it by
+  /// exactly the rules of [recordEvents] without re-reading the history. The
+  /// workout screen uses this for its live record marks, so a mark agrees
+  /// with Finish, History and Stats.
+  RecordJudge recordJudge(Iterable<WorkoutSession> history) {
+    final states = <String, _RecordState>{};
+    final ordered = eligibleSessions(history).toList()..sort(_chronological);
+    for (final session in ordered) {
+      _judge(states, session, absorb: true);
+    }
+    return RecordJudge._(states);
+  }
+
+  /// The records [session] sets against [states], optionally adding its sets
+  /// to them. A lift with no state yet is a baseline and earns nothing.
+  static List<RecordEvent> _judge(
+    Map<String, _RecordState> states,
+    WorkoutSession session, {
+    required bool absorb,
+  }) {
+    final lifts = <String, _PerformedLift>{};
+    for (final (exerciseIndex, exercise) in session.exercises.indexed) {
+      for (final (setIndex, set) in exercise.sets.indexed) {
+        if (set.reps <= 0) continue;
+        final id = ExerciseCatalog.identity(exercise.name, exercise.exerciseId);
+        lifts
+            .putIfAbsent(
+              id,
+              () => _PerformedLift(
+                ExerciseCatalog.displayName(id, exercise.name),
+                timed: ExerciseCatalog.isTimed(
+                  exercise.name,
+                  exercise.exerciseId,
+                ),
+              ),
+            )
+            .sets
+            .add(_PerformedSet(exerciseIndex, setIndex, set));
+      }
+    }
+    final events = <RecordEvent>[];
+    for (final MapEntry(:key, value: lift) in lifts.entries) {
+      final state = states[key];
+      if (state == null) {
+        if (absorb) states[key] = _RecordState()..absorb(lift);
+        continue;
+      }
+      final achievements = state.achievements(lift);
+      if (absorb) state.absorb(lift);
+      if (achievements.isEmpty) continue;
+      events.add(
+        RecordEvent(
+          exerciseName: lift.name,
+          exerciseId: key,
+          session: session,
+          achievements: List.unmodifiable(achievements),
+        ),
+      );
+    }
+    return events;
   }
 
   /// The records [session] set, judged against the other workouts in
@@ -240,21 +273,25 @@ class StatisticsAnalyticsService {
     return date != 0 ? date : (a.id ?? '').compareTo(b.id ?? '');
   }
 
-  List<String> exerciseNames(Iterable<WorkoutSession> sessions) {
+  /// Canonical exercise ID to display name, for every lift with performed sets.
+  Map<String, String> exerciseDirectory(Iterable<WorkoutSession> sessions) {
     final names = <String, String>{};
     for (final session in eligibleSessions(sessions)) {
-      for (final exercise in session.exercises) {
-        if (exercise.sets.any((set) => set.reps > 0)) {
+      for (final e in session.exercises) {
+        if (e.sets.any((s) => s.reps > 0)) {
+          final id = ExerciseCatalog.identity(e.name, e.exerciseId);
           names.putIfAbsent(
-            exercise.name.trim().toLowerCase(),
-            () => exercise.name.trim(),
+            id,
+            () => ExerciseCatalog.displayName(id, e.name.trim()),
           );
         }
       }
     }
-    final result = names.values.toList()..sort();
-    return List.unmodifiable(result);
+    return names;
   }
+
+  List<String> exerciseNames(Iterable<WorkoutSession> sessions) =>
+      List.unmodifiable(exerciseDirectory(sessions).values.toList()..sort());
 
   /// One lift's value per workout in [sessions], oldest first.
   ///
@@ -268,12 +305,20 @@ class StatisticsAnalyticsService {
     String exerciseName,
     ExerciseMetric metric,
   ) {
-    final key = exerciseName.trim().toLowerCase();
+    // [exerciseName] may be a label or a canonical ID; both resolve the same.
+    final key = ExerciseCatalog.identity(exerciseName);
     final performed = <(WorkoutSession, List<gym.Set>)>[];
     for (final session in eligibleSessions(sessions).reversed) {
       final sets =
           session.exercises
-              .where((exercise) => exercise.name.trim().toLowerCase() == key)
+              .where(
+                (exercise) =>
+                    ExerciseCatalog.identity(
+                      exercise.name,
+                      exercise.exerciseId,
+                    ) ==
+                    key,
+              )
               .expand((exercise) => exercise.sets)
               .where((set) => set.reps > 0)
               .toList();
@@ -281,7 +326,7 @@ class StatisticsAnalyticsService {
     }
     final fallback = progressFallback(
       metric,
-      timed: ExerciseLibrary.isTimed(exerciseName),
+      timed: ExerciseCatalog.isTimed(key, key),
       bodyweight: performed.every(
         (entry) => entry.$2.every((set) => set.weight <= 0),
       ),
@@ -464,23 +509,37 @@ class StatisticsAnalyticsService {
     final firsts = <String, (String, double)>{};
     final lasts = <String, double>{};
     for (final session in ordered) {
+      // Occurrences of one movement in a workout combine by canonical ID.
+      final bests = <String, double>{};
+      final names = <String, String>{};
       for (final exercise in session.exercises) {
-        if (ExerciseLibrary.isTimed(exercise.name)) continue;
-        var best = 0.0;
-        for (final set in exercise.sets) {
-          final e1rm = estimatedOneRepMax(set);
-          if (e1rm > best) best = e1rm;
+        if (ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId)) {
+          continue;
         }
-        if (best == 0) continue;
-        final key = exercise.name.trim().toLowerCase();
-        firsts.putIfAbsent(key, () => (exercise.name.trim(), best));
-        lasts[key] = best;
+        final key = ExerciseCatalog.identity(
+          exercise.name,
+          exercise.exerciseId,
+        );
+        names[key] = ExerciseCatalog.displayName(key, exercise.name.trim());
+        for (final set in exercise.sets) {
+          final value = estimatedOneRepMax(set);
+          if (value > (bests[key] ?? 0)) bests[key] = value;
+        }
+      }
+      for (final entry in bests.entries) {
+        firsts.putIfAbsent(entry.key, () => (names[entry.key]!, entry.value));
+        lasts[entry.key] = entry.value;
       }
     }
     final gains = [
       for (final MapEntry(:key, value: (name, start)) in firsts.entries)
         if (lasts[key]! > start)
-          LiftGain(exerciseName: name, start: start, end: lasts[key]!),
+          LiftGain(
+            exerciseName: name,
+            exerciseId: key,
+            start: start,
+            end: lasts[key]!,
+          ),
     ]..sort((a, b) => b.percent.compareTo(a.percent));
     return List.unmodifiable(gains);
   }
@@ -492,10 +551,11 @@ class StatisticsAnalyticsService {
   ) {
     final summaries =
         [
-            for (final name in exerciseNames(sessions))
+            for (final entry in exerciseDirectory(sessions).entries)
               LiftSummary(
-                exerciseName: name,
-                progress: exerciseProgress(sessions, name, metric),
+                exerciseName: entry.value,
+                exerciseId: entry.key,
+                progress: exerciseProgress(sessions, entry.key, metric),
               ),
           ].where((lift) => lift.progress.points.isNotEmpty).toList()
           ..sort((a, b) {
@@ -518,8 +578,22 @@ class StatisticsAnalyticsService {
   }
 }
 
+/// Bests from a fixed history (see [StatisticsAnalyticsService.recordJudge]).
+class RecordJudge {
+  final Map<String, _RecordState> _states;
+
+  RecordJudge._(this._states);
+
+  /// The records [session] would set if logged after the judged history.
+  /// Its sets are not added to the bests, so it can be judged again after
+  /// every edit.
+  List<RecordEvent> recordsFor(WorkoutSession session) => List.unmodifiable(
+    StatisticsAnalyticsService._judge(_states, session, absorb: false),
+  );
+}
+
 /// One lift's performed sets in one workout, gathered across every exercise
-/// entry that shares its name.
+/// occurrence that shares its canonical exercise ID.
 class _PerformedLift {
   final String name;
 
@@ -634,8 +708,7 @@ class _RecordState {
 
       final strongest = _top(sets, (set) => set.estimatedOneRepMax);
       final previousE1rm = estimatedOneRepMax;
-      if (previousE1rm != null &&
-          strongest.estimatedOneRepMax > previousE1rm) {
+      if (previousE1rm != null && strongest.estimatedOneRepMax > previousE1rm) {
         result.add(
           strongest.achievement(
             RecordType.estimatedOneRepMax,
@@ -722,6 +795,10 @@ class _RecordState {
     }
     for (final set in lift.bodyweight) {
       if (set.reps > (mostReps ?? 0)) mostReps = set.reps;
+      // Performed bodyweight sets are a heaviest-weight baseline of zero, so
+      // the first added load after them is a record (weighted dips after
+      // bodyweight dips). Volume, 1RM and rep bests still need a loaded set.
+      heaviestWeight ??= 0;
     }
   }
 }

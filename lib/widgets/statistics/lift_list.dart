@@ -39,7 +39,7 @@ class _LiftListState extends State<LiftList> {
   Widget build(BuildContext context) {
     final lifts = widget.lifts;
     final selectedIndex = lifts.indexWhere(
-      (lift) => lift.exerciseName == widget.selected,
+      (lift) => (lift.exerciseId ?? lift.exerciseName) == widget.selected,
     );
     // A selection further down the list keeps itself visible when collapsed.
     final visible =
@@ -55,12 +55,12 @@ class _LiftListState extends State<LiftList> {
       children: [
         for (final lift in visible)
           _LiftRow(
-            key: ValueKey('lift-${lift.exerciseName}'),
+            key: ValueKey('lift-${lift.exerciseId ?? lift.exerciseName}'),
             lift: lift,
-            selected: lift.exerciseName == widget.selected,
+            selected: (lift.exerciseId ?? lift.exerciseName) == widget.selected,
             metric: widget.metric,
             unit: widget.weightUnit,
-            onTap: () => widget.onSelect(lift.exerciseName),
+            onTap: () => widget.onSelect(lift.exerciseId ?? lift.exerciseName),
           ),
         if (lifts.length > LiftList.collapsedCount)
           TextButton.icon(

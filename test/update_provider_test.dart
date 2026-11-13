@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/services.dart';
@@ -22,7 +23,11 @@ void main() {
 
   /// Installs build [build] and caches [release] as already fetched, so the
   /// startup check offers it without touching the network.
-  void seed({String build = '1'}) {
+  void seed({
+    String build = '1',
+    bool autoDownload = false,
+    Map<String, Object> extra = const {},
+  }) {
     PackageInfo.setMockInitialValues(
       appName: 'OpenGym',
       packageName: 'com.aalishms.opengym',
@@ -33,6 +38,8 @@ void main() {
     SharedPreferences.setMockInitialValues({
       'update_cached_release': jsonEncode(release.toCache()),
       'update_last_check': DateTime.now().millisecondsSinceEpoch,
+      'update_auto_download': autoDownload,
+      ...extra,
     });
   }
 
@@ -147,8 +154,11 @@ void main() {
       await tester.pump();
       expect(updates.status, UpdateStatus.installing);
 
+      downloader.onEvent!(
+        const InstallResultEvent(InstallResult(InstallOutcome.confirming)),
+      );
       downloader.installResult = const InstallResult(InstallOutcome.canceled);
-      await lifecycle(tester, AppLifecycleState.inactive);
+      await lifecycle(tester, AppLifecycleState.paused);
       await lifecycle(tester, AppLifecycleState.resumed);
       expect(updates.status, UpdateStatus.downloaded);
       expect(updates.isUpdateAvailable, isTrue);
@@ -169,9 +179,16 @@ void main() {
     downloader.snapshot = finished;
     await tester.pump(UpdateProvider.pollInterval);
     await tester.pump();
+    downloader.onEvent!(
+      const InstallResultEvent(InstallResult(InstallOutcome.confirming)),
+    );
 
     await lifecycle(tester, AppLifecycleState.paused);
     await lifecycle(tester, AppLifecycleState.resumed);
+    // The answer may trail the resume, so it is given a moment first.
+    expect(updates.status, UpdateStatus.installing);
+    await tester.pump(UpdateProvider.installResultGrace);
+    await tester.pump();
     expect(updates.status, UpdateStatus.downloaded);
     updates.dispose();
   });
@@ -185,8 +202,11 @@ void main() {
     await tester.pump(UpdateProvider.pollInterval);
     await tester.pump();
 
+    downloader.onEvent!(
+      const InstallResultEvent(InstallResult(InstallOutcome.confirming)),
+    );
     downloader.installResult = const InstallResult(InstallOutcome.failed, -7);
-    await lifecycle(tester, AppLifecycleState.inactive);
+    await lifecycle(tester, AppLifecycleState.paused);
     await lifecycle(tester, AppLifecycleState.resumed);
     expect(updates.status, UpdateStatus.failed);
     expect(updates.error, contains('signed differently'));
@@ -289,15 +309,368 @@ void main() {
     expect(updates.status, UpdateStatus.downloading);
     updates.dispose();
   });
+
+  UpdateDownloadSnapshot background(
+    UpdateDownloadState state, {
+    int reason = 0,
+  }) => UpdateDownloadSnapshot(
+    state: state,
+    tag: release.tagName,
+    downloadedBytes: state == UpdateDownloadState.successful ? 100 : 0,
+    totalBytes: 100,
+    reason: reason,
+    background: true,
+  );
+
+  group('background downloads', () {
+    testWidgets('an offer starts a Wi-Fi-only download when enabled', (
+      tester,
+    ) async {
+      seed(autoDownload: true);
+      await lifecycle(tester, AppLifecycleState.resumed);
+      final downloader = _FakeDownloader();
+      final updates = UpdateProvider(downloader: downloader);
+
+      await updates.checkOnStartup();
+      expect(updates.status, UpdateStatus.available);
+      expect(downloader.starts, 1);
+      expect(downloader.lastStartBackground, isTrue);
+      updates.dispose();
+    });
+
+    testWidgets('nothing downloads by itself when turned off', (tester) async {
+      final (updates, downloader) = await offered(tester);
+      expect(downloader.starts, 0);
+      updates.dispose();
+    });
+
+    testWidgets('turning it off stops an unfinished background download', (
+      tester,
+    ) async {
+      seed(autoDownload: true);
+      await lifecycle(tester, AppLifecycleState.resumed);
+      final downloader = _FakeDownloader();
+      final updates = UpdateProvider(downloader: downloader);
+      await updates.checkOnStartup();
+
+      await updates.setAutoDownload(false);
+      expect(downloader.cancels, 1);
+      expect(updates.autoDownload, isFalse);
+      updates.dispose();
+    });
+
+    testWidgets('a finished background download installs without refetching', (
+      tester,
+    ) async {
+      seed(autoDownload: true);
+      await lifecycle(tester, AppLifecycleState.resumed);
+      final downloader =
+          _FakeDownloader()
+            ..snapshot = background(UpdateDownloadState.successful);
+      final updates = UpdateProvider(downloader: downloader);
+
+      await updates.checkOnStartup();
+      expect(updates.status, UpdateStatus.downloaded);
+      expect(downloader.installs, 0, reason: 'the user has not asked yet');
+
+      await updates.startUpdate();
+      expect(downloader.starts, 0);
+      expect(downloader.installs, 1);
+      expect(downloader.backgroundMarks, [false]);
+      updates.dispose();
+    });
+
+    testWidgets('a resume notices a background download that finished', (
+      tester,
+    ) async {
+      seed(autoDownload: true);
+      await lifecycle(tester, AppLifecycleState.resumed);
+      final downloader = _FakeDownloader();
+      final updates = UpdateProvider(downloader: downloader);
+      await updates.checkOnStartup();
+      expect(updates.status, UpdateStatus.available);
+
+      downloader.snapshot = background(UpdateDownloadState.successful);
+      await updates.checkOnResume();
+      expect(updates.status, UpdateStatus.downloaded);
+      updates.dispose();
+    });
+
+    testWidgets('Update now restarts a download held back for Wi-Fi', (
+      tester,
+    ) async {
+      seed(autoDownload: true);
+      await lifecycle(tester, AppLifecycleState.resumed);
+      final downloader =
+          _FakeDownloader()
+            ..snapshot = background(UpdateDownloadState.paused, reason: 3);
+      final updates = UpdateProvider(downloader: downloader);
+      await updates.checkOnStartup();
+      expect(downloader.starts, 0, reason: 'the queued download is kept');
+
+      await updates.startUpdate();
+      expect(downloader.starts, 1);
+      expect(downloader.lastStartBackground, isFalse);
+      expect(updates.status, UpdateStatus.downloading);
+      updates.dispose();
+    });
+  });
+
+  group('when the prompt opens by itself', () {
+    testWidgets('once per release, then again after the snooze', (
+      tester,
+    ) async {
+      var now = DateTime.now();
+      seed();
+      await lifecycle(tester, AppLifecycleState.resumed);
+      final updates = UpdateProvider(
+        downloader: _FakeDownloader(),
+        clock: () => now,
+      );
+      await updates.checkOnStartup();
+
+      expect(await updates.shouldPromptAutomatically(), isTrue);
+      await updates.markPrompted();
+      expect(await updates.shouldPromptAutomatically(), isFalse);
+
+      now = now.add(UpdateProvider.snooze);
+      expect(await updates.shouldPromptAutomatically(), isTrue);
+      updates.dispose();
+    });
+
+    testWidgets('Later keeps the offer for the Settings badge', (tester) async {
+      final (updates, _) = await offered(tester);
+      updates.dismiss();
+      await tester.pump(); // Lets the snooze record land.
+      expect(updates.status, UpdateStatus.available);
+      expect(updates.hasPendingUpdate, isTrue);
+      expect(await updates.shouldPromptAutomatically(), isFalse);
+      updates.dispose();
+    });
+
+    testWidgets('a download the user started asks until put off', (
+      tester,
+    ) async {
+      seed();
+      await lifecycle(tester, AppLifecycleState.resumed);
+      final downloader = _FakeDownloader()..snapshot = finished;
+      final updates = UpdateProvider(downloader: downloader);
+      await updates.checkOnStartup();
+      await updates.markPrompted();
+
+      expect(await updates.shouldPromptAutomatically(), isTrue);
+      updates.dismiss();
+      await tester.pump();
+      expect(downloader.backgroundMarks, [true]);
+      expect(await updates.shouldPromptAutomatically(), isFalse);
+      updates.dispose();
+    });
+
+    testWidgets('the "Update ready" notification overrides the snooze', (
+      tester,
+    ) async {
+      seed(
+        extra: {
+          'update_prompted_tag': release.tagName,
+          'update_prompted_at': DateTime.now().millisecondsSinceEpoch,
+        },
+      );
+      await lifecycle(tester, AppLifecycleState.resumed);
+      final downloader = _FakeDownloader()..openRequest = true;
+      final updates = UpdateProvider(downloader: downloader);
+      await updates.checkOnStartup();
+
+      expect(await updates.shouldPromptAutomatically(), isTrue);
+      expect(await updates.shouldPromptAutomatically(), isFalse);
+      updates.dispose();
+    });
+
+    testWidgets('the notification while running asks the shell to open it', (
+      tester,
+    ) async {
+      final (updates, downloader) = await offered(tester);
+      var opened = 0;
+      final sub = updates.openRequests.listen((_) => opened++);
+
+      downloader.onEvent!(const OpenUpdateEvent());
+      await tester.pump();
+      expect(opened, 1);
+      unawaited(sub.cancel());
+      updates.dispose();
+    });
+  });
+
+  testWidgets('a finished download waits out a workout', (tester) async {
+    final (updates, downloader) = await offered(tester);
+    var workoutLive = true;
+    updates.canInterrupt = () async => !workoutLive;
+
+    await updates.startUpdate();
+    downloader.snapshot = finished;
+    await tester.pump(UpdateProvider.pollInterval);
+    await tester.pump();
+    expect(updates.status, UpdateStatus.downloaded);
+    expect(downloader.installs, 0);
+
+    workoutLive = false;
+    await lifecycle(tester, AppLifecycleState.paused);
+    await lifecycle(tester, AppLifecycleState.resumed);
+    expect(downloader.installs, 1);
+    updates.dispose();
+  });
+
+  testWidgets('a pushed install answer is handled without a resume', (
+    tester,
+  ) async {
+    final (updates, downloader) = await offered(tester);
+    await updates.startUpdate();
+    downloader.snapshot = finished;
+    await tester.pump(UpdateProvider.pollInterval);
+    await tester.pump();
+    expect(updates.status, UpdateStatus.installing);
+
+    downloader.onEvent!(
+      const InstallResultEvent(InstallResult(InstallOutcome.canceled)),
+    );
+    expect(updates.status, UpdateStatus.downloaded);
+    updates.dispose();
+  });
+
+  testWidgets('a damaged download is discarded and explained', (tester) async {
+    final (updates, downloader) = await offered(tester);
+    await updates.startUpdate();
+    downloader.snapshot = finished;
+    await tester.pump(UpdateProvider.pollInterval);
+    await tester.pump();
+
+    downloader.onEvent!(
+      const InstallResultEvent(InstallResult(InstallOutcome.corrupt)),
+    );
+    await tester.pump();
+    expect(updates.status, UpdateStatus.failed);
+    expect(updates.error, kCorruptDownloadMessage);
+    expect(downloader.cancels, 1);
+
+    await updates.startUpdate();
+    expect(downloader.starts, 2, reason: 'Try again downloads it afresh');
+    updates.dispose();
+  });
+
+  testWidgets('the confirm screen is waited on, and a shade pull is ignored', (
+    tester,
+  ) async {
+    final (updates, downloader) = await offered(tester);
+    await updates.startUpdate();
+    downloader.snapshot = finished;
+    await tester.pump(UpdateProvider.pollInterval);
+    await tester.pump();
+    expect(updates.status, UpdateStatus.installing);
+
+    // Still staging: a notification shade pull is not the installer.
+    await lifecycle(tester, AppLifecycleState.inactive);
+    await lifecycle(tester, AppLifecycleState.resumed);
+    await tester.pump(UpdateProvider.installResultGrace);
+    expect(updates.status, UpdateStatus.installing);
+
+    // The confirm screen is up; no timeout while the user reads it.
+    downloader.onEvent!(
+      const InstallResultEvent(InstallResult(InstallOutcome.confirming)),
+    );
+    await tester.pump(UpdateProvider.installTimeout * 2);
+    expect(updates.status, UpdateStatus.installing);
+
+    // Backing out of it without an answer hands the button back.
+    await lifecycle(tester, AppLifecycleState.paused);
+    await lifecycle(tester, AppLifecycleState.resumed);
+    await tester.pump(UpdateProvider.installResultGrace);
+    await tester.pump();
+    expect(updates.status, UpdateStatus.downloaded);
+    updates.dispose();
+  });
+
+  testWidgets('a damaged release is not fetched in the background again', (
+    tester,
+  ) async {
+    seed(autoDownload: true, extra: {'update_corrupt_tag': 'v1.0.1+2'});
+    await lifecycle(tester, AppLifecycleState.resumed);
+    final downloader = _FakeDownloader();
+    final updates = UpdateProvider(downloader: downloader);
+    await updates.checkOnStartup();
+    expect(updates.status, UpdateStatus.available);
+    expect(downloader.starts, 0);
+    updates.dispose();
+  });
+
+  testWidgets('a failed background download is retried', (tester) async {
+    seed(autoDownload: true);
+    await lifecycle(tester, AppLifecycleState.resumed);
+    final downloader = _FakeDownloader();
+    final updates = UpdateProvider(downloader: downloader);
+    await updates.checkOnStartup();
+    expect(downloader.starts, 1);
+
+    downloader.snapshot = background(UpdateDownloadState.failed);
+    await updates.checkOnResume();
+    expect(downloader.starts, 2);
+    updates.dispose();
+  });
+
+  testWidgets('an install that never answers hands the button back', (
+    tester,
+  ) async {
+    final (updates, downloader) = await offered(tester);
+    await updates.startUpdate();
+    downloader.snapshot = finished;
+    await tester.pump(UpdateProvider.pollInterval);
+    await tester.pump();
+    expect(updates.status, UpdateStatus.installing);
+
+    await tester.pump(UpdateProvider.installTimeout);
+    expect(updates.status, UpdateStatus.downloaded);
+    updates.dispose();
+  });
+
+  group("what's new", () {
+    testWidgets('shows once on the first launch of a new build', (
+      tester,
+    ) async {
+      seed(build: '2', extra: {'update_last_seen_build': 1});
+      await lifecycle(tester, AppLifecycleState.resumed);
+      final updates = UpdateProvider(downloader: _FakeDownloader());
+      await updates.checkOnStartup();
+
+      expect(updates.takeWhatsNew()?.tagName, release.tagName);
+      expect(updates.takeWhatsNew(), isNull);
+      updates.dispose();
+
+      final relaunched = UpdateProvider(downloader: _FakeDownloader());
+      await relaunched.checkOnStartup();
+      expect(relaunched.takeWhatsNew(), isNull);
+      relaunched.dispose();
+    });
+
+    testWidgets('stays quiet on a fresh install', (tester) async {
+      seed(build: '2');
+      await lifecycle(tester, AppLifecycleState.resumed);
+      final updates = UpdateProvider(downloader: _FakeDownloader());
+      await updates.checkOnStartup();
+      expect(updates.takeWhatsNew(), isNull);
+      updates.dispose();
+    });
+  });
 }
 
 class _FakeDownloader extends UpdateDownloader {
   UpdateDownloadSnapshot snapshot = UpdateDownloadSnapshot.none;
   InstallResult? installResult;
   bool permission = true;
+  bool openRequest = false;
   int starts = 0;
   int installs = 0;
   int cancels = 0;
+  bool? lastStartBackground;
+  final List<bool> backgroundMarks = [];
+  void Function(UpdatePlatformEvent event)? onEvent;
 
   @override
   bool get isSupported => true;
@@ -309,12 +682,19 @@ class _FakeDownloader extends UpdateDownloader {
   Future<bool> ensureInstallPermission() async => permission;
 
   @override
-  Future<void> start(ReleaseInfo release) async {
+  Future<void> start(ReleaseInfo release, {bool background = false}) async {
     starts++;
+    lastStartBackground = background;
     snapshot = UpdateDownloadSnapshot(
       state: UpdateDownloadState.pending,
       tag: release.tagName,
+      background: background,
     );
+  }
+
+  @override
+  Future<void> setBackground(bool background) async {
+    backgroundMarks.add(background);
   }
 
   @override
@@ -327,7 +707,7 @@ class _FakeDownloader extends UpdateDownloader {
   }
 
   @override
-  Future<bool> install() async {
+  Future<bool> install(ReleaseInfo release) async {
     installs++;
     return true;
   }
@@ -337,5 +717,20 @@ class _FakeDownloader extends UpdateDownloader {
     final result = installResult;
     installResult = null;
     return result;
+  }
+
+  @override
+  Future<bool> canUpdateSilently() async => false;
+
+  @override
+  Future<bool> takeOpenUpdateRequest() async {
+    final requested = openRequest;
+    openRequest = false;
+    return requested;
+  }
+
+  @override
+  void listen(void Function(UpdatePlatformEvent event) onEvent) {
+    this.onEvent = onEvent;
   }
 }

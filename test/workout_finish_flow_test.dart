@@ -9,8 +9,8 @@ import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/workout_screen.dart';
+import 'package:gymapp/screens/workout_summary_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
-import 'package:gymapp/widgets/workout/workout_finish_summary.dart';
 import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -97,21 +97,22 @@ void main() {
           );
           await pumpWithStorage(tester);
           sessions.fail = fails;
-          expect(find.text('Finish workout'), findsOneWidget);
-          await tester.tap(find.text('Finish workout'));
+          final finish = find.byKey(const ValueKey('finish-workout'));
+          expect(finish, findsOneWidget);
+          await tester.tap(finish);
           await tester.pumpAndSettle();
           await tester.tap(find.text('Log workout'));
           await pumpWithStorage(tester);
           expect(
-            find.byType(WorkoutFinishSummary),
+            find.byType(WorkoutSummaryScreen),
             fails ? findsNothing : findsOneWidget,
           );
           expect(HiveService.getSessionById('draft')!.isCompleted, !fails);
           if (!fails) {
-            await tester.tap(find.text('Done'));
+            await tester.tap(find.byKey(const ValueKey('summary-done')));
             await tester.pumpAndSettle();
-            expect(find.text('Finish workout'), findsNothing);
-            expect(find.byType(WorkoutFinishSummary), findsNothing);
+            expect(finish, findsNothing);
+            expect(find.byType(WorkoutSummaryScreen), findsNothing);
           }
           expect(tester.takeException(), isNull);
         } finally {

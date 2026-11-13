@@ -134,6 +134,7 @@ class CoachExercise {
     if (stored != null) {
       return ExerciseTemplate(
         name: stored.name,
+        exerciseId: stored.exerciseId,
         sets: stored.sets,
         setTargets:
             stored.setTargets == null
@@ -151,6 +152,7 @@ class CoachExercise {
     }
     return ExerciseTemplate(
       name: name,
+      exerciseId: effortSource?.exerciseId,
       sets: sets.length,
       setTargets: [
         for (var index = 0; index < sets.length; index++)

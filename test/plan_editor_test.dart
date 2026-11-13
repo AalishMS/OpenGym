@@ -1,3 +1,5 @@
+import 'package:gymapp/services/exercise_catalog.dart';
+import 'package:gymapp/services/sync_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -37,6 +39,7 @@ void main() {
   });
 
   setUp(() async {
+    await ExerciseCatalog.clear();
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
     await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
   });
@@ -309,7 +312,10 @@ void main() {
     await tester.enterText(find.byType(TextFormField), 'Cable Halo');
     tester.testTextInput.hide();
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Create'));
+    await tester.runAsync(() async {
+      await tester.tap(find.text('Create'));
+      await SyncService.instance.runExclusiveLocalMutation(() async {});
+    });
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Selected (1)'));
@@ -744,6 +750,7 @@ void main() {
     }
     await tester.runAsync(() async {
       await tester.tap(find.text('Save'));
+      await SyncService.instance.runExclusiveLocalMutation(() async {});
       await Hive.box<WorkoutPlan>(HiveService.plansBox).flush();
     });
     await tester.pumpAndSettle();

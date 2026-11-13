@@ -13,6 +13,7 @@ import 'package:gymapp/navigation/workout_destination.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/workout_screen.dart';
+import 'package:gymapp/services/exercise_catalog.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/utils/training_block_identity.dart';
@@ -154,7 +155,7 @@ void main() {
     ]);
   });
 
-  workoutTest('rename rejects changing reps to seconds before saving', (
+  workoutTest("renaming to a hold's name keeps the lift and its measure", (
     tester,
   ) async {
     await open(tester);
@@ -162,25 +163,25 @@ void main() {
     await tester.tap(find.text('Rename exercise'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Plank');
+    await tester.pump();
+    // Plank is another movement: the label changes, the identity does not.
+    expect(find.byKey(const ValueKey('rename-merge-note')), findsOneWidget);
     await tester.tap(find.text('Rename'));
-    await tester.pumpAndSettle();
-    expect(
-      find.textContaining('Timed exercises need a timed exercise name.'),
-      findsOneWidget,
-    );
-    expect(find.text('Rename exercise'), findsOneWidget);
-    expect(
-      names(HiveService.getPlanById('push')!.exercises).first,
-      'Bench Press',
-    );
-    expect(
-      names(HiveService.getSessionById('push-1')!.exercises).first,
-      'Bench Press',
-    );
-    expect(
-      HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split'),
-      isNull,
-    );
+    await pumpWithStorage(tester);
+
+    final draft =
+        HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
+    final renamed = draft.exercises.first;
+    expect(renamed.name, 'Plank');
+    expect(renamed.exerciseId, 'builtin:bench-press');
+    expect(ExerciseCatalog.isTimed(renamed.name, renamed.exerciseId), isFalse);
+    final logged = HiveService.getSessionById('push-1')!.exercises.first;
+    expect(logged.name, 'Plank');
+    expect(logged.exerciseId, 'builtin:bench-press');
+    expect(logged.sets.first.reps, 8, reason: 'reps are never reinterpreted');
+    // Previous still reads as weight × reps, not as a hold in seconds.
+    expect(find.text('80 × 8'), findsOneWidget);
+    expect(find.text('80 × 8 s'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -228,6 +229,15 @@ void main() {
         HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
     expect(names(draft.exercises), ['Flat bench press', 'Cable Fly']);
     expect(draft.exercises.first.sets.first.weight, 80);
+    // Every renamed occurrence keeps (or gains) its stable catalog ID.
+    for (final id in [
+      HiveService.getPlanById('push')!.exercises.first.exerciseId,
+      HiveService.getPlanById('upper')!.exercises.first.exerciseId,
+      HiveService.getSessionById('push-1')!.exercises.first.exerciseId,
+      draft.exercises.first.exerciseId,
+    ]) {
+      expect(id, 'builtin:bench-press');
+    }
 
     // The renamed workout still finds last week's sets under the new name.
     expect(find.text('Flat bench press'), findsOneWidget);
@@ -248,7 +258,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  workoutTest('renaming to an existing name warns that histories merge', (
+  workoutTest("renaming to another exercise's name keeps histories apart", (
     tester,
   ) async {
     await open(tester);
@@ -257,17 +267,23 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'squat');
     await tester.pump();
-    expect(find.byKey(const ValueKey('rename-merge-note')), findsOneWidget);
     expect(
       find.text(
-        'squat already exists, so the two histories and records will merge.',
+        'Squat is a different exercise, so its history stays separate. To '
+        'combine them, merge them in Settings → Manage exercises.',
       ),
       findsOneWidget,
     );
-    // The note only applies while the rename reaches the other records.
+    // Renaming only this workout does not merge either.
     await tester.tap(find.byKey(const ValueKey('rename-everywhere')));
     await tester.pump();
-    expect(find.byKey(const ValueKey('rename-merge-note')), findsNothing);
+    expect(find.byKey(const ValueKey('rename-merge-note')), findsOneWidget);
+    await tester.tap(find.text('Rename'));
+    await pumpWithStorage(tester);
+    final draft =
+        HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
+    expect(draft.exercises.first.name, 'squat');
+    expect(draft.exercises.first.exerciseId, 'builtin:bench-press');
   });
 
   workoutTest('unchecked rename changes this workout only', (tester) async {
@@ -337,6 +353,7 @@ void main() {
         HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
     expect(names(draft.exercises), ['Squat', 'Cable Fly']);
     final squat = draft.exercises.first;
+    expect(squat.exerciseId, 'builtin:squat');
     expect(squat.note, isNull);
     // Two sets kept; both take the latest Squat performance in the split.
     expect(
@@ -401,7 +418,9 @@ void main() {
     );
   });
 
-  workoutTest('a completed log offers no exercise menu', (tester) async {
+  workoutTest('a completed log can be renamed but not replaced', (
+    tester,
+  ) async {
     await open(
       tester,
       destination: WorkoutDestination.week(
@@ -410,6 +429,10 @@ void main() {
       ),
     );
     expect(find.text('Bench Press'), findsOneWidget);
-    expect(find.byTooltip('Exercise actions for Bench Press'), findsNothing);
+    // Logged workouts are edited in place; swapping a movement is only for
+    // a workout still being trained.
+    await openMenu(tester, 'Bench Press');
+    expect(find.text('Rename exercise'), findsOneWidget);
+    expect(find.text('Replace exercise'), findsNothing);
   });
 }

@@ -8,6 +8,8 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import 'exercise_management_screen.dart';
+import '../services/exercise_catalog.dart';
 import '../providers/settings_provider.dart';
 import '../providers/update_provider.dart';
 import '../providers/workout_plan_provider.dart';
@@ -22,6 +24,7 @@ import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../theme/radii.dart';
+import '../utils/scroll_to_top.dart';
 import '../utils/weight_units.dart';
 import '../widgets/app_header.dart';
 import '../widgets/update_dialog.dart';
@@ -36,7 +39,11 @@ class SettingsScreen extends StatefulWidget {
     this.onSignOut,
     this.onReplayTutorial,
     this.showSampleData = kDebugMode,
+    this.scrollToTopRequest = 0,
   });
+
+  /// Bumped when the Settings tab is tapped while showing.
+  final int scrollToTopRequest;
 
   final Future<void> Function(String splitId)? onClearData;
   final Future<void> Function()? onLoadSampleData;
@@ -54,6 +61,21 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   String? _busyAction;
   bool _confirmingMutation = false;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void didUpdateWidget(covariant SettingsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.scrollToTopRequest != oldWidget.scrollToTopRequest) {
+      scrollToTop(context, _scrollController);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   Future<void> _confirmMutation({
     required String title,
@@ -241,6 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Consumer<SettingsProvider>(
                 builder: (context, settings, child) {
                   return SingleChildScrollView(
+                    controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,6 +273,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildAccentColorSection(context, settings),
                         const _SectionHeader(title: 'Workout'),
                         _buildWeightUnitSection(context, settings),
+                        _buildSettingsTile(
+                          icon: LucideIcons.dumbbell,
+                          title: 'Manage exercises',
+                          subtitle:
+                              'Rename custom exercises and merge duplicates',
+                          onTap:
+                              () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder:
+                                      (_) => ExerciseManagementScreen(
+                                        userId:
+                                            context
+                                                .read<SplitProvider>()
+                                                .activeSplit
+                                                ?.userId,
+                                      ),
+                                ),
+                              ),
+                        ),
                         _buildSwitchTile(
                           context: context,
                           icon: LucideIcons.zap,
@@ -416,6 +458,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           subtitle: _updateSubtitle(updates),
                           onTap: () => _handleUpdateCheck(context, updates),
                         ),
+                        if (UpdateService.isSupportedPlatform)
+                          _buildSwitchTile(
+                            context: context,
+                            icon: LucideIcons.wifi,
+                            title: 'Download updates on Wi-Fi',
+                            subtitle:
+                                'Get new versions ready in the background so '
+                                'updating takes seconds',
+                            value: updates.autoDownload,
+                            onChanged:
+                                (value) => _runSettingsAction(
+                                  context,
+                                  () => updates.setAutoDownload(value),
+                                ),
+                          ),
                         const _SectionHeader(title: 'About'),
                         if (widget.onReplayTutorial != null)
                           _buildSettingsTile(
@@ -858,6 +915,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           blocks: HiveService.getAllTrainingBlocksRaw(),
           weeks: HiveService.getAllTrainingWeeksRaw(),
           progress: HiveService.getAllWorkoutProgressRaw(),
+          exerciseDefinitions: ExerciseCatalog.stored,
           settings: {
             'themeMode': settings.themeMode.index,
             'accentIndex': settings.accentIndex,
@@ -933,6 +991,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               blocks: imported.blocks!,
               weeks: imported.weeks!,
               progress: imported.progress!,
+              exerciseDefinitions: imported.graph!.exerciseDefinitions,
               settings: imported.settings!,
               operationId: imported.operationId,
             );

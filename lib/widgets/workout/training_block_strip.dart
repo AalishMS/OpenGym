@@ -227,6 +227,20 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
                         ),
                       ),
                     ),
+                    // Without a ground of its own, the block needs a rule to
+                    // part it from the weeks it holds.
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xs,
+                      ),
+                      child: Center(
+                        child: SizedBox(
+                          width: 1,
+                          height: 28,
+                          child: ColoredBox(color: borderColor(context)),
+                        ),
+                      ),
+                    ),
                     Expanded(
                       child: ShaderMask(
                         shaderCallback: (bounds) {
@@ -331,8 +345,9 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
   }
 }
 
-/// The selected block's name on a quiet ground: a ground means tappable, and
-/// this opens the block menu above it.
+/// The selected block's name as ink on the page, like the week tabs beside it:
+/// the accent icon and chevron say tappable, and a wash appears only while
+/// pressed or while the block menu above it is open.
 class _BlockButton extends StatelessWidget {
   final String name;
   final bool open;
@@ -357,10 +372,9 @@ class _BlockButton extends StatelessWidget {
       child: Tooltip(
         message: name,
         child: Material(
-          color: open ? accentMutedColor(context) : surfaceColor(context),
-          shape: RoundedRectangleBorder(
+          color: open ? accentMutedColor(context) : Colors.transparent,
+          shape: const RoundedRectangleBorder(
             borderRadius: AppRadius.control,
-            side: BorderSide(color: borderColor(context)),
           ),
           clipBehavior: Clip.antiAlias,
           child: InkWell(

@@ -310,7 +310,7 @@ void main() {
     await tester.pumpWidget(host(const HistoryScreen(), sessions: [session]));
     await tester.pump();
     expect(find.text('Push Day'), findsOneWidget);
-    expect(find.text('Exercises'), findsOneWidget);
+    expect(find.text('1 set'), findsOneWidget);
     expect(find.text('Bench Press'), findsOneWidget);
     expect(find.byTooltip('Workout actions'), findsNothing);
     await tester.tap(find.text('Push Day'));
@@ -335,7 +335,11 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.ensureVisible(find.text('Exercise progress'));
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(ValueKey('progress-period-${StatisticsPeriod.allTime}')),
+    );
     await tester.pumpAndSettle();
     expect(find.text(name), findsWidgets);
     expectNoOverflow(tester, 'long progression heading');
@@ -358,6 +362,9 @@ void main() {
       );
       await tester.pumpWidget(host(const StatsScreen(), sessions: [session]));
       await tester.pump();
+
+      await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
+      await tester.pumpAndSettle();
 
       Finder chip(StatisticsPeriod period) =>
           find.byKey(ValueKey('progress-period-$period'));

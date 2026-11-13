@@ -33,6 +33,7 @@ import 'support/test_fonts.dart';
 void main() {
   final harness = HiveTestHarness();
   final writes = <WorkoutSession>[];
+  var failWrites = false;
   void workoutTest(String name, Future<void> Function(WidgetTester) body) =>
       testWidgets(name, (tester) async {
         try {
@@ -43,6 +44,7 @@ void main() {
       });
   setUp(() async {
     writes.clear();
+    failWrites = false;
     await harness.open();
   });
   final plan = WorkoutPlan(
@@ -98,7 +100,13 @@ void main() {
         rootBundle.load('packages/lucide_icons_flutter/assets/lucide.ttf'),
       )).load();
       final manifest = const StandardMessageCodec().encodeMessage({
-        for (final weight in ['Regular', 'SemiBold', 'Bold'])
+        for (final weight in [
+          'Regular',
+          'Medium',
+          'SemiBold',
+          'Bold',
+          'ExtraBold',
+        ])
           'Manrope-$weight.ttf': [
             {'asset': 'Manrope-$weight.ttf'},
           ],
@@ -158,7 +166,7 @@ void main() {
             ]),
       ),
       ChangeNotifierProvider<WorkoutSessionProvider>(
-        create: (_) => _Sessions(writes),
+        create: (_) => _Sessions(writes, () => failWrites),
       ),
     ],
     child: MaterialApp(
@@ -291,7 +299,7 @@ void main() {
               find.descendant(of: card, matching: find.byType(Scrollbar)),
               findsNothing,
             );
-            final finish = find.widgetWithText(TextButton, 'Finish workout');
+            final finish = find.byKey(const ValueKey('finish-workout'));
             expect(finish, findsOneWidget);
             expect(
               tester
@@ -439,26 +447,148 @@ void main() {
     }
   });
 
-  workoutTest('completed log hides editing and workout management controls', (
+  workoutTest('completed log edits in place and stays logged', (tester) async {
+    await tester.runAsync(() => seed(completed: true));
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+    // A logged workout has no clock to run, but everything else is editable.
+    expect(find.bySemanticsLabel('Start workout'), findsNothing);
+    expect(find.byTooltip('Finish workout'), findsNothing);
+    expect(find.text('Add set'), findsWidgets);
+    expect(find.byTooltip('Exercise actions for Bench press'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Exercise actions for Bench press'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Move down'));
+    await pumpWithStorage(tester);
+    var saved = HiveService.getSessionById('week-6')!;
+    expect(saved.isCompleted, isTrue);
+    expect(saved.exercises.first.name, 'Incline dumbbell press');
+    expect(saved.planName, plan.name);
+
+    await tester.tap(find.text('Add set').first);
+    await pumpWithStorage(tester);
+    saved = HiveService.getSessionById('week-6')!;
+    expect(saved.isCompleted, isTrue);
+    expect(saved.exercises.first.sets, hasLength(4));
+    // A logged workout's edits never open the new-workout flow.
+    expect(find.text('Log workout?'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('completed log corrects its date and duration', (tester) async {
+    await tester.runAsync(() => seed(completed: true));
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Workout actions'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard workout'), findsNothing);
+    await tester.tap(find.text('Edit date and duration'));
+    await tester.pumpAndSettle();
+    expect(find.text('6 Sep 2026'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('workout-duration-hours')),
+      '24',
+    );
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('workout-time-error')), findsOneWidget);
+    expect(writes, isEmpty);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('workout-duration-hours')),
+      '1',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('workout-duration-minutes')),
+      '5',
+    );
+    await tester.tap(find.text('Save'));
+    await pumpWithStorage(tester);
+    final saved = HiveService.getSessionById('week-6')!;
+    expect(saved.isCompleted, isTrue);
+    expect(saved.durationSeconds, 65 * 60);
+    expect(saved.date, DateTime(2026, 9, 6));
+    expect(find.textContaining('1:05:00'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('changing only the date keeps a sub-minute duration', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      await seed(completed: true);
+      final box = Hive.box<WorkoutSession>(HiveService.sessionsBox);
+      await box.put(
+        'week-6',
+        box
+            .get('week-6')!
+            .copyWith(
+              startedAt: DateTime(2026, 9, 6, 18),
+              date: DateTime(2026, 9, 6, 18),
+              durationSeconds: 42,
+            ),
+      );
+    });
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Workout actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Edit date and duration'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('workout-date')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.descendant(
+        of: find.byType(CalendarDatePicker),
+        matching: find.text('4'),
+      ),
+    );
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save'));
+    await pumpWithStorage(tester);
+    expect(find.byKey(const ValueKey('workout-time-error')), findsNothing);
+    final saved = HiveService.getSessionById('week-6')!;
+    expect(saved.date, DateTime(2026, 9, 4, 18));
+    expect(saved.startedAt, DateTime(2026, 9, 4, 18));
+    expect(saved.durationSeconds, 42);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('unsaved edits to a logged workout leave through saving', (
     tester,
   ) async {
     await tester.runAsync(() => seed(completed: true));
     await tester.pumpWidget(host());
     await tester.pumpAndSettle();
-    expect(find.text('Add set'), findsNothing);
-    expect(find.text('Add exercise'), findsNothing);
-    expect(find.byTooltip('Exercise actions for Bench press'), findsNothing);
-    expect(find.byTooltip('Workout actions'), findsNothing);
-    expect(find.bySemanticsLabel('Start workout'), findsNothing);
-    expect(find.byTooltip('Finish workout'), findsNothing);
-    // Completed sessions deliberately ignore pointer events on the log.
-    await tester.longPress(
-      find.bySemanticsLabel('Set 1 Kg').first,
-      warnIfMissed: false,
+    bool canPop() =>
+        tester
+            .widget<PopScope<Object?>>(
+              find
+                  .descendant(
+                    of: find.byType(WorkoutScreen),
+                    matching: find.byWidgetPredicate((w) => w is PopScope),
+                  )
+                  .first,
+            )
+            .canPop;
+    expect(canPop(), isTrue);
+    failWrites = true;
+    await tester.tap(find.text('Add set').first);
+    await pumpWithStorage(tester);
+    // The failed autosave keeps the edit, so Back must retry it, not pop.
+    expect(find.text('Retry'), findsOneWidget);
+    expect(canPop(), isFalse);
+    failWrites = false;
+    await tester.tap(find.text('Retry'));
+    await pumpWithStorage(tester);
+    expect(canPop(), isTrue);
+    expect(
+      HiveService.getSessionById('week-6')!.exercises.first.sets,
+      hasLength(5),
     );
-    await tester.pumpAndSettle();
-    expect(find.text('Delete set'), findsNothing);
-    expect(find.text('70'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -477,7 +607,7 @@ void main() {
       await tester.runAsync(() => seed());
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
-      final finish = find.widgetWithText(TextButton, 'Finish workout');
+      final finish = find.byKey(const ValueKey('finish-workout'));
       // Nothing to finish before Start, so the header leaves Finish out.
       expect(finish, findsNothing);
       expect(find.textContaining('Tap Start in the toolbar'), findsNothing);
@@ -495,16 +625,34 @@ void main() {
       await tester.runAsync(() => seed(started: true));
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
-      expect(tester.widget<TextButton>(finish).onPressed, isNotNull);
+      final semantics = tester.ensureSemantics();
+      final finishNode = tester.getSemantics(
+        find.bySemanticsLabel('Finish workout'),
+      );
       expect(
-        Theme.of(
-          tester.element(finish),
-        ).textButtonTheme.style?.foregroundColor?.resolve({}),
+        finishNode.getSemanticsData().hasAction(ui.SemanticsAction.tap),
+        isTrue,
+      );
+      expect(
+        finishNode.getSemanticsData().flagsCollection.isEnabled,
+        ui.Tristate.isTrue,
+      );
+      final finishButton = tester.widget<TextButton>(finish);
+      expect(finishButton.onPressed, isNotNull);
+      expect(
+        finishButton.style!.foregroundColor!.resolve({}),
         accentColor(tester.element(finish)),
       );
-      await tester.tap(finish);
+      // Labelled, so it can't be read as a generic save.
+      expect(
+        find.descendant(of: finish, matching: find.text('Finish')),
+        findsOneWidget,
+      );
+      // Activate the action the same way a screen reader does.
+      finishNode.owner!.performAction(finishNode.id, ui.SemanticsAction.tap);
       await tester.pumpAndSettle();
       expect(find.text('Log workout?'), findsOneWidget);
+      semantics.dispose();
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(
@@ -538,10 +686,12 @@ class _Plans extends WorkoutPlanProvider {
 
 class _Sessions extends WorkoutSessionProvider {
   final List<WorkoutSession> writes;
-  _Sessions(this.writes);
+  final bool Function() fail;
+  _Sessions(this.writes, this.fail);
 
   @override
   Future<void> upsertSession(WorkoutSession session) async {
+    if (fail()) throw StateError('disk full');
     await super.upsertSession(session);
     writes.add(session);
   }

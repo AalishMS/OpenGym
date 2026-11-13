@@ -1,3 +1,4 @@
+import '../../services/exercise_catalog.dart';
 import '../../models/statistics.dart';
 import '../../models/workout_session.dart';
 import '../../services/statistics_analytics_service.dart';
@@ -49,11 +50,16 @@ HistoryJournalData buildHistoryJournalData(
     for (final event in analytics.recordEvents(eligible)) event.session,
   };
   final normalizedQuery = query.trim().toLowerCase();
+  final matchingIds = ExerciseCatalog.search(query).map((d) => d.id).toSet();
   final filtered = eligible.where((session) {
     if (normalizedQuery.isEmpty) return true;
     if (session.planName.toLowerCase().contains(normalizedQuery)) return true;
     return session.exercises.any(
-      (exercise) => exercise.name.toLowerCase().contains(normalizedQuery),
+      (exercise) =>
+          exercise.name.toLowerCase().contains(normalizedQuery) ||
+          matchingIds.contains(
+            ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
+          ),
     );
   });
 

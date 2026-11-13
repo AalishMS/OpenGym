@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import '../../data/exercise_library.dart';
+import '../../services/exercise_catalog.dart';
 import '../../models/exercise.dart';
 import '../../models/set.dart' as gym;
 import '../../providers/settings_provider.dart';
@@ -36,6 +36,15 @@ class ExerciseCard extends StatelessWidget {
   final void Function(int)? onReplace;
   final void Function(int) onDeleteExercise;
 
+  /// The heaviest weight logged for this exercise before this workout, or
+  /// null without history. A set entered above it is marked as a record.
+  final double? recordWeight;
+
+  /// The sets the shared record rules mark as records, by set index. When
+  /// given, it decides the marks instead of [recordWeight], so a live mark
+  /// is exactly what Finish, History and Stats will report.
+  final Set<int>? recordSetIndexes;
+
   const ExerciseCard({
     super.key,
     required this.exercise,
@@ -55,7 +64,21 @@ class ExerciseCard extends StatelessWidget {
     required this.onRename,
     this.onReplace,
     required this.onDeleteExercise,
+    this.recordWeight,
+    this.recordSetIndexes,
   });
+
+  /// Whether [set] would be a record if logged as entered. Matches Finish:
+  /// the heaviest weight for the exercise, with reps performed.
+  static bool isRecord(gym.Set set, double? recordWeight) =>
+      set.reps > 0 && recordWeight != null && set.weight > recordWeight;
+
+  static bool _beats(gym.Set set, gym.Set? previous) =>
+      previous != null &&
+      previous.reps > 0 &&
+      set.reps > 0 &&
+      (set.weight > previous.weight ||
+          (set.weight == previous.weight && set.reps > previous.reps));
 
   void _onAction(_ExerciseAction action) {
     switch (action) {
@@ -181,7 +204,10 @@ class ExerciseCard extends StatelessWidget {
               ignoring: readOnly,
               child: SetEntryTable(
                 continuousLog: true,
-                isTimed: ExerciseLibrary.isTimed(exercise.name),
+                isTimed: ExerciseCatalog.isTimed(
+                  exercise.name,
+                  exercise.exerciseId,
+                ),
                 weightUnit: weightUnit,
                 onEntryFinished: onEntryFinished,
                 onDelete:
@@ -195,9 +221,19 @@ class ExerciseCard extends StatelessWidget {
                       reps: exercise.sets[i].reps,
                       previous:
                           i < previousSets.length && previousSets[i].reps > 0
-                              ? '${formatEntryWeight(previousSets[i].weight, weightUnit)} × ${previousSets[i].reps}${ExerciseLibrary.isTimed(exercise.name) ? ' s' : ''}'
+                              ? '${formatEntryWeight(previousSets[i].weight, weightUnit)} × ${previousSets[i].reps}${ExerciseCatalog.isTimed(exercise.name, exercise.exerciseId) ? ' s' : ''}'
                               : null,
                       rpe: exercise.sets[i].rpe,
+                      record:
+                          !readOnly &&
+                          (recordSetIndexes?.contains(i) ??
+                              isRecord(exercise.sets[i], recordWeight)),
+                      beatsPrevious:
+                          !readOnly &&
+                          _beats(
+                            exercise.sets[i],
+                            i < previousSets.length ? previousSets[i] : null,
+                          ),
                     ),
                 ],
                 onChanged:

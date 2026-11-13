@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../models/exercise_definition.dart';
+import 'exercise_catalog.dart';
 import '../models/split.dart';
 import '../models/split_preference.dart';
 import '../models/training_block.dart';
@@ -44,6 +46,7 @@ class SyncService {
   static final SyncService instance = SyncService._();
   static const _pageSize = 500;
   static const _tables = [
+    'exercise_definitions',
     'splits',
     'training_blocks',
     'training_weeks',
@@ -72,7 +75,8 @@ class SyncService {
     if (user == null) return SyncStatus.savedOnDevice;
     if (_upgradeRequiredUserId == user) return SyncStatus.upgradeRequired;
     if (_lastFailedUserId == user) return SyncStatus.retryableError;
-    if (HiveService.getDirtySplits(deleted: false).isNotEmpty ||
+    if (ExerciseCatalog.stored.any((d) => d.dirty) ||
+        HiveService.getDirtySplits(deleted: false).isNotEmpty ||
         HiveService.getDirtySplits(deleted: true).isNotEmpty ||
         HiveService.getDirtySplitPreferences().isNotEmpty ||
         HiveService.getDirtyPlans().isNotEmpty ||
@@ -86,6 +90,12 @@ class SyncService {
       return SyncStatus.savedOnDevice;
     }
     return SyncStatus.synced;
+  }
+
+  void notifyLocalChange() {
+    _changes.add(null);
+    _statusChanges.add(null);
+    scheduleSync();
   }
 
   void scheduleSync() {
@@ -141,7 +151,7 @@ class SyncService {
     final account = _SyncAccount(user);
     try {
       await _checked(TrainingBlockRestore().recover(ownerId: user), account);
-      _db.rest.headers['x-opengym-training-schema'] = '2';
+      _db.rest.headers['x-opengym-training-schema'] = '3';
       await _checked(
         HiveService.recoverTrainingWeekRebase(ownerId: user),
         account,
@@ -152,7 +162,7 @@ class SyncService {
         _db.rpc('activate_training_schema'),
         account,
       );
-      if (capability is! int || capability != 2) {
+      if (capability is! int || capability != 3) {
         throw StateError('The training schema was not acknowledged.');
       }
       final prefs = await _checked(SharedPreferences.getInstance(), account);
@@ -169,6 +179,7 @@ class SyncService {
           account,
           full:
               full ||
+              table == 'exercise_definitions' ||
               table == 'splits' ||
               table == 'training_blocks' ||
               table == 'training_weeks',
@@ -179,6 +190,9 @@ class SyncService {
         TrainingBlockMigration().normalizeUnderGate(ownerId: user),
         account,
       );
+      for (final d in ExerciseCatalog.stored.where((d) => d.dirty)) {
+        await _push('exercise_definitions', _exerciseRow(d), account);
+      }
       for (final split in HiveService.getDirtySplits(deleted: false)) {
         await _pushSplit(split, account);
       }
@@ -497,6 +511,14 @@ class SyncService {
     if (row['user_id'] != owner) {
       throw StateError('Remote row has the wrong owner.');
     }
+    if (table == 'exercise_definitions') {
+      ExerciseDefinition.fromJson({
+        ...Map<String, dynamic>.from(row['data'] as Map),
+        'id': row['id'],
+        'userId': owner,
+      });
+      return;
+    }
     if (table == 'splits') return;
     final splitId =
         (table == 'split_preferences'
@@ -571,6 +593,7 @@ class SyncService {
     String owner,
   ) {
     if (table == 'splits' ||
+        table == 'exercise_definitions' ||
         row['deleted_at'] != null ||
         row['user_id'] != owner) {
       return false;
@@ -638,6 +661,16 @@ class SyncService {
         local == null ||
         localTime == null ||
         (remoteTime != null && !localTime.isAfter(remoteTime));
+    if (table == 'exercise_definitions' &&
+        (row['data'] as Map)['mergedIntoId'] != null &&
+        (local?['data'] as Map?)?['mergedIntoId'] == null) {
+      wins = true;
+    }
+    if (table == 'exercise_definitions' &&
+        (local?['data'] as Map?)?['mergedIntoId'] != null &&
+        (row['data'] as Map)['mergedIntoId'] == null) {
+      wins = false;
+    }
     if (local?['deleted_at'] != null && row['deleted_at'] == null) wins = false;
     if (table == 'workout_progress' &&
         local != null &&
@@ -686,6 +719,16 @@ class SyncService {
     }
     if (!wins) return;
     switch (table) {
+      case 'exercise_definitions':
+        await ExerciseCatalog.put(
+          ExerciseDefinition.fromJson({
+            ...Map<String, dynamic>.from(row['data'] as Map),
+            'id': id,
+            'userId': owner,
+            'updatedAt': remoteTime?.toIso8601String(),
+            'dirty': false,
+          }),
+        );
       case 'splits':
         final value = Split(
           id: id,
@@ -850,6 +893,19 @@ class SyncService {
       (value ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true))
           .toUtc()
           .toIso8601String();
+  Map<String, dynamic> _exerciseRow(ExerciseDefinition d) => {
+    'id': d.id,
+    'user_id': d.userId,
+    'updated_at': _ts(d.updatedAt),
+    'data': {
+      'id': d.id,
+      'name': d.name,
+      'aliases': d.aliases,
+      'category': d.category,
+      'builtIn': d.builtIn,
+      'mergedIntoId': d.mergedIntoId,
+    },
+  };
   Map<String, dynamic> _splitRow(Split r) => {
     'id': r.id,
     'user_id': r.userId,
@@ -922,6 +978,9 @@ class SyncService {
 
   Map<String, dynamic>? _localRow(String table, String id) {
     switch (table) {
+      case 'exercise_definitions':
+        final d = ExerciseCatalog.stored.where((d) => d.id == id).firstOrNull;
+        return d == null ? null : _exerciseRow(d);
       case 'splits':
         final r = HiveService.getSplitById(id);
         return r == null ? null : _splitRow(r);
@@ -950,6 +1009,9 @@ class SyncService {
 
   Future<void> _markClean(String table, String id) async {
     switch (table) {
+      case 'exercise_definitions':
+        final d = ExerciseCatalog.getById(id)!;
+        await ExerciseCatalog.put(d.copyWith(dirty: false));
       case 'splits':
         await HiveService.clearSplitDirty(id);
       case 'workout_plans':

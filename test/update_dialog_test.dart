@@ -89,7 +89,7 @@ void main() {
     );
     await tester.tap(find.text('Open'));
     await tester.pump();
-    expect(find.text('Opening installer'), findsOneWidget);
+    expect(find.text('Installing update'), findsOneWidget);
     expect(find.text('Update now'), findsNothing);
     expect(find.text('Cancel download'), findsNothing);
   });
@@ -179,6 +179,61 @@ void main() {
     await tester.tap(find.text('Update now'));
     await tester.pumpAndSettle();
     expect(find.text('The update action failed. Try again.'), findsOneWidget);
+  });
+
+  test('release boilerplate and GitHub attributions are not highlights', () {
+    // The body of v1.0.16+17 as GitHub published it.
+    const body =
+        'Install the APK below. If OpenGym is already installed, it will\n'
+        'offer this update from inside the app.\n\n\n'
+        "## What's Changed\n"
+        '* Redesign statistics with focused views and block trends by '
+        '@AalishMS in https://github.com/AalishMS/OpenGym/pull/14\n\n\n'
+        '**Full Changelog**: https://github.com/AalishMS/OpenGym/compare/'
+        'v1.0.15+16...v1.0.16+17';
+    expect(releaseHighlights(body), [
+      'Redesign statistics with focused views and block trends',
+    ]);
+  });
+
+  test('notes stop at a footer rule', () {
+    expect(
+      releaseHighlights('- Faster sync\n- Clearer charts\n\n---\n\n- Footer'),
+      ['Faster sync', 'Clearer charts'],
+    );
+  });
+
+  test('prose-only notes still produce highlights', () {
+    expect(releaseHighlights('Faster sync.\nClearer charts.'), [
+      'Faster sync.',
+      'Clearer charts.',
+    ]);
+  });
+
+  testWidgets("what's new shows the installed release's notes", (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(const Color(0xFF7C5CFF), Brightness.dark),
+        home: Scaffold(
+          body: Builder(
+            builder:
+                (context) => TextButton(
+                  onPressed: () => showWhatsNewDialog(context, release),
+                  child: const Text('Open'),
+                ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    expect(find.text('Updated to Version 2'), findsOneWidget);
+    expect(find.text('Faster workout startup'), findsOneWidget);
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    expect(find.text('Updated to Version 2'), findsNothing);
   });
 
   test('release notes are normalized and capped', () {

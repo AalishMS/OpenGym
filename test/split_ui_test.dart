@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,13 +26,15 @@ import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/widgets/splits/split_switcher.dart';
 
 import 'support/hive_test_harness.dart';
+import 'support/test_fonts.dart';
 import 'package:gymapp/theme/app_theme.dart';
 
 void main() {
   final hiveHarness = HiveTestHarness();
 
   setUpAll(() async {
-    GoogleFonts.config.allowRuntimeFetching = false;
+    // The square test glyphs these layouts are measured against.
+    await loadTestFonts();
     SharedPreferences.setMockInitialValues({});
     await Supabase.initialize(
       url: 'https://example.supabase.co',
@@ -181,6 +182,10 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.pumpWidget(harness.host(const StatsScreen()));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All'));
     await tester.pumpAndSettle();
     expect(find.text('UL Only'), findsWidgets);
     expect(find.text('PPL Only'), findsNothing);

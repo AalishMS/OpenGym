@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:gymapp/models/split.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
@@ -389,7 +388,7 @@ void main() {
         userId: null,
       );
       expect(imported.success, isTrue, reason: imported.errorMessage);
-      expect(imported.version, 5);
+      expect(imported.version, 6);
       expect(imported.graph!.blocks.single.plannedWeekCount, 4);
       final copied = imported.graph!;
       final push = copied.progress.singleWhere(

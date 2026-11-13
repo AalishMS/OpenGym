@@ -9,12 +9,14 @@ import 'statistics_analytics_service.dart';
 /// computed on its own.
 class PRResult {
   final String exerciseName;
+  final String? exerciseId;
   final double previousPR;
   final double newPR;
   final int reps;
 
   PRResult({
     required this.exerciseName,
+    this.exerciseId,
     required this.previousPR,
     required this.newPR,
     required this.reps,
@@ -29,6 +31,7 @@ class PRTrackingService {
         if (achievement.type == RecordType.heaviestWeight)
           PRResult(
             exerciseName: event.exerciseName,
+            exerciseId: event.exerciseId,
             previousPR: achievement.previousValue ?? 0,
             newPR: achievement.value,
             reps: achievement.setReps,

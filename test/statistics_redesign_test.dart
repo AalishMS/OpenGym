@@ -3,7 +3,6 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/set.dart' as gym;
 import 'package:gymapp/models/statistics.dart';
@@ -132,8 +131,8 @@ void main() {
             .map((week) => week.volumeLoad),
         [800, 0, 800],
       );
-      expect(analytics.exerciseNames(data), ['Bench press', 'Overhead press']);
-      expect(analytics.latestExercise(data), 'Bench press');
+      expect(analytics.exerciseNames(data), ['Bench Press', 'Overhead Press']);
+      expect(analytics.latestExercise(data), 'Bench Press');
       expect(analytics.weeklyVolume([], now: now).single.volumeLoad, 0);
     },
   );
@@ -450,7 +449,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('screen order and independent exercise selectors', (
+  testWidgets('focused views keep exercise filters independent', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(390, 900);
@@ -464,33 +463,29 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Recent sessions'), findsNothing);
-    final headings = ['Weekly training', 'Exercise progress', 'Recent records'];
+    expect(find.text('Weekly training'), findsOneWidget);
+    expect(find.byKey(const ValueKey('progress-exercise')), findsNothing);
+    expect(find.text('Recent records'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('weekly-exercise-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bench Press').last);
+    await tester.pumpAndSettle();
+    expect(find.text('400 kg'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
+    await tester.pumpAndSettle();
     expect(
-      tester.getTopLeft(find.text(headings[0])).dy,
-      lessThan(tester.getTopLeft(find.text(headings[1])).dy),
+      tester.widget<Text>(find.byKey(const ValueKey('progress-exercise'))).data,
+      'Bench Press',
     );
-    expect(
-      tester.getTopLeft(find.text(headings[1])).dy,
-      lessThan(tester.getTopLeft(find.text(headings[2])).dy),
-    );
-    final selectors = find.byType(DropdownButtonFormField<String>);
-    await tester.tap(selectors.first);
+    expect(find.text('Weekly training'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Overview')));
+    await tester.pumpAndSettle();
+    expect(find.text('Bench Press'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('weekly-exercise-picker')));
     await tester.pumpAndSettle();
     await tester.tap(find.text('All exercises').last);
     await tester.pumpAndSettle();
-    expect(
-      tester
-          .widget<DropdownButtonFormField<String>>(selectors.first)
-          .initialValue,
-      '',
-    );
-    expect(selectors, findsOneWidget);
-    expect(
-      tester.widget<Text>(find.byKey(const ValueKey('progress-exercise'))).data,
-      'Bench press',
-    );
-    expect(find.text('800 kg'), findsOneWidget);
+    expect(find.text('All exercises'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -511,6 +506,8 @@ void main() {
         child: host(const StatsScreen()),
       ),
     );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
     await tester.pumpAndSettle();
     expect(find.text('Change'), findsOneWidget);
     expect(find.text('Best in period'), findsOneWidget);
@@ -550,13 +547,17 @@ void main() {
     await tester.pump();
     expect(counting.calls, first);
 
-    // A new measure recomputes the lifts and nothing else.
-    final sets = find.byKey(
-      ValueKey('progress-metric-${ExerciseMetric.totalSets}'),
-    );
-    await tester.ensureVisible(sets);
+    // Switching views reuses every derived value.
+    await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
     await tester.pumpAndSettle();
-    await tester.tap(sets);
+    expect(counting.calls, first);
+
+    // A new measure recomputes the lifts and nothing else.
+    await tester.tap(find.byKey(const ValueKey('progress-metric-picker')));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.widgetWithText(ListTile, ExerciseMetric.totalSets.label),
+    );
     await tester.pumpAndSettle();
     expect(counting.calls['liftSummaries'], 2);
     expect(counting.calls['recordEvents'], 1);

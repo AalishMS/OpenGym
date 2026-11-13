@@ -1,11 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import 'models/workout_session.dart';
 import 'navigation/open_workout.dart';
+import 'navigation/tab_swipe_recognizer.dart';
 import 'navigation/workout_destination.dart';
 import 'providers/coach_provider.dart';
 import 'providers/update_provider.dart';
@@ -22,6 +24,8 @@ import 'services/hive_service.dart';
 import 'services/tutorial_preferences.dart';
 import 'services/workout_timer_notification_service.dart';
 import 'theme/breakpoints.dart';
+import 'utils/scroll_to_top.dart';
+import 'widgets/active_workout_bar.dart';
 import 'widgets/app_bottom_nav.dart';
 import 'widgets/app_nav_rail.dart';
 import 'widgets/coach/coach_button.dart';
@@ -36,14 +40,30 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
+class _AppShellState extends State<AppShell>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   // Index into [_screens]. Dashboard is index 0 (desktop-only); the phone
   // bottom bar addresses screens 1–4.
   int _currentIndex = 0;
   int _weeklyTrainingRequest = 0;
   int _statsVisit = 0;
   int _homeResetRequest = 0;
+  final GlobalKey<StatsScreenState> _statsKey = GlobalKey<StatsScreenState>();
+
+  /// Tapping the tab that is already showing scrolls it back to the top.
+  int _historyTopRequest = 0;
+  int _statsTopRequest = 0;
+  int _settingsTopRequest = 0;
+
+  /// Fades the incoming tab in, so a tap or swipe reads as a move rather than
+  /// a cut. The IndexedStack underneath still keeps every tab's state.
+  late final AnimationController _tabFade = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 160),
+    value: 1,
+  );
   double _tabDragDistance = 0;
+  TabSwipeGestureRecognizer? _tabSwipeRecognizer;
   bool _openingHistoryWorkout = false;
   final ScrollController _homeScrollController = ScrollController();
   final GlobalKey _planTourKey = GlobalKey(debugLabel: 'tutorial-plan');
@@ -59,7 +79,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   bool _coachOpen = false;
 
   /// Guards against a second prompt if this State is rebuilt.
-  bool _updatePromptShown = false;
+  // Update prompt bookkeeping. The provider decides whether an offer is due;
+  // the shell decides whether now is a good moment for a dialog.
+  UpdateProvider? _updates;
+  bool _updateCheckStarted = false;
+  bool _updateCheckRunning = false;
+  bool _updatePromptOpen = false;
+  StreamSubscription<void>? _updateOpenSubscription;
+
+  /// A workout timer is running or paused, so no dialog may cover it and no
+  /// update may close the app.
+  bool _workoutLive = false;
   StreamSubscription<WorkoutTimerNotificationEvent>? _timerSubscription;
   int? _handledTimerIntentRevision;
   Future<void> _timerEvents = Future<void>.value();
@@ -88,12 +118,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         ],
       ),
     ),
-    const HistoryScreen(),
+    HistoryScreen(scrollToTopRequest: _historyTopRequest),
     StatsScreen(
+      key: _statsKey,
       weeklyTrainingRequest: _weeklyTrainingRequest,
       visitRequest: _statsVisit,
+      scrollToTopRequest: _statsTopRequest,
     ),
-    SettingsScreen(onReplayTutorial: _replayTutorial),
+    SettingsScreen(
+      onReplayTutorial: _replayTutorial,
+      scrollToTopRequest: _settingsTopRequest,
+    ),
   ];
 
   Future<void> _maybeStartTutorial() async {
@@ -210,20 +245,72 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (_coachOpen) setState(() => _coachOpen = false);
   }
 
-  /// A tap on the tab that is already showing closes the Coach over Home.
+  /// A tap on the tab that is already showing closes the Coach over Home and
+  /// scrolls that tab back to the top.
   void _selectTab(int index, {required int showing}) {
+    final reselected = index == showing;
+    if (!reselected) {
+      HapticFeedback.selectionClick();
+      if (MediaQuery.disableAnimationsOf(context)) {
+        _tabFade.value = 1;
+      } else {
+        _tabFade.forward(from: 0);
+      }
+    }
     setState(() {
       if (index == 1) _homeResetRequest++;
-      if (index == showing && index == 1) _coachOpen = false;
+      if (reselected) {
+        switch (index) {
+          case 1:
+            _coachOpen = false;
+            scrollToTop(context, _homeScrollController);
+          case 2:
+            _historyTopRequest++;
+          case 3:
+            _statsTopRequest++;
+          case 4:
+            _settingsTopRequest++;
+        }
+      }
       // Stats reopens at the top whenever it is entered from another tab.
       if (index == 3 && showing != 3) _statsVisit++;
       _currentIndex = index;
     });
   }
 
+  void _resumeWorkout(WorkoutSession session) {
+    final id = session.id;
+    if (id == null) return;
+    unawaited(
+      openWorkoutDestination(
+        context,
+        WorkoutDestination.session(id),
+        requireIncomplete: true,
+      ),
+    );
+  }
+
+  /// The resume strip, rebuilt on every session write so it appears when a
+  /// timer starts and disappears when the workout is finished or deleted.
+  Widget _liveWorkoutStrip() {
+    return ValueListenableBuilder(
+      valueListenable: HiveService.sessionsListenable(),
+      builder: (context, _, _) {
+        final session = HiveService.getLiveSession();
+        if (session == null) return const SizedBox.shrink();
+        return ActiveWorkoutBar(
+          session: session,
+          onTap: () => _resumeWorkout(session),
+        );
+      },
+    );
+  }
+
   void _finishTabSwipe(DragEndDetails details, {required int showing}) {
     final distance = _tabDragDistance;
     _tabDragDistance = 0;
+    // A drag that wandered too far up or down was a scroll, not a swipe.
+    if (!(_tabSwipeRecognizer?.isMostlyHorizontal ?? true)) return;
     final velocity = details.primaryVelocity ?? 0;
     // Require a deliberate drag, or a short, fast flick. Vertical scrolling
     // competes with this horizontal recognizer in Flutter's gesture arena.
@@ -238,7 +325,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         Directionality.of(context) == TextDirection.ltr
             ? distance < 0
             : distance > 0;
+    if (showing == 3 &&
+        (_statsKey.currentState?.handleSectionSwipe(forward: forward) ??
+            false)) {
+      return;
+    }
     final next = showing + (forward ? 1 : -1);
+    if (next == 3) {
+      _statsKey.currentState?.handleSectionSwipe(
+        forward: forward,
+        entering: true,
+      );
+    }
     if (next >= 1 && next <= 4) _selectTab(next, showing: showing);
   }
 
@@ -319,7 +417,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _maybeStartTutorial();
       if (!mounted) return;
-      if (!_tourActive) unawaited(_checkForUpdate());
       unawaited(_restoreTimerNotification());
     });
   }
@@ -328,20 +425,31 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _timerSubscription?.cancel();
+    _updateOpenSubscription?.cancel();
+    _updates?.canInterrupt = () async => true;
     _homeScrollController.dispose();
+    _tabFade.dispose();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      _reconcileCurrentTimer();
-    }
+    if (state == AppLifecycleState.resumed) unawaited(_onResumed());
+  }
+
+  Future<void> _onResumed() async {
+    await _reconcileCurrentTimer();
+    // Only once the launch check has run: the tour defers it on first run.
+    if (mounted && _updateCheckStarted) await _checkForUpdate();
   }
 
   Future<void> _restoreTimerNotification() async {
     await WorkoutTimerNotificationService.instance.restore();
     await _reconcileCurrentTimer();
+    // The update check waits for this so it knows whether a workout is live,
+    // but not for the timer's intent below, which can hold a pushed workout
+    // route open for as long as the session lasts.
+    if (mounted && !_tourActive) unawaited(_checkForUpdate());
     final event =
         await WorkoutTimerNotificationService.instance.consumeIntent();
     if (event != null) await _handleTimerEvent(event);
@@ -349,7 +457,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   Future<void> _reconcileCurrentTimer() async {
     final snapshot = await WorkoutTimerNotificationService.instance.snapshot();
-    if (snapshot != null) await _reconcileTimer(snapshot);
+    final session = snapshot == null ? null : await _reconcileTimer(snapshot);
+    _workoutLive = session != null;
   }
 
   Future<WorkoutSession?> _reconcileTimer(
@@ -405,21 +514,79 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     );
   }
 
+  /// Runs the launch check the first time and the resume check after that,
+  /// then opens the prompt if an offer is due and the moment is right.
   Future<void> _checkForUpdate() async {
-    final updates = context.read<UpdateProvider>();
-    await updates.checkOnStartup();
-    if (!mounted || _updatePromptShown || _tourActive || _replayingTutorial) {
-      return;
+    if (_updateCheckRunning) return;
+    _updateCheckRunning = true;
+    try {
+      final updates = _updates ??= context.read<UpdateProvider>();
+      // Read live, not from the last resume: a workout can start while a
+      // download the user asked for is still coming down.
+      updates.canInterrupt = () async {
+        if (!mounted) return false;
+        await _reconcileCurrentTimer();
+        return !_workoutLive;
+      };
+      _updateOpenSubscription ??= updates.openRequests.listen(
+        (_) => unawaited(_showUpdatePrompt()),
+      );
+      if (_updateCheckStarted) {
+        await updates.checkOnResume();
+      } else {
+        _updateCheckStarted = true;
+        await updates.checkOnStartup();
+      }
+      if (!mounted || !_mayPromptNow) return;
+
+      final whatsNew = updates.takeWhatsNew();
+      if (whatsNew != null) {
+        _updatePromptOpen = true;
+        try {
+          await showWhatsNewDialog(context, whatsNew);
+        } finally {
+          _updatePromptOpen = false;
+        }
+        return;
+      }
+
+      if (!await updates.shouldPromptAutomatically()) return;
+      if (!mounted || !_mayPromptNow) return;
+      await updates.markPrompted();
+      await _showUpdatePrompt();
+    } finally {
+      _updateCheckRunning = false;
     }
-    // A download picked up from an earlier run shows its progress too.
-    if (!updates.isUpdateAvailable && !updates.isBusy) return;
-    _updatePromptShown = true;
-    await showUpdateDialog(context);
+  }
+
+  /// Whether a dialog may open by itself: not over the tour, a workout, or a
+  /// screen the user pushed (a workout, a plan editor), and not twice.
+  bool get _mayPromptNow =>
+      !_updatePromptOpen &&
+      !_tourActive &&
+      !_replayingTutorial &&
+      !_workoutLive &&
+      (ModalRoute.of(context)?.isCurrent ?? true);
+
+  /// Opens the update dialog. Also the answer to tapping "Update ready to
+  /// install", which the user asked for, so only the tour holds it back.
+  Future<void> _showUpdatePrompt() async {
+    if (!mounted || _updatePromptOpen || _tourActive) return;
+    _updatePromptOpen = true;
+    try {
+      await showUpdateDialog(context);
+    } finally {
+      _updatePromptOpen = false;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final isWide = Breakpoints.isWide(context);
+    // Select, not watch: download progress ticks twice a second.
+    final updatePending = context.select<UpdateProvider?, bool>(
+      (updates) => updates?.hasPendingUpdate ?? false,
+    );
 
     // Dashboard (index 0) is desktop-only. On the narrow bottom-bar layout it's
     // unreachable, so clamp the rendered/highlighted screen to Plans (index 1).
@@ -436,9 +603,12 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         );
     final coachInView = coachShown && effectiveIndex == 1;
 
-    final stack = IndexedStack(
-      index: effectiveIndex,
-      children: _screens(coachShown: coachShown, showing: effectiveIndex),
+    final stack = FadeTransition(
+      opacity: CurvedAnimation(parent: _tabFade, curve: Curves.easeOut),
+      child: IndexedStack(
+        index: effectiveIndex,
+        children: _screens(coachShown: coachShown, showing: effectiveIndex),
+      ),
     );
 
     if (isWide) {
@@ -453,9 +623,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   4: _settingsTourKey,
                 },
                 currentIndex: effectiveIndex,
+                badgedIndex: updatePending ? 4 : null,
                 onTap: (i) => _selectTab(i, showing: effectiveIndex),
               ),
-              Expanded(child: stack),
+              Expanded(
+                child: Column(
+                  children: [Expanded(child: stack), _liveWorkoutStrip()],
+                ),
+              ),
             ],
           ),
         ),
@@ -466,32 +641,46 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     return _withTutorial(
       Scaffold(
-        body: GestureDetector(
+        body: RawGestureDetector(
           behavior: HitTestBehavior.opaque,
           excludeFromSemantics: true,
-          onHorizontalDragStart:
-              coachInView ? null : (_) => _tabDragDistance = 0,
-          onHorizontalDragUpdate:
-              coachInView
-                  ? null
-                  : (details) => _tabDragDistance += details.primaryDelta ?? 0,
-          onHorizontalDragEnd:
-              coachInView
-                  ? null
-                  : (details) =>
-                      _finishTabSwipe(details, showing: effectiveIndex),
-          onHorizontalDragCancel: () => _tabDragDistance = 0,
+          gestures: {
+            if (!coachInView)
+              TabSwipeGestureRecognizer: GestureRecognizerFactoryWithHandlers<
+                TabSwipeGestureRecognizer
+              >(() => TabSwipeGestureRecognizer(debugOwner: this), (
+                recognizer,
+              ) {
+                _tabSwipeRecognizer = recognizer;
+                recognizer.onStart = (_) => _tabDragDistance = 0;
+                recognizer.onUpdate = (details) {
+                  _tabDragDistance += details.primaryDelta ?? 0;
+                };
+                recognizer.onEnd = (details) {
+                  _finishTabSwipe(details, showing: effectiveIndex);
+                };
+                recognizer.onCancel = () => _tabDragDistance = 0;
+              }),
+          },
           child: stack,
         ),
-        bottomNavigationBar: AppBottomNav(
-          destinationKeys: {
-            1: _historyTourKey,
-            2: _statsTourKey,
-            3: _settingsTourKey,
-          },
-          // Bottom bar slots [PLANS, HISTORY, STATS, SETTINGS] map to screens 1–4.
-          currentIndex: (effectiveIndex - 1).clamp(0, 3),
-          onTap: (i) => _selectTab(i + 1, showing: effectiveIndex),
+        bottomNavigationBar: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _liveWorkoutStrip(),
+            AppBottomNav(
+              destinationKeys: {
+                1: _historyTourKey,
+                2: _statsTourKey,
+                3: _settingsTourKey,
+              },
+              // Bottom bar slots [PLANS, HISTORY, STATS, SETTINGS] map to
+              // screens 1–4.
+              currentIndex: (effectiveIndex - 1).clamp(0, 3),
+              badgedIndex: updatePending ? 3 : null,
+              onTap: (i) => _selectTab(i + 1, showing: effectiveIndex),
+            ),
+          ],
         ),
       ),
       coachInView: coachInView,
