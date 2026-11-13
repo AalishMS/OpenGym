@@ -292,5 +292,38 @@ void main() {
       );
       expect(tester.takeException(), isNull);
     });
+
+    workoutTest('a log at the same time is judged in the shared order', (
+      tester,
+    ) async {
+      // Same timestamp as week 2; Finish orders push-1 before push-2 by ID.
+      final sameTime = WorkoutSession(
+        id: 'push-1',
+        planId: 'push',
+        planName: 'Push',
+        date: DateTime(2026, 1, 14),
+        weekNumber: 1,
+        isCompleted: true,
+        exercises: [
+          lift('Bench Press', bench, [Set(weight: 100, reps: 5)]),
+        ],
+      );
+      final current = week(2, completed: false, [
+        lift('Bench Press', bench, [Set(weight: 110, reps: 3)]),
+      ]);
+      expect(current.date, sameTime.date);
+      await open(tester, [sameTime, current], weekNumber: 2);
+
+      expect(mark('Bench Press', 0), findsOneWidget);
+      final shared = analytics.sessionRecords([
+        sameTime,
+        current.copyWith(isCompleted: true),
+      ], current);
+      expect(
+        flat(shared).map((r) => r.$1),
+        contains(RecordType.heaviestWeight),
+      );
+      expect(tester.takeException(), isNull);
+    });
   });
 }

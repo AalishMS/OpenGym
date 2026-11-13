@@ -9,6 +9,7 @@ import '../providers/settings_provider.dart';
 import '../providers/split_provider.dart';
 import '../providers/training_block_provider.dart';
 import '../providers/workout_session_provider.dart';
+import '../services/exercise_catalog.dart';
 import '../services/statistics_analytics_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
@@ -130,7 +131,18 @@ class StatsScreenState extends State<StatsScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    ExerciseCatalog.changes.addListener(_catalogChanged);
+  }
+
+  void _catalogChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    ExerciseCatalog.changes.removeListener(_catalogChanged);
     _scrollController.dispose();
     super.dispose();
   }
@@ -250,21 +262,27 @@ class StatsScreenState extends State<StatsScreen> {
       _recordLimit = 12;
       _resetScroll();
     }
+    // Renames and merges change what a logged lift resolves to without
+    // touching the workouts, so everything named or grouped by lift also
+    // keys on the catalog.
+    final catalog = ExerciseCatalog.revision;
     final directory = _directory([
       analytics,
       sessions,
+      catalog,
     ], () => analytics.exerciseDirectory(sessions));
     // Every record, newest first: Records lists them and blocks count them,
     // so they are worked out once per change to the split's workouts.
     final records = _records([
       analytics,
       sessions,
+      catalog,
     ], () => analytics.recordEvents(sessions));
     final names = directory.keys.toList();
     final weeklyExercise =
         names.contains(_weeklyExercise) ? _weeklyExercise : null;
     final lifts = _lifts(
-      [analytics, sessions, _period, _metric, thisWeek],
+      [analytics, sessions, catalog, _period, _metric, thisWeek],
       () => analytics.liftSummaries(
         analytics.sessionsInPeriod(sessions, _period),
         _metric,
@@ -320,7 +338,7 @@ class StatsScreenState extends State<StatsScreen> {
           sessions: sessions,
           showCurrentWeek: _showCurrentWeek,
           weeks: _weekly(
-            [analytics, sessions, weeklyExercise, thisWeek],
+            [analytics, sessions, catalog, weeklyExercise, thisWeek],
             () =>
                 analytics.weeklyVolume(sessions, exerciseName: weeklyExercise),
           ),

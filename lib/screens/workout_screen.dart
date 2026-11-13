@@ -281,20 +281,23 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   }
 
   /// Bests from the workouts this one is judged against: the split's other
-  /// logs dated before it, exactly the window Finish judges it in. A logged
-  /// workout being edited therefore never has a record hidden by a later
-  /// session.
+  /// logs ordered before it, exactly the window Finish judges it in - by
+  /// date, then by ID for logs at the same time. A logged workout being
+  /// edited therefore never has a record hidden by a later session.
   RecordJudge get _recordJudge =>
       _recordCache ??= () {
         final current = _weekSessions[_currentWeek];
         final currentId = current?.id;
-        final loggedAt = current?.date;
         return const StatisticsAnalyticsService().recordJudge(
           HiveService.getCompletedSessions(splitId: widget.plan.splitId).where(
             (session) =>
                 session.deletedAt == null &&
                 session.id != currentId &&
-                (loggedAt == null || session.date.isBefore(loggedAt)),
+                (current == null ||
+                    StatisticsAnalyticsService.isLoggedBefore(
+                      session,
+                      current,
+                    )),
           ),
         );
       }();

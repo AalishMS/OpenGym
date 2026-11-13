@@ -267,6 +267,11 @@ class StatisticsAnalyticsService {
   static bool _sameSession(WorkoutSession a, WorkoutSession b) =>
       a.id != null && b.id != null ? a.id == b.id : identical(a, b);
 
+  /// Whether [a] comes before [b] in the order records are judged in, so
+  /// [b] is judged against it. See [_chronological].
+  static bool isLoggedBefore(WorkoutSession a, WorkoutSession b) =>
+      _chronological(a, b) < 0;
+
   /// Oldest first, with a stable order for workouts logged at the same time.
   static int _chronological(WorkoutSession a, WorkoutSession b) {
     final date = a.date.compareTo(b.date);

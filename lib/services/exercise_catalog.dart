@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
@@ -13,8 +14,24 @@ class ExerciseCatalog {
   static Map<String, ExerciseDefinition>? _definitions;
   static final Map<String, String> _canonical = {};
   static Map<String, Set<String>>? _names;
+  static int _revision = 0;
+
+  /// Changes whenever the catalog may resolve a name or ID differently - a
+  /// rename, merge, sync pull or account switch. Caches of anything derived
+  /// through [identity] or [displayName] key on it, because those changes
+  /// leave the saved workouts themselves untouched.
+  static int get revision {
+    _byId; // Notices a reopened box before the caller keys on the revision.
+    return _revision;
+  }
+
+  /// Notifies after every write, so a screen that caches derived values can
+  /// rebuild even when no provider reloads (an offline rename, say).
+  static Listenable get changes => _changes;
+  static final _changes = ValueNotifier<int>(0);
 
   static void _invalidate() {
+    _revision++;
     _definitions = null;
     _names = null;
     _canonical.clear();
@@ -198,6 +215,7 @@ class ExerciseCatalog {
     ExerciseDefinition.fromJson(value.toJson());
     await Hive.box<dynamic>(boxName).put(value.id, value.toJson());
     _invalidate();
+    _changes.value++;
   }
 
   static Future<ExerciseDefinition> createCustom(
@@ -307,5 +325,6 @@ class ExerciseCatalog {
   static Future<void> clear() async {
     if (Hive.isBoxOpen(boxName)) await Hive.box<dynamic>(boxName).clear();
     _invalidate();
+    _changes.value++;
   }
 }
