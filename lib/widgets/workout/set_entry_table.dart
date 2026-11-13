@@ -130,7 +130,10 @@ double _minimumTableWidth(
       fontFeatures: const [FontFeature.tabularFigures()],
     ),
   );
-  final rpe = widest(['@10', 'RPE'], Theme.of(context).textTheme.labelLarge!);
+  final rpe = widest([
+    '@10',
+    'RPE',
+  ], Theme.of(context).textTheme.labelLarge!.copyWith(fontSize: 20));
   final unit = [
     weight / _kWeightFlex,
     reps / (showRpe ? _kRepsFlex : _kWeightFlex),
@@ -805,7 +808,7 @@ TextStyle _quiet(BuildContext context) =>
       fontFeatures: const [FontFeature.tabularFigures()],
     );
 
-Widget _effort(BuildContext context, int rpe) => Semantics(
+Widget _effort(BuildContext context, int rpe, {double? fontSize}) => Semantics(
   label: 'RPE $rpe',
   excludeSemantics: true,
   child: Text(
@@ -813,8 +816,10 @@ Widget _effort(BuildContext context, int rpe) => Semantics(
     maxLines: 1,
     softWrap: false,
     style: Theme.of(context).textTheme.labelLarge!.copyWith(
+      fontSize: fontSize,
       fontWeight: FontWeight.w700,
       color: rpeColor(rpe, context),
+      fontFeatures: const [FontFeature.tabularFigures()],
     ),
   ),
 );
@@ -885,6 +890,8 @@ class _EntryHeader extends StatelessWidget {
     this.continuousLog = false,
   });
 
+  // No rules here: the host already divides exercises, and rows are
+  // separated by space alone, so a header rule would stack with that divider.
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
@@ -1115,6 +1122,40 @@ class _EntryRow extends StatelessWidget {
     _SetField.rpe,
   );
 
+  /// What a resting cell shows. Effort reads as its coloured `@7`, and an
+  /// unset one as a faint dash under the RPE header.
+  Widget _restingValue(BuildContext context, String value, _SetField field) {
+    if (field == _SetField.rpe) {
+      // Sized with the figures beside it, so the row reads as one line.
+      if (rpe != null) {
+        return _effort(context, rpe!, fontSize: _valueStyle(context).fontSize);
+      }
+      // A quiet dash, not a repeat of the column header on every row.
+      return Text(
+        '\u2014',
+        maxLines: 1,
+        softWrap: false,
+        style: Theme.of(context).textTheme.labelLarge!.copyWith(
+          fontWeight: FontWeight.w600,
+          color: textSecondaryColor(context),
+        ),
+      );
+    }
+    return _EntryValue(
+      value: value,
+      active: false,
+      style: _valueStyle(context),
+    );
+  }
+
+  TextStyle _valueStyle(BuildContext context, {bool active = false}) =>
+      Theme.of(context).textTheme.titleLarge!.copyWith(
+        fontSize: continuousLog ? 18 : 20,
+        fontFeatures: const [FontFeature.tabularFigures()],
+        fontWeight: FontWeight.bold,
+        color: active ? accentColor(context) : textPrimaryColor(context),
+      );
+
   Widget _field(
     BuildContext context,
     String value,
@@ -1149,35 +1190,32 @@ class _EntryRow extends StatelessWidget {
         borderRadius: AppRadius.field,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxs),
-          child: Container(
+          // Figures sit bare in a ruled table. Only the cell the keys edit
+          // lifts into an accent wash; the keypad header carries the value
+          // and replace mode.
+          child: AnimatedContainer(
+            duration:
+                MediaQuery.disableAnimationsOf(context)
+                    ? Duration.zero
+                    : const Duration(milliseconds: 120),
             constraints: const BoxConstraints(minHeight: 44),
             padding: const EdgeInsets.all(AppSpacing.xs),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color:
-                  continuousLog
-                      ? surfaceColor(context)
-                      : backgroundColor(context),
-              // The ring marks the cell the keys edit; the large figure in
-              // the keypad header carries the value and replace mode.
-              border:
                   _active(field)
-                      ? Border.all(color: accentColor(context), width: 2)
-                      : continuousLog
-                      ? null
-                      : Border.all(color: borderColor(context)),
+                      ? accentMutedColor(context)
+                      : accentMutedColor(context).withAlpha(0),
               borderRadius: AppRadius.field,
             ),
-            child: _EntryValue(
-              value: _active(field) ? editing!._input : value,
-              active: _active(field),
-              style: Theme.of(context).textTheme.titleLarge!.copyWith(
-                fontSize: continuousLog ? 18 : 20,
-                fontFeatures: const [FontFeature.tabularFigures()],
-                fontWeight: FontWeight.bold,
-                color: textPrimaryColor(context),
-              ),
-            ),
+            child:
+                _active(field)
+                    ? _EntryValue(
+                      value: editing!._input,
+                      active: true,
+                      style: _valueStyle(context, active: true),
+                    )
+                    : _restingValue(context, value, field),
           ),
         ),
       ),

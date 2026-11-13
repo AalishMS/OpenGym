@@ -237,7 +237,7 @@ void main() {
     expect(headerValue, findsOneWidget);
     expect(tester.widget<Text>(headerValue).style!.fontSize, 28);
     expect(tester.widget<Text>(headerValue).style!.backgroundColor, isNull);
-    final ring =
+    final wash =
         tester
                 .widget<Container>(
                   find
@@ -253,9 +253,9 @@ void main() {
                 )
                 .decoration!
             as BoxDecoration;
-    final ringSide = (ring.border! as Border).top;
-    expect(ringSide.color, accentColor(tester.element(activeCell)));
-    expect(ringSide.width, 2);
+    // The cell the keys edit lifts into the opaque accent wash, unboxed.
+    expect(wash.color, accentMutedColor(tester.element(activeCell)));
+    expect(wash.border, isNull);
     // Replace mode is the header value's accent underline.
     final underline =
         tester
