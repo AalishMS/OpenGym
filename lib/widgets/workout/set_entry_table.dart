@@ -1642,8 +1642,10 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                 style: TextButton.styleFrom(
                   foregroundColor: accentColor(context),
                   minimumSize: const Size(48, 40),
+                  // Its own padding is the gap before the tick, so the set
+                  // and field label keep room on a ~380dp phone.
                   padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.md,
+                    horizontal: AppSpacing.sm,
                   ),
                   shape: const RoundedRectangleBorder(
                     borderRadius: AppRadius.button,
@@ -1653,7 +1655,6 @@ class _SetKeyboardState extends State<_SetKeyboard> {
                 icon: const Icon(Icons.content_copy_outlined, size: 18),
                 label: Text('Copy to set ${_index + 2}'),
               ),
-            const SizedBox(width: _kKeyGap),
             SizedBox(
               width: columnWidth,
               height: 48,
