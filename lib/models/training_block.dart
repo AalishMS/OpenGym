@@ -2,6 +2,14 @@ import 'package:hive/hive.dart';
 
 part 'training_block.g.dart';
 
+/// How many weeks a new block is planned for unless the user chooses another
+/// length. Shared by the create dialog and the preset installer.
+const int kDefaultBlockWeeks = 4;
+
+/// The longest a block can be created or extended to by choice. A block can
+/// still pass this by appending weeks as it is trained.
+const int kMaxBlockWeeks = 52;
+
 @HiveType(typeId: 8)
 class TrainingBlock extends HiveObject {
   @HiveField(0)

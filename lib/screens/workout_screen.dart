@@ -1418,15 +1418,24 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       );
   }
 
-  Future<void> _renameBlock(String blockId) async {
+  Future<void> _editBlock(String blockId) async {
     final block = _blocks.where((b) => b.id == blockId).firstOrNull;
     if (block == null) return;
-    await TrainingBlockDialogs.rename(
+    await TrainingBlockDialogs.edit(
       context,
       block,
+      currentWeekCount: trainingBlockLength(
+        block,
+        _training.weeksByBlock[blockId] ?? const <TrainingWeek>[],
+      ),
       onSave:
-          (name) => _structureMutation(
-            () => _structure.renameBlock(widget.plan.splitId!, blockId, name),
+          (name, count) => _structureMutation(
+            () => _structure.updateBlock(
+              splitId: widget.plan.splitId!,
+              blockId: blockId,
+              name: name,
+              weekCount: count,
+            ),
           ),
     );
   }
@@ -1619,6 +1628,14 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                                 w.number),
                                   )
                                   .toList();
+                      final planned =
+                          source != null &&
+                          supplied.isEmpty &&
+                          (_training
+                                      .blockById[source.blockId]
+                                      ?.plannedWeekCount ??
+                                  0) >
+                              source.number;
                       final blockIndex =
                           source == null
                               ? -1
@@ -1727,8 +1744,18 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                 )
                               else
                                 TrainingBoundaryOption(
-                                  icon: LucideIcons.plus,
-                                  title: 'Add week',
+                                  icon:
+                                      planned
+                                          ? LucideIcons.arrowRight
+                                          : LucideIcons.plus,
+                                  // The block was made longer after this
+                                  // workout reached its end: the next week is
+                                  // already planned, just not allocated yet.
+                                  title:
+                                      planned
+                                          ? 'Continue to Week '
+                                              '${source.number + 1}'
+                                          : 'Add week',
                                   detail:
                                       source == null || blockName == null
                                           ? 'Keep going in this block.'
@@ -2245,7 +2272,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       activeWeekId: _progress?.activeWeekId,
       onSelectWeek: _onWeekChanged,
       onSelectBlock: _selectBlock,
-      onRenameBlock: _renameBlock,
+      onEditBlock: _editBlock,
       onReorderBlocks: _reorderBlocks,
       onAddWeek: _addWeek,
       onDeleteWeek: widget.plan.id == null ? null : _showWeekActions,

@@ -91,7 +91,7 @@ void main() {
                   onSelectWeek: (id) => setState(() => selected = id),
                   onSelectBlock:
                       (id) => setState(() => selected = slots[id]!.first.id),
-                  onRenameBlock: (id) => onAction?.call('rename:$id'),
+                  onEditBlock: (id) => onAction?.call('edit:$id'),
                   onReorderBlocks: () => onAction?.call('reorder'),
                   onCreateBlock: () => onAction?.call('create'),
                   onAddWeek: (id) => onAction?.call('add:$id'),
@@ -161,7 +161,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Block 2'), findsOneWidget);
     expect(find.text('Create block'), findsOneWidget);
-    expect(find.text('Rename block'), findsOneWidget);
+    expect(find.text('Edit block'), findsOneWidget);
     expect(find.text('Reorder blocks'), findsOneWidget);
     await tester.tap(find.text('Block 2'));
     await tester.pumpAndSettle();
@@ -210,13 +210,13 @@ void main() {
     );
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('Rename block'), findsNothing);
+    expect(find.text('Edit block'), findsNothing);
     expect(find.text('Selected b0-w1'), findsOneWidget);
     await tester.tap(find.text('Block 1'));
     await tester.pumpAndSettle();
     await tester.tapAt(const Offset(380, 100));
     await tester.pumpAndSettle();
-    expect(find.text('Rename block'), findsNothing);
+    expect(find.text('Edit block'), findsNothing);
   });
 
   testWidgets(
@@ -228,13 +228,13 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Add week'));
-      for (final label in ['Create block', 'Rename block', 'Reorder blocks']) {
+      for (final label in ['Create block', 'Edit block', 'Reorder blocks']) {
         await tester.tap(find.text('Block 1'));
         await tester.pumpAndSettle();
         await tester.tap(find.text(label));
         await tester.pumpAndSettle();
       }
-      expect(actions, ['add:b0', 'create', 'rename:b0', 'reorder']);
+      expect(actions, ['add:b0', 'create', 'edit:b0', 'reorder']);
       await tester.pumpWidget(
         host(
           structure: blocks(1),
@@ -862,7 +862,7 @@ void main() {
         await tester.tap(find.text('Create'));
         await pumpWithStorage(tester);
         expect(find.text('Strength · Week 1'), findsOneWidget);
-        await choose('Strength', 'Rename block');
+        await choose('Strength', 'Edit block');
         await tester.enterText(find.bySemanticsLabel('Block name'), 'Power');
         await tester.tap(find.text('Save'));
         await pumpWithStorage(tester);
@@ -875,11 +875,7 @@ void main() {
         await pumpWithStorage(tester);
         expect(HiveService.blocksForSplit('s').first.name, 'Power');
         expect(find.text('Power · Week 1'), findsOneWidget);
-        for (final action in [
-          'Create block',
-          'Rename block',
-          'Reorder blocks',
-        ]) {
+        for (final action in ['Create block', 'Edit block', 'Reorder blocks']) {
           await choose('Power', action);
           await tester.tap(find.text('Cancel'));
           await tester.pumpAndSettle();

@@ -13,7 +13,9 @@ import '../navigation/app_navigation_observer.dart';
 import '../providers/settings_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/split_provider.dart';
+import '../repositories/training_block_repository.dart';
 import '../services/hive_service.dart';
+import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../theme/breakpoints.dart';
@@ -30,6 +32,7 @@ import '../widgets/workout/training_block_dialogs.dart';
 import '../models/training_block.dart';
 import '../models/training_week.dart';
 import '../providers/training_block_provider.dart';
+import '../widgets/workout/training_block_strip.dart';
 
 class PlanEditorScreen extends StatefulWidget {
   final WorkoutPlan? plan;
@@ -176,15 +179,105 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     return 'Choose starting week';
   }
 
+  TrainingBlockSnapshot _loadBlocks() => (
+    blocks: _startingBlocks,
+    weeksByBlock: _startingWeeks,
+  );
+
+  /// Block changes write straight to storage, outside this form's Save and
+  /// Discard, so they never touch the dirty signature.
+  Future<T> _blockMutation<T>(Future<T> Function() write) async {
+    try {
+      return await write();
+    } finally {
+      // Also after a failure: a recovered creation can have written a block.
+      if (mounted) {
+        context.read<TrainingBlockProvider?>()?.reload();
+        setState(() {});
+      }
+      SyncService.instance.scheduleSync();
+    }
+  }
+
+  TrainingBlockRepository get _blockRepository => TrainingBlockRepository(
+    ownerId:
+        () =>
+            widget.plan?.userId ?? HiveService.getSplitById(_splitId!)?.userId,
+  );
+
+  Future<TrainingBlock> _createBlock(String name, int count) => _blockMutation(
+    () => _blockRepository.createBlock(
+      splitId: _splitId!,
+      name: name,
+      weekCount: count,
+    ),
+  );
+
+  Future<TrainingBlock> _editBlock(
+    TrainingBlock block,
+    String name,
+    int count,
+  ) => _blockMutation(
+    () => _blockRepository.updateBlock(
+      splitId: _splitId!,
+      blockId: block.id,
+      name: name,
+      weekCount: count,
+    ),
+  );
+
   Future<void> _chooseStart() async {
     final chosen = await TrainingBlockDialogs.startingWeek(
       context,
       blocks: _startingBlocks,
       weeksByBlock: _startingWeeks,
       selectedWeekId: _startingWeekId,
+      load: _loadBlocks,
+      onCreateBlock: _createBlock,
+      onEditBlock: _editBlock,
     );
     if (chosen != null && mounted) setState(() => _startingWeekId = chosen);
   }
+
+  /// The block the plan is in now, e.g. `Strength · Week 2 of 4`.
+  String get _currentBlockLabel {
+    final planId = widget.plan?.id;
+    final progress =
+        planId == null || _splitId == null
+            ? null
+            : HiveService.progressForPlan(_splitId!, planId);
+    final week =
+        progress == null
+            ? null
+            : HiveService.getTrainingWeekById(progress.activeWeekId);
+    final block =
+        week == null || week.deletedAt != null
+            ? null
+            : HiveService.getTrainingBlockById(week.blockId);
+    if (block == null || block.deletedAt != null) return 'Not in a block';
+    final length = trainingBlockLength(
+      block,
+      HiveService.weeksForBlock(_splitId!, block.id),
+    );
+    return '${block.name} · Week ${week!.number} of $length';
+  }
+
+  String? get _currentBlockId {
+    final planId = widget.plan?.id;
+    if (planId == null || _splitId == null) return null;
+    final progress = HiveService.progressForPlan(_splitId!, planId);
+    return progress == null
+        ? null
+        : HiveService.getTrainingWeekById(progress.activeWeekId)?.blockId;
+  }
+
+  Future<void> _manageBlocks() => TrainingBlockDialogs.manage(
+    context,
+    load: _loadBlocks,
+    onCreateBlock: _createBlock,
+    onEditBlock: _editBlock,
+    currentBlockId: _currentBlockId,
+  );
 
   Future<void> _savePlan() async {
     if (_isSaving || _saved || !_canSave) return;
@@ -502,13 +595,19 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                               controller: _nameController,
                               marker: planColor,
                             ),
-                            if (!widget.isEdit &&
-                                _startingBlocks.isNotEmpty) ...[
+                            if (_startingBlocks.isNotEmpty) ...[
                               const SizedBox(height: AppSpacing.md),
-                              StartingWeekField(
-                                value: _startingLabel,
-                                onTap: _isSaving ? null : _chooseStart,
-                              ),
+                              if (widget.isEdit)
+                                StartingWeekField(
+                                  label: 'Training block',
+                                  value: _currentBlockLabel,
+                                  onTap: _isSaving ? null : _manageBlocks,
+                                )
+                              else
+                                StartingWeekField(
+                                  value: _startingLabel,
+                                  onTap: _isSaving ? null : _chooseStart,
+                                ),
                             ],
                             const SizedBox(height: AppSpacing.xl),
                             Wrap(

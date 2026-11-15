@@ -34,7 +34,7 @@ class TrainingBlockRepository {
     required int weekCount,
   }) => SyncService.instance.runExclusiveLocalMutation(() async {
     final trimmed = HiveService.validateTrainingName(name);
-    if (weekCount < 1 || weekCount > 52) {
+    if (weekCount < 1 || weekCount > kMaxBlockWeeks) {
       throw ArgumentError.value(weekCount, 'weekCount');
     }
     final owner = _owner();
@@ -140,6 +140,47 @@ class TrainingBlockRepository {
           block.copyWith(name: trimmed, updatedAt: DateTime.now(), dirty: true),
         );
       });
+
+  /// Renames a block and/or extends its planned length. Length is grow-only:
+  /// the server keeps the greater count and sync merges by maximum, so a
+  /// shorter value could never stick. Week rows stay lazy; a plan allocates
+  /// the next one when it reaches it.
+  Future<TrainingBlock> updateBlock({
+    required String splitId,
+    required String blockId,
+    required String name,
+    required int weekCount,
+  }) => SyncService.instance.runExclusiveLocalMutation(() async {
+    final trimmed = HiveService.validateTrainingName(name);
+    final block = HiveService.validateTrainingBlock(splitId, blockId, _owner());
+    final weeks = weeksForBlock(splitId, blockId);
+    final current =
+        block.plannedWeekCount ??
+        (weeks.isEmpty
+            ? 1
+            : weeks.map((w) => w.number).reduce((a, b) => a > b ? a : b));
+    if (weekCount < current) {
+      throw ArgumentError.value(
+        weekCount,
+        'weekCount',
+        'A block can be extended but not shortened.',
+      );
+    }
+    if (weekCount > current && weekCount > kMaxBlockWeeks) {
+      throw ArgumentError.value(weekCount, 'weekCount');
+    }
+    if (trimmed == block.name && weekCount == block.plannedWeekCount) {
+      return block;
+    }
+    final updated = block.copyWith(
+      name: trimmed,
+      plannedWeekCount: weekCount,
+      updatedAt: DateTime.now(),
+      dirty: true,
+    );
+    await HiveService.putTrainingBlockRaw(updated);
+    return updated;
+  });
 
   Future<void> reorderBlocks(String splitId, List<String> orderedIds) =>
       SyncService.instance.runExclusiveLocalMutation(() async {

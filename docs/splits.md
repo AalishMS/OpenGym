@@ -54,7 +54,11 @@ moves only the choosing workout. The strip cannot add future weeks early.
 New/duplicated/Coach-added plans choose their start from intended weeks, with
 allocation deferred until saving; existing plan edits retain their position.
 
-Create, rename and reorder blocks, or extend a block at its boundary. Individual
+Create, edit (rename and extend) and reorder blocks, or extend a block at its
+boundary. Blocks can be created and edited from the workout screen's block menu
+and from the plan editor (the new-plan starting-week sheet, and the *Training
+block* field when editing a plan). A block's planned length is grow-only: weeks
+can be added but never removed, and extending allocates no week rows. Individual
 block/week deletion and week rename/reorder are unavailable. History still
 includes every completed live session by date across blocks, even when its
 original plan no longer exists. Exact-session resume keeps duplicate logs and

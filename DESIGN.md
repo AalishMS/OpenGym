@@ -265,8 +265,26 @@ block expands to show its weeks as chips, so block and week read as one
 decision. Pickers include intended future week
 numbers without allocating them; saving the new plan allocates/reuses only its
 chosen slot. Existing plan edits retain progress. Create block accepts an
-intended length of 1–52 weeks and a 1–40 character trimmed name; explicit
-extensions can go beyond 52. Blocks can be renamed/reordered.
+intended length of 1–52 weeks (four by default, the same default presets use for
+Block 1) and a 1–40 character trimmed name; explicit extensions can go beyond
+52. Blocks can be renamed, extended and reordered. A block's length is
+grow-only: Edit block raises the intended count (the server keeps the greater
+value and sync merges by maximum), never lowers it, and never allocates week
+rows. Weeks and logged workouts always stay in the block.
+
+Blocks are managed in the plan editor as well as the workout screen. In a new
+plan, the starting-week sheet has *Create block* and a per-block *Edit block*
+button; a block created there is selected at Week 1 so a later planned week can
+still be chosen before *Use this week*. Editing an existing plan shows a
+*Training block* field under the name (e.g. `Strength · Week 2 of 4`) that opens
+the same sheet in a management mode: blocks with their lengths, the plan's
+current block marked, Edit block and Create block, and a Done button. It cannot
+move the plan to another block or week. Block changes save immediately and are
+shared by every workout in the split, so they are outside the editor's
+Save/Discard. Extending a block while a workout waits at its boundary needs no
+repair: progress stays *awaiting boundary*, the sheet then offers *Continue to
+Week N* in place of Add week, and that allocates the next week of the same
+block.
 Holding a week tab opens a sheet with *Delete week*. It deletes that week for
 the open workout only: its logs and drafts there are tombstoned and the tab is
 no longer supplied, while the shared week row stays for the split's other
@@ -288,8 +306,9 @@ browsed. The block name sits on a quiet ground, since a
 ground means tappable, and opens a compact menu above it, shaped like the
 split switcher. It lists every block in saved order with its intended length,
 marks the current one with a radio-style check, and then shows Create block,
-Rename block and Reorder blocks under a rule. Reorder is disabled until there
-are two blocks. The block list scrolls while the commands stay pinned, unless
+Edit block (rename and add weeks) and Reorder blocks under a rule. Reorder is
+disabled until there are two blocks. The block list scrolls while the commands
+stay pinned, unless
 the text is too large for both to fit; then the whole menu scrolls. It closes
 on selection, outside tap or Back. There is no separate block overflow menu or
 collapse state.
