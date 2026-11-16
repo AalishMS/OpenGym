@@ -62,6 +62,9 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   bool _showColors = false;
   String? _draftId;
   String? _startingWeekId;
+  // The block the starting week is in, kept so a week removed by shortening
+  // can fall back to that block's last remaining week.
+  String? _startingBlockId;
 
   bool get _canSave => _nameController.text.trim().isNotEmpty;
 
@@ -111,6 +114,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
               _splitId!,
               blocks.first.id,
             ).firstOrNull?.id;
+        _startingBlockId = blocks.first.id;
       }
     }
     _initialSignature = _signature();
@@ -191,8 +195,37 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     ownerId:
         () =>
             widget.plan?.userId ?? HiveService.getSplitById(_splitId!)?.userId,
-    onChanged: () => setState(() {}),
+    onChanged: () => setState(_settleStartingWeek),
   );
+
+  /// Keeps the chosen starting week on a week that exists: blocks change
+  /// outside this form's Save, so a delete or a shorten can remove it.
+  void _settleStartingWeek() {
+    final id = _startingWeekId;
+    if (id == null || _splitId == null) return;
+    final weeks = _startingWeeks;
+    for (final entry in weeks.entries) {
+      if (entry.value.any((w) => w.id == id)) {
+        _startingBlockId = entry.key;
+        return;
+      }
+    }
+    final kept = weeks[_startingBlockId]?.lastOrNull;
+    if (kept != null) {
+      _startingWeekId = kept.id;
+      return;
+    }
+    final first = _startingBlocks.firstOrNull;
+    _startingBlockId = first?.id;
+    _startingWeekId = first == null ? null : weeks[first.id]?.firstOrNull?.id;
+  }
+
+  String? _blockOfStartingWeek(String weekId) {
+    for (final entry in _startingWeeks.entries) {
+      if (entry.value.any((w) => w.id == weekId)) return entry.key;
+    }
+    return null;
+  }
 
   Future<void> _chooseStart() async {
     final chosen = await TrainingBlockDialogs.startingWeek(
@@ -204,8 +237,18 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
       onCreateBlock: (name, count) => _blockActions.create(name, count),
       onEditBlock:
           (block, name, count) => _blockActions.edit(block, name, count),
+      lifecycle: _blockActions.lifecycle,
     );
-    if (chosen != null && mounted) setState(() => _startingWeekId = chosen);
+    if (!mounted) return;
+    setState(() {
+      if (chosen != null) {
+        _startingWeekId = chosen;
+        _startingBlockId = _blockOfStartingWeek(chosen);
+      }
+      // Blocks may have been deleted or shortened while the sheet was open,
+      // whether or not a week was confirmed.
+      _settleStartingWeek();
+    });
   }
 
   /// The block the plan is in now, e.g. `Strength · Week 2 of 4`.
@@ -246,6 +289,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     onCreateBlock: (name, count) => _blockActions.create(name, count),
     onEditBlock: (block, name, count) => _blockActions.edit(block, name, count),
     currentBlockId: _currentBlockId,
+    lifecycle: _blockActions.lifecycle,
   );
 
   Future<void> _savePlan() async {

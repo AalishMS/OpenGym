@@ -6,11 +6,13 @@ import '../../providers/training_block_provider.dart';
 import '../../repositories/training_block_repository.dart';
 import '../../services/hive_service.dart';
 import '../../services/sync_service.dart';
+import '../../services/training_block_lifecycle.dart';
 import 'training_block_dialogs.dart';
 
-/// The storage side of the starting-week sheet's Create block and Edit block:
-/// what [TrainingBlockDialogs.startingWeek] and [TrainingBlockDialogs.manage]
-/// take as `load`, `onCreateBlock` and `onEditBlock`.
+/// The storage side of the starting-week sheet's Create block, Edit block and
+/// Delete block: what [TrainingBlockDialogs.startingWeek] and
+/// [TrainingBlockDialogs.manage] take as `load`, `onCreateBlock`,
+/// `onEditBlock` and `lifecycle`.
 ///
 /// Block changes write straight to storage, outside any form's Save, so each
 /// one reloads [TrainingBlockProvider] (when present) and schedules a sync,
@@ -25,12 +27,17 @@ class TrainingBlockActions {
   /// Runs after every write attempt, while the context is still mounted.
   final VoidCallback? onChanged;
 
+  /// Overrides what sync negotiated, for tests.
+  final bool Function(String? owner)? _lifecycleAvailable;
+
   TrainingBlockActions({
     required BuildContext Function() context,
     required this.splitId,
     required this.ownerId,
     this.onChanged,
-  }) : _context = context;
+    bool Function(String? owner)? lifecycleAvailable,
+  }) : _context = context,
+       _lifecycleAvailable = lifecycleAvailable;
 
   /// The split's own owner, unless the caller knows a plan's.
   static String? splitOwner(String splitId) =>
@@ -47,8 +54,10 @@ class TrainingBlockActions {
     );
   }
 
-  TrainingBlockRepository get _repository =>
-      TrainingBlockRepository(ownerId: ownerId);
+  TrainingBlockRepository get _repository => TrainingBlockRepository(
+    ownerId: ownerId,
+    lifecycleAvailable: _lifecycleAvailable,
+  );
 
   Future<TrainingBlock> create(String name, int count) => _mutate(
     () =>
@@ -64,6 +73,24 @@ class TrainingBlockActions {
           weekCount: count,
         ),
       );
+
+  Future<void> delete(TrainingBlock block) => _mutate(
+    () => _repository.deleteBlock(splitId: splitId, blockId: block.id),
+  );
+
+  /// Whether this account can shorten and delete blocks right now.
+  bool get lifecycleAvailable => _repository.lifecycleAvailable;
+
+  /// The fewest weeks [blockId] can be shortened to.
+  int minimumWeekCount(String blockId) =>
+      _repository.minimumWeekCount(splitId, blockId);
+
+  BlockDeletionBlocker? deleteBlocker(String blockId) =>
+      _repository.deleteBlocker(splitId, blockId);
+
+  /// The shorten and delete rules for the block sheets.
+  TrainingBlockLifecycle get lifecycle =>
+      TrainingBlockLifecycle.of(_repository, splitId: splitId, delete: delete);
 
   Future<T> _mutate<T>(Future<T> Function() write) async {
     try {

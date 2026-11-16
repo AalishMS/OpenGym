@@ -658,6 +658,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         load: blockActions.load,
                         onCreateBlock: blockActions.create,
                         onEditBlock: blockActions.edit,
+                        lifecycle: blockActions.lifecycle,
                       );
                       if (selected == null || !context.mounted) return;
                       final copyPlan = WorkoutPlan(

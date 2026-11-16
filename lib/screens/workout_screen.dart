@@ -1421,23 +1421,48 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   Future<void> _editBlock(String blockId) async {
     final block = _blocks.where((b) => b.id == blockId).firstOrNull;
     if (block == null) return;
-    await TrainingBlockDialogs.edit(
+    final splitId = widget.plan.splitId!;
+    final lifecycle = TrainingBlockLifecycle.of(
+      _structure,
+      splitId: splitId,
+      delete:
+          (block) => _structureMutation(
+            () => _structure.deleteBlock(splitId: splitId, blockId: block.id),
+            label: 'Deleting block',
+          ),
+    );
+    final lifecycleOn = lifecycle.available();
+    final blocker = lifecycleOn ? lifecycle.deleteBlocker(block) : null;
+    final viewed = _weeks.isEmpty ? null : _currentWeek;
+    final result = await TrainingBlockDialogs.edit(
       context,
       block,
       currentWeekCount: trainingBlockLength(
         block,
         _training.weeksByBlock[blockId] ?? const <TrainingWeek>[],
       ),
+      minimumWeekCount: lifecycleOn ? lifecycle.minimumWeekCount(block) : null,
       onSave:
           (name, count) => _structureMutation(
             () => _structure.updateBlock(
-              splitId: widget.plan.splitId!,
+              splitId: splitId,
               blockId: blockId,
               name: name,
               weekCount: count,
             ),
           ),
+      onDelete: lifecycleOn ? () => lifecycle.delete(block) : null,
+      deleteUnavailableReason:
+          blocker == null ? null : TrainingBlockDialogs.blockerMessage(blocker),
     );
+    if (!mounted || result is! TrainingBlockDeleted) return;
+    _viewedWeekByBlock.remove(blockId);
+    // A workout can view a block other than the one its progress is in. When
+    // that block is deleted, return to the workout's active week.
+    if (viewed != null && !_weeks.contains(viewed)) _selectProgress();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('${result.name} deleted')));
   }
 
   Future<void> _reorderBlocks() => TrainingBlockDialogs.reorder(

@@ -4,6 +4,9 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../models/training_block.dart';
 import '../../models/training_week.dart';
+import '../../repositories/training_block_repository.dart';
+import '../../services/sync_service.dart';
+import '../../services/training_block_lifecycle.dart';
 import '../../services/training_week_choices.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
@@ -19,7 +22,82 @@ typedef TrainingBlockSnapshot =
       Map<String, List<TrainingWeek>> weeksByBlock,
     });
 
+/// How [TrainingBlockDialogs.edit] ended, when it did not simply close.
+sealed class TrainingBlockEditResult {
+  const TrainingBlockEditResult();
+}
+
+/// The block was renamed and/or resized; [block] is the stored result.
+class TrainingBlockSaved extends TrainingBlockEditResult {
+  final TrainingBlock block;
+  const TrainingBlockSaved(this.block);
+}
+
+/// The block was deleted. [name] is what it was called.
+class TrainingBlockDeleted extends TrainingBlockEditResult {
+  final String name;
+  const TrainingBlockDeleted(this.name);
+}
+
+/// What the block sheets need to shorten and delete blocks. Everything is read
+/// when a block's Edit dialog opens, so a dialog reflects the current state.
+class TrainingBlockLifecycle {
+  /// Whether blocks can be shortened and deleted right now.
+  final bool Function() available;
+
+  /// The fewest weeks [TrainingBlock] can become, or null to keep its length.
+  final int? Function(TrainingBlock block) minimumWeekCount;
+
+  /// Why the block cannot be deleted, or null when it can.
+  final BlockDeletionBlocker? Function(TrainingBlock block) deleteBlocker;
+  final Future<void> Function(TrainingBlock block) delete;
+
+  const TrainingBlockLifecycle({
+    required this.available,
+    required this.minimumWeekCount,
+    required this.deleteBlocker,
+    required this.delete,
+  });
+
+  /// Reads the rules from [repository]. A block the repository cannot find
+  /// (it just changed) answers as keep-length and deletable; the write then
+  /// reports the real reason.
+  factory TrainingBlockLifecycle.of(
+    TrainingBlockRepository repository, {
+    required String splitId,
+    required Future<void> Function(TrainingBlock block) delete,
+  }) => TrainingBlockLifecycle(
+    available: () => repository.lifecycleAvailable,
+    minimumWeekCount: (block) {
+      try {
+        return repository.minimumWeekCount(splitId, block.id);
+      } catch (_) {
+        return null;
+      }
+    },
+    deleteBlocker: (block) {
+      try {
+        return repository.deleteBlocker(splitId, block.id);
+      } catch (_) {
+        return null;
+      }
+    },
+    delete: delete,
+  );
+}
+
 abstract final class TrainingBlockDialogs {
+  /// Why a block cannot be deleted, in the words shown beneath Delete block.
+  static String blockerMessage(BlockDeletionBlocker blocker) =>
+      switch (blocker) {
+        BlockDeletionBlocker.lastBlock => 'A split keeps at least one block.',
+        BlockDeletionBlocker.hasWorkouts =>
+          'This block has workouts in it, so it can\'t be deleted.',
+        BlockDeletionBlocker.workoutInBlock =>
+          'A workout is in this block right now. Move it to another block '
+              'first.',
+      };
+
   /// Pick a block and week. With [load] and the block callbacks the sheet also
   /// creates and edits blocks in place; without them it only picks.
   static Future<String?> startingWeek(
@@ -31,6 +109,7 @@ abstract final class TrainingBlockDialogs {
     Future<TrainingBlock> Function(String name, int count)? onCreateBlock,
     Future<TrainingBlock> Function(TrainingBlock block, String name, int count)?
     onEditBlock,
+    TrainingBlockLifecycle? lifecycle,
   }) => showModalBottomSheet<String>(
     context: context,
     useSafeArea: true,
@@ -44,6 +123,7 @@ abstract final class TrainingBlockDialogs {
           load: load,
           onCreateBlock: onCreateBlock,
           onEditBlock: onEditBlock,
+          lifecycle: lifecycle,
         ),
   );
 
@@ -61,6 +141,7 @@ abstract final class TrainingBlockDialogs {
     )
     onEditBlock,
     String? currentBlockId,
+    TrainingBlockLifecycle? lifecycle,
   }) {
     final snapshot = load();
     return showModalBottomSheet<void>(
@@ -77,6 +158,7 @@ abstract final class TrainingBlockDialogs {
             load: load,
             onCreateBlock: onCreateBlock,
             onEditBlock: onEditBlock,
+            lifecycle: lifecycle,
           ),
     );
   }
@@ -85,29 +167,52 @@ abstract final class TrainingBlockDialogs {
     BuildContext context, {
     required Future<TrainingBlock> Function(String name, int count) onSave,
     int initialWeekCount = kDefaultBlockWeeks,
-  }) => showDialog<TrainingBlock>(
-    context: context,
-    builder:
-        (_) => _BlockForm(onSave: onSave, initialWeekCount: initialWeekCount),
-  );
+  }) async =>
+      await showDialog<Object>(
+            context: context,
+            builder:
+                (_) => _BlockForm(
+                  onSave: onSave,
+                  initialWeekCount: initialWeekCount,
+                ),
+          )
+          as TrainingBlock?;
 
-  /// Rename a block and/or add weeks. [currentWeekCount] is the minimum: a
-  /// block can grow but never shrink.
-  static Future<TrainingBlock?> edit(
+  /// Rename, resize or delete a block. Null means it was closed unchanged.
+  ///
+  /// [minimumWeekCount] is the fewest weeks the block may become; it defaults
+  /// to [currentWeekCount], so a block can only grow. A non-null [onDelete]
+  /// says shortening and deleting are supported for this account: the dialog
+  /// then offers Delete block, disabled with [deleteUnavailableReason] beneath
+  /// it when the block cannot be deleted. Without it the dialog keeps the
+  /// grow-only behaviour and has no delete.
+  static Future<TrainingBlockEditResult?> edit(
     BuildContext context,
     TrainingBlock block, {
     required int currentWeekCount,
     required Future<TrainingBlock> Function(String name, int count) onSave,
-  }) => showDialog<TrainingBlock>(
-    context: context,
-    builder:
-        (_) => _BlockForm(
-          initialName: block.name,
-          initialWeekCount: currentWeekCount,
-          minWeekCount: currentWeekCount,
-          onSave: onSave,
-        ),
-  );
+    int? minimumWeekCount,
+    Future<void> Function()? onDelete,
+    String? deleteUnavailableReason,
+  }) async {
+    final result = await showDialog<Object>(
+      context: context,
+      builder:
+          (_) => _BlockForm(
+            initialName: block.name,
+            initialWeekCount: currentWeekCount,
+            minWeekCount: (minimumWeekCount ?? currentWeekCount).clamp(
+              1,
+              currentWeekCount,
+            ),
+            lifecycle: onDelete != null,
+            onSave: onSave,
+            onDelete: onDelete,
+            deleteUnavailableReason: deleteUnavailableReason,
+          ),
+    );
+    return result as TrainingBlockEditResult?;
+  }
 
   static Future<void> reorder(
     BuildContext context,
@@ -361,14 +466,22 @@ class _BlockForm extends StatefulWidget {
   final String? initialName;
   final int initialWeekCount;
 
-  /// The fewest weeks allowed. An existing block can only grow.
+  /// The fewest weeks allowed. Below [initialWeekCount] the block can shrink.
   final int minWeekCount;
+
+  /// Whether this account can shorten and delete blocks (editing only).
+  final bool lifecycle;
   final Future<TrainingBlock> Function(String, int) onSave;
+  final Future<void> Function()? onDelete;
+  final String? deleteUnavailableReason;
   const _BlockForm({
     this.initialName,
     required this.initialWeekCount,
     this.minWeekCount = 1,
+    this.lifecycle = false,
     required this.onSave,
+    this.onDelete,
+    this.deleteUnavailableReason,
   });
   @override
   State<_BlockForm> createState() => _BlockFormState();
@@ -379,13 +492,21 @@ class _BlockFormState extends State<_BlockForm> {
   late final _name = TextEditingController(text: widget.initialName ?? '');
   late final _count = TextEditingController(text: '${widget.initialWeekCount}');
   bool _saving = false;
+  bool _deleting = false;
   String? _error;
 
+  bool get _busy => _saving || _deleting;
   bool get _creating => widget.initialName == null;
   int get _minWeeks => widget.minWeekCount;
+  bool get _canShorten => !_creating && _minWeeks < widget.initialWeekCount;
+  bool get _canDelete =>
+      !_creating && widget.lifecycle && widget.onDelete != null;
   // A block can already be past the usual cap through appended weeks; it may
   // keep that length but not grow further.
-  int get _maxWeeks => _minWeeks > kMaxBlockWeeks ? _minWeeks : kMaxBlockWeeks;
+  int get _maxWeeks =>
+      widget.initialWeekCount > kMaxBlockWeeks
+          ? widget.initialWeekCount
+          : kMaxBlockWeeks;
   int? get _weeks => int.tryParse(_count.text);
 
   @override
@@ -402,7 +523,7 @@ class _BlockFormState extends State<_BlockForm> {
   }
 
   Future<void> _save() async {
-    if (_saving || !_form.currentState!.validate()) return;
+    if (_busy || !_form.currentState!.validate()) return;
     setState(() {
       _saving = true;
       _error = null;
@@ -412,7 +533,9 @@ class _BlockFormState extends State<_BlockForm> {
         _name.text.trim(),
         int.parse(_count.text),
       );
-      if (mounted) Navigator.pop(context, result);
+      if (mounted) {
+        Navigator.pop(context, _creating ? result : TrainingBlockSaved(result));
+      }
     } on ArgumentError {
       // The repository refused the values: while this dialog was open the
       // block changed (a sync or another workout made it longer), so retrying
@@ -433,6 +556,69 @@ class _BlockFormState extends State<_BlockForm> {
     }
   }
 
+  Future<void> _delete() async {
+    if (_busy) return;
+    final name = widget.initialName!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => _DeleteBlockConfirmation(name: name),
+    );
+    if (confirmed != true || !mounted || _busy) return;
+    setState(() {
+      _deleting = true;
+      _error = null;
+    });
+    try {
+      await widget.onDelete!();
+      if (mounted) Navigator.pop(context, TrainingBlockDeleted(name));
+    } on TrainingBlockDeletionException catch (e) {
+      if (mounted) setState(() => _error = _deletionMessage(e));
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () =>
+              _error = 'Could not delete. Check your connection and try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
+  }
+
+  static String _deletionMessage(TrainingBlockDeletionException e) {
+    // This device found the block in use itself: say which way.
+    final blocker = e.blocker;
+    if (blocker != null) return TrainingBlockDialogs.blockerMessage(blocker);
+    return switch (e.reason) {
+      TrainingBlockDeletionReason.inUse =>
+        'This block is in use on another device.',
+      TrainingBlockDeletionReason.lastBlock =>
+        TrainingBlockDialogs.blockerMessage(BlockDeletionBlocker.lastBlock),
+      TrainingBlockDeletionReason.updateRequired =>
+        'Update OpenGym to delete blocks.',
+      TrainingBlockDeletionReason.unavailable ||
+      TrainingBlockDeletionReason
+          .splitDeleted => 'This block is no longer available.',
+    };
+  }
+
+  String get _description {
+    if (_creating) {
+      return 'A block is a phase of training, like four weeks of strength '
+          'work. Each workout reveals the next week as you complete it.';
+    }
+    if (_canShorten) {
+      return 'Remove planned weeks no workout has reached, or add more. '
+          'Logged workouts stay in this block.';
+    }
+    if (widget.lifecycle) {
+      return 'Rename this block or add weeks. Logged workouts stay in this '
+          'block.';
+    }
+    return 'You can add weeks but not remove them. Weeks and logged '
+        'workouts stay in this block.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final weeks = _weeks;
@@ -442,16 +628,10 @@ class _BlockFormState extends State<_BlockForm> {
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
     );
     return PopScope(
-      canPop: !_saving,
+      canPop: !_busy,
       child: _BlockDialogFrame(
         title: _creating ? 'Create block' : 'Edit block',
-        description:
-            _creating
-                ? 'A block is a phase of training, like four weeks of '
-                    'strength work. Each workout reveals the next week as '
-                    'you complete it.'
-                : 'You can add weeks but not remove them. Weeks and logged '
-                    'workouts stay in this block.',
+        description: _description,
         error: _error,
         body: SingleChildScrollView(
           child: Form(
@@ -462,7 +642,7 @@ class _BlockFormState extends State<_BlockForm> {
               children: [
                 TextFormField(
                   controller: _name,
-                  enabled: !_saving,
+                  enabled: !_busy,
                   maxLength: 40,
                   autofocus: true,
                   textCapitalization: TextCapitalization.sentences,
@@ -486,7 +666,7 @@ class _BlockFormState extends State<_BlockForm> {
                       tooltip: 'Fewer weeks',
                       style: stepStyle,
                       onPressed:
-                          _saving || weeks == null || weeks <= _minWeeks
+                          _busy || weeks == null || weeks <= _minWeeks
                               ? null
                               : () => _step(-1),
                       icon: const Icon(LucideIcons.minus, size: 20),
@@ -495,7 +675,7 @@ class _BlockFormState extends State<_BlockForm> {
                     Expanded(
                       child: TextFormField(
                         controller: _count,
-                        enabled: !_saving,
+                        enabled: !_busy,
                         textAlign: TextAlign.center,
                         keyboardType: TextInputType.number,
                         inputFormatters: [
@@ -525,10 +705,11 @@ class _BlockFormState extends State<_BlockForm> {
                               count <= _maxWeeks) {
                             return null;
                           }
-                          return _creating
-                              ? 'Choose 1–$_maxWeeks weeks.'
-                              : 'Weeks can only be added. Choose '
-                                  '$_minWeeks–$_maxWeeks.';
+                          if (_creating || _canShorten) {
+                            return 'Choose $_minWeeks–$_maxWeeks weeks.';
+                          }
+                          return 'Weeks can only be added. Choose '
+                              '$_minWeeks–$_maxWeeks.';
                         },
                       ),
                     ),
@@ -537,29 +718,130 @@ class _BlockFormState extends State<_BlockForm> {
                       tooltip: 'More weeks',
                       style: stepStyle,
                       onPressed:
-                          _saving || (weeks != null && weeks >= _maxWeeks)
+                          _busy || (weeks != null && weeks >= _maxWeeks)
                               ? null
                               : () => _step(1),
                       icon: const Icon(LucideIcons.plus, size: 20),
                     ),
                   ],
                 ),
+                if (!_creating && widget.lifecycle && !_canShorten) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Every week here has been reached, so this block can\'t '
+                    'be shorter.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: textSecondaryColor(context),
+                    ),
+                  ),
+                ],
+                if (_canDelete) ...[
+                  const SizedBox(height: AppSpacing.lg),
+                  Divider(height: 1, color: borderColor(context)),
+                  const SizedBox(height: AppSpacing.lg),
+                  _DeleteBlockButton(
+                    deleting: _deleting,
+                    onPressed:
+                        _busy || widget.deleteUnavailableReason != null
+                            ? null
+                            : _delete,
+                  ),
+                  if (widget.deleteUnavailableReason != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      widget.deleteUnavailableReason!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: textSecondaryColor(context),
+                      ),
+                    ),
+                  ],
+                ],
               ],
             ),
           ),
         ),
         actions: [
           TextButton(
-            onPressed: _saving ? null : () => Navigator.pop(context),
+            onPressed: _busy ? null : () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
           _SaveButton(
             label: _creating ? 'Create' : 'Save',
             saving: _saving,
-            onPressed: _save,
+            onPressed: _busy ? null : _save,
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The destructive entry point in Edit block. It sits apart from Cancel and
+/// Save, outlined in the error colour, and is disabled rather than hidden when
+/// the block can't be deleted.
+class _DeleteBlockButton extends StatelessWidget {
+  final bool deleting;
+  final VoidCallback? onPressed;
+  const _DeleteBlockButton({required this.deleting, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final error = errorColor(context);
+    return OutlinedButton.icon(
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size.fromHeight(48),
+        foregroundColor: error,
+        side: BorderSide(
+          color: onPressed == null ? borderColor(context) : error,
+        ),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
+      ),
+      icon:
+          deleting
+              ? Semantics(
+                label: 'Deleting',
+                child: SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: textSecondaryColor(context),
+                  ),
+                ),
+              )
+              : const Icon(LucideIcons.trash2, size: 18),
+      label: const Text('Delete block'),
+    );
+  }
+}
+
+class _DeleteBlockConfirmation extends StatelessWidget {
+  final String name;
+  const _DeleteBlockConfirmation({required this.name});
+
+  @override
+  Widget build(BuildContext context) {
+    final error = errorColor(context);
+    return AlertDialog(
+      title: Text('Delete $name?', style: TextStyle(color: error)),
+      content: const Text(
+        'This block and its planned weeks will be removed from the split. '
+        'No workouts are logged in it.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: error,
+            foregroundColor: onColor(error),
+          ),
+          child: const Text('Delete'),
+        ),
+      ],
     );
   }
 }
@@ -773,6 +1055,7 @@ class _StartingWeek extends StatefulWidget {
     int count,
   )?
   onEditBlock;
+  final TrainingBlockLifecycle? lifecycle;
   const _StartingWeek({
     required this.blocks,
     required this.weeksByBlock,
@@ -782,6 +1065,7 @@ class _StartingWeek extends StatefulWidget {
     this.load,
     this.onCreateBlock,
     this.onEditBlock,
+    this.lifecycle,
   });
   @override
   State<_StartingWeek> createState() => _StartingWeekState();
@@ -818,18 +1102,8 @@ class _StartingWeekState extends State<_StartingWeek> {
     super.initState();
     _blocks = widget.blocks;
     _weeks = _planned(widget.blocks, widget.weeksByBlock);
-    final choices = _choices;
-    final chosen =
-        choices
-            .where(
-              (b) => _weeks[b.id]!.any((w) => w.id == widget.selectedWeekId),
-            )
-            .firstOrNull ??
-        choices.firstOrNull;
-    _block = chosen?.id;
-    _week =
-        widget.selectedWeekId ??
-        (_block == null ? null : _weeks[_block]!.first.id);
+    _week = widget.selectedWeekId;
+    _settleSelection();
     _scrollToSelection();
   }
 
@@ -840,6 +1114,33 @@ class _StartingWeekState extends State<_StartingWeek> {
         Scrollable.ensureVisible(chip, alignment: .5);
       }
     });
+  }
+
+  /// Keeps the selection on a week that exists. A week removed by shortening
+  /// leaves the block's last week selected; a deleted block leaves the first
+  /// remaining block's first week.
+  void _settleSelection() {
+    final choices = _choices;
+    final owner =
+        _week == null
+            ? null
+            : choices
+                .where((b) => _weeks[b.id]!.any((w) => w.id == _week))
+                .firstOrNull;
+    if (owner != null) {
+      _block = owner.id;
+      return;
+    }
+    final kept = choices.where((b) => b.id == _block).firstOrNull;
+    final fallback = kept ?? choices.firstOrNull;
+    _block = fallback?.id;
+    _week =
+        fallback == null
+            ? null
+            : (kept == null
+                    ? _weeks[fallback.id]!.first
+                    : _weeks[kept.id]!.last)
+                .id;
   }
 
   void _chooseBlock(String id) {
@@ -855,6 +1156,7 @@ class _StartingWeekState extends State<_StartingWeek> {
     setState(() {
       _blocks = snapshot.blocks;
       _weeks = _planned(snapshot.blocks, snapshot.weeksByBlock);
+      _settleSelection();
     });
   }
 
@@ -875,14 +1177,26 @@ class _StartingWeekState extends State<_StartingWeek> {
   }
 
   Future<void> _edit(TrainingBlock block) async {
-    final edited = await TrainingBlockDialogs.edit(
+    final lifecycle = widget.lifecycle;
+    final lifecycleOn = lifecycle != null && lifecycle.available();
+    final blocker = lifecycleOn ? lifecycle.deleteBlocker(block) : null;
+    final result = await TrainingBlockDialogs.edit(
       context,
       block,
       currentWeekCount: _lengthOf(block),
+      minimumWeekCount: lifecycleOn ? lifecycle.minimumWeekCount(block) : null,
       onSave: (name, count) => widget.onEditBlock!(block, name, count),
+      onDelete: lifecycleOn ? () => lifecycle.delete(block) : null,
+      deleteUnavailableReason:
+          blocker == null ? null : TrainingBlockDialogs.blockerMessage(blocker),
     );
-    if (edited == null || !mounted) return;
+    if (result == null || !mounted) return;
     _reload();
+    if (result is TrainingBlockDeleted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text('${result.name} deleted')));
+    }
   }
 
   @override
@@ -917,6 +1231,8 @@ class _StartingWeekState extends State<_StartingWeek> {
                   widget.picking
                       ? 'This workout starts here. Later weeks appear as you '
                           'complete it.'
+                      : widget.lifecycle?.available() ?? false
+                      ? 'Rename a block, change its length, or delete it.'
                       : 'Add weeks or rename a block. Weeks can be added but '
                           'not removed.',
                   style: textTheme.bodyMedium?.copyWith(

@@ -886,6 +886,109 @@ void main() {
       },
     );
 
+    Future<void> openBlockMenuAction(
+      WidgetTester tester,
+      String blockName,
+      String action,
+    ) async {
+      await tester.tap(find.text(blockName));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(action));
+      await tester.pumpAndSettle();
+    }
+
+    locationTest(
+      'deleting the block being viewed falls back to the active week',
+      (tester) async {
+        await tester.runAsync(() async {
+          await TrainingBlockMigration().normalize(ownerId: null);
+          await TrainingBlockRepository(
+            ownerId: () => null,
+          ).createBlock(splitId: 's', name: 'Strength', weekCount: 3);
+        });
+        await open(tester);
+        await tester.tap(find.text('Block 1'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Strength'));
+        await pumpWithStorage(tester);
+        expect(find.text('Strength · Week 1'), findsOneWidget);
+
+        await openBlockMenuAction(tester, 'Strength', 'Edit block');
+        expect(find.text('Delete block'), findsOneWidget);
+        await tester.tap(find.text('Delete block'));
+        await tester.pumpAndSettle();
+        expect(find.text('Delete Strength?'), findsOneWidget);
+        await tester.runAsync(() async {
+          await tester.tap(
+            find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.text('Delete'),
+            ),
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        });
+        await pumpWithStorage(tester);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Strength deleted'), findsOneWidget);
+        expect(find.text('Block 1 · Week 1'), findsOneWidget);
+        expect(find.text('Strength · Week 1'), findsNothing);
+        expect(HiveService.blocksForSplit('s').map((b) => b.name), ['Block 1']);
+        expect(
+          HiveService.readTrainingGraph(ownerId: null).validate,
+          returnsNormally,
+        );
+      },
+    );
+
+    locationTest(
+      'the block the workout is in cannot be deleted and can be shortened '
+      'only to its reached week',
+      (tester) async {
+        await tester.runAsync(() async {
+          await TrainingBlockMigration().normalize(ownerId: null);
+          final repo = TrainingBlockRepository(ownerId: () => null);
+          final first = repo.blocksForSplit('s').single;
+          await repo.updateBlock(
+            splitId: 's',
+            blockId: first.id,
+            name: first.name,
+            weekCount: 4,
+          );
+          await repo.createBlock(splitId: 's', name: 'Strength', weekCount: 3);
+        });
+        await open(tester);
+        await openBlockMenuAction(tester, 'Block 1', 'Edit block');
+        expect(
+          find.text(
+            'A workout is in this block right now. Move it to another block '
+            'first.',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          tester
+              .widget<ButtonStyleButton>(
+                find.ancestor(
+                  of: find.text('Delete block'),
+                  matching: find.bySubtype<ButtonStyleButton>(),
+                ),
+              )
+              .onPressed,
+          isNull,
+        );
+        await tester.enterText(find.bySemanticsLabel('Weeks'), '1');
+        await tester.runAsync(() async {
+          await tester.tap(find.text('Save'));
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        });
+        await pumpWithStorage(tester);
+        await tester.pumpAndSettle();
+        expect(HiveService.blocksForSplit('s').first.plannedWeekCount, 1);
+        expect(find.text('Block 1 · Week 1'), findsOneWidget);
+      },
+    );
+
     locationTest(
       'failed save prevents switching blocks and future weeks stay disabled',
       (tester) async {
