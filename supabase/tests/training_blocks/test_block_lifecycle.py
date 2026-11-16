@@ -516,5 +516,364 @@ class BlockLifecycleTest(unittest.TestCase):
         self.assertIsNone(self.stored_block(block_id)['deleted_at'])
 
 
+def strip_seq(row):
+    return {k: v for k, v in row.items() if k != 'server_seq'}
+
+
+def owner_connection():
+    """A direct connection acting as the owner through RLS, like PostgREST does,
+    but with NO pre-request guard: nothing here takes the account advisory lock."""
+    connection = psycopg.connect(host='127.0.0.1', port=55439, dbname='opengym_training_blocks_test',
+                                 user=os.environ.get('USER', 'aalish'), autocommit=False)
+    connection.execute('set role authenticated')
+    connection.execute("select set_config('request.jwt.claims', %s, false)",
+                       (json.dumps({'sub': OWNER, 'role': 'authenticated'}),))
+    return connection
+
+
+def wait_until_blocked(test, marker):
+    """Wait until a backend running `marker` waits on a row/transaction lock
+    (never the advisory lock) and return its wait event."""
+    deadline = time.monotonic() + 5
+    while True:
+        event = sql(f"""select coalesce(max(wait_event_type || ':' || wait_event),'') from pg_stat_activity
+                        where query like '%{marker}%' and query not like '%pg_stat_activity%' and wait_event_type='Lock'""")
+        if event:
+            test.assertNotEqual(event, 'Lock:advisory')
+            return event
+        test.assertLess(time.monotonic(), deadline, 'backend never blocked on a row lock')
+        time.sleep(0.01)
+
+
+class RescueAndLosingUpsertTest(unittest.TestCase):
+    """F1 server contract: a rescued session / progress row is accepted, and an
+    upsert that loses last-write-wins is a silent no-op even when the stored row's
+    parent was tombstoned by a raw upsert (what restore and Clear All Data do)."""
+    EXPECTED = '11111111-1111-4111-8111-111111111111'
+    setUp = test_api.TrainingBlocksApiTest.setUp
+    activate = BlockLifecycleTest.activate
+    post = BlockLifecycleTest.post
+    get = BlockLifecycleTest.get
+    stored_block = BlockLifecycleTest.stored_block
+    new_block = BlockLifecycleTest.new_block
+    session_in = BlockLifecycleTest.session_in
+    move_progress = BlockLifecycleTest.move_progress
+
+    def evidence(self, source, following, session_id):
+        return {'sourceWeekId': source, 'nextWeekId': following, 'resultRevision': session_id,
+                'expectedRevision': self.EXPECTED, 'committedAt': T2}
+
+    def evidence_session(self, week, following, number=1, **extra):
+        session_id = str(uuid.uuid4())
+        row = self.session_in(week, number, session_id=session_id, updated_at=T2, **extra)
+        row['data']['completionTransition'] = self.evidence(week, following, session_id)
+        return row
+
+    def tombstone(self, block_id, week_ids, updated=T3, weeks_only=False):
+        for number, week in enumerate(week_ids, 1):
+            self.assertLess(api('training_weeks', 'POST', week_row(block_id, number, week_id=week, updated=updated, deleted_at=updated), schema=4)[0], 300)
+        if not weeks_only:
+            self.assertLess(api('training_blocks', 'POST', block_row(block_id, count=len(week_ids), clock=T1, updated=updated, deleted_at=updated), schema=4)[0], 300)
+
+    def graph(self):
+        """Old block X holding a completed session with evidence (not yet
+        tombstoned), and a live rescue block Y with the same two week numbers."""
+        self.activate()
+        old_block, (old_one, old_two) = self.new_block(count=2, clock=T1, weeks=[1, 2])
+        stored = self.post('workout_sessions', self.evidence_session(old_one, old_two))
+        new_block, (new_one, new_two) = self.new_block(name='Rescue', position=6, count=2, clock=T1, weeks=[1, 2])
+        return old_block, (old_one, old_two), stored, new_block, (new_one, new_two)
+
+    def rescued(self, stored, new_one, new_two):
+        row = {**stored, 'training_week_id': new_one}
+        row['data'] = {**stored['data'], 'trainingWeekId': new_one,
+                       'completionTransition': self.evidence(new_one, new_two, stored['id'])}
+        return row
+
+    def stored_session(self, session_id):
+        return self.get(f'workout_sessions?id=eq.{session_id}')[0]
+
+    def stored_progress(self):
+        return self.get(f'workout_progress?plan_id=eq.{PLAN}')[0]
+
+    # --- sessions: the rescue move ------------------------------------------
+
+    def test_session_moves_out_of_a_tombstoned_week_with_remapped_evidence(self):
+        old_block, old_weeks, stored, new_block, (new_one, new_two) = self.graph()
+        self.tombstone(old_block, old_weeks)
+        self.assertEqual(self.stored_session(stored['id'])['training_week_id'], old_weeks[0])
+        status, body = api('workout_sessions', 'POST', self.rescued(stored, new_one, new_two), schema=4)
+        self.assertLess(status, 300, body)
+        after = self.stored_session(stored['id'])
+        self.assertEqual(after['training_week_id'], new_one)
+        self.assertEqual(after['data']['trainingWeekId'], new_one)
+        self.assertEqual(after['data']['completionTransition'], self.evidence(new_one, new_two, stored['id']))
+        self.assertEqual(when(after['updated_at']), when(T2))  # Unchanged: a link fix, not an edit.
+        self.assertEqual(body[0]['training_week_id'], new_one)
+        self.assertEqual(body[0]['data']['completionTransition']['sourceWeekId'], new_one)
+        self.assertEqual(sql(f"select count(*) from workout_sessions where id='{stored['id']}'"), '1')
+
+    def test_the_same_move_is_refused_while_the_old_week_is_live(self):
+        old_block, old_weeks, stored, new_block, (new_one, new_two) = self.graph()
+        before = self.stored_session(stored['id'])
+        status, body = api('workout_sessions', 'POST', self.rescued(stored, new_one, new_two), schema=4)
+        self.assertGreaterEqual(status, 400, body)
+        self.assertEqual(body['message'], 'Invalid completion evidence')
+        self.assertEqual(self.stored_session(stored['id']), before)
+        # A block tombstone alone does not make the week a tombstone.
+        self.assertLess(api('training_blocks', 'POST', block_row(old_block, count=2, clock=T1, updated=T3, deleted_at=T3), schema=4)[0], 300)
+        self.assertGreaterEqual(api('workout_sessions', 'POST', self.rescued(stored, new_one, new_two), schema=4)[0], 400)
+        self.assertEqual(self.stored_session(stored['id']), before)
+        # Once the week itself is a tombstone the same push is accepted.
+        self.tombstone(old_block, old_weeks, weeks_only=True)
+        self.assertLess(api('workout_sessions', 'POST', self.rescued(stored, new_one, new_two), schema=4)[0], 300)
+
+    def test_the_move_is_refused_when_the_evidence_does_not_match_the_new_week(self):
+        old_block, (old_one, old_two), stored, new_block, (new_one, new_two) = self.graph()
+        self.tombstone(old_block, (old_one, old_two))
+        before = self.stored_session(stored['id'])
+        good = self.rescued(stored, new_one, new_two)
+
+        def with_evidence(**changes):
+            row = json.loads(json.dumps(good))
+            row['data']['completionTransition'].update(changes)
+            return row
+
+        attempts = {
+            'still names the old week': with_evidence(sourceWeekId=old_one),
+            'names the other new week': with_evidence(sourceWeekId=new_two, nextWeekId=new_one),
+            'next week is the same week': with_evidence(nextWeekId=new_one),
+            'next week is in the old block': with_evidence(nextWeekId=old_two),
+            'rewritten expected revision': with_evidence(expectedRevision=str(uuid.uuid4())),
+            'rewritten commit time': with_evidence(committedAt=T4),
+            'foreign result revision': with_evidence(resultRevision=str(uuid.uuid4())),
+            'extra evidence key': with_evidence(extra=True),
+        }
+        for label, row in attempts.items():
+            status, body = api('workout_sessions', 'POST', row, schema=4)
+            self.assertGreaterEqual(status, 400, (label, body))
+            self.assertEqual(self.stored_session(stored['id']), before, label)
+        dropped = json.loads(json.dumps(good))
+        dropped['data']['completionTransition'] = None
+        self.assertGreaterEqual(api('workout_sessions', 'POST', dropped, schema=4)[0], 400)
+        wrong_number = json.loads(json.dumps(good))
+        wrong_number['week_number'] = 2
+        wrong_number['data']['weekNumber'] = 2
+        self.assertGreaterEqual(api('workout_sessions', 'POST', wrong_number, schema=4)[0], 400)
+        self.assertEqual(self.stored_session(stored['id']), before)
+        self.assertLess(api('workout_sessions', 'POST', good, schema=4)[0], 300)
+
+    def test_the_move_is_refused_into_a_tombstoned_week(self):
+        old_block, old_weeks, stored, new_block, (new_one, new_two) = self.graph()
+        self.tombstone(old_block, old_weeks)
+        before = self.stored_session(stored['id'])
+        self.tombstone(new_block, (new_one, new_two), weeks_only=True)
+        status, body = api('workout_sessions', 'POST', self.rescued(stored, new_one, new_two), schema=4)
+        self.assertGreaterEqual(status, 400, body)
+        self.assertEqual(self.stored_session(stored['id']), before)
+        # Same through a direct UPDATE, which skips the BEFORE INSERT pass entirely.
+        with self.assertRaises(psycopg.errors.CheckViolation):
+            sql(f"""update workout_sessions set training_week_id='{new_one}', updated_at=updated_at,
+                    data=jsonb_set(jsonb_set(jsonb_set(data,'{{trainingWeekId}}','"{new_one}"'),
+                      '{{completionTransition,sourceWeekId}}','"{new_one}"'),
+                      '{{completionTransition,nextWeekId}}','"{new_two}"') where id='{stored['id']}'""")
+        self.assertEqual(self.stored_session(stored['id']), before)
+
+    def test_a_session_without_stored_evidence_still_takes_incoming_evidence(self):
+        self.activate()
+        old_block, (old_one, old_two) = self.new_block(count=2, clock=T1, weeks=[1, 2])
+        new_block, (new_one, new_two) = self.new_block(name='Rescue', position=6, count=2, clock=T1, weeks=[1, 2])
+        draft = self.post('workout_sessions', self.session_in(old_one, 1, updated_at=T2))
+        self.tombstone(old_block, (old_one, old_two))
+        moved = {**draft, 'training_week_id': new_one}
+        moved['data'] = {**draft['data'], 'trainingWeekId': new_one,
+                         'completionTransition': self.evidence(new_one, new_two, draft['id'])}
+        self.post('workout_sessions', moved)
+        self.assertEqual(self.stored_session(draft['id'])['data']['completionTransition']['sourceWeekId'], new_one)
+
+    # --- losing upserts are silent no-ops ----------------------------------------
+
+    def test_a_losing_session_upsert_is_a_no_op_when_the_stored_week_is_tombstoned(self):
+        old_block, old_weeks, stored, new_block, (new_one, new_two) = self.graph()
+        self.tombstone(old_block, old_weeks)
+        before = self.stored_session(stored['id'])
+        losing = self.rescued(stored, new_one, new_two)
+        losing['updated_at'] = '2026-01-01T00:00:00Z'  # Older than the stored T2.
+        status, body = api('workout_sessions', 'POST', losing, schema=4)
+        self.assertEqual(status, 200, body)
+        # PostgREST returns the canonical stored row, which differs from what was sent.
+        self.assertEqual(len(body), 1)
+        self.assertEqual(strip_seq(body[0]), strip_seq(before))
+        self.assertEqual(body[0]['training_week_id'], old_weeks[0])
+        self.assertNotEqual(body[0]['training_week_id'], losing['training_week_id'])
+        after = self.stored_session(stored['id'])
+        self.assertEqual(strip_seq(after), strip_seq(before))
+        self.assertEqual(body[0], after)
+        # An incoming LIVE row under a tombstoned week is still refused by the BEFORE
+        # INSERT pass: only the stored row's parent is exempt, never the sent row's.
+        status, body = api('workout_sessions', 'POST', {**before, 'updated_at': '2026-01-01T00:00:00Z'}, schema=4)
+        self.assertGreaterEqual(status, 400, body)
+        self.assertEqual(strip_seq(self.stored_session(stored['id'])), strip_seq(before))
+
+    def losing_progress_setup(self):
+        self.activate()
+        old_block, old_weeks = self.new_block(count=2, clock=T1, weeks=[1, 2])
+        new_block, new_weeks = self.new_block(name='Rescue', position=6, count=2, clock=T1, weeks=[1, 2])
+        self.move_progress(old_weeks[0], revision='00000000-0000-4000-8000-0000000000aa', updated=T3)
+        self.tombstone(old_block, old_weeks)
+        stored = self.stored_progress()
+        self.assertEqual(stored['active_week_id'], old_weeks[0])
+        self.assertIsNone(stored['deleted_at'])
+        return stored, new_weeks
+
+    def rescued_progress(self, stored, new_weeks, revision, updated):
+        return {**stored, 'active_week_id': new_weeks[0], 'available_week_ids': list(new_weeks),
+                'revision': revision, 'updated_at': updated}
+
+    def test_a_losing_progress_upsert_is_a_no_op_when_the_stored_week_is_tombstoned(self):
+        stored, new_weeks = self.losing_progress_setup()
+        initial = sql(f"select training_internal.initial_revision('{SPLIT}','{PLAN}')")
+        losers = {
+            'older updated_at': self.rescued_progress(stored, new_weeks, str(uuid.uuid4()), T2),
+            'initial revision, newer updated_at': self.rescued_progress(stored, new_weeks, initial, T4),
+            'equal updated_at, lower revision': self.rescued_progress(stored, new_weeks, '00000000-0000-4000-8000-000000000001', T3),
+        }
+        for label, row in losers.items():
+            status, body = api('workout_progress', 'POST', row, schema=4)
+            self.assertEqual(status, 200, (label, body))
+            self.assertEqual(strip_seq(body[0]), strip_seq(stored), label)
+            self.assertEqual(strip_seq(self.stored_progress()), strip_seq(stored), label)
+            self.assertNotEqual(body[0]['active_week_id'], row['active_week_id'], label)
+
+    def test_a_rescued_progress_row_per_the_client_contract_is_accepted(self):
+        stored, new_weeks = self.losing_progress_setup()
+        revision = str(uuid.uuid5(uuid.UUID(stored['revision']), 'rescued-block'))
+        later = '2026-11-16T00:00:03.001Z'  # Stored updated_at (T3) + 1 ms.
+        row = self.rescued_progress(stored, new_weeks, revision, later)
+        status, body = api('workout_progress', 'POST', row, schema=4)
+        self.assertLess(status, 300, body)
+        after = self.stored_progress()
+        self.assertEqual((after['active_week_id'], after['available_week_ids'], after['revision']),
+                         (new_weeks[0], list(new_weeks), revision))
+        self.assertEqual(when(after['updated_at']), when(later))
+        self.assertEqual(body[0], after)
+
+    def test_rescued_progress_wins_an_equal_updated_at_with_the_higher_revision(self):
+        stored, new_weeks = self.losing_progress_setup()
+        row = self.rescued_progress(stored, new_weeks, 'ffffffff-ffff-4fff-8fff-ffffffffffff', T3)
+        self.post('workout_progress', row)
+        self.assertEqual(self.stored_progress()['active_week_id'], new_weeks[0])
+
+    def test_a_losing_week_upsert_is_a_no_op_when_the_stored_block_is_tombstoned(self):
+        self.activate()
+        old_block, (old_one,) = self.new_block(count=1, clock=T1, weeks=[1])
+        live_block, _ = self.new_block(name='Live', position=6, count=1, clock=T1)
+        # Restore pushed the block tombstone; its week row is still live on the server.
+        self.assertLess(api('training_blocks', 'POST', block_row(old_block, count=1, clock=T1, updated=T3, deleted_at=T3), schema=4)[0], 300)
+        stored = self.get(f'training_weeks?id=eq.{old_one}')[0]
+        self.assertIsNone(stored['deleted_at'])
+        losing = week_row(live_block, 1, week_id=old_one, updated=EARLY)  # Older than the stored T1, other block.
+        status, body = api('training_weeks', 'POST', losing, schema=4)
+        self.assertEqual(status, 200, body)
+        self.assertEqual(strip_seq(body[0]), strip_seq(stored))
+        self.assertEqual(strip_seq(self.get(f'training_weeks?id=eq.{old_one}')[0]), strip_seq(stored))
+
+    def test_a_row_that_does_change_is_still_fully_validated(self):
+        """The no-op rule must not let a changing row slip under a tombstoned parent."""
+        old_block, old_weeks, stored, new_block, (new_one, new_two) = self.graph()
+        self.move_progress(old_weeks[0], revision='00000000-0000-4000-8000-0000000000aa', updated=T3)
+        progress = self.stored_progress()
+        self.tombstone(old_block, old_weeks)
+        self.tombstone(new_block, (new_one, new_two), weeks_only=True)
+        # Winning upserts into a tombstoned week: rejected, nothing changes.
+        row = {**progress, 'active_week_id': new_one, 'available_week_ids': [new_one], 'revision': str(uuid.uuid4()), 'updated_at': LATE}
+        self.assertGreaterEqual(api('workout_progress', 'POST', row, schema=4)[0], 400)
+        moved = self.rescued(stored, new_one, new_two)
+        moved['updated_at'] = LATE
+        self.assertGreaterEqual(api('workout_sessions', 'POST', moved, schema=4)[0], 400)
+        # Direct UPDATEs skip the BEFORE INSERT pass, so these exercise the UPDATE triggers alone.
+        with self.assertRaises(psycopg.errors.CheckViolation):
+            sql(f"update workout_progress set active_week_id='{new_one}', available_week_ids=array['{new_one}']::uuid[] where plan_id='{PLAN}'")
+        self.assertEqual(self.stored_progress()['active_week_id'], progress['active_week_id'])
+        with self.assertRaises(psycopg.errors.CheckViolation):
+            sql(f"update workout_sessions set updated_at='{LATE}' where id='{stored['id']}'")
+        # A true no-op update of a live row under a tombstoned parent stays legal.
+        sql(f"update workout_sessions set updated_at=updated_at where id='{stored['id']}'")
+        sql(f"update workout_progress set updated_at=updated_at where plan_id='{PLAN}'")
+        with self.assertRaises(psycopg.errors.CheckViolation):
+            sql(f"update workout_progress set state='awaitingBoundary' where plan_id='{PLAN}'")
+
+    # --- F6: the RPC is safe without the pre-request guard ----------------------------
+
+    def race_setup(self):
+        self.activate()
+        block_id, (week,) = self.new_block(count=2, clock=T1, weeks=[1])
+        return block_id, week
+
+    def child_write(self, kind, connection, week):
+        if kind == 'session':
+            session = self.session_in(week, 1)
+            connection.execute('''insert into public.workout_sessions(id,user_id,split_id,plan_id,plan_name,week_number,date,data,training_week_id)
+                                  values(%s,%s,%s,%s,'Push',1,'2026-01-01T00:00:00Z',%s::jsonb,%s)''',
+                               (session['id'], OWNER, SPLIT, PLAN, json.dumps(session['data']), week))
+            return f"select count(*) from workout_sessions where id='{session['id']}'"
+        connection.execute('''update public.workout_progress set active_week_id=%s, available_week_ids=array[%s]::uuid[],
+                              revision=%s, updated_at='2026-11-16T00:00:09Z' where plan_id=%s''',
+                           (week, week, str(uuid.uuid4()), PLAN))
+        return f"select count(*) from workout_progress where plan_id='{PLAN}' and active_week_id='{week}'"
+
+    def test_rpc_waits_for_an_uncommitted_child_write_that_never_took_the_advisory_lock(self):
+        for kind in ('session', 'progress'):
+            with self.subTest(kind=kind):
+                self.setUp()
+                block_id, week = self.race_setup()
+                writer = owner_connection()
+                caller = owner_connection()
+                try:
+                    persisted = self.child_write(kind, writer, week)
+                    self.assertEqual(sql(f"select count(*) from pg_locks where pid={writer.info.backend_pid} and locktype='advisory'"), '0')
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as workers:
+                        racing = workers.submit(lambda: caller.execute('select public.delete_training_block(%s)', (block_id,)))
+                        wait_until_blocked(self, 'delete_training_block')
+                        self.assertFalse(racing.done())
+                        writer.commit()
+                        with self.assertRaises(psycopg.errors.Error) as refused:
+                            racing.result(timeout=10)
+                    self.assertEqual(refused.exception.sqlstate, 'PT409')
+                    self.assertEqual(refused.exception.diag.message_detail, 'in_use')
+                    caller.rollback()
+                finally:
+                    writer.close()
+                    caller.close()
+                self.assertEqual(sql(persisted), '1')
+                self.assertIsNone(self.stored_block(block_id)['deleted_at'])
+                self.assertEqual(sql(f"select count(*) from training_weeks where block_id='{block_id}' and deleted_at is not null"), '0')
+
+    def test_child_write_waits_for_an_uncommitted_rpc_and_is_then_rejected(self):
+        for kind in ('session', 'progress'):
+            with self.subTest(kind=kind):
+                self.setUp()
+                block_id, week = self.race_setup()
+                caller = owner_connection()
+                writer = owner_connection()
+                try:
+                    caller.execute('select public.delete_training_block(%s)', (block_id,))
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as workers:
+                        racing = workers.submit(lambda: self.child_write(kind, writer, week))
+                        wait_until_blocked(self, 'workout_')
+                        self.assertFalse(racing.done())
+                        self.assertEqual(sql(f"select count(*) from pg_locks where pid={writer.info.backend_pid} and locktype='advisory'"), '0')
+                        caller.commit()
+                        with self.assertRaises(psycopg.errors.CheckViolation):
+                            racing.result(timeout=10)
+                    writer.rollback()
+                finally:
+                    writer.close()
+                    caller.close()
+                self.assertIsNotNone(self.stored_block(block_id)['deleted_at'])
+                self.assertEqual(sql(f"select count(*) from workout_sessions where training_week_id='{week}'"), '0')
+                self.assertNotEqual(self.stored_progress()['active_week_id'], week)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

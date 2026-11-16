@@ -132,3 +132,11 @@ and its weeks in one transaction under the account lock. It refuses with PT409
 for an unknown or foreign id, and is idempotent. An account activated at 4
 rejects headers 1-3 with PT426. `test_lazy_weeks.py` must keep passing unchanged:
 it is the proof that the legacy rule survives.
+
+`RescueAndLosingUpsertTest` (same file) covers the rescue contract: a session in a
+tombstoned week can move to a live week of another block with its completion
+evidence re-pointed (and only re-pointed), a progress row that wins last-write-wins
+is accepted, and an upsert that loses it is a silent no-op even when the stored
+row's parent is a tombstone. Its race tests open two direct connections and take no
+advisory lock: the delete RPC row-locks the block's weeks, and every session /
+progress write holds its week `FOR SHARE`, so the in-use check cannot miss a write.
