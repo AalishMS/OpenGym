@@ -11,6 +11,7 @@ import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_progress.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/repositories/training_block_repository.dart';
+import 'package:gymapp/services/sync_service.dart';
 import 'package:gymapp/services/backup_service.dart';
 import 'package:gymapp/services/adopt_local_data.dart';
 import 'package:gymapp/services/sample_data_seeder.dart';
@@ -294,7 +295,34 @@ void main() {
       expect(future.success, isTrue, reason: future.errorMessage);
     });
 
+    test('below schema 4 restoring and the sample seeder stamp no clock, and '
+        'at 4 the seeder does', () async {
+      await stampedBlock();
+      await restore(
+        BackupService.importData(backup().jsonString, userId: owner),
+      );
+      final restored = HiveService.getAllTrainingBlocksRaw().where(
+        (b) => b.deletedAt == null,
+      );
+      expect(restored, isNotEmpty);
+      expect(
+        restored.every((b) => b.plannedWeekCountUpdatedAt == null),
+        isTrue,
+      );
+      await SampleDataSeeder.seedSampleData(splitId: splitId);
+      List<TrainingBlock> live() =>
+          HiveService.blocksForSplit(splitId).toList();
+      expect(live(), isNotEmpty);
+      expect(live().every((b) => b.plannedWeekCountUpdatedAt == null), isTrue);
+      SyncService.instance.setNegotiatedSchema(owner, 4);
+      addTearDown(SyncService.instance.forgetNegotiatedSchemas);
+      await SampleDataSeeder.seedSampleData(splitId: splitId);
+      expect(live().every((b) => b.plannedWeekCountUpdatedAt != null), isTrue);
+    });
+
     test('restoring stamps the clock on every restored block', () async {
+      SyncService.instance.setNegotiatedSchema(owner, 4);
+      addTearDown(SyncService.instance.forgetNegotiatedSchemas);
       final block = await stampedBlock();
       final saved = BackupService.importData(
         backup().jsonString,

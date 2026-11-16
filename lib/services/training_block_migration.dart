@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,6 +18,10 @@ import 'hive_service.dart';
 import 'training_block_graph.dart';
 import 'sync_service.dart';
 import 'workout_progression_service.dart';
+
+class _RescueReport {
+  bool applied = false;
+}
 
 class TrainingPreparationException implements Exception {
   final Object cause;
@@ -213,7 +218,30 @@ class TrainingBlockMigration {
     );
   }
 
+  /// Normalizes [input] into a valid graph. Rescuing live work out of a block
+  /// another replica deleted is applied first; it can never be the reason this
+  /// throws: if the rescued graph is invalid the result is exactly what the
+  /// same input produces without any rescue.
   static TrainingBlockGraph prepareGraph(TrainingBlockGraph input) {
+    final rescue = _RescueReport();
+    try {
+      return _prepareGraph(input, rescue);
+    } catch (_) {
+      if (!rescue.applied) rethrow;
+      return _prepareGraph(input, null);
+    }
+  }
+
+  /// The pre-rescue behaviour, for tests that compare against it.
+  @visibleForTesting
+  static TrainingBlockGraph prepareGraphWithoutRescue(
+    TrainingBlockGraph input,
+  ) => _prepareGraph(input, null);
+
+  static TrainingBlockGraph _prepareGraph(
+    TrainingBlockGraph input,
+    _RescueReport? rescue,
+  ) {
     input = ExerciseIdentityMigration.prepare(input);
     input.validate(
       allowLegacyLinks: true,
@@ -250,15 +278,17 @@ class TrainingBlockMigration {
         );
       }
     }
-    _rescueDeletedBlocks(
-      ownerId: input.ownerId,
-      splits: splits,
-      plans: plans,
-      blocks: blocks,
-      weeks: weeks,
-      sessions: sessions,
-      progress: progress,
-    );
+    if (rescue != null) {
+      rescue.applied = _rescueDeletedBlocks(
+        ownerId: input.ownerId,
+        splits: splits,
+        plans: plans,
+        blocks: blocks,
+        weeks: weeks,
+        sessions: sessions,
+        progress: progress,
+      );
+    }
     for (final w in weeks.values.toList()) {
       final parent = blocks[w.blockId]!;
       if (parent.deletedAt != null && w.deletedAt == null) {
@@ -601,15 +631,23 @@ class TrainingBlockMigration {
   }
 
   /// A deleted block must never take live work with it. When a replica deleted
-  /// a block that this device still uses, the live sessions and progress of
-  /// live plans move into a successor block with an ID derived from the
-  /// deleted one, so every replica rescuing it chooses the same rows.
+  /// a block that this device still uses, every live session in it (whatever
+  /// its plan's state: a deleted plan keeps its sessions as history) and the
+  /// live progress of live plans move into a successor block with an ID derived
+  /// from the deleted one, so every replica rescuing it chooses the same rows.
   ///
-  /// Only a session in the block's weeks or a progress row whose active week is
-  /// in the block triggers a rescue. A progress row that merely lists a week of
-  /// the block as available does not: a user's own delete leaves such rows
-  /// behind and must stay deleted. Once a rescue runs, those entries move too.
-  static void _rescueDeletedBlocks({
+  /// Only a live session in the block's weeks or a progress row whose active
+  /// week is in the block triggers a rescue. A progress row that merely lists a
+  /// week of the block as available does not: a user's own delete leaves such
+  /// rows behind and must stay deleted. Once a rescue runs, those entries move
+  /// too. Sessions a restore or Clear All Data tombstoned are not live, so
+  /// nothing is rescued for them.
+  ///
+  /// Rescue is all-or-nothing per block and can never be the reason preparation
+  /// fails: a block which cannot be rescued cleanly is left exactly as the
+  /// cascade below treats it without any rescue. Returns whether any block was
+  /// rescued.
+  static bool _rescueDeletedBlocks({
     required String? ownerId,
     required Map<String, Split> splits,
     required Map<String, WorkoutPlan> plans,
@@ -619,7 +657,10 @@ class TrainingBlockMigration {
     required Map<String, WorkoutProgress> progress,
   }) {
     bool livePlan(String? id) =>
-        id != null && plans[id]?.deletedAt == null && plans.containsKey(id);
+        id != null && plans.containsKey(id) && plans[id]!.deletedAt == null;
+    var changed = false;
+    // Blocks which could not be rescued cleanly stay as they are.
+    final skipped = <String>{};
     // Each pass can only move work off a deleted block, so this settles.
     for (var pass = 0; pass < 8; pass++) {
       var rescued = false;
@@ -628,6 +669,7 @@ class TrainingBlockMigration {
               .where(
                 (b) =>
                     b.deletedAt != null &&
+                    !skipped.contains(b.id) &&
                     splits[b.splitId]?.deletedAt == null &&
                     splits.containsKey(b.splitId),
               )
@@ -641,7 +683,7 @@ class TrainingBlockMigration {
         if (xWeeks.isEmpty) continue;
         final movedSessions =
             sessions.values.where((s) {
-              if (s.deletedAt != null || !livePlan(s.planId)) return false;
+              if (s.deletedAt != null || s.splitId != x.splitId) return false;
               if (xWeeks.containsKey(s.trainingWeekId)) return true;
               final t = s.completionTransition;
               return t != null &&
@@ -686,16 +728,22 @@ class TrainingBlockMigration {
             if (xWeeks[id] case final w?) numbers.add(w.number);
           }
         }
+        if (numbers.isEmpty) {
+          skipped.add(x.id);
+          continue;
+        }
         final highest = numbers.reduce((a, b) => a > b ? a : b);
         // Find the successor: the derived block, or the next derivation when
         // that one (or one of the weeks it needs) is itself tombstoned.
         var targetId = rescuedTrainingBlockId(x.id);
         TrainingBlock? target;
-        late Map<int, String> weekIds;
+        Map<int, String>? weekIds;
         for (var i = 0; i < 16; i++) {
           final existing = blocks[targetId];
           final candidate = <int, String>{};
-          var usable = existing == null || existing.deletedAt == null;
+          var usable =
+              existing == null ||
+              (existing.deletedAt == null && existing.splitId == x.splitId);
           for (final n in numbers) {
             if (!usable) break;
             final live =
@@ -726,15 +774,101 @@ class TrainingBlockMigration {
           }
           targetId = rescuedTrainingBlockId(targetId);
         }
-        if (weekIds.length != numbers.length) {
-          throw StateError('A rescued training block could not be derived.');
+        if (weekIds == null || weekIds.length != numbers.length) {
+          skipped.add(x.id);
+          continue;
+        }
+        // Week ids map by id: each source week goes to the successor's week of
+        // its number. Weeks of one block sharing a number (one of them
+        // tombstoned) share that target, so anything which would then collapse
+        // two distinct weeks of a completion into one makes the block
+        // unrescuable rather than invalid.
+        String? remap(String? id) {
+          final w = xWeeks[id];
+          return w == null ? id : weekIds![w.number];
+        }
+
+        final targetWeekIds = weekIds.values.toSet();
+        final stagedSessions = <String, WorkoutSession>{};
+        var clean = true;
+        for (final s in movedSessions) {
+          final t = s.completionTransition;
+          final week = remap(s.trainingWeekId);
+          final number =
+              xWeeks[s.trainingWeekId]?.number ??
+              (s.trainingWeekId == null
+                  ? null
+                  : weeks[s.trainingWeekId]?.number);
+          if (week == null || number != s.weekNumber) {
+            clean = false;
+            break;
+          }
+          Map<String, dynamic>? evidence;
+          if (t != null) {
+            final source = remap(t['sourceWeekId'] as String?);
+            final next = remap(t['nextWeekId'] as String?);
+            if (source != week ||
+                (next != null &&
+                    (next == source || !targetWeekIds.contains(next)))) {
+              clean = false;
+              break;
+            }
+            evidence = {...t, 'sourceWeekId': source, 'nextWeekId': next};
+          }
+          stagedSessions[s.id!] = s.copyWith(
+            trainingWeekId: week,
+            completionTransition: evidence,
+            dirty: true,
+          );
+        }
+        if (!clean) {
+          skipped.add(x.id);
+          continue;
+        }
+        final stagedProgress = <String, WorkoutProgress>{};
+        for (final p in movedProgress) {
+          final available = <String>[];
+          for (final id in p.availableWeekIds ?? const <String>[]) {
+            final mapped = remap(id)!;
+            if (!available.contains(mapped)) available.add(mapped);
+          }
+          final active = remap(p.activeWeekId)!;
+          if (p.availableWeekIds != null && !available.contains(active)) {
+            clean = false;
+            break;
+          }
+          if (xWeeks.containsKey(p.activeWeekId)) {
+            // The server's last-write-wins would keep its stored row, whose
+            // week is deleted, over a rescued row with an unchanged revision
+            // and time. Win it instead, with values every replica derives
+            // alike: a revision from the old one and the successor, and a time
+            // just after both the row's own and the deletion.
+            final base = p.updatedAt ?? x.deletedAt!;
+            final from = base.isAfter(x.deletedAt!) ? base : x.deletedAt!;
+            stagedProgress[p.id] = p.copyWith(
+              activeWeekId: active,
+              availableWeekIds: p.availableWeekIds == null ? null : available,
+              revision: rescuedProgressRevision(p.revision, targetId),
+              updatedAt: from.add(const Duration(milliseconds: 1)),
+              dirty: true,
+            );
+          } else {
+            stagedProgress[p.id] = p.copyWith(
+              availableWeekIds: p.availableWeekIds == null ? null : available,
+              dirty: true,
+            );
+          }
+        }
+        if (!clean) {
+          skipped.add(x.id);
+          continue;
         }
         final planned = [
           x.plannedWeekCount ?? 1,
           highest,
         ].reduce((a, b) => a > b ? a : b);
         if (target == null) {
-          target = TrainingBlock(
+          blocks[targetId] = TrainingBlock(
             id: targetId,
             splitId: x.splitId,
             name: x.name,
@@ -746,7 +880,6 @@ class TrainingBlockMigration {
             plannedWeekCountUpdatedAt: x.plannedWeekCountUpdatedAt,
             dirty: true,
           );
-          blocks[targetId] = target;
         } else if ((target.plannedWeekCount ?? 0) < highest) {
           blocks[targetId] = target.copyWith(
             plannedWeekCount: highest,
@@ -766,42 +899,14 @@ class TrainingBlockMigration {
             dirty: true,
           );
         }
-        String? remap(String? id) {
-          final w = xWeeks[id];
-          return w == null ? id : weekIds[w.number];
-        }
-
-        for (final s in movedSessions) {
-          final t = s.completionTransition;
-          sessions[s.id!] = s.copyWith(
-            trainingWeekId: remap(s.trainingWeekId),
-            completionTransition:
-                t == null
-                    ? null
-                    : {
-                      ...t,
-                      'sourceWeekId': remap(t['sourceWeekId'] as String?),
-                      'nextWeekId': remap(t['nextWeekId'] as String?),
-                    },
-            dirty: true,
-          );
-        }
-        for (final p in movedProgress) {
-          final available = <String>[];
-          for (final id in p.availableWeekIds ?? const <String>[]) {
-            final mapped = remap(id)!;
-            if (!available.contains(mapped)) available.add(mapped);
-          }
-          progress[p.id] = p.copyWith(
-            activeWeekId: remap(p.activeWeekId),
-            availableWeekIds: p.availableWeekIds == null ? null : available,
-            dirty: true,
-          );
-        }
+        sessions.addAll(stagedSessions);
+        progress.addAll(stagedProgress);
         rescued = true;
+        changed = true;
       }
-      if (!rescued) return;
+      if (!rescued) return changed;
     }
+    return changed;
   }
 
   static int compareSessionRecency(WorkoutSession a, WorkoutSession b) {

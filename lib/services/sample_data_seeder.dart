@@ -299,7 +299,10 @@ class SampleDataSeeder {
         splitId: splitId,
         name: spec.name,
         plannedWeekCount: spec.plannedWeeks,
-        plannedWeekCountUpdatedAt: now,
+        plannedWeekCountUpdatedAt: SyncService.instance.durationClockFor(
+          ownerId,
+          now,
+        ),
         position: blockIndex,
         createdAt: created,
         userId: ownerId,

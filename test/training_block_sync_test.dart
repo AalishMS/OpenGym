@@ -21,6 +21,7 @@ import 'package:gymapp/services/supabase_service.dart';
 import 'package:gymapp/services/sync_service.dart';
 import 'package:gymapp/services/training_block_lifecycle.dart';
 import 'package:gymapp/services/training_block_migration.dart';
+import 'package:gymapp/services/training_block_restore.dart';
 import 'package:gymapp/services/workout_progression_service.dart';
 import 'package:gymapp/utils/training_block_identity.dart';
 import 'package:http/http.dart' as http;
@@ -84,6 +85,16 @@ class ReplicaApi {
     return http.Response('null', 200);
   }
 
+  /// What `now()` is inside the server's procedures.
+  DateTime Function() serverNow = () => DateTime.utc(2026, 11, 16, 12);
+
+  DateTime? ts(Object? value) =>
+      value == null ? null : DateTime.parse(value as String).toUtc();
+  Map<String, dynamic>? byId(String table, Object? id) =>
+      (tables[table] ?? const <Map<String, dynamic>>[])
+          .where((r) => r['id'] == id)
+          .firstOrNull;
+
   http.Response deleteBlock(http.Request request) {
     if ((accountSchema ?? 0) < 4) {
       return failure(426, 'PT426', 'Update OpenGym to delete training blocks');
@@ -96,10 +107,13 @@ class ReplicaApi {
             .where((b) => b['id'] == target && b['user_id'] == userId)
             .firstOrNull;
     if (found == null) return http.Response('null', 200);
-    final mine = weeks.where((w) => w['block_id'] == target).toList();
+    final mine =
+        weeks
+            .where((w) => w['block_id'] == target && w['user_id'] == userId)
+            .toList();
     if (found['deleted_at'] == null) {
       final split = (tables['splits'] ?? []).where(
-        (r) => r['id'] == found['split_id'],
+        (r) => r['id'] == found['split_id'] && r['user_id'] == userId,
       );
       if (split.any((r) => r['deleted_at'] != null)) {
         return failure(409, 'PT409', 'unavailable', 'split_deleted');
@@ -107,6 +121,7 @@ class ReplicaApi {
       if (!blocks.any(
         (b) =>
             b['split_id'] == found['split_id'] &&
+            b['user_id'] == userId &&
             b['deleted_at'] == null &&
             b['id'] != target,
       )) {
@@ -116,19 +131,28 @@ class ReplicaApi {
       final used =
           (tables['workout_sessions'] ?? []).any(
             (r) =>
-                r['deleted_at'] == null && ids.contains(r['training_week_id']),
+                r['user_id'] == userId &&
+                r['deleted_at'] == null &&
+                ids.contains(r['training_week_id']),
           ) ||
           (tables['workout_progress'] ?? []).any(
-            (r) => r['deleted_at'] == null && ids.contains(r['active_week_id']),
+            (r) =>
+                r['user_id'] == userId &&
+                r['deleted_at'] == null &&
+                ids.contains(r['active_week_id']),
           );
       if (used) return failure(409, 'PT409', 'in use', 'in_use');
-      final at = DateTime.utc(2026, 11, 16, 12).toIso8601String();
+      // deleted_at = stamp, updated_at = greatest(updated_at, stamp)
+      final stamp = serverNow();
       for (final row in [
         found,
         ...mine.where((w) => w['deleted_at'] == null),
       ]) {
-        row['deleted_at'] = at;
-        row['updated_at'] = at;
+        final before = ts(row['updated_at']);
+        row['deleted_at'] = stamp.toIso8601String();
+        row['updated_at'] =
+            (before != null && before.isAfter(stamp) ? before : stamp)
+                .toIso8601String();
         row['server_seq'] = '${DateTime.utc(2026, 11, 16, 12, 0, 1)}'
             .replaceFirst(' ', 'T');
       }
@@ -143,44 +167,258 @@ class ReplicaApi {
     );
   }
 
-  /// `keep_newest_row` for blocks: the duration resolves on its own clock.
-  Map<String, dynamic> mergeBlock(
+  /// `keep_newest_row` for blocks: the duration resolves on its own clock at
+  /// schema 4 and by the larger count before it. Returns the row to store.
+  /// An omitted clock column is the stored clock, so it ties. `kept` says the
+  /// stored row won (the write is then a silent no-op apart from the merged
+  /// duration the real trigger writes onto it).
+  ({Map<String, dynamic> row, bool kept}) mergeBlock(
     Map<String, dynamic> old,
     Map<String, dynamic> incoming,
   ) {
-    DateTime clock(Map<String, dynamic> r) =>
-        r['planned_week_count_updated_at'] == null
-            ? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true)
-            : DateTime.parse(r['planned_week_count_updated_at'] as String);
     final row = Map<String, dynamic>.from(incoming);
+    // The tombstone is sticky and returns before the duration is merged.
+    if (old['deleted_at'] != null && row['deleted_at'] == null) {
+      return (row: old, kept: true);
+    }
     final oldCount = old['planned_week_count'] as int?;
     final newCount = row['planned_week_count'] as int?;
-    if (newCount == null ||
-        (oldCount != null && clock(old).isAfter(clock(row)))) {
-      row['planned_week_count'] = oldCount;
-      row['planned_week_count_updated_at'] =
-          old['planned_week_count_updated_at'];
-    } else if (oldCount != null && clock(old) == clock(row)) {
-      row['planned_week_count'] = oldCount > newCount ? oldCount : newCount;
-    }
-    Map<String, dynamic> result;
-    if (old['deleted_at'] != null && row['deleted_at'] == null) {
-      result = Map<String, dynamic>.from(old);
-    } else if (old['deleted_at'] == null && row['deleted_at'] != null) {
-      result = row;
-    } else if (DateTime.parse(
-      row['updated_at'] as String,
-    ).isBefore(DateTime.parse(old['updated_at'] as String))) {
-      result = Map<String, dynamic>.from(old);
+    if (serverSchema >= 4) {
+      if (!row.containsKey('planned_week_count_updated_at')) {
+        row['planned_week_count_updated_at'] =
+            old['planned_week_count_updated_at'];
+      }
+      final past = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      DateTime clock(Map<String, dynamic> r) =>
+          ts(r['planned_week_count_updated_at']) ??
+          past.subtract(const Duration(days: 365000));
+      if (newCount == null ||
+          (oldCount != null && clock(old).isAfter(clock(row)))) {
+        row['planned_week_count'] = oldCount;
+        row['planned_week_count_updated_at'] =
+            old['planned_week_count_updated_at'];
+      } else if (oldCount != null && clock(old) == clock(row)) {
+        row['planned_week_count'] = oldCount > newCount ? oldCount : newCount;
+      }
     } else {
-      result = row;
+      // greatest() ignores nulls.
+      row['planned_week_count'] =
+          oldCount == null
+              ? newCount
+              : newCount == null
+              ? oldCount
+              : (oldCount > newCount ? oldCount : newCount);
     }
+    final kept =
+        !(old['deleted_at'] == null && row['deleted_at'] != null) &&
+        ts(row['updated_at'])!.isBefore(ts(old['updated_at'])!);
+    final result = kept ? old : row;
+    // `old` carries the merged duration too when it is the row kept.
     result['planned_week_count'] = row['planned_week_count'];
     if (serverSchema >= 4) {
       result['planned_week_count_updated_at'] =
           row['planned_week_count_updated_at'];
     }
-    return result;
+    return (row: result, kept: kept);
+  }
+
+  /// `keep_newest_row` for every other table: a stored tombstone is sticky, a
+  /// tombstone wins over a live row, then the newer `updated_at` wins and
+  /// progress adds its revision rules. Returns the row to store, which is
+  /// [old] itself when the incoming write loses.
+  ({Map<String, dynamic> row, bool kept}) keepNewest(
+    String table,
+    Map<String, dynamic> old,
+    Map<String, dynamic> row,
+  ) {
+    if (table == 'split_preferences') {
+      final loses = ts(row['updated_at'])!.isBefore(ts(old['updated_at'])!);
+      return (row: loses ? old : row, kept: loses);
+    }
+    if (old['deleted_at'] != null && row['deleted_at'] == null) {
+      return (row: old, kept: true);
+    }
+    if (old['deleted_at'] == null && row['deleted_at'] != null) {
+      return (row: row, kept: false);
+    }
+    if (ts(row['updated_at'])!.isBefore(ts(old['updated_at'])!)) {
+      return (row: old, kept: true);
+    }
+    if (table == 'workout_progress') {
+      Map<String, dynamic> without(Map<String, dynamic> r) => {
+        for (final e in r.entries)
+          if (e.key != 'available_week_ids' && e.key != 'server_seq')
+            e.key: e.value,
+      };
+      if (old['available_week_ids'] == null &&
+          row['available_week_ids'] != null &&
+          jsonEncode(without(row)) == jsonEncode(without(old))) {
+        return (row: row, kept: false);
+      }
+      if (row['revision'] ==
+          initialProgressRevision(
+            row['split_id'] as String,
+            row['plan_id'] as String,
+          )) {
+        return (row: old, kept: true);
+      }
+      if (ts(row['updated_at']) == ts(old['updated_at']) &&
+          (row['revision'] as String).compareTo(old['revision'] as String) <
+              0) {
+        return (row: old, kept: true);
+      }
+    }
+    return (row: row, kept: false);
+  }
+
+  /// A rejected write the way PostgREST reports a raised check_violation.
+  http.Response checkViolation(String message) =>
+      failure(400, '23514', message);
+
+  /// `check_training_parent`: live children cannot sit under deleted parents,
+  /// and every parent must exist and belong to the same account and split.
+  String? parentViolation(String table, Map<String, dynamic> row) {
+    if (table != 'training_blocks' &&
+        table != 'training_weeks' &&
+        table != 'workout_progress') {
+      return null;
+    }
+    final live = row['deleted_at'] == null;
+    final split = byId('splits', row['split_id']);
+    if (split == null ||
+        split['user_id'] != row['user_id'] ||
+        (live && split['deleted_at'] != null)) {
+      return 'Training split is unavailable';
+    }
+    if (table == 'training_weeks') {
+      final block = byId('training_blocks', row['block_id']);
+      if (block == null ||
+          block['user_id'] != row['user_id'] ||
+          block['split_id'] != row['split_id'] ||
+          (live && block['deleted_at'] != null)) {
+        return 'Training block is unavailable';
+      }
+    } else if (table == 'workout_progress') {
+      final plan = byId('workout_plans', row['plan_id']);
+      if (plan == null ||
+          plan['user_id'] != row['user_id'] ||
+          plan['split_id'] != row['split_id'] ||
+          (live && plan['deleted_at'] != null)) {
+        return 'Progress plan is unavailable';
+      }
+      final week = byId('training_weeks', row['active_week_id']);
+      if (week == null ||
+          week['user_id'] != row['user_id'] ||
+          week['split_id'] != row['split_id'] ||
+          (live && week['deleted_at'] != null)) {
+        return 'Progress week is unavailable';
+      }
+    }
+    return null;
+  }
+
+  /// `check_available_weeks`.
+  String? availableViolation(Map<String, dynamic> row) {
+    final ids = (row['available_week_ids'] as List?)?.cast<String?>();
+    if (ids == null) return null;
+    if (ids.contains(null) ||
+        ids.length != ids.toSet().length ||
+        !ids.contains(row['active_week_id'])) {
+      return 'Invalid available training weeks';
+    }
+    for (final id in ids) {
+      final week = byId('training_weeks', id);
+      if (week == null ||
+          week['split_id'] != row['split_id'] ||
+          week['user_id'] != row['user_id']) {
+        return 'Available weeks belong to another split or account';
+      }
+    }
+    return null;
+  }
+
+  /// `link_session`, as amended: when a session moves out of a tombstoned
+  /// week its incoming completion evidence replaces the stored one; in every
+  /// other update the stored evidence is kept. Returns the row to store, or the
+  /// reason it is rejected.
+  (Map<String, dynamic>?, String?) linkSession(
+    Map<String, dynamic>? old,
+    Map<String, dynamic> row,
+  ) {
+    if (accountSchema == null) return (row, null);
+    String bad(String message) => message;
+    if ((row['week_number'] as int) < 1) {
+      return (null, bad('Invalid legacy training week'));
+    }
+    final data = Map<String, dynamic>.from(row['data'] as Map);
+    if ((data['trainingSchemaVersion'] ?? '1').toString() != '1') {
+      return (null, bad('Unsupported training schema version'));
+    }
+    if (data['splitId'] != null && data['splitId'] != row['split_id']) {
+      return (null, bad('Conflicting session split'));
+    }
+    if (data['planId'] != null && data['planId'] != row['plan_id']) {
+      return (null, bad('Conflicting session plan'));
+    }
+    if (data['trainingWeekId'] != null) {
+      if (row['training_week_id'] != null &&
+          row['training_week_id'] != data['trainingWeekId']) {
+        return (null, bad('Conflicting session week'));
+      }
+      row['training_week_id'] = data['trainingWeekId'];
+    }
+    final parent = byId('training_weeks', row['training_week_id']);
+    if (parent == null) return (null, bad('No data found'));
+    if (parent['user_id'] != row['user_id'] ||
+        parent['split_id'] != row['split_id'] ||
+        parent['number'] != row['week_number'] ||
+        (row['deleted_at'] == null && parent['deleted_at'] != null)) {
+      return (null, bad('Conflicting or deleted session week'));
+    }
+    if (row['plan_id'] != null) {
+      final plan = byId('workout_plans', row['plan_id']);
+      if (plan != null &&
+          (plan['user_id'] != row['user_id'] ||
+              plan['split_id'] != row['split_id'])) {
+        return (null, bad('Conflicting session plan owner or split'));
+      }
+    }
+    data['trainingSchemaVersion'] = 1;
+    data['trainingWeekId'] = row['training_week_id'];
+    data['splitId'] = row['split_id'];
+    data['planId'] = row['plan_id'];
+    if (old != null) {
+      final oldData = old['data'] as Map?;
+      final oldEvidence = oldData?['completionTransition'];
+      final movedOutOfDeletedWeek =
+          old['training_week_id'] != row['training_week_id'] &&
+          byId('training_weeks', old['training_week_id'])?['deleted_at'] !=
+              null;
+      if (oldEvidence != null && !movedOutOfDeletedWeek) {
+        data['completionTransition'] = oldEvidence;
+      }
+    }
+    final evidence = data['completionTransition'];
+    if (evidence != null) {
+      if (evidence is! Map ||
+          evidence['sourceWeekId'] != row['training_week_id'] ||
+          evidence['resultRevision'] != row['id'] ||
+          evidence['expectedRevision'] == null ||
+          evidence['committedAt'] == null ||
+          (data['isCompleted'] ?? true) != true) {
+        return (null, bad('Invalid completion evidence'));
+      }
+      if (evidence['nextWeekId'] != null) {
+        final target = byId('training_weeks', evidence['nextWeekId']);
+        if (target == null) return (null, bad('No data found'));
+        if (target['block_id'] != parent['block_id'] ||
+            target['split_id'] != parent['split_id'] ||
+            target['id'] == parent['id']) {
+          return (null, bad('Invalid completion target'));
+        }
+      }
+    }
+    return ({...row, 'data': data}, null);
   }
 
   Future<http.Response> handle(http.Request request) async {
@@ -270,19 +508,44 @@ class ReplicaApi {
             rows.any((r) => r[key] == row[key])) {
           continue;
         }
-        var stored = row;
-        if (table == 'training_blocks') {
-          if (serverSchema < 4 &&
-              row.containsKey('planned_week_count_updated_at')) {
-            return failure(
-              400,
-              'PGRST204',
-              "Could not find the 'planned_week_count_updated_at' column",
-            );
-          }
-          final old = rows.where((r) => r[key] == row[key]).firstOrNull;
-          if (old != null) stored = mergeBlock(old, row);
+        if (table == 'training_blocks' &&
+            serverSchema < 4 &&
+            row.containsKey('planned_week_count_updated_at')) {
+          return failure(
+            400,
+            'PGRST204',
+            "Could not find the 'planned_week_count_updated_at' column",
+          );
         }
+        final old = rows.where((r) => r[key] == row[key]).firstOrNull;
+        var stored = row;
+        if (old != null) {
+          // BEFORE UPDATE: a_training_lww first. A write which loses is a
+          // silent no-op; the stored row comes back, parents unchecked.
+          // exercise_definitions has no such trigger and is overwritten.
+          final result =
+              table == 'training_blocks'
+                  ? mergeBlock(old, row)
+                  : table == 'exercise_definitions'
+                  ? (row: row, kept: false)
+                  : keepNewest(table, old, row);
+          if (result.kept) {
+            saved.add(result.row);
+            continue;
+          }
+          stored = result.row;
+        }
+        // b_link_training_week, b_training_parent, c_available_weeks.
+        if (table == 'workout_sessions') {
+          final (linked, reason) = linkSession(old, stored);
+          if (reason != null) return checkViolation(reason);
+          stored = linked!;
+        }
+        final violation =
+            parentViolation(table, stored) ??
+            (table == 'workout_progress' ? availableViolation(stored) : null);
+        if (violation != null) return checkViolation(violation);
+        stored = Map<String, dynamic>.from(stored);
         rows.removeWhere((r) => r[key] == row[key]);
         stored['server_seq'] =
             stamp.add(const Duration(days: 1)).toIso8601String();
@@ -1775,10 +2038,12 @@ void main() {
         );
         await SyncService.instance.syncNow(fullReconciliation: true);
         expect(SyncService.instance.blockLifecycleAvailable(owner), isFalse);
-        // Another device (old app) extended it; this device stamped a clock.
+        // Another device (old app) extended it.
         serverBlock(block.id)['planned_week_count'] = 7;
         serverBlock(block.id)['server_seq'] = '2026-12-01T00:00:00.000Z';
-        expect(localBlock(block.id).plannedWeekCountUpdatedAt, isNotNull);
+        // No clock exists below schema 4: it could only wait to beat a
+        // clock-less write later.
+        expect(localBlock(block.id).plannedWeekCountUpdatedAt, isNull);
         await SyncService.instance.syncNow(fullReconciliation: true);
         expect(localBlock(block.id).plannedWeekCount, 7);
         expect(serverBlock(block.id)['planned_week_count'], 7);
@@ -1942,6 +2207,275 @@ void main() {
         isNot(xWeek.id),
       );
     });
+
+    WorkoutSession completedInX(
+      String id,
+      TrainingWeek from,
+      TrainingWeek to,
+    ) => WorkoutSession(
+      id: id,
+      date: DateTime.utc(2026, 11, 9),
+      planName: 'Push',
+      planId: planId,
+      splitId: splitId,
+      userId: owner,
+      trainingWeekId: from.id,
+      weekNumber: from.number,
+      isCompleted: true,
+      completionTransition: {
+        'expectedRevision': '00000000-0000-4000-8000-0000000000e1',
+        'sourceWeekId': from.id,
+        'nextWeekId': to.id,
+        'resultRevision': id,
+        'committedAt': DateTime.utc(2026, 11, 9).toIso8601String(),
+      },
+      updatedAt: DateTime.utc(2026, 11, 9),
+      dirty: true,
+      exercises: [],
+    );
+
+    Map<String, dynamic> serverRow(String table, String id) =>
+        api.tables[table]!.singleWhere((r) => r['id'] == id);
+
+    test('F1: a session the server already holds live in the deleted block is '
+        'relinked with its evidence and accepted, keeping its time', () async {
+      api.serverSchema = 4;
+      await setUpBlocks();
+      final week2 = await repo.appendWeek(splitId, x.id);
+      const id = '00000000-0000-4000-8000-0000000000a1';
+      await HiveService.putSessionRaw(completedInX(id, xWeek, week2));
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      final before = serverRow('workout_sessions', id)['updated_at'];
+      // A restore elsewhere tombstoned the block and its weeks without
+      // touching this session, which stays live on the server.
+      serverDeletes(x.id);
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      final successor = rescuedTrainingBlockId(x.id);
+      final to1 = lazyTrainingWeekId(splitId, successor, 1);
+      final to2 = lazyTrainingWeekId(splitId, successor, 2);
+      final row = serverRow('workout_sessions', id);
+      expect(row['deleted_at'], isNull);
+      expect(row['training_week_id'], to1);
+      expect(row['updated_at'], before);
+      final evidence = (row['data'] as Map)['completionTransition'] as Map;
+      expect(evidence['sourceWeekId'], to1);
+      expect(evidence['nextWeekId'], to2);
+      expect(evidence['resultRevision'], id);
+      expect(HiveService.getSessionById(id)!.dirty, isFalse);
+      expect(HiveService.getSessionById(id)!.trainingWeekId, to1);
+    });
+
+    test('F1: a rescued progress row wins against the stored row it would '
+        'otherwise lose to', () async {
+      api.serverSchema = 4;
+      await setUpBlocks();
+      const low = '00000000-0000-4000-8000-000000000001';
+      const high = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+      final progress = HiveService.getAllWorkoutProgressRaw().single;
+      await HiveService.putWorkoutProgressRaw(
+        progress.copyWith(
+          activeWeekId: xWeek.id,
+          availableWeekIds: [...?progress.availableWeekIds, xWeek.id],
+          revision: low,
+          updatedAt: DateTime.utc(2026, 11, 10),
+          dirty: true,
+        ),
+      );
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      // Another device wrote the same instant with a higher revision; this one
+      // never sees it, because the block is deleted before the next pull.
+      final stored = api.tables['workout_progress']!.single;
+      stored['revision'] = high;
+      stored['server_seq'] = '2026-12-01T00:00:00.000Z';
+      serverDeletes(x.id);
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      final week = lazyTrainingWeekId(splitId, rescuedTrainingBlockId(x.id), 1);
+      final row = api.tables['workout_progress']!.single;
+      expect(row['active_week_id'], week);
+      expect(row['revision'], isNot(high));
+      expect(row['revision'], isNot(low));
+      expect(HiveService.getAllWorkoutProgressRaw().single.dirty, isFalse);
+      // Every replica derives the same values, so a second one agrees.
+      api.requests.clear();
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(
+        writeOrder().where((w) => w != 'activate_training_schema'),
+        isEmpty,
+      );
+    });
+
+    void serverDeletesPlan(String id) {
+      for (final table in ['workout_plans', 'workout_progress']) {
+        for (final row in api.tables[table]!.where(
+          (r) => r['id'] == id || r['plan_id'] == id,
+        )) {
+          row['deleted_at'] = tServer.toIso8601String();
+          row['updated_at'] = tServer.toIso8601String();
+          row['server_seq'] = '2026-11-16T12:00:01.000Z';
+        }
+      }
+    }
+
+    test('F2: a live workout of a plan another device deleted survives the '
+        'block\'s deletion in a rescued block', () async {
+      api.serverSchema = 4;
+      await setUpBlocks();
+      await useBlockXOffline();
+      // The phone deletes the plan, then the block; the server sees nothing
+      // live in it.
+      serverDeletesPlan(planId);
+      serverDeletes(x.id);
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      final successor = rescuedTrainingBlockId(x.id);
+      final week = lazyTrainingWeekId(splitId, successor, 1);
+      final saved = HiveService.getSessionById('logged-in-x')!;
+      expect(saved.deletedAt, isNull);
+      expect(saved.trainingWeekId, week);
+      expect(HiveService.getPlanById(planId)!.deletedAt, isNotNull);
+      expect(
+        HiveService.getAllWorkoutProgressRaw().single.deletedAt,
+        isNotNull,
+      );
+      final row = serverRow('workout_sessions', 'logged-in-x');
+      expect(row['deleted_at'], isNull);
+      expect(row['training_week_id'], week);
+      expect(
+        HiveService.readTrainingGraph(ownerId: owner).validate,
+        returnsNormally,
+      );
+    });
+
+    test(
+      'F2: after a remote Clear All Data a workout logged offline survives '
+      'in a rescued copy of its block, which validates and uploads',
+      () async {
+        api.serverSchema = 4;
+        await setUpBlocks();
+        await useBlockXOffline();
+        // Clear All Data on another device: every row is tombstoned and a fresh
+        // block takes over.
+        for (final table in [
+          'training_blocks',
+          'training_weeks',
+          'workout_plans',
+          'workout_progress',
+          'workout_sessions',
+        ]) {
+          for (final row
+              in api.tables[table] ?? const <Map<String, dynamic>>[]) {
+            row['deleted_at'] = tServer.toIso8601String();
+            row['updated_at'] = tServer.toIso8601String();
+            row['server_seq'] = '2026-11-16T12:00:01.000Z';
+          }
+        }
+        const fresh = '00000000-0000-4000-8000-0000000000f1';
+        api.tables['training_blocks']!.add({
+          'id': fresh,
+          'user_id': owner,
+          'split_id': splitId,
+          'name': 'Block 1',
+          'position': 0,
+          'planned_week_count': 4,
+          'created_at': tServer.toIso8601String(),
+          'updated_at': tServer.toIso8601String(),
+          'deleted_at': null,
+          'server_seq': '2026-11-16T12:00:02.000Z',
+        });
+        api.tables['training_weeks']!.add({
+          'id': '00000000-0000-4000-8000-0000000000f2',
+          'user_id': owner,
+          'split_id': splitId,
+          'block_id': fresh,
+          'number': 1,
+          'created_at': tServer.toIso8601String(),
+          'updated_at': tServer.toIso8601String(),
+          'deleted_at': null,
+          'server_seq': '2026-11-16T12:00:02.000Z',
+        });
+        await SyncService.instance.syncNow();
+        expect(SyncService.instance.status, SyncStatus.synced);
+        final successor = rescuedTrainingBlockId(x.id);
+        final week = lazyTrainingWeekId(splitId, successor, 1);
+        final saved = HiveService.getSessionById('logged-in-x')!;
+        expect(saved.deletedAt, isNull);
+        expect(saved.trainingWeekId, week);
+        expect(saved.dirty, isFalse);
+        expect(
+          serverRow('workout_sessions', 'logged-in-x')['deleted_at'],
+          isNull,
+        );
+        expect(serverBlock(successor)['deleted_at'], isNull);
+        expect(
+          HiveService.readTrainingGraph(ownerId: owner).validate,
+          returnsNormally,
+        );
+        api.requests.clear();
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        expect(
+          writeOrder().where((w) => w != 'activate_training_schema'),
+          isEmpty,
+        );
+      },
+    );
+
+    test('F2: Clear All Data on this device rescues nothing', () async {
+      api.serverSchema = 4;
+      await setUpBlocks();
+      await useBlockXOffline();
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      await HiveService.softDeleteAllWorkoutData();
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(
+        HiveService.getAllTrainingBlocksRaw().map((b) => b.id),
+        isNot(contains(rescuedTrainingBlockId(x.id))),
+      );
+      expect(HiveService.getSessionById('logged-in-x')!.deletedAt, isNotNull);
+      expect(
+        serverRow('workout_sessions', 'logged-in-x')['deleted_at'],
+        isNotNull,
+      );
+      expect(
+        api.tables['training_blocks']!.map((b) => b['id']),
+        isNot(contains(rescuedTrainingBlockId(x.id))),
+      );
+    });
+
+    test(
+      'F2: restoring an older backup on this device rescues nothing',
+      () async {
+        api.serverSchema = 4;
+        // A backup of a plan that had already been trained: its progress is no
+        // longer the bootstrap row, which the server would never let overwrite
+        // a stored row.
+        final base = HiveService.readTrainingGraph(ownerId: owner);
+        final older = base.copyWith(
+          progress: [
+            for (final p in base.progress)
+              p.copyWith(revision: '00000000-0000-4000-8000-0000000000b1'),
+          ],
+        );
+        await setUpBlocks();
+        await useBlockXOffline();
+        await SyncService.instance.syncNow();
+        expect(SyncService.instance.status, SyncStatus.synced);
+        await TrainingBlockRestore().replace(graph: older);
+        await SyncService.instance.syncNow();
+        expect(SyncService.instance.status, SyncStatus.synced);
+        expect(
+          HiveService.getAllTrainingBlocksRaw().map((b) => b.id),
+          isNot(contains(rescuedTrainingBlockId(x.id))),
+        );
+        expect(HiveService.getSessionById('logged-in-x')!.deletedAt, isNotNull);
+        expect(localBlock(x.id).deletedAt, isNotNull);
+      },
+    );
 
     test('a rename or extension made offline on a block with no work loses to '
         'the delete', () async {
@@ -2148,55 +2682,74 @@ void main() {
       },
     );
 
-    test('a block the server never received is tombstoned locally and the '
-        'tombstone uploads as an insert, blocks before weeks', () async {
-      api.serverSchema = 4;
-      await SyncService.instance.syncNow(fullReconciliation: true);
-      repo = TrainingBlockRepository(ownerId: () => owner);
-      // The first upload of the new block fails, so the server never has it.
-      api.intercept =
-          (r) async =>
-              r.method == 'POST' && r.url.path.endsWith('/training_blocks')
-                  ? http.Response('{"message":"offline","code":"OFFLINE"}', 503)
-                  : null;
-      final lonely = await repo.createBlock(
-        splitId: splitId,
-        name: 'Lonely',
+    test(
+      'a block the server never received is not deleted: the call fails, '
+      'local data is untouched, and it works once the block has uploaded',
+      () async {
+        api.serverSchema = 4;
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        repo = TrainingBlockRepository(ownerId: () => owner);
+        // The first upload of the new block fails, so the server never has it.
+        api.intercept =
+            (r) async =>
+                r.method == 'POST' && r.url.path.endsWith('/training_blocks')
+                    ? http.Response(
+                      '{"message":"offline","code":"OFFLINE"}',
+                      503,
+                    )
+                    : null;
+        final lonely = await repo.createBlock(
+          splitId: splitId,
+          name: 'Lonely',
+          weekCount: 3,
+        );
+        await repo.appendWeek(splitId, lonely.id);
+        await repo.createBlock(splitId: splitId, name: 'Other', weekCount: 3);
+        final before = snapshot();
+        await expectLater(
+          repo.deleteBlock(splitId: splitId, blockId: lonely.id),
+          throwsA(isNot(isA<TrainingBlockDeletionException>())),
+        );
+        expect(deleteCalls(), hasLength(1));
+        expect(snapshot(), before);
+        expect(localBlock(lonely.id).deletedAt, isNull);
+        // Nothing in the gate is left held.
+        api.intercept = null;
+        await repo.deleteBlock(splitId: splitId, blockId: lonely.id);
+        expect(localBlock(lonely.id).deletedAt, isNotNull);
+        expect(localBlock(lonely.id).dirty, isFalse);
+        expect(serverBlock(lonely.id)['deleted_at'], isNotNull);
+      },
+    );
+
+    test('local-only data still deletes purely locally', () async {
+      const localSplit = '00000000-0000-4000-8000-0000000000aa';
+      await HiveService.putSplitRaw(
+        Split(
+          id: localSplit,
+          name: 'Local',
+          createdAt: stamp,
+          updatedAt: stamp,
+        ),
+      );
+      final local = TrainingBlockRepository(ownerId: () => null);
+      await local.createBlock(splitId: localSplit, name: 'Keep', weekCount: 3);
+      final extra = await local.createBlock(
+        splitId: localSplit,
+        name: 'Extra',
         weekCount: 3,
       );
-      await repo.appendWeek(splitId, lonely.id);
-      await repo.createBlock(splitId: splitId, name: 'Other', weekCount: 3);
-      await repo.deleteBlock(splitId: splitId, blockId: lonely.id);
+      expect(local.lifecycleAvailable, isTrue);
+      await local.deleteBlock(splitId: localSplit, blockId: extra.id);
+      expect(localBlock(extra.id).deletedAt, isNotNull);
+      expect(localBlock(extra.id).dirty, isTrue);
       expect(
-        api.tables['training_blocks']!.any((r) => r['id'] == lonely.id),
-        isFalse,
-      );
-      expect(localBlock(lonely.id).deletedAt, isNotNull);
-      expect(localBlock(lonely.id).dirty, isTrue);
-      final weeks = HiveService.getAllTrainingWeeksRaw().where(
-        (w) => w.blockId == lonely.id,
-      );
-      expect(weeks, hasLength(2));
-      expect(
-        weeks.every((w) => w.deletedAt != null && w.dirty == true),
+        HiveService.getAllTrainingWeeksRaw()
+            .where((w) => w.blockId == extra.id)
+            .every((w) => w.deletedAt != null && w.dirty == true),
         isTrue,
       );
-      api.intercept = null;
-      api.requests.clear();
-      await SyncService.instance.syncNow();
-      expect(SyncService.instance.status, SyncStatus.synced);
-      expect(serverBlock(lonely.id)['deleted_at'], isNotNull);
-      expect(
-        api.tables['training_weeks']!
-            .where((r) => r['block_id'] == lonely.id)
-            .every((r) => r['deleted_at'] != null),
-        isTrue,
-      );
-      final order = writeOrder();
-      expect(
-        order.indexOf('training_blocks'),
-        lessThan(order.indexOf('training_weeks')),
-      );
+      expect(deleteCalls(), isEmpty);
     });
 
     test(
@@ -2284,6 +2837,383 @@ void main() {
         deletion,
       ]).timeout(const Duration(seconds: 20));
       expect(order, ['mutation start', 'mutation end', 'delete']);
+    });
+  });
+
+  group('duration clocks exist only where they mean something', () {
+    final c0 = DateTime.utc(2026, 3, 1);
+
+    test('F3: a client at schema 3 extends offline, an old client extends '
+        'further, then the account reaches 4: both end at 8', () async {
+      final repo = TrainingBlockRepository(ownerId: () => owner);
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(SyncService.instance.blockLifecycleAvailable(owner), isFalse);
+      final block = await repo.createBlock(
+        splitId: splitId,
+        name: 'Block',
+        weekCount: 4,
+      );
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(serverBlock(block.id)['planned_week_count'], 4);
+      // This client extends offline: no clock, because none can matter yet.
+      await repo.updateBlock(
+        splitId: splitId,
+        blockId: block.id,
+        name: 'Block',
+        weekCount: 5,
+      );
+      expect(localBlock(block.id).plannedWeekCount, 5);
+      expect(localBlock(block.id).plannedWeekCountUpdatedAt, isNull);
+      // An older app extends to 8 and syncs, without the clock column.
+      final stored = serverBlock(block.id);
+      stored['planned_week_count'] = 8;
+      stored['updated_at'] = DateTime.utc(2030).toIso8601String();
+      stored['server_seq'] = '2026-12-01T00:00:00.000Z';
+      // The account then reaches schema 4.
+      api.serverSchema = 4;
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(localBlock(block.id).plannedWeekCount, 8);
+      expect(serverBlock(block.id)['planned_week_count'], 8);
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(localBlock(block.id).plannedWeekCount, 8);
+      expect(serverBlock(block.id)['planned_week_count'], 8);
+    });
+
+    test('F3: every length change below schema 4 leaves the clock null and '
+        'carries no earlier one forward', () async {
+      api.serverSchema = 4;
+      final repo = TrainingBlockRepository(ownerId: () => owner);
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      final block = await repo.createBlock(
+        splitId: splitId,
+        name: 'Block',
+        weekCount: 4,
+      );
+      expect(localBlock(block.id).plannedWeekCountUpdatedAt, isNotNull);
+      // The account is now known to be below 4.
+      SyncService.instance.setNegotiatedSchema(owner, 3);
+      await repo.updateBlock(
+        splitId: splitId,
+        blockId: block.id,
+        name: 'Block',
+        weekCount: 6,
+      );
+      expect(localBlock(block.id).plannedWeekCount, 6);
+      expect(localBlock(block.id).plannedWeekCountUpdatedAt, isNull);
+      await repo.appendWeek(splitId, block.id);
+      await repo.appendWeek(splitId, block.id);
+      expect(localBlock(block.id).plannedWeekCountUpdatedAt, isNull);
+    });
+
+    test(
+      'F3: a clock stamped while data was local-only is dropped on the '
+      'first cycle that negotiates 3, and kept on one that negotiates 4',
+      () async {
+        final repo = TrainingBlockRepository(ownerId: () => owner);
+        final block = await repo.createBlock(
+          splitId: splitId,
+          name: 'Adopted',
+          weekCount: 4,
+        );
+        // What adoption of local-only data leaves: a meaningful clock.
+        await HiveService.putTrainingBlockRaw(
+          localBlock(block.id).copyWith(plannedWeekCountUpdatedAt: c0),
+        );
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        expect(SyncService.instance.status, SyncStatus.synced);
+        expect(SyncService.instance.blockLifecycleAvailable(owner), isFalse);
+        expect(localBlock(block.id).plannedWeekCountUpdatedAt, isNull);
+        expect(
+          serverBlock(block.id).containsKey('planned_week_count_updated_at'),
+          isFalse,
+        );
+        // Reaching 4 later does not resurrect a clock.
+        api.serverSchema = 4;
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        expect(localBlock(block.id).plannedWeekCountUpdatedAt, isNull);
+
+        // On an account which negotiates 4 it is kept and sent.
+        SyncService.instance.forgetNegotiatedSchemas();
+        final other = await repo.createBlock(
+          splitId: splitId,
+          name: 'Kept',
+          weekCount: 4,
+        );
+        await HiveService.putTrainingBlockRaw(
+          localBlock(other.id).copyWith(plannedWeekCountUpdatedAt: c0),
+        );
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        expect(localBlock(other.id).plannedWeekCountUpdatedAt, c0);
+        expect(
+          DateTime.parse(
+            serverBlock(other.id)['planned_week_count_updated_at'] as String,
+          ),
+          c0,
+        );
+      },
+    );
+  });
+
+  group('F4/F5 the delete call and the remembered level', () {
+    late TrainingBlockRepository repo;
+    late TrainingBlock x;
+    final savedTimeout = SyncService.blockDeleteTimeout;
+    tearDown(() => SyncService.blockDeleteTimeout = savedTimeout);
+
+    test(
+      'F4: a delete call which never answers fails, frees the gate, leaves '
+      'local data alone, and a later pull of the tombstones converges',
+      () async {
+        api.serverSchema = 4;
+        repo = TrainingBlockRepository(ownerId: () => owner);
+        x = await repo.createBlock(splitId: splitId, name: 'X', weekCount: 4);
+        await repo.createBlock(splitId: splitId, name: 'Y', weekCount: 3);
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        SyncService.instance.setNegotiatedSchema(owner, 4);
+        SyncService.blockDeleteTimeout = const Duration(milliseconds: 200);
+        final never = Completer<http.Response?>();
+        api.intercept =
+            (r) =>
+                r.url.path.endsWith('/rpc/delete_training_block')
+                    ? never.future
+                    : Future.value(null);
+        final before = jsonEncode([
+          for (final b in HiveService.getAllTrainingBlocksRaw()) b.toJson(),
+          for (final w in HiveService.getAllTrainingWeeksRaw()) w.toJson(),
+        ]);
+        await expectLater(
+          repo.deleteBlock(splitId: splitId, blockId: x.id),
+          throwsA(isA<TimeoutException>()),
+        );
+        expect(
+          jsonEncode([
+            for (final b in HiveService.getAllTrainingBlocksRaw()) b.toJson(),
+            for (final w in HiveService.getAllTrainingWeeksRaw()) w.toJson(),
+          ]),
+          before,
+        );
+        // The gate is free: another mutation runs at once.
+        expect(
+          await SyncService.instance
+              .runExclusiveLocalMutation(() async => 'free')
+              .timeout(const Duration(seconds: 2)),
+          'free',
+        );
+        // The server had committed; the next cycle brings its tombstones.
+        api.intercept = null;
+        serverDeletes(x.id);
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        expect(SyncService.instance.status, SyncStatus.synced);
+        expect(localBlock(x.id).deletedAt, tServer);
+        expect(localBlock(x.id).dirty, isFalse);
+        expect(
+          repo.blocksForSplit(splitId).map((b) => b.id),
+          isNot(contains(x.id)),
+        );
+      },
+    );
+
+    test('F5: the persisted level is the last negotiated one, so a server '
+        'which falls back to 3 turns the lifecycle off, now and after a '
+        'restart', () async {
+      api.serverSchema = 4;
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.blockLifecycleAvailable(owner), isTrue);
+      expect(
+        (await SharedPreferences.getInstance()).getInt(
+          'training_schema_$owner',
+        ),
+        4,
+      );
+      // The server is rolled back to a state which only offers 3.
+      api.serverSchema = 3;
+      api.accountSchema = 3;
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.blockLifecycleAvailable(owner), isFalse);
+      expect(
+        (await SharedPreferences.getInstance()).getInt(
+          'training_schema_$owner',
+        ),
+        3,
+      );
+      SyncService.instance.forgetNegotiatedSchemas();
+      await SyncService.instance.restoreNegotiatedSchemas();
+      expect(SyncService.instance.blockLifecycleAvailable(owner), isFalse);
+    });
+  });
+
+  group('the fake server follows the SQL', () {
+    Future<http.Response> post(String table, Map<String, dynamic> row) =>
+        api.handle(
+          http.Request(
+              'POST',
+              Uri.parse('https://x.supabase.co/rest/v1/$table'),
+            )
+            ..headers['x-opengym-training-schema'] = '4'
+            ..body = jsonEncode(row),
+        );
+    Map<String, dynamic> blockRow(
+      String id, {
+      String? deleted,
+      int count = 3,
+    }) => {
+      'id': id,
+      'user_id': owner,
+      'split_id': splitId,
+      'name': id,
+      'position': 0,
+      'planned_week_count': count,
+      'created_at': stamp.toIso8601String(),
+      'updated_at': stamp.toIso8601String(),
+      'deleted_at': deleted,
+    };
+    Map<String, dynamic> weekRow(String id, String block, {String? deleted}) =>
+        {
+          'id': id,
+          'user_id': owner,
+          'split_id': splitId,
+          'block_id': block,
+          'number': 1,
+          'created_at': stamp.toIso8601String(),
+          'updated_at': stamp.toIso8601String(),
+          'deleted_at': deleted,
+        };
+    final dead = DateTime.utc(2026, 5, 1).toIso8601String();
+
+    setUp(() {
+      api.serverSchema = 4;
+      api.accountSchema = 4;
+      api.tables['splits'] = [
+        {'id': splitId, 'user_id': owner, 'deleted_at': null},
+      ];
+      api.tables['workout_plans'] = [
+        {
+          'id': planId,
+          'user_id': owner,
+          'split_id': splitId,
+          'deleted_at': null,
+        },
+      ];
+    });
+
+    test('a live week under a deleted block, and live progress on a deleted '
+        'week, are rejected; tombstones are accepted', () async {
+      expect(
+        (await post(
+          'training_blocks',
+          blockRow('b', deleted: dead),
+        )).statusCode,
+        201,
+      );
+      expect((await post('training_weeks', weekRow('w', 'b'))).statusCode, 400);
+      expect(
+        (await post(
+          'training_weeks',
+          weekRow('w', 'b', deleted: dead),
+        )).statusCode,
+        201,
+      );
+      final progress = {
+        'id': 'p',
+        'user_id': owner,
+        'split_id': splitId,
+        'plan_id': planId,
+        'active_week_id': 'w',
+        'available_week_ids': ['w'],
+        'state': 'ready',
+        'revision': 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+        'updated_at': stamp.toIso8601String(),
+        'deleted_at': null,
+      };
+      expect((await post('workout_progress', progress)).statusCode, 400);
+      expect(
+        (await post('workout_progress', {
+          ...progress,
+          'deleted_at': dead,
+        })).statusCode,
+        201,
+      );
+    });
+
+    test('a live session in a deleted week is rejected', () async {
+      await post('training_blocks', blockRow('b'));
+      await post('training_weeks', weekRow('w', 'b', deleted: dead));
+      final session = {
+        'id': 's',
+        'user_id': owner,
+        'split_id': splitId,
+        'plan_id': planId,
+        'training_week_id': 'w',
+        'plan_name': 'Push',
+        'week_number': 1,
+        'date': stamp.toIso8601String(),
+        'data': {'trainingWeekId': 'w'},
+        'updated_at': stamp.toIso8601String(),
+        'deleted_at': null,
+      };
+      expect((await post('workout_sessions', session)).statusCode, 400);
+    });
+
+    test('a stored tombstone is sticky and a losing upsert is a silent no-op '
+        'returning the stored row', () async {
+      await post('training_blocks', blockRow('b', deleted: dead));
+      final revived = await post('training_blocks', blockRow('b', count: 9));
+      expect(revived.statusCode, 201);
+      expect((jsonDecode(revived.body) as List).single['deleted_at'], dead);
+      expect(
+        (jsonDecode(revived.body) as List).single['planned_week_count'],
+        3,
+      );
+      await post('training_blocks', blockRow('c'));
+      await post('training_weeks', weekRow('w', 'c'));
+      final stale = await post('training_weeks', {
+        ...weekRow('w', 'c'),
+        'updated_at': DateTime.utc(2020).toIso8601String(),
+        'number': 7,
+      });
+      expect(stale.statusCode, 201);
+      expect((jsonDecode(stale.body) as List).single['number'], 1);
+    });
+
+    test('an omitted clock column is the stored clock, a tie, which keeps '
+        'the larger count', () async {
+      await post('training_blocks', {
+        ...blockRow('b', count: 6),
+        'planned_week_count_updated_at':
+            DateTime.utc(2026, 3).toIso8601String(),
+      });
+      final smaller = await post('training_blocks', blockRow('b', count: 4));
+      expect(
+        (jsonDecode(smaller.body) as List).single['planned_week_count'],
+        6,
+      );
+    });
+
+    test('the delete procedure stamps greatest(updated_at, now())', () async {
+      await post('training_blocks', blockRow('a'));
+      await post('training_blocks', {
+        ...blockRow('b'),
+        'updated_at': DateTime.utc(2030).toIso8601String(),
+      });
+      for (final id in ['b']) {
+        final result = await api.handle(
+          http.Request(
+              'POST',
+              Uri.parse(
+                'https://x.supabase.co/rest/v1/rpc/delete_training_block',
+              ),
+            )
+            ..headers['x-opengym-training-schema'] = '4'
+            ..body = jsonEncode({'target': id}),
+        );
+        final block = (jsonDecode(result.body) as Map)['block'] as Map;
+        expect(DateTime.parse(block['deleted_at'] as String), api.serverNow());
+        expect(
+          DateTime.parse(block['updated_at'] as String),
+          DateTime.utc(2030),
+        );
+      }
     });
   });
 }

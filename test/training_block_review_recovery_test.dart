@@ -17,6 +17,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'support/hive_test_harness.dart';
 import 'package:gymapp/models/split_preference.dart';
 import 'package:gymapp/services/training_block_graph.dart';
+import 'package:gymapp/services/sync_service.dart';
 import 'package:gymapp/services/training_plan_installer.dart';
 import 'dart:convert';
 
@@ -284,6 +285,8 @@ void main() {
 
   test('the installer stamps the duration clock when it sets or raises a '
       'block length', () async {
+    SyncService.instance.setNegotiatedSchema('owner', 4);
+    addTearDown(SyncService.instance.forgetNegotiatedSchemas);
     final before = DateTime.now();
     // Split b exists with its default block and nothing in it: a raise.
     final existing = HiveService.blocksForSplit('b').single;
@@ -332,8 +335,152 @@ void main() {
     expect(created.plannedWeekCountUpdatedAt, isNotNull);
   });
 
+  test('below schema 4 the installer and the boundary writers stamp no clock, '
+      'and an intent stamped earlier loses its clock on recovery', () async {
+    final repo = TrainingBlockRepository(ownerId: () => 'owner');
+    await installTrainingPlansUnderGate(
+      ownerId: 'owner',
+      split: HiveService.getSplitById('b'),
+      initialBlockWeekCount: 6,
+      plans: {
+        'x': WorkoutPlan(
+          id: 'x',
+          name: 'X',
+          exercises: [],
+          splitId: 'b',
+          userId: 'owner',
+        ),
+      },
+    );
+    expect(HiveService.blocksForSplit('b').single.plannedWeekCount, 6);
+    expect(
+      HiveService.blocksForSplit('b').single.plannedWeekCountUpdatedAt,
+      isNull,
+    );
+    final fresh = Split(id: 'c', name: 'c', createdAt: now, userId: 'owner');
+    await installTrainingPlansUnderGate(
+      ownerId: 'owner',
+      split: fresh,
+      initialBlockWeekCount: 5,
+      plans: {
+        'y': WorkoutPlan(
+          id: 'y',
+          name: 'Y',
+          exercises: [],
+          splitId: 'c',
+          userId: 'owner',
+        ),
+      },
+    );
+    expect(
+      HiveService.blocksForSplit('c').single.plannedWeekCountUpdatedAt,
+      isNull,
+    );
+    final block = await repo.createBlock(
+      splitId: 'a',
+      name: 'Short',
+      weekCount: 1,
+    );
+    final first = repo.weeksForBlock('a', block.id).single;
+    Future<String> awaitBoundary() async {
+      await HiveService.putWorkoutProgressRaw(
+        repo
+            .progressForPlan('a', 'p')!
+            .copyWith(
+              activeWeekId: first.id,
+              availableWeekIds: [first.id],
+              state: WorkoutProgressState.awaitingBoundary,
+            ),
+      );
+      return HiveService.progressForPlan('a', 'p')!.revision;
+    }
+
+    final service = WorkoutProgressionService(ownerId: () => 'owner');
+    await service.extendBoundary(
+      planId: 'p',
+      expectedRevision: await awaitBoundary(),
+    );
+    expect(HiveService.getTrainingBlockById(block.id)!.plannedWeekCount, 2);
+    expect(
+      HiveService.getTrainingBlockById(block.id)!.plannedWeekCountUpdatedAt,
+      isNull,
+    );
+    final solo = await repo.createBlock(
+      splitId: 'a',
+      name: 'Solo',
+      weekCount: 1,
+    );
+    final soloWeek = repo.weeksForBlock('a', solo.id).single;
+    await HiveService.putWorkoutProgressRaw(
+      repo
+          .progressForPlan('a', 'p')!
+          .copyWith(
+            activeWeekId: soloWeek.id,
+            availableWeekIds: [soloWeek.id],
+            state: WorkoutProgressState.awaitingBoundary,
+          ),
+    );
+    final created = await service.createBoundary(
+      planId: 'p',
+      expectedRevision: HiveService.progressForPlan('a', 'p')!.revision,
+      name: 'Next',
+      weekCount: 3,
+    );
+    expect(created.plannedWeekCountUpdatedAt, isNull);
+
+    // An extension journaled while the account was at 4, recovered after it
+    // is known to be below.
+    SyncService.instance.setNegotiatedSchema('owner', 4);
+    final other = await repo.createBlock(
+      splitId: 'a',
+      name: 'Journaled',
+      weekCount: 1,
+    );
+    final otherFirst = repo.weeksForBlock('a', other.id).single;
+    await HiveService.putWorkoutProgressRaw(
+      repo
+          .progressForPlan('a', 'p')!
+          .copyWith(
+            activeWeekId: otherFirst.id,
+            availableWeekIds: [otherFirst.id],
+            state: WorkoutProgressState.awaitingBoundary,
+          ),
+    );
+    final crashing = WorkoutProgressionService(
+      ownerId: () => 'owner',
+      writeProgress: (_) async => throw StateError('disk'),
+    );
+    await expectLater(
+      crashing.extendBoundary(
+        planId: 'p',
+        expectedRevision: HiveService.progressForPlan('a', 'p')!.revision,
+      ),
+      throwsStateError,
+    );
+    expect(
+      HiveService.getTrainingBlockById(other.id)!.plannedWeekCountUpdatedAt,
+      isNotNull,
+    );
+    await HiveService.putTrainingBlockRaw(
+      HiveService.getTrainingBlockById(
+        other.id,
+      )!.copyWith(plannedWeekCount: 1, plannedWeekCountUpdatedAt: now),
+    );
+    SyncService.instance.setNegotiatedSchema('owner', 3);
+    addTearDown(SyncService.instance.forgetNegotiatedSchemas);
+    await WorkoutProgressionService.recoverBoundaryUnderGate(ownerId: 'owner');
+    final saved = HiveService.getTrainingBlockById(other.id)!;
+    expect(saved.plannedWeekCount, 2);
+    expect(saved.plannedWeekCountUpdatedAt, isNull);
+  });
+
   group('boundary choices and the duration clock', () {
     final tExtend = DateTime.utc(2026, 11, 20, 9);
+    setUp(() {
+      // These account for a server which resolves length on the clock.
+      SyncService.instance.setNegotiatedSchema('owner', 4);
+      addTearDown(SyncService.instance.forgetNegotiatedSchemas);
+    });
     late TrainingBlock block;
     late TrainingWeek first;
 

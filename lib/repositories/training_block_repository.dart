@@ -25,6 +25,12 @@ class TrainingBlockRepository {
        _lifecycleAvailable =
            lifecycleAvailable ?? SyncService.instance.blockLifecycleAvailable;
 
+  DateTime? _clock(String? owner, DateTime at) => stampDurationClock(
+    at,
+    owner: owner,
+    lifecycleAvailable: _lifecycleAvailable,
+  );
+
   /// Whether blocks can be shortened and deleted for the current account.
   bool get lifecycleAvailable => _lifecycleAvailable(_owner());
 
@@ -135,7 +141,7 @@ class TrainingBlockRepository {
       splitId: splitId,
       name: trimmed,
       plannedWeekCount: weekCount,
-      plannedWeekCountUpdatedAt: now,
+      plannedWeekCountUpdatedAt: _clock(owner, now),
       position:
           blocks.isEmpty
               ? 0
@@ -192,7 +198,7 @@ class TrainingBlockRepository {
           await HiveService.putTrainingBlockRaw(
             block.copyWith(
               plannedWeekCount: week.number,
-              plannedWeekCountUpdatedAt: now,
+              plannedWeekCountUpdatedAt: _clock(_owner(), now),
               updatedAt: now,
               dirty: true,
             ),
@@ -253,10 +259,12 @@ class TrainingBlockRepository {
     final updated = block.copyWith(
       name: trimmed,
       plannedWeekCount: weekCount,
+      // A changed length is stamped (or left without a clock where none may
+      // exist); a rename alone keeps whatever the block has.
       plannedWeekCountUpdatedAt:
           weekCount == block.plannedWeekCount
               ? block.plannedWeekCountUpdatedAt
-              : now,
+              : _clock(owner, now),
       updatedAt: now,
       dirty: true,
     );

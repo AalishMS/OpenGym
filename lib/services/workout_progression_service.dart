@@ -562,7 +562,10 @@ class WorkoutProgressionService {
     final block = HiveService.getTrainingBlockById(source.blockId)!;
     final extended = block.copyWith(
       plannedWeekCount: week.number,
-      plannedWeekCountUpdatedAt: now,
+      plannedWeekCountUpdatedAt: SyncService.instance.durationClockFor(
+        _owner(),
+        now,
+      ),
       updatedAt: now,
       dirty: true,
     );
@@ -624,7 +627,10 @@ class WorkoutProgressionService {
       splitId: progress.splitId,
       name: trimmed,
       plannedWeekCount: weekCount,
-      plannedWeekCountUpdatedAt: now,
+      plannedWeekCountUpdatedAt: SyncService.instance.durationClockFor(
+        _owner(),
+        now,
+      ),
       position:
           blocks.map((b) => b.position).reduce((a, b) => a > b ? a : b) + 1,
       createdAt: now,
@@ -735,8 +741,17 @@ class WorkoutProgressionService {
         await operations.flush();
         return null;
       }
+      // The intent may have been stamped under another schema than the
+      // account has now.
+      final intentClock = block.plannedWeekCountUpdatedAt;
+      final stamped =
+          intentClock != null &&
+                  SyncService.instance.durationClockFor(ownerId, intentClock) !=
+                      null
+              ? block
+              : block.copyWith(plannedWeekCountUpdatedAt: null);
       if (saved == null) {
-        await HiveService.putTrainingBlockRaw(block);
+        await HiveService.putTrainingBlockRaw(stamped);
       } else if (saved.deletedAt != null ||
           saved.splitId != block.splitId ||
           saved.userId != ownerId) {
@@ -746,7 +761,7 @@ class WorkoutProgressionService {
         await HiveService.putTrainingBlockRaw(
           saved.copyWith(
             plannedWeekCount: block.plannedWeekCount,
-            plannedWeekCountUpdatedAt: block.plannedWeekCountUpdatedAt,
+            plannedWeekCountUpdatedAt: stamped.plannedWeekCountUpdatedAt,
             updatedAt: block.updatedAt,
             dirty: true,
           ),

@@ -12,6 +12,7 @@ import 'package:gymapp/models/workout_progress.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/repositories/training_block_repository.dart';
+import 'package:gymapp/services/sync_service.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/training_block_migration.dart';
 import 'package:gymapp/services/workout_progression_service.dart';
@@ -243,6 +244,8 @@ void main() {
     test(
       'an unused block shortens to its allocated weeks and stamps the clock',
       () async {
+        SyncService.instance.setNegotiatedSchema('owner', 4);
+        addTearDown(SyncService.instance.forgetNegotiatedSchemas);
         final block = await newBlock(weeks: 6);
         expect(lifecycle.lifecycleAvailable, isTrue);
         expect(lifecycle.minimumWeekCount(splitId, block.id), 1);
@@ -258,6 +261,33 @@ void main() {
         expect(repo.weeksForBlock(splitId, block.id), hasLength(1));
         // And it can be lengthened again afterwards.
         expect((await shorten(block, 5)).plannedWeekCount, 5);
+      },
+    );
+
+    test(
+      'below schema 4 no writer stamps a clock or carries one forward',
+      () async {
+        // Created while the account was known to be at 4.
+        SyncService.instance.setNegotiatedSchema('owner', 4);
+        addTearDown(SyncService.instance.forgetNegotiatedSchemas);
+        final block = await newBlock(weeks: 3);
+        expect(stored(block.id).plannedWeekCountUpdatedAt, isNotNull);
+        SyncService.instance.setNegotiatedSchema('owner', 3);
+        await repo.updateBlock(
+          splitId: splitId,
+          blockId: block.id,
+          name: block.name,
+          weekCount: 5,
+        );
+        expect(stored(block.id).plannedWeekCount, 5);
+        expect(stored(block.id).plannedWeekCountUpdatedAt, isNull);
+        await repo.appendWeek(splitId, block.id);
+        await repo.appendWeek(splitId, block.id);
+        await repo.appendWeek(splitId, block.id);
+        await repo.appendWeek(splitId, block.id);
+        expect(stored(block.id).plannedWeekCountUpdatedAt, isNull);
+        final fresh = await newBlock(weeks: 2);
+        expect(stored(fresh.id).plannedWeekCountUpdatedAt, isNull);
       },
     );
 
@@ -278,6 +308,8 @@ void main() {
     });
 
     test('rename and unchanged saves leave the duration clock alone', () async {
+      SyncService.instance.setNegotiatedSchema('owner', 4);
+      addTearDown(SyncService.instance.forgetNegotiatedSchemas);
       final block = await newBlock(weeks: 6);
       final clock = stored(block.id).plannedWeekCountUpdatedAt;
       expect(clock, isNotNull);

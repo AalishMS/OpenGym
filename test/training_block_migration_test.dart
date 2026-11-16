@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/models/exercise.dart';
@@ -669,8 +670,8 @@ void main() {
       final g = deleted(
         xWeeksTombstoned: false,
         sessions: [
-          // A session of a deleted plan does not count as a dependent.
-          session0('old', planB, xw1, 1),
+          // A session the deleting replica already tombstoned is not live work.
+          session0('old', planB, xw1, 1, deleted: tDelete),
         ],
         plans: [plan0(planA), plan0(planB, deleted: tDelete)],
       );
@@ -681,8 +682,7 @@ void main() {
       for (final w in out.weeks.where((w) => w.blockId == x)) {
         expect(w.deletedAt, isNotNull);
       }
-      expect(out.sessions.single.deletedAt, isNotNull);
-      expect(out.sessions.single.dirty, isTrue);
+      expect(out.sessions.single.deletedAt, tDelete);
       expect(out.progress.single.deletedAt, isNull);
     });
 
@@ -712,7 +712,13 @@ void main() {
       final p = out.progress.single;
       expect(p.activeWeekId, xpw(2));
       expect(p.availableWeekIds, [xpw(1), xpw(2)]);
-      expect(p.revision, 'rev-$planA');
+      // It must win last-write-wins on the server, whose stored row still
+      // points into the deleted block: a new revision derived from the old one
+      // and the successor, and a time strictly after both the row's own and
+      // the deletion.
+      expect(p.revision, rescuedProgressRevision('rev-$planA', xPrime));
+      expect(p.revision, isNot('rev-$planA'));
+      expect(p.updatedAt, tDelete.add(const Duration(milliseconds: 1)));
       expect(p.deletedAt, isNull);
       expect(p.dirty, isTrue);
       // The deleted block itself stays deleted.
@@ -1091,6 +1097,380 @@ void main() {
       final b = prep(g).blocks.single;
       expect(b.plannedWeekCount, 3);
       expect(b.plannedWeekCountUpdatedAt, isNull);
+    });
+
+    // F2: a live session is rescued whatever its plan's state.
+    test('a live session of a deleted plan is rescued, not cascaded', () {
+      final out = prep(
+        deleted(
+          plans: [plan0(planA), plan0(planB, deleted: tDelete)],
+          progress: [
+            progress0(planA, yw1, [yw1]),
+            progress0(planB, xw1, [xw1], deleted: tDelete),
+          ],
+          sessions: [
+            session0('history', planB, xw2, 2),
+            session0('orphan', 'no-such-plan-needed', xw1, 1),
+          ],
+        ),
+      );
+      final history = out.sessions.singleWhere((s) => s.id == 'history');
+      expect(history.deletedAt, isNull);
+      expect(history.trainingWeekId, xpw(2));
+      expect(history.dirty, isTrue);
+      expect(history.updatedAt, t0);
+      expect(out.blocks.singleWhere((b) => b.id == xPrime).deletedAt, isNull);
+      // The deleted plan's progress stays deleted.
+      expect(
+        out.progress.singleWhere((p) => p.planId == planB).deletedAt,
+        isNotNull,
+      );
+      expect(dump(prep(out)), dump(out));
+    });
+
+    test('a live session with no plan at all is rescued', () {
+      final s = session0('planless', planA, xw1, 1).copyWith(planId: null);
+      final out = prep(deleted(sessions: [s]));
+      expect(out.sessions.single.deletedAt, isNull);
+      expect(out.sessions.single.trainingWeekId, xpw(1));
+    });
+
+    test('a tombstoned session is not live work and rescues nothing', () {
+      final out = prep(
+        deleted(sessions: [session0('gone', planA, xw1, 1, deleted: tDelete)]),
+      );
+      expect(out.blocks.map((b) => b.id), isNot(contains(xPrime)));
+      expect(out.sessions.single.deletedAt, tDelete);
+    });
+
+    // F1: a rescued progress row has to win last-write-wins on the server.
+    test('a rescued progress row gets a new revision and a strictly later '
+        'time, the same on every replica, never the bootstrap revision', () {
+      final late = tDelete.add(const Duration(hours: 5));
+      for (final updated in [t0, late, null]) {
+        final row = progress0(planA, xw2, [xw1, xw2]).copyWith(
+          updatedAt: updated,
+          revision: initialProgressRevision(splitId, planA),
+        );
+        final first = prep(deleted(progress: [row])).progress.single;
+        final second = prep(deleted(progress: [row])).progress.single;
+        expect(first.revision, second.revision);
+        expect(first.updatedAt, second.updatedAt);
+        expect(first.revision, isNot(row.revision));
+        expect(first.revision, isNot(initialProgressRevision(splitId, planA)));
+        final floor =
+            updated != null && updated.isAfter(tDelete) ? updated : tDelete;
+        expect(first.updatedAt, floor.add(const Duration(milliseconds: 1)));
+        expect(first.updatedAt!.isAfter(updated ?? tDelete), isTrue);
+      }
+    });
+
+    test(
+      'a progress row only listing the block keeps its revision and time',
+      () {
+        final out = prep(
+          deleted(
+            plans: [plan0(planA), plan0(planB)],
+            progress: [
+              progress0(planA, xw2, [xw2]),
+              progress0(planB, yw1, [xw1, yw1]),
+            ],
+          ),
+        );
+        final b = out.progress.singleWhere((p) => p.planId == planB);
+        expect(b.revision, 'rev-$planB');
+        expect(b.updatedAt, t0);
+      },
+    );
+
+    // F8: mapping by week id, and rescue is never the reason this throws.
+    group('rescue never makes preparation fail', () {
+      final xw2dup = lazyTrainingWeekId(splitId, 'dup-source', 2);
+
+      TrainingBlockGraph duplicateWeekGraph({
+        required List<WorkoutSession> sessions,
+        List<WorkoutProgress>? progress,
+      }) => deleted(
+        sessions: sessions,
+        progress: progress,
+        extraWeeks: [week0(xw2dup, x, 2, deleted: null)],
+      );
+
+      test('two week rows of one number, one tombstoned and one live, share '
+          'a target without collapsing a completion', () {
+        final out = prep(
+          duplicateWeekGraph(
+            sessions: [
+              session0('a', planA, xw1, 1, nextWeekId: xw2),
+              session0('b', planA, xw2dup, 2),
+            ],
+            progress: [
+              progress0(planA, xw2dup, [xw1, xw2, xw2dup]),
+            ],
+          ),
+        );
+        for (final s in out.sessions) {
+          expect(s.deletedAt, isNull, reason: s.id);
+        }
+        final a = out.sessions.singleWhere((s) => s.id == 'a');
+        expect(a.completionTransition!['sourceWeekId'], xpw(1));
+        expect(a.completionTransition!['nextWeekId'], xpw(2));
+        expect(
+          out.sessions.singleWhere((s) => s.id == 'b').trainingWeekId,
+          xpw(2),
+        );
+        expect(out.progress.single.availableWeekIds, [xpw(1), xpw(2)]);
+        expect(
+          out.weeks.where((w) => w.blockId == xPrime && w.deletedAt == null),
+          hasLength(2),
+        );
+      });
+
+      test('a completion between two weeks of the same number cannot be '
+          'rescued: the block is left exactly as without rescue', () {
+        final g = duplicateWeekGraph(
+          sessions: [session0('c', planA, xw2, 2, nextWeekId: xw2dup)],
+          progress: [
+            progress0(planA, yw1, [yw1]),
+          ],
+        );
+        // Rescuing it would map both weeks onto one and invalidate the
+        // evidence; the block is left as the cascade alone treats it.
+        final out = prep(g);
+        expect(
+          dump(out),
+          dump(TrainingBlockMigration.prepareGraphWithoutRescue(g)),
+        );
+        expect(out.blocks.map((b) => b.id), isNot(contains(xPrime)));
+        expect(out.sessions.single.deletedAt, isNotNull);
+      });
+
+      test(
+        'sixteen unusable derivations leave the block as without rescue',
+        () {
+          var id = x;
+          final chain = <TrainingBlock>[];
+          for (var i = 0; i < 17; i++) {
+            id = rescuedTrainingBlockId(id);
+            chain.add(block0(id, deleted: tDelete, position: 5 + i));
+          }
+          final g = deleted(
+            sessions: [session0('s', planA, xw1, 1)],
+            extraBlocks: chain,
+          );
+          final out = prep(g);
+          expect(out.sessions.single.deletedAt, isNotNull);
+          expect(
+            dump(out),
+            dump(TrainingBlockMigration.prepareGraphWithoutRescue(g)),
+          );
+        },
+      );
+
+      test('a successor id held by another split is not used', () {
+        final g = deleted(
+          sessions: [session0('s', planA, xw1, 1)],
+          extraBlocks: [block0(xPrime, sid: 'other-split')],
+          extraWeeks: [
+            week0(
+              lazyTrainingWeekId('other-split', xPrime, 1),
+              xPrime,
+              1,
+              sid: 'other-split',
+            ),
+          ],
+        ).copyWith(splits: [split0(), split0('other-split')]);
+        final out = prep(g);
+        final s = out.sessions.single;
+        expect(s.deletedAt, isNull);
+        final home = out.weeks.singleWhere((w) => w.id == s.trainingWeekId);
+        expect(home.splitId, splitId);
+        expect(
+          out.blocks.singleWhere((b) => b.id == home.blockId).splitId,
+          splitId,
+        );
+      });
+    });
+
+    test('random graphs: rescue is never the reason preparation throws, a '
+        'result always validates, and running again changes nothing', () {
+      final blockIds = ['b0', 'b1', 'b2', 'b3'];
+      var rescuedGraphs = 0;
+      var unrescuedGraphs = 0;
+      var thrownByBaseline = 0;
+      for (var seed = 0; seed < 600; seed++) {
+        final r = Random(seed);
+        T pick<T>(List<T> items) => items[r.nextInt(items.length)];
+        bool chance(double p) => r.nextDouble() < p;
+        final splitDeleted = chance(0.1);
+        final plans = [
+          plan0(planA),
+          if (chance(0.7)) plan0(planB, deleted: chance(0.5) ? tDelete : null),
+        ];
+        // Blocks, some tombstoned, some holding a derived rescue id so that
+        // derivations collide.
+        final blocks = <TrainingBlock>[];
+        final ids = <String>{};
+        for (var i = 0; i < 1 + r.nextInt(3); i++) {
+          final id =
+              i == 0 || !chance(0.25)
+                  ? blockIds[i]
+                  : rescuedTrainingBlockId(blockIds[i - 1]);
+          if (!ids.add(id)) continue;
+          blocks.add(
+            block0(
+              id,
+              position: i,
+              count: 1 + r.nextInt(4),
+              deleted: chance(0.5) ? tDelete : null,
+            ),
+          );
+        }
+        if (chance(0.2) && blocks.any((b) => b.deletedAt != null)) {
+          final id = rescuedTrainingBlockId(
+            rescuedTrainingBlockId(blocks.first.id),
+          );
+          if (ids.add(id)) {
+            blocks.add(block0(id, position: 9, deleted: tDelete));
+          }
+        }
+        if (blocks.every((b) => b.deletedAt != null) && chance(0.8)) {
+          blocks.add(block0('b9', position: 8));
+        }
+        final weeks = <TrainingWeek>[];
+        for (final b in blocks) {
+          final count = r.nextInt(4);
+          for (var k = 0; k < count; k++) {
+            final n = 1 + (chance(0.3) ? 0 : r.nextInt(3));
+            final id =
+                chance(0.5)
+                    ? lazyTrainingWeekId(splitId, b.id, n)
+                    : '${b.id}-w$k-$n';
+            if (weeks.any((w) => w.id == id)) continue;
+            // Never two live weeks of one number in a live block (strict
+            // validation rejects that before any rescue runs).
+            weeks.add(
+              week0(
+                id,
+                b.id,
+                n,
+                deleted: b.deletedAt != null || chance(0.3) ? tDelete : null,
+              ),
+            );
+          }
+        }
+        if (weeks.isEmpty) continue;
+        final sessions = <WorkoutSession>[];
+        for (var i = 0; i < r.nextInt(5); i++) {
+          final w = pick(weeks);
+          final planChoice = r.nextInt(4);
+          final plan =
+              planChoice == 0 ? null : (planChoice == 1 ? planB : planA);
+          final sameBlock =
+              weeks
+                  .where((o) => o.blockId == w.blockId && o.id != w.id)
+                  .toList();
+          final evidenceNext =
+              sameBlock.isNotEmpty && chance(0.5) ? pick(sameBlock) : null;
+          var session = session0(
+            's$i',
+            plan ?? planA,
+            w.id,
+            w.number,
+            nextWeekId: evidenceNext?.id,
+            completed: evidenceNext != null || chance(0.5),
+            deleted: chance(0.2) ? tDelete : null,
+          );
+          if (plan == null) session = session.copyWith(planId: null);
+          sessions.add(session);
+        }
+        final progress = <WorkoutProgress>[];
+        for (final plan in plans) {
+          if (chance(0.15)) continue;
+          final active = pick(weeks);
+          final available =
+              {
+                active.id,
+                for (final w in weeks)
+                  if (chance(0.3)) w.id,
+              }.toList();
+          progress.add(
+            progress0(
+              plan.id!,
+              active.id,
+              available,
+              deleted: plan.deletedAt != null || chance(0.15) ? tDelete : null,
+            ),
+          );
+        }
+        final g = graph0(
+          splits: [split0(splitId, splitDeleted ? tDelete : null)],
+          plans: plans,
+          blocks: blocks,
+          weeks: weeks,
+          sessions: sessions,
+          progress: progress,
+        );
+        String baseline;
+        try {
+          baseline = dump(TrainingBlockMigration.prepareGraphWithoutRescue(g));
+        } catch (e) {
+          baseline = 'throws $e';
+          thrownByBaseline++;
+        }
+        TrainingBlockGraph? out;
+        String actual;
+        try {
+          out = TrainingBlockMigration.prepareGraph(g);
+          out.validate();
+          actual = dump(out);
+        } catch (e) {
+          actual = 'throws $e';
+        }
+        final reason = 'seed $seed';
+        if (actual.startsWith('throws ')) {
+          // Rescue is never the reason: the plain path throws the same way.
+          expect(actual, baseline, reason: reason);
+          continue;
+        }
+        if (out!.blocks.any(
+          (b) => b.dirty == true && !g.blocks.any((o) => o.id == b.id),
+        )) {
+          rescuedGraphs++;
+        }
+        final referenced = blocks.any((b) {
+          if (b.deletedAt == null || splitDeleted) return false;
+          final ids = {
+            for (final w in weeks)
+              if (w.blockId == b.id) w.id,
+          };
+          return sessions.any(
+                (s) =>
+                    s.deletedAt == null &&
+                    (ids.contains(s.trainingWeekId) ||
+                        ids.contains(s.completionTransition?['sourceWeekId']) ||
+                        ids.contains(s.completionTransition?['nextWeekId'])),
+              ) ||
+              progress.any(
+                (p) =>
+                    p.deletedAt == null &&
+                    plans.any(
+                      (pl) => pl.id == p.planId && pl.deletedAt == null,
+                    ) &&
+                    ids.contains(p.activeWeekId),
+              );
+        });
+        if (!referenced) {
+          unrescuedGraphs++;
+          expect(actual, baseline, reason: reason);
+        }
+        // Running it again changes nothing.
+        expect(dump(prep(out)), actual, reason: reason);
+      }
+      // The generator has to reach the interesting cases.
+      expect(rescuedGraphs, greaterThan(20));
+      expect(unrescuedGraphs, greaterThan(20));
+      expect(thrownByBaseline, greaterThan(0));
     });
   });
 }

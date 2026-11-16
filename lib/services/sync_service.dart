@@ -139,6 +139,39 @@ class SyncService {
   bool blockLifecycleAvailable(String? owner) =>
       owner == null || _schemaFor(owner) >= 4;
 
+  /// The duration clock to stamp on a block whose planned length [owner] is
+  /// changing at [at]: [at] where the clock means something (local-only data,
+  /// or an account whose server resolves block length on it), otherwise null.
+  /// Every writer of `plannedWeekCount` stamps through this, so a signed-in
+  /// account below schema 4 never carries a clock that could later beat a
+  /// clock-less write made by an older app in the meantime.
+  DateTime? durationClockFor(String? owner, DateTime at) => stampDurationClock(
+    at,
+    owner: owner,
+    lifecycleAvailable: blockLifecycleAvailable,
+  );
+
+  /// Local blocks of [user] must carry no duration clock while the account is
+  /// below schema 4. One may have been stamped while the account was known to
+  /// be at 4 (a server rolled back since), or while the data was still
+  /// local-only (adoption keeps those; they are meaningful once the account
+  /// negotiates 4 and are dropped here when it does not).
+  Future<void> _dropDurationClocks(String user, _SyncAccount account) async {
+    for (final block in HiveService.getAllTrainingBlocksRaw().where(
+      (b) => b.userId == user && b.plannedWeekCountUpdatedAt != null,
+    )) {
+      account.check();
+      await HiveService.putTrainingBlockRaw(
+        block.copyWith(plannedWeekCountUpdatedAt: null),
+      );
+    }
+  }
+
+  /// Pretends [user] negotiated [level] without a server.
+  @visibleForTesting
+  void setNegotiatedSchema(String user, int level) =>
+      _schemaByUser[user] = level;
+
   @visibleForTesting
   void forgetNegotiatedSchemas() {
     _schemaByUser.clear();
@@ -190,6 +223,13 @@ class SyncService {
     }
     return level;
   }
+
+  /// How long the delete procedure may take before the call is abandoned. The
+  /// mutation gate is held for the whole call, so it must not wait for the
+  /// operating system's socket timeout. A response lost after the server
+  /// committed is repaired by the next pull, which brings the tombstones.
+  @visibleForTesting
+  static Duration blockDeleteTimeout = const Duration(seconds: 15);
 
   /// Deletes an unused training block through the server's guarded procedure,
   /// which re-checks everything under the account lock, and mirrors the result
@@ -259,7 +299,9 @@ class SyncService {
       dynamic result;
       try {
         result = await _checked(
-          _db.rpc('delete_training_block', params: {'target': blockId}),
+          _db
+              .rpc('delete_training_block', params: {'target': blockId})
+              .timeout(blockDeleteTimeout),
           account,
         );
       } on PostgrestException catch (error) {
@@ -279,32 +321,33 @@ class SyncService {
         }
         rethrow;
       }
-      if (result is Map && result['block'] is Map) {
-        final remoteWeeks =
-            (result['weeks'] as List? ?? const [])
-                .map((w) => Map<String, dynamic>.from(w as Map))
-                .toList();
-        await _applyRow(
-          'training_blocks',
-          Map<String, dynamic>.from(result['block'] as Map),
-          user,
-        );
-        for (final week in remoteWeeks) {
-          await _applyRow('training_weeks', week, user);
-        }
-        // Weeks the server never saw (allocated here, not yet uploaded) are
-        // part of the deleted block too.
-        final stored = HiveService.getTrainingBlockById(blockId);
-        await tombstoneTrainingBlockLocally(
-          blockId,
-          at: stored?.deletedAt,
-          onlyLiveWeeks: true,
-        );
-      } else {
-        // The server has never seen this block. Its tombstone uploads with the
-        // next sync, as an insert.
-        await tombstoneTrainingBlockLocally(blockId);
+      if (result is! Map || result['block'] is! Map) {
+        // Null means the server has no such block. That does not mean no
+        // device has it (an unsynced device can hold a block under a
+        // deterministic id), so nothing is deleted here: the sync above
+        // uploads every block this device holds, and a miss is retried.
+        throw StateError('The server does not have this block yet. Try again.');
       }
+      final remoteWeeks =
+          (result['weeks'] as List? ?? const [])
+              .map((w) => Map<String, dynamic>.from(w as Map))
+              .toList();
+      await _applyRow(
+        'training_blocks',
+        Map<String, dynamic>.from(result['block'] as Map),
+        user,
+      );
+      for (final week in remoteWeeks) {
+        await _applyRow('training_weeks', week, user);
+      }
+      // Weeks the server never saw (allocated here, not yet uploaded) are
+      // part of the deleted block too.
+      final stored = HiveService.getTrainingBlockById(blockId);
+      await tombstoneTrainingBlockLocally(
+        blockId,
+        at: stored?.deletedAt,
+        onlyLiveWeeks: true,
+      );
       await HiveService.flushTrainingData();
     });
     _changes.add(null);
@@ -408,8 +451,14 @@ class SyncService {
       final previous = _schemaByUser[user] ?? 0;
       _schemaByUser[user] = schema;
       final prefs = await _checked(SharedPreferences.getInstance(), account);
-      if (schema > (prefs.getInt(_schemaKey(user)) ?? 0)) {
+      // The last level negotiated, not the highest: a server which can no
+      // longer offer 4 must not leave this device offering shortening after a
+      // restart.
+      if (schema != prefs.getInt(_schemaKey(user))) {
         await _checked(prefs.setInt(_schemaKey(user), schema), account);
+      }
+      if (schema < 4) {
+        await _checked(_dropDurationClocks(user, account), account);
       }
       if (schema != previous) _changes.add(null);
       final lastFull = DateTime.tryParse(
@@ -966,17 +1015,6 @@ class SyncService {
         ),
         (count: remoteCount, changedAt: clockAware ? remoteClock : null),
       );
-      if (!clockAware) {
-        // The clock cannot change the outcome here; keep the one that goes
-        // with the surviving count.
-        merged = (
-          count: merged.count,
-          changedAt:
-              merged.count == localCount
-                  ? block.plannedWeekCountUpdatedAt
-                  : null,
-        );
-      }
       final differsFromRemote =
           merged.count != remoteCount ||
           (clockAware && !_sameInstant(merged.changedAt, remoteClock));

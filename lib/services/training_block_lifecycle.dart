@@ -95,3 +95,15 @@ BlockDeletionBlocker? blockDeletionBlocker(
   }
   return null;
 }
+
+/// The duration clock for a change of a block's planned length at [at], or null
+/// where no clock may exist. A clock is meaningful only for local-only data
+/// ([owner] null) or an account whose server resolves length on it
+/// ([lifecycleAvailable], training schema 4). Below that the server keeps the
+/// larger count and ignores the clock, so a stamped clock would only wait to
+/// beat a clock-less write made later by an older app.
+DateTime? stampDurationClock(
+  DateTime at, {
+  required String? owner,
+  required bool Function(String? owner) lifecycleAvailable,
+}) => owner == null || lifecycleAvailable(owner) ? at : null;

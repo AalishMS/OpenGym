@@ -9,6 +9,7 @@ import '../models/workout_plan.dart';
 import '../models/workout_progress.dart';
 import '../models/workout_session.dart';
 import '../utils/training_block_identity.dart';
+import 'sync_service.dart';
 import 'training_week_choices.dart';
 
 /// A validated value used by normalization, backup and replacement recovery.
@@ -75,7 +76,10 @@ class TrainingBlockGraph {
       splitId: splitId,
       name: 'Block 1',
       plannedWeekCount: weekCount,
-      plannedWeekCountUpdatedAt: now,
+      plannedWeekCountUpdatedAt: SyncService.instance.durationClockFor(
+        ownerId,
+        now,
+      ),
       position: 0,
       createdAt: now,
       updatedAt: now,

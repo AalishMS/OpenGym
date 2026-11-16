@@ -264,7 +264,10 @@ class TrainingBlockRestore {
         blocks: [
           for (final r in imported.blocks)
             r.copyWith(
-              plannedWeekCountUpdatedAt: now,
+              plannedWeekCountUpdatedAt: SyncService.instance.durationClockFor(
+                owner,
+                now,
+              ),
               updatedAt: now,
               dirty: true,
             ),

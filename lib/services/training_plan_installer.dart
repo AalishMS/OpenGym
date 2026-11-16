@@ -2,6 +2,7 @@ import '../models/split.dart';
 import '../models/training_block.dart';
 import '../models/workout_plan.dart';
 import 'hive_service.dart';
+import 'sync_service.dart';
 import 'training_block_migration.dart';
 import 'training_block_restore.dart';
 
@@ -69,7 +70,8 @@ Future<void> installTrainingPlansUnderGate({
             if (b.id == block.id)
               b.copyWith(
                 plannedWeekCount: initialBlockWeekCount,
-                plannedWeekCountUpdatedAt: raisedAt,
+                plannedWeekCountUpdatedAt: SyncService.instance
+                    .durationClockFor(ownerId, raisedAt),
                 updatedAt: raisedAt,
                 dirty: true,
               )
