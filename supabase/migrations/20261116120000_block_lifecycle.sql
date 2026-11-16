@@ -3,6 +3,12 @@
 -- Installation alone does not upgrade any account: schema 1-3 writers never send
 -- the clock, so they keep the grow-only duration rule until their account is
 -- activated at 4 (which fences those writers off with PT426).
+
+-- Both ALTERs need a brief exclusive lock. Give up rather than queue behind a
+-- long transaction and hold every other request on these tables behind us;
+-- the file is safe to run again.
+set lock_timeout = '5s';
+
 alter table public.training_blocks
   add column if not exists planned_week_count_updated_at timestamptz;
 alter table public.account_training_capabilities
@@ -294,4 +300,5 @@ end
 $$;
 revoke all on function public.delete_training_block(uuid) from public, anon;
 grant execute on function public.delete_training_block(uuid) to authenticated;
+reset lock_timeout;
 notify pgrst, 'reload schema';
