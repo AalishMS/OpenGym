@@ -1,4 +1,5 @@
 import '../models/split.dart';
+import '../models/training_block.dart';
 import '../models/workout_plan.dart';
 import 'hive_service.dart';
 import 'training_block_migration.dart';
@@ -16,8 +17,12 @@ Future<void> installTrainingPlansUnderGate({
   Future<void> Function(String phase)? onPhase,
 }) async {
   if (initialBlockWeekCount != null &&
-      (split == null || initialBlockWeekCount < 1 || initialBlockWeekCount > 52)) {
-    throw ArgumentError('An initial block needs a split and 1–52 weeks.');
+      (split == null ||
+          initialBlockWeekCount < 1 ||
+          initialBlockWeekCount > kMaxBlockWeeks)) {
+    throw ArgumentError(
+      'An initial block needs a split and 1–$kMaxBlockWeeks weeks.',
+    );
   }
   await HiveService.recoverTrainingOperations(ownerId: ownerId);
   final current = HiveService.readTrainingGraph(ownerId: ownerId);
@@ -40,25 +45,37 @@ Future<void> installTrainingPlansUnderGate({
       )
       .ownedBy(ownerId);
   for (final p in plans.values.where((p) => p.deletedAt == null)) {
-    input = input.ensureNewStructure(p.splitId!);
+    // A split that gets no block yet is bootstrapped at the requested length;
+    // other splits take the default.
+    input =
+        p.splitId == split?.id && initialBlockWeekCount != null
+            ? input.ensureNewStructure(
+              p.splitId!,
+              weekCount: initialBlockWeekCount,
+            )
+            : input.ensureNewStructure(p.splitId!);
   }
   if (initialBlockWeekCount != null) {
     final block = input.blocks.singleWhere(
       (b) => b.splitId == split!.id && b.deletedAt == null,
     );
-    input = input.copyWith(
-      blocks: [
-        for (final b in input.blocks)
-          if (b.id == block.id)
-            b.copyWith(
-              plannedWeekCount: initialBlockWeekCount,
-              updatedAt: DateTime.now(),
-              dirty: true,
-            )
-          else
-            b,
-      ],
-    );
+    // A block that already existed (a reused default split) is grow-only,
+    // like every block length: it keeps a larger count than requested.
+    if ((block.plannedWeekCount ?? 1) < initialBlockWeekCount) {
+      input = input.copyWith(
+        blocks: [
+          for (final b in input.blocks)
+            if (b.id == block.id)
+              b.copyWith(
+                plannedWeekCount: initialBlockWeekCount,
+                updatedAt: DateTime.now(),
+                dirty: true,
+              )
+            else
+              b,
+        ],
+      );
+    }
   }
   var desired = TrainingBlockMigration.prepareGraph(
     input,

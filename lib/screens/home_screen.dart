@@ -30,6 +30,7 @@ import '../widgets/home/up_next_card.dart';
 import '../widgets/persistence_dialog.dart';
 import '../widgets/splits/preset_browser_dialog.dart';
 import '../widgets/splits/split_switcher.dart';
+import '../widgets/workout/training_block_actions.dart';
 import '../widgets/workout/training_block_dialogs.dart';
 import 'plan_editor_screen.dart';
 
@@ -641,17 +642,22 @@ class _HomeScreenState extends State<HomeScreen> {
                           plan.splitId ??
                           context.read<SplitProvider?>()?.activeSplitId;
                       if (splitId == null) return;
-                      final blocks = HiveService.blocksForSplit(splitId);
+                      final blockActions = TrainingBlockActions(
+                        context: () => context,
+                        splitId: splitId,
+                        ownerId:
+                            () =>
+                                plan.userId ??
+                                TrainingBlockActions.splitOwner(splitId),
+                      );
+                      final snapshot = blockActions.load();
                       final selected = await TrainingBlockDialogs.startingWeek(
                         context,
-                        blocks: blocks,
-                        weeksByBlock: {
-                          for (final b in blocks)
-                            b.id: HiveService.startingWeeksForBlock(
-                              splitId,
-                              b.id,
-                            ),
-                        },
+                        blocks: snapshot.blocks,
+                        weeksByBlock: snapshot.weeksByBlock,
+                        load: blockActions.load,
+                        onCreateBlock: blockActions.create,
+                        onEditBlock: blockActions.edit,
                       );
                       if (selected == null || !context.mounted) return;
                       final copyPlan = WorkoutPlan(

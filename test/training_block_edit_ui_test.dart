@@ -12,7 +12,9 @@ import 'package:gymapp/models/workout_progress.dart';
 import 'package:gymapp/providers/split_provider.dart';
 import 'package:gymapp/providers/training_block_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
+import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/repositories/training_block_repository.dart';
+import 'package:gymapp/screens/home_screen.dart';
 import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/training_block_migration.dart';
@@ -343,6 +345,80 @@ void main() {
         await tester.tap(find.byTooltip('Back'));
         await tester.pumpAndSettle();
         expect(find.text('Discard changes?'), findsNothing);
+      },
+    );
+
+    editorTest(
+      'home duplicate plan: make a block in the sheet, pick a week, copy into it',
+      (tester) async {
+        tester.view.devicePixelRatio = 1;
+        tester.view.physicalSize = const Size(400, 880);
+        addTearDown(tester.view.reset);
+        final original = WorkoutPlan(
+          id: 'p',
+          splitId: 's',
+          name: 'Push',
+          exercises: [ExerciseTemplate(name: 'Squat', sets: 1)],
+        );
+        await tester.runAsync(() => HiveService.createPlan(original));
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider(
+                create: (_) => SplitProvider(userIdProvider: () => null),
+              ),
+              ChangeNotifierProvider(
+                create: (c) => WorkoutPlanProvider(c.read<SplitProvider>()),
+              ),
+              ChangeNotifierProvider(create: (_) => WorkoutSessionProvider()),
+              ChangeNotifierProvider(
+                create:
+                    (c) => TrainingBlockProvider(
+                      splitProvider: c.read<SplitProvider>(),
+                      ownerId: () => null,
+                    ),
+              ),
+            ],
+            child: MaterialApp(
+              theme: buildTheme(const Color(0xFF008D8D), Brightness.light),
+              home: const HomeScreen(),
+            ),
+          ),
+        );
+        await pumpWithStorage(tester);
+        await tester.tap(find.text('Manage'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Plan actions'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Duplicate plan'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Create block'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.bySemanticsLabel('Block name'), 'Power');
+        await tester.tap(find.text('Create'));
+        await pumpWithStorage(tester);
+        expect(find.text('Week 4'), findsOneWidget);
+        await tester.tap(find.text('Week 3'));
+        await tester.pumpAndSettle();
+        // Choosing the week starts the copy at once, behind a progress dialog.
+        await tester.runAsync(() async {
+          await tester.tap(find.text('Use this week'));
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        });
+        await pumpWithStorage(tester);
+        final copy = HiveService.getPlans(
+          splitId: 's',
+        ).singleWhere((p) => p.name == 'Push (Copy)');
+        final progress = HiveService.progressForPlan('s', copy.id!)!;
+        final week = HiveService.getTrainingWeekById(progress.activeWeekId)!;
+        expect(HiveService.getTrainingBlockById(week.blockId)!.name, 'Power');
+        expect(week.number, 3);
+        expect(progress.state, WorkoutProgressState.ready);
+        expect(
+          HiveService.readTrainingGraph(ownerId: null).validate,
+          returnsNormally,
+        );
       },
     );
 

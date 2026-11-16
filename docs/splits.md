@@ -38,7 +38,8 @@ data across every split without deleting the split profiles.
 
 ## Blocks and workout progress
 
-A new workspace supplies Block 1 / Week 1. Blocks and week identities are
+A new workspace supplies Block 1 with an intended length of four weeks
+(`kDefaultBlockWeeks`), allocating only Week 1. Blocks and week identities are
 shared; available weeks and active progress are independent for each workout.
 A block's chosen length is its intended duration, not a request to allocate
 all weeks upfront. A four-week block starts with Week 1. Logging Push creates
@@ -57,7 +58,8 @@ allocation deferred until saving; existing plan edits retain their position.
 Create, edit (rename and extend) and reorder blocks, or extend a block at its
 boundary. Blocks can be created and edited from the workout screen's block menu
 and from the plan editor (the new-plan starting-week sheet, and the *Training
-block* field when editing a plan). A block's planned length is grow-only: weeks
+block* field when editing a plan), and from Home's *Duplicate plan* sheet,
+which is the same starting-week sheet. A block's planned length is grow-only: weeks
 can be added but never removed, and extending allocates no week rows. Individual
 block/week deletion and week rename/reorder are unavailable. History still
 includes every completed live session by date across blocks, even when its

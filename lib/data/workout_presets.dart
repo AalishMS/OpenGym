@@ -1,5 +1,6 @@
 import '../models/exercise_template.dart';
 import '../models/set_template.dart';
+import '../models/training_block.dart';
 
 enum WorkoutPresetGoal { hypertrophy, strength, hybrid }
 
@@ -17,6 +18,9 @@ class WorkoutPreset {
   final List<int?> scheduleSlots;
   final List<WorkoutPresetPlan> plans;
 
+  /// Intended length of the Block 1 the preset installs.
+  final int blockWeeks;
+
   const WorkoutPreset({
     required this.id,
     required this.version,
@@ -30,6 +34,7 @@ class WorkoutPreset {
     required this.schedule,
     required this.scheduleSlots,
     required this.plans,
+    this.blockWeeks = kDefaultBlockWeeks,
   });
 
   int get days => plans.length;

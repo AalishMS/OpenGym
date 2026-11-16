@@ -12,9 +12,12 @@ import 'package:gymapp/models/split_preference.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_progress.dart';
 import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/models/training_block.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/services/split_install_target.dart';
 import 'package:gymapp/services/training_block_migration.dart';
 import 'package:gymapp/services/workout_progression_service.dart';
+import 'package:gymapp/repositories/split_repository.dart';
 import 'package:gymapp/repositories/training_block_repository.dart';
 
 import 'support/hive_test_harness.dart';
@@ -220,7 +223,11 @@ void main() {
   });
 
   for (final preset in workoutPresets) {
-    test('${preset.id} starts Block 1 with four intended weeks', () async {
+    test('${preset.id} ships a four-week block', () {
+      expect(preset.blockWeeks, 4);
+    });
+
+    test('${preset.id} starts Block 1 with its own block length', () async {
       final result = await const WorkoutPresetInstaller().install(
         preset: preset,
         userId: userId,
@@ -229,7 +236,7 @@ void main() {
       final repo = TrainingBlockRepository(ownerId: () => userId);
       final block = repo.blocksForSplit(result.splitId).single;
       expect(block.name, 'Block 1');
-      expect(block.plannedWeekCount, 4);
+      expect(block.plannedWeekCount, preset.blockWeeks);
       final first = repo.weeksForBlock(result.splitId, block.id).single;
       expect(first.number, 1);
       for (final plan in HiveService.getPlans(splitId: result.splitId)) {
@@ -241,22 +248,143 @@ void main() {
     });
   }
 
-  test('reused bootstrap block gets the four-week preset length', () async {
-    final id = await _seedDefault(userId);
-    await TrainingBlockMigration().normalize(ownerId: userId);
-    final original = HiveService.blocksForSplit(id).single;
-    expect(original.plannedWeekCount, 1);
-    final result = await const WorkoutPresetInstaller().install(
-      preset: _preset('HYP-FB-3'),
-      userId: userId,
-      maxSplits: 5,
-    );
-    expect(result.reusedDefaultSplit, isTrue);
-    final block = HiveService.blocksForSplit(id).single;
-    expect(block.id, original.id);
-    expect(block.plannedWeekCount, 4);
-    expect(block.dirty, isTrue);
-    expect(HiveService.weeksForBlock(id, block.id), hasLength(1));
+  test(
+    'reused legacy one-week bootstrap block gets the preset length',
+    () async {
+      final id = await _seedDefault(userId);
+      await TrainingBlockMigration().normalize(ownerId: userId);
+      final original = HiveService.blocksForSplit(id).single;
+      expect(original.plannedWeekCount, 1);
+      final result = await const WorkoutPresetInstaller().install(
+        preset: _preset('HYP-FB-3'),
+        userId: userId,
+        maxSplits: 5,
+      );
+      expect(result.reusedDefaultSplit, isTrue);
+      final block = HiveService.blocksForSplit(id).single;
+      expect(block.id, original.id);
+      expect(block.plannedWeekCount, 4);
+      expect(block.dirty, isTrue);
+      expect(HiveService.weeksForBlock(id, block.id), hasLength(1));
+    },
+  );
+
+  test(
+    'a new custom split and a plan into a block-less split start at four weeks',
+    () async {
+      final now = DateTime(2026);
+      await SplitRepository().upsertSplit(
+        Split(id: 'custom', name: 'Travel', userId: userId, createdAt: now),
+      );
+      expect(
+        HiveService.blocksForSplit('custom').single.plannedWeekCount,
+        kDefaultBlockWeeks,
+      );
+      await HiveService.putSplitRaw(
+        Split(id: 'bare', name: 'Bare', userId: userId, createdAt: now),
+      );
+      await HiveService.createPlan(
+        WorkoutPlan(
+          id: 'bare-plan',
+          splitId: 'bare',
+          name: 'Push',
+          exercises: [ExerciseTemplate(name: 'Squat', sets: 1)],
+        ),
+      );
+      expect(
+        HiveService.blocksForSplit('bare').single.plannedWeekCount,
+        kDefaultBlockWeeks,
+      );
+    },
+  );
+
+  group('a preset sets its own block length', () {
+    WorkoutPreset withWeeks(int weeks) {
+      final base = _preset('HYP-FB-3');
+      return WorkoutPreset(
+        id: 'TEST-$weeks',
+        version: base.version,
+        name: base.name,
+        installName: base.installName,
+        goal: base.goal,
+        splitStyle: base.splitStyle,
+        bestFit: base.bestFit,
+        duration: base.duration,
+        summary: base.summary,
+        schedule: base.schedule,
+        scheduleSlots: base.scheduleSlots,
+        plans: base.plans,
+        blockWeeks: weeks,
+      );
+    }
+
+    Future<int?> installed(WorkoutPreset preset) async {
+      final result = await const WorkoutPresetInstaller().install(
+        preset: preset,
+        userId: userId,
+        maxSplits: 5,
+      );
+      final block = HiveService.blocksForSplit(result.splitId).single;
+      expect(block.name, 'Block 1');
+      expect(HiveService.weeksForBlock(result.splitId, block.id), hasLength(1));
+      HiveService.readTrainingGraph(ownerId: userId).validate();
+      return block.plannedWeekCount;
+    }
+
+    // The deterministic default split, normalized, with a stored length.
+    Future<void> seedDefaultBlock(int weeks) async {
+      final id = await _seedDefault(userId);
+      await TrainingBlockMigration().normalize(ownerId: userId);
+      final block = HiveService.blocksForSplit(id).single;
+      await HiveService.putTrainingBlockRaw(
+        block.copyWith(plannedWeekCount: weeks),
+      );
+      expect(
+        SplitInstallTarget.isUntouchedDefault(
+          HiveService.getSplitById(id),
+          userId,
+        ),
+        isTrue,
+      );
+    }
+
+    for (final weeks in [6, 3]) {
+      test('new split gets exactly $weeks weeks', () async {
+        expect(await installed(withWeeks(weeks)), weeks);
+      });
+    }
+
+    test('rejects a length outside 1 to $kMaxBlockWeeks', () async {
+      for (final weeks in [0, -1, kMaxBlockWeeks + 1]) {
+        await expectLater(
+          const WorkoutPresetInstaller().install(
+            preset: withWeeks(weeks),
+            userId: userId,
+            maxSplits: 5,
+          ),
+          throwsA(isA<FormatException>()),
+          reason: '$weeks',
+        );
+      }
+      expect(HiveService.getSplits(), isEmpty);
+    });
+
+    for (final weeks in [6, 3]) {
+      test('reused legacy one-week default grows to $weeks', () async {
+        await seedDefaultBlock(1);
+        expect(await installed(withWeeks(weeks)), weeks);
+      });
+    }
+
+    test('reused four-week default grows to 6', () async {
+      await seedDefaultBlock(4);
+      expect(await installed(withWeeks(6)), 6);
+    });
+
+    test('reused four-week default keeps its larger length for 3', () async {
+      await seedDefaultBlock(4);
+      expect(await installed(withWeeks(3)), 4);
+    });
   });
 
   for (final createBlock in [false, true]) {

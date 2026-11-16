@@ -13,9 +13,7 @@ import '../navigation/app_navigation_observer.dart';
 import '../providers/settings_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/split_provider.dart';
-import '../repositories/training_block_repository.dart';
 import '../services/hive_service.dart';
-import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../theme/breakpoints.dart';
@@ -28,6 +26,7 @@ import '../widgets/workout/set_entry_table.dart';
 import '../utils/set_history.dart';
 import '../utils/weight_units.dart';
 import '../widgets/workout/workout_dialogs.dart';
+import '../widgets/workout/training_block_actions.dart';
 import '../widgets/workout/training_block_dialogs.dart';
 import '../models/training_block.dart';
 import '../models/training_week.dart';
@@ -186,44 +185,13 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
 
   /// Block changes write straight to storage, outside this form's Save and
   /// Discard, so they never touch the dirty signature.
-  Future<T> _blockMutation<T>(Future<T> Function() write) async {
-    try {
-      return await write();
-    } finally {
-      // Also after a failure: a recovered creation can have written a block.
-      if (mounted) {
-        context.read<TrainingBlockProvider?>()?.reload();
-        setState(() {});
-      }
-      SyncService.instance.scheduleSync();
-    }
-  }
-
-  TrainingBlockRepository get _blockRepository => TrainingBlockRepository(
+  TrainingBlockActions get _blockActions => TrainingBlockActions(
+    context: () => context,
+    splitId: _splitId!,
     ownerId:
         () =>
             widget.plan?.userId ?? HiveService.getSplitById(_splitId!)?.userId,
-  );
-
-  Future<TrainingBlock> _createBlock(String name, int count) => _blockMutation(
-    () => _blockRepository.createBlock(
-      splitId: _splitId!,
-      name: name,
-      weekCount: count,
-    ),
-  );
-
-  Future<TrainingBlock> _editBlock(
-    TrainingBlock block,
-    String name,
-    int count,
-  ) => _blockMutation(
-    () => _blockRepository.updateBlock(
-      splitId: _splitId!,
-      blockId: block.id,
-      name: name,
-      weekCount: count,
-    ),
+    onChanged: () => setState(() {}),
   );
 
   Future<void> _chooseStart() async {
@@ -233,8 +201,9 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
       weeksByBlock: _startingWeeks,
       selectedWeekId: _startingWeekId,
       load: _loadBlocks,
-      onCreateBlock: _createBlock,
-      onEditBlock: _editBlock,
+      onCreateBlock: (name, count) => _blockActions.create(name, count),
+      onEditBlock:
+          (block, name, count) => _blockActions.edit(block, name, count),
     );
     if (chosen != null && mounted) setState(() => _startingWeekId = chosen);
   }
@@ -274,8 +243,8 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   Future<void> _manageBlocks() => TrainingBlockDialogs.manage(
     context,
     load: _loadBlocks,
-    onCreateBlock: _createBlock,
-    onEditBlock: _editBlock,
+    onCreateBlock: (name, count) => _blockActions.create(name, count),
+    onEditBlock: (block, name, count) => _blockActions.edit(block, name, count),
     currentBlockId: _currentBlockId,
   );
 

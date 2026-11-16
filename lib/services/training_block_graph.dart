@@ -60,8 +60,12 @@ class TrainingBlockGraph {
   );
 
   /// New explicit structure uses random IDs; legacy normalization alone owns
-  /// deterministic block/week identities.
-  TrainingBlockGraph ensureNewStructure(String splitId) {
+  /// deterministic block/week identities. A new `Block 1` is [weekCount]
+  /// weeks long, [kDefaultBlockWeeks] unless the caller knows better.
+  TrainingBlockGraph ensureNewStructure(
+    String splitId, {
+    int weekCount = kDefaultBlockWeeks,
+  }) {
     if (blocks.any((b) => b.splitId == splitId && b.deletedAt == null)) {
       return this;
     }
@@ -70,7 +74,7 @@ class TrainingBlockGraph {
       id: _uuid.v4(),
       splitId: splitId,
       name: 'Block 1',
-      plannedWeekCount: 1,
+      plannedWeekCount: weekCount,
       position: 0,
       createdAt: now,
       updatedAt: now,

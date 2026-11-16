@@ -274,7 +274,8 @@ rows. Weeks and logged workouts always stay in the block.
 
 Blocks are managed in the plan editor as well as the workout screen. In a new
 plan, the starting-week sheet has *Create block* and a per-block *Edit block*
-button; a block created there is selected at Week 1 so a later planned week can
+button (Home's *Duplicate plan* sheet offers the same through
+`TrainingBlockActions`, shared by both screens); a block created there is selected at Week 1 so a later planned week can
 still be chosen before *Use this week*. Editing an existing plan shows a
 *Training block* field under the name (e.g. `Strength · Week 2 of 4`) that opens
 the same sheet in a management mode: blocks with their lengths, the plan's
@@ -352,7 +353,13 @@ hide tombstones; raw reads retain them for synchronization.
 Normalization durably writes an owner-scoped safety artifact before changing links. Legacy
 weeks use deterministic split/number IDs inside one Block 1, preserving gaps,
 all session IDs/values/timers, and orphan history. Explicit new structure uses
-UUID4. Empty splits receive Block 1 / Week 1. Bootstrap metadata has a neutral
+UUID4. Empty splits receive Block 1 / Week 1; a new split's Block 1 has an
+intended length of four weeks (`kDefaultBlockWeeks`), whether it comes from a
+custom split, a first plan, or the Coach. A default split bootstrapped before
+that keeps its one-week Block 1, and both count as untouched for reuse (the
+check looks at ids, names, position and edit stamps, not at the length).
+New-structure blocks get random ids, so two devices' bootstraps never merge;
+a legacy block's deterministic id merges by maximum length. Bootstrap metadata has a neutral
 edit timestamp and cannot overwrite real structure/progress edits. Late legacy
 rows reserve their original labels; colliding new weeks rebase under the same
 ID with a journaled label update to linked session snapshots.
@@ -507,8 +514,12 @@ The app compiles a read-only catalog of workout programs from the reviewed
 preset research. Catalog metadata is never written to Hive or Supabase. Choosing
 a program copies its workout days into ordinary user-owned plans, with explicit
 positions so their schedule order survives synchronization. Every preset starts
-in Block 1 with an intended length of four weeks, allocating only Week 1 at
-installation. This also applies when reusing the untouched default split.
+in Block 1 with an intended length of its `blockWeeks` (four for every bundled
+preset; the length lives with the preset data), allocating only Week 1 at
+installation. A new split's Block 1 is created at that length. When the
+untouched default split is reused, its existing block grows to the preset's
+length but never shrinks, so a longer existing block keeps its length. The
+preset detail shows it as *Starts with* a *N-week block* before installing.
 Each workout advances independently through Week 4, then uses the block boundary
 prompt on its next ordinary entry to add a week or create a new block.
 Installation is an
