@@ -340,11 +340,14 @@ class ReplicaApi {
     return null;
   }
 
-  /// `link_session`, as amended: a tombstone is pinned to the stored link; when
-  /// a live session moves out of a tombstoned week its incoming completion
-  /// evidence replaces the stored one, but only if it is the stored evidence
-  /// pointed at the new week; in every other update the stored evidence is
-  /// kept. [storedForInsert] is the stored row the BEFORE INSERT pass looks up
+  /// `link_session`. At schema 4 as amended: a tombstone is pinned to the
+  /// stored link; when a live session moves out of a tombstoned week its
+  /// incoming completion evidence replaces the stored one, but only if it is
+  /// the stored evidence pointed at the new week; in every other update the
+  /// stored evidence is kept. An unmigrated server (schema 3) runs the original
+  /// trigger of migration 20261028072415: no pin, the stored evidence always
+  /// replaces the incoming one, and the link is validated against that.
+  /// [storedForInsert] is the stored row the BEFORE INSERT pass looks up
   /// by id. Returns the row to store, or the reason it is rejected.
   (Map<String, dynamic>?, String?) linkSession(
     Map<String, dynamic>? old,
@@ -359,7 +362,8 @@ class ReplicaApi {
     // is pinned to the stored link, week number and evidence, in the BEFORE
     // INSERT pass of an upsert too, which looks the stored row up by id.
     final stored = old ?? storedForInsert;
-    if (stored != null &&
+    if (serverSchema >= 4 &&
+        stored != null &&
         row['deleted_at'] != null &&
         stored['training_week_id'] != null) {
       final incomingData = row['data'] as Map;
@@ -424,6 +428,7 @@ class ReplicaApi {
       final oldData = old['data'] as Map?;
       final oldEvidence = oldData?['completionTransition'];
       final movedOutOfDeletedWeek =
+          serverSchema >= 4 &&
           old['training_week_id'] != row['training_week_id'] &&
           byId('training_weeks', old['training_week_id'])?['deleted_at'] !=
               null;
@@ -590,9 +595,11 @@ class ReplicaApi {
         var stored = incoming;
         var changed = true;
         if (old != null) {
-          // BEFORE UPDATE: a_training_lww first. A write which loses is a
-          // silent no-op, and the parents are not checked again unless the
-          // trigger's merged duration changed the stored row.
+          // BEFORE UPDATE: a_training_lww first. At schema 4 a write which
+          // loses is a silent no-op, and the parents are not checked again
+          // unless the trigger's merged duration changed the stored row. An
+          // unmigrated server returns the stored row from the trigger and the
+          // link and parent checks still run on it, so they can raise.
           // exercise_definitions has no such trigger and is overwritten.
           final result =
               table == 'training_blocks'
@@ -602,7 +609,7 @@ class ReplicaApi {
                   : keepNewest(table, old, incoming);
           stored = result.row;
           changed = !result.kept || jsonEncode(stored) != jsonEncode(old);
-          if (!changed) {
+          if (!changed && serverSchema >= 4) {
             saved.add(stored);
             continue;
           }
@@ -2168,10 +2175,10 @@ void main() {
       );
     }
 
-    for (final migrated in [true, false]) {
+    {
       test('work done offline in it is rescued into a successor and uploaded '
-          'parents first (migrated: $migrated)', () async {
-        api.serverSchema = migrated ? 4 : 3;
+          'parents first', () async {
+        api.serverSchema = 4;
         await setUpBlocks();
         await useBlockXOffline();
         serverDeletes(x.id);
@@ -2372,6 +2379,167 @@ void main() {
       expect(row['revision'], isNot(low));
       expect(HiveService.getAllWorkoutProgressRaw().single.dirty, isFalse);
       // Every replica derives the same values, so a second one agrees.
+      api.requests.clear();
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(
+        writeOrder().where((w) => w != 'activate_training_schema'),
+        isEmpty,
+      );
+    });
+
+    const completedId = '00000000-0000-4000-8000-0000000000a1';
+
+    /// The server holds completed session [completedId] live in X, then X and
+    /// its weeks are tombstoned without it, as another device's restore does.
+    Future<TrainingWeek> completedSessionInDeletedBlock() async {
+      await setUpBlocks();
+      final week2 = await repo.appendWeek(splitId, x.id);
+      await HiveService.putSessionRaw(completedInX(completedId, xWeek, week2));
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      serverDeletes(x.id);
+      return week2;
+    }
+
+    test('F1: against an unmigrated server nothing is rescued, because the '
+        'server would restore the stored evidence and refuse the relinked '
+        'session on every sync; the older cascade applies and sync '
+        'completes', () async {
+      api.serverSchema = 3;
+      await completedSessionInDeletedBlock();
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(SyncService.instance.blockLifecycleAvailable(owner), isFalse);
+      expect(
+        HiveService.getTrainingBlockById(rescuedTrainingBlockId(x.id)),
+        isNull,
+      );
+      // The session follows its deleted block, exactly as before rescue.
+      final local = HiveService.getSessionById(completedId)!;
+      expect(local.deletedAt, isNotNull);
+      expect(local.trainingWeekId, xWeek.id);
+      expect(
+        serverRow('workout_sessions', completedId)['deleted_at'],
+        isNotNull,
+      );
+      for (var i = 0; i < 2; i++) {
+        api.requests.clear();
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        expect(SyncService.instance.status, SyncStatus.synced);
+        expect(
+          writeOrder().where((w) => w != 'activate_training_schema'),
+          isEmpty,
+        );
+      }
+    });
+
+    test('F1: the same account later negotiating 4 has nothing left to '
+        'rescue and nothing throws', () async {
+      api.serverSchema = 3;
+      await completedSessionInDeletedBlock();
+      await SyncService.instance.syncNow();
+      api.serverSchema = 4;
+      api.accountSchema = null;
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(SyncService.instance.blockLifecycleAvailable(owner), isTrue);
+      expect(
+        HiveService.getTrainingBlockById(rescuedTrainingBlockId(x.id)),
+        isNull,
+      );
+      expect(HiveService.getSessionById(completedId)!.deletedAt, isNotNull);
+      api.requests.clear();
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(
+        writeOrder().where((w) => w != 'activate_training_schema'),
+        isEmpty,
+      );
+    });
+
+    test('F1: rows rescued at schema 4 stay rescued when a later cycle '
+        'negotiates 3, and nothing throws', () async {
+      api.serverSchema = 4;
+      await completedSessionInDeletedBlock();
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      final successor = rescuedTrainingBlockId(x.id);
+      expect(localBlock(successor).deletedAt, isNull);
+      api.serverSchema = 3;
+      api.accountSchema = null;
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(SyncService.instance.blockLifecycleAvailable(owner), isFalse);
+      expect(localBlock(successor).deletedAt, isNull);
+      expect(
+        HiveService.getSessionById(completedId)!.trainingWeekId,
+        lazyTrainingWeekId(splitId, successor, 1),
+      );
+      expect(HiveService.getSessionById(completedId)!.deletedAt, isNull);
+    });
+
+    test('F3: a completion whose progress write never happened still advances '
+        'the plan after its block is deleted remotely', () async {
+      api.serverSchema = 4;
+      await setUpBlocks();
+      final week2 = await repo.appendWeek(splitId, x.id);
+      const before = '00000000-0000-4000-8000-0000000000e1';
+      final progress = HiveService.getAllWorkoutProgressRaw().single;
+      await HiveService.putWorkoutProgressRaw(
+        progress.copyWith(
+          activeWeekId: xWeek.id,
+          availableWeekIds: [...?progress.availableWeekIds, xWeek.id],
+          revision: before,
+          updatedAt: DateTime.utc(2026, 11, 8),
+          dirty: true,
+        ),
+      );
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      // The workout was completed and its session written with evidence, then
+      // the app died before the progress row advanced.
+      final done = completedInX(completedId, xWeek, week2);
+      await HiveService.putSessionRaw(
+        done.copyWith(
+          completionTransition: {
+            ...done.completionTransition!,
+            'expectedRevision': before,
+          },
+        ),
+      );
+      expect(
+        HiveService.getAllWorkoutProgressRaw().single.activeWeekId,
+        xWeek.id,
+      );
+      serverDeletes(x.id);
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+
+      final successor = rescuedTrainingBlockId(x.id);
+      final to1 = lazyTrainingWeekId(splitId, successor, 1);
+      final to2 = lazyTrainingWeekId(splitId, successor, 2);
+      final advanced = HiveService.getAllWorkoutProgressRaw().single;
+      expect(advanced.activeWeekId, to2);
+      expect(advanced.state, WorkoutProgressState.ready);
+      expect(advanced.availableWeekIds, containsAll([to1, to2]));
+      expect(
+        advanced.revision,
+        rescuedProgressRevision(completedId, successor),
+      );
+      expect(advanced.dirty, isFalse);
+      expect(HiveService.getSessionById(completedId)!.trainingWeekId, to1);
+      final graph = HiveService.readTrainingGraph(ownerId: owner);
+      expect(graph.validate, returnsNormally);
+      // Preparing again changes nothing.
+      expect(
+        jsonEncode(
+          TrainingBlockMigration.prepareGraph(graph, rescue: true).toJson(),
+        ),
+        jsonEncode(graph.toJson()),
+      );
+      // The server took it all, and a further cycle has nothing to send.
+      final row = api.tables['workout_progress']!.single;
+      expect(row['active_week_id'], to2);
+      expect(row['revision'], advanced.revision);
       api.requests.clear();
       await SyncService.instance.syncNow(fullReconciliation: true);
       expect(

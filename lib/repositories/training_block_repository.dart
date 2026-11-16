@@ -225,11 +225,16 @@ class TrainingBlockRepository {
   /// can go down to [minimumWeekCount]; otherwise it is grow-only, because the
   /// server keeps the greater count and a shorter value could never stick.
   /// Week rows stay lazy; a plan allocates the next one when it reaches it.
+  ///
+  /// A null [weekCount] leaves the stored length alone: neither the count nor
+  /// its clock is written, so a rename cannot undo a length another device set
+  /// since the caller last read the block. Pass a count only when the user
+  /// chose one.
   Future<TrainingBlock> updateBlock({
     required String splitId,
     required String blockId,
     required String name,
-    required int weekCount,
+    int? weekCount,
   }) => SyncService.instance.runExclusiveLocalMutation(() async {
     final trimmed = HiveService.validateTrainingName(name);
     final owner = _owner();
@@ -237,6 +242,16 @@ class TrainingBlockRepository {
     // Finish interrupted structural writes first so the floor sees every week.
     await HiveService.recoverTrainingOperations(ownerId: owner);
     final block = HiveService.validateTrainingBlock(splitId, blockId, owner);
+    if (weekCount == null) {
+      if (trimmed == block.name) return block;
+      final renamed = block.copyWith(
+        name: trimmed,
+        updatedAt: DateTime.now(),
+        dirty: true,
+      );
+      await HiveService.putTrainingBlockRaw(renamed);
+      return renamed;
+    }
     final current = _currentCount(block);
     final minimum =
         _lifecycleAvailable(owner) ? _floor(block, current) : current;

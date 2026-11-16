@@ -109,7 +109,7 @@ void main() {
     testWidgets('edit pre-fills, enforces the minimum and saves name + count', (
       tester,
     ) async {
-      (String, int)? saved;
+      (String, int?)? saved;
       await open(
         tester,
         (c) => TrainingBlockDialogs.edit(
@@ -158,6 +158,50 @@ void main() {
       expect(saved, ('Power', 4));
     });
 
+    testWidgets('a save that left the weeks alone sends no length, even '
+        'after stepping away and back', (tester) async {
+      final saved = <(String, int?)>[];
+      await open(
+        tester,
+        (c) => TrainingBlockDialogs.edit(
+          c,
+          block(),
+          currentWeekCount: 3,
+          onSave: (name, count) async {
+            saved.add((name, count));
+            return block();
+          },
+        ),
+      );
+      await tester.enterText(find.bySemanticsLabel('Block name'), 'Power');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(saved, [('Power', null)]);
+
+      saved.clear();
+      await open(
+        tester,
+        (c) => TrainingBlockDialogs.edit(
+          c,
+          block(),
+          currentWeekCount: 3,
+          onSave: (name, count) async {
+            saved.add((name, count));
+            return block();
+          },
+        ),
+      );
+      await tester.tap(find.byTooltip('More weeks'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Fewer weeks'));
+      await tester.pumpAndSettle();
+      expect(weeksText(tester), '3');
+      await tester.enterText(find.bySemanticsLabel('Block name'), 'Power');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+      expect(saved, [('Power', null)]);
+    });
+
     testWidgets('edit says the block changed when its values are refused', (
       tester,
     ) async {
@@ -203,8 +247,8 @@ void main() {
         int? minimum,
         Future<void> Function()? onDelete,
         String? reason,
-        Future<TrainingBlock> Function(String, int)? onSave,
-        List<(String, int)>? saved,
+        Future<TrainingBlock> Function(String, int?)? onSave,
+        List<(String, int?)>? saved,
       }) async {
         TrainingBlockEditResult? result;
         var finished = false;
@@ -234,7 +278,7 @@ void main() {
       testWidgets('a lower minimum lets the block shrink to it and saves', (
         tester,
       ) async {
-        final saved = <(String, int)>[];
+        final saved = <(String, int?)>[];
         final result = await openEdit(
           tester,
           minimum: 2,
@@ -571,7 +615,7 @@ void main() {
       },
     );
 
-    Future<TrainingBlock> edit(TrainingBlock b, String name, int count) async {
+    Future<TrainingBlock> edit(TrainingBlock b, String name, int? count) async {
       final updated = b.copyWith(name: name, plannedWeekCount: count);
       stored[stored.indexWhere((x) => x.id == b.id)] = updated;
       return updated;
@@ -893,6 +937,62 @@ void main() {
         );
       },
     );
+
+    for (final other in [4, 8]) {
+      editorTest(
+        'a rename saved after a sync resized the block to $other keeps the '
+        'length the other device set',
+        (tester) async {
+          final strength = await seed(tester, 'Strength', 6);
+          final plan = WorkoutPlan(
+            id: 'p',
+            splitId: 's',
+            name: 'Push',
+            exercises: [ExerciseTemplate(name: 'Squat', sets: 1)],
+          );
+          await tester.runAsync(() async {
+            await HiveService.createPlan(
+              plan,
+              startingWeekId:
+                  HiveService.startingWeeksForBlock('s', strength.id)[1].id,
+            );
+          });
+          await pumpEditor(tester, plan: HiveService.getPlanById('p'));
+          await tester.tap(find.text('Training block'));
+          await tester.pumpAndSettle();
+          await tester.tap(find.byTooltip('Edit Strength'));
+          await tester.pumpAndSettle();
+          expect(weeksText(tester), '6');
+          // A sync brings another device's length while the dialog is open.
+          await tester.runAsync(
+            () => TrainingBlockRepository(ownerId: () => null).updateBlock(
+              splitId: 's',
+              blockId: strength.id,
+              name: 'Strength',
+              weekCount: other,
+            ),
+          );
+          final resized = HiveService.getTrainingBlockById(strength.id)!;
+          expect(resized.plannedWeekCount, other);
+          expect(resized.plannedWeekCountUpdatedAt, isNotNull);
+          await tester.enterText(find.bySemanticsLabel('Block name'), 'Power');
+          await tester.tap(
+            find.descendant(
+              of: find.byType(Dialog),
+              matching: find.text('Save'),
+            ),
+          );
+          await pumpWithStorage(tester);
+          final saved = HiveService.getTrainingBlockById(strength.id)!;
+          expect(saved.name, 'Power');
+          expect(saved.plannedWeekCount, other);
+          expect(
+            saved.plannedWeekCountUpdatedAt,
+            resized.plannedWeekCountUpdatedAt,
+          );
+        },
+      );
+    }
 
     editorTest(
       'edit mode: shows the current block and week, extends it, stays clean',

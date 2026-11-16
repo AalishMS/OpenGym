@@ -319,6 +319,7 @@ void main() {
         graph([
           session('DB Press', 20, 1, exerciseId: customId),
         ]).copyWith(exerciseDefinitions: [source]),
+        rescue: true,
       );
       await TrainingBlockRestore().replace(graph: original);
       await ExerciseCatalog.merge(customId, pressId);
@@ -431,6 +432,7 @@ void main() {
         graph([
           session('One', 20, 1, exerciseId: customId),
         ]).copyWith(exerciseDefinitions: [pending]),
+        rescue: true,
       );
       await TrainingBlockRestore().replace(graph: initial);
       await TrainingBlockMigration().normalize(ownerId: null);
@@ -530,6 +532,7 @@ void main() {
               const ExerciseDefinition(id: customId, name: 'DB Press'),
             ],
           ),
+          rescue: true,
         );
         original = original.copyWith(
           plans: [

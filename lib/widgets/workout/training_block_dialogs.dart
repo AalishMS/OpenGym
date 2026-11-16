@@ -107,7 +107,11 @@ abstract final class TrainingBlockDialogs {
     String? selectedWeekId,
     TrainingBlockSnapshot Function()? load,
     Future<TrainingBlock> Function(String name, int count)? onCreateBlock,
-    Future<TrainingBlock> Function(TrainingBlock block, String name, int count)?
+    Future<TrainingBlock> Function(
+      TrainingBlock block,
+      String name,
+      int? count,
+    )?
     onEditBlock,
     TrainingBlockLifecycle? lifecycle,
   }) => showModalBottomSheet<String>(
@@ -137,7 +141,7 @@ abstract final class TrainingBlockDialogs {
     required Future<TrainingBlock> Function(
       TrainingBlock block,
       String name,
-      int count,
+      int? count,
     )
     onEditBlock,
     String? currentBlockId,
@@ -172,7 +176,7 @@ abstract final class TrainingBlockDialogs {
             context: context,
             builder:
                 (_) => _BlockForm(
-                  onSave: onSave,
+                  onSave: (name, count) => onSave(name, count!),
                   initialWeekCount: initialWeekCount,
                 ),
           )
@@ -186,11 +190,16 @@ abstract final class TrainingBlockDialogs {
   /// then offers Delete block, disabled with [deleteUnavailableReason] beneath
   /// it when the block cannot be deleted. Without it the dialog keeps the
   /// grow-only behaviour and has no delete.
+  ///
+  /// [onSave] gets a null count when the user left the weeks as they opened
+  /// the dialog, meaning "keep the stored length": the block may have been
+  /// resized elsewhere while the dialog was open, and a rename must not undo
+  /// that.
   static Future<TrainingBlockEditResult?> edit(
     BuildContext context,
     TrainingBlock block, {
     required int currentWeekCount,
-    required Future<TrainingBlock> Function(String name, int count) onSave,
+    required Future<TrainingBlock> Function(String name, int? count) onSave,
     int? minimumWeekCount,
     Future<void> Function()? onDelete,
     String? deleteUnavailableReason,
@@ -471,7 +480,7 @@ class _BlockForm extends StatefulWidget {
 
   /// Whether this account can shorten and delete blocks (editing only).
   final bool lifecycle;
-  final Future<TrainingBlock> Function(String, int) onSave;
+  final Future<TrainingBlock> Function(String, int?) onSave;
   final Future<void> Function()? onDelete;
   final String? deleteUnavailableReason;
   const _BlockForm({
@@ -529,9 +538,13 @@ class _BlockFormState extends State<_BlockForm> {
       _error = null;
     });
     try {
+      final weeks = int.parse(_count.text);
+      // Creating always sends a length. Editing sends one only when the user
+      // changed it from what the dialog opened with, so a rename alone never
+      // writes the length.
       final result = await widget.onSave(
         _name.text.trim(),
-        int.parse(_count.text),
+        _creating || weeks != widget.initialWeekCount ? weeks : null,
       );
       if (mounted) {
         Navigator.pop(context, _creating ? result : TrainingBlockSaved(result));
@@ -1052,7 +1065,7 @@ class _StartingWeek extends StatefulWidget {
   final Future<TrainingBlock> Function(
     TrainingBlock block,
     String name,
-    int count,
+    int? count,
   )?
   onEditBlock;
   final TrainingBlockLifecycle? lifecycle;

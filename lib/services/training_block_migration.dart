@@ -150,7 +150,10 @@ class TrainingBlockMigration {
       await checkpoint(_ownerKey(ownerId), journal, 'snapshot');
       await HiveService.recoverTrainingOperations(ownerId: ownerId);
       final count = HiveService.getAllSessionsRaw().length;
-      final prepared = prepareGraph(_readGraph(ownerId));
+      final prepared = prepareGraph(
+        _readGraph(ownerId),
+        rescue: rescueAvailableFor(ownerId),
+      );
       for (final d in prepared.exerciseDefinitions) {
         if (jsonEncode(ExerciseCatalog.getById(d.id)?.toJson()) !=
             jsonEncode(d.toJson())) {
@@ -228,19 +231,36 @@ class TrainingBlockMigration {
     );
   }
 
-  /// Normalizes [input] into a valid graph. Rescuing live work out of a block
-  /// another replica deleted is applied first; it can never be the reason this
-  /// throws. If the graph with every rescue fails validation the blocks are
+  /// Whether work in [owner]'s data may be rescued out of a deleted block:
+  /// only where the uploads of a rescue are accepted, which is local-only data
+  /// or an account whose negotiated training schema is 4 or higher. A server
+  /// below 4 restores a stored session's evidence over the rescued one and
+  /// refuses the relinked row on every sync. An account whose level is not
+  /// known yet counts as below 4. Callers pass this as `rescue` for the graph
+  /// of the same owner.
+  static bool rescueAvailableFor(String? owner) =>
+      SyncService.instance.blockLifecycleAvailable(owner);
+
+  /// Normalizes [input] into a valid graph. With [rescue], rescuing live work
+  /// out of a block another replica deleted is applied first; it can never be
+  /// the reason this throws. Without it the result is exactly what the app did
+  /// before rescue existed: the live work in a deleted block is tombstoned
+  /// with it. [rescue] is a parameter, not read here, so this stays pure. If the graph with every rescue fails validation the blocks are
   /// rescued one at a time and a block is kept only if the graph still
   /// validates with it; one which does not is left to the older cascade and
   /// logged, and the other blocks stay rescued.
-  static TrainingBlockGraph prepareGraph(TrainingBlockGraph input) =>
-      prepareGraphReporting(input).graph;
+  static TrainingBlockGraph prepareGraph(
+    TrainingBlockGraph input, {
+    required bool rescue,
+  }) => prepareGraphReporting(input, rescue: rescue).graph;
 
   /// [prepareGraph] with a report of what the rescue did.
   @visibleForTesting
   static ({TrainingBlockGraph graph, BlockRescueReport report})
-  prepareGraphReporting(TrainingBlockGraph input) {
+  prepareGraphReporting(TrainingBlockGraph input, {bool rescue = true}) {
+    if (!rescue) {
+      return (graph: _prepareGraph(input), report: BlockRescueReport());
+    }
     final all = BlockRescueReport();
     try {
       final graph = _prepareGraph(input, report: all);
@@ -731,6 +751,25 @@ class TrainingBlockMigration {
     // Each pass can only move work off a deleted block, so this settles.
     for (var pass = 0; pass < 8; pass++) {
       var rescued = false;
+      // A completion whose progress write never happened is still pending: its
+      // evidence expects the progress row's current revision, which a rescue
+      // replaces. Settle those first, on a copy, so a rescued row carries the
+      // advance and one left to the cascade is untouched.
+      final settled = {
+        for (final p
+            in WorkoutProgressionService.reconcileGraph(
+              TrainingBlockGraph(
+                ownerId: ownerId,
+                splits: splits.values.toList(),
+                plans: plans.values.toList(),
+                sessions: sessions.values.toList(),
+                blocks: blocks.values.toList(),
+                weeks: weeks.values.toList(),
+                progress: progress.values.toList(),
+              ),
+            ).progress)
+          p.id: p,
+      };
       final deleted =
           blocks.values
               .where(
@@ -758,7 +797,7 @@ class TrainingBlockMigration {
                       xWeeks.containsKey(t['nextWeekId']));
             }).toList();
         final activeProgress =
-            progress.values
+            settled.values
                 .where(
                   (p) =>
                       p.deletedAt == null &&
@@ -772,7 +811,7 @@ class TrainingBlockMigration {
           continue;
         }
         final movedProgress =
-            progress.values
+            settled.values
                 .where(
                   (p) =>
                       p.deletedAt == null &&

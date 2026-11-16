@@ -83,6 +83,7 @@ Future<void> installTrainingPlansUnderGate({
   }
   var desired = TrainingBlockMigration.prepareGraph(
     input,
+    rescue: TrainingBlockMigration.rescueAvailableFor(ownerId),
   ).explicitPlanRevisions(
     plans.keys.where((id) => !current.plans.any((p) => p.id == id)).toSet(),
   );

@@ -64,7 +64,8 @@ class TrainingBlockActions {
         _repository.createBlock(splitId: splitId, name: name, weekCount: count),
   );
 
-  Future<TrainingBlock> edit(TrainingBlock block, String name, int count) =>
+  /// A null [count] keeps the block's stored length.
+  Future<TrainingBlock> edit(TrainingBlock block, String name, int? count) =>
       _mutate(
         () => _repository.updateBlock(
           splitId: splitId,

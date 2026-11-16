@@ -76,7 +76,9 @@ the block is in use on another device. Once an account is at schema 4, app
 versions that predate it stop syncing until updated. If another device deletes
 a block this device still uses (a workout logged in it, or a plan positioned in
 it), the live work moves into a successor block rather than being deleted with
-it. A block whose planned length is below its highest allocated week is healed
+it. This rescue applies to local-only data and to an account at schema 4; below
+schema 4 the older behaviour applies and the live work in the deleted block is
+deleted with it. A block whose planned length is below its highest allocated week is healed
 up to that week during normalization. Rescue keeps every live workout in the
 deleted block, including history of deleted plans, so a rescued block cannot be
 deleted while it holds them. If a block cannot be rescued cleanly the older

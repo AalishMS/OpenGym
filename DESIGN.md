@@ -424,7 +424,12 @@ and falls back to 3 against a server without
 unavailable. Deleting a block goes through a guarded RPC that refuses a split's
 last block and a block in use. A block deleted on another device while this one
 still has a workout in it or a plan positioned in it is rescued: that live work
-moves to a successor block with an ID derived from the deleted one. A block
+moves to a successor block with an ID derived from the deleted one. Rescue
+applies to local-only data and to an account whose negotiated schema is 4; below
+that (including an account whose level is not known yet) the older cascade
+applies, because a server without the migration refuses a relinked session on
+every sync. A completed workout whose progress write was interrupted is applied
+to its progress row before the rescue changes that row's revision. A block
 shorter than its highest allocated week is healed up to that week. Known limits:
 rescue keeps every live workout in the deleted block, including history of
 deleted plans, so a rescued block cannot be deleted while it holds them. Each

@@ -597,7 +597,7 @@ void main() {
     );
     String dump(TrainingBlockGraph g) => jsonEncode(g.toJson());
     TrainingBlockGraph prep(TrainingBlockGraph g) {
-      final out = TrainingBlockMigration.prepareGraph(g);
+      final out = TrainingBlockMigration.prepareGraph(g, rescue: true);
       out.validate();
       return out;
     }
@@ -1444,7 +1444,7 @@ void main() {
         TrainingBlockMigration.extraValidationForTesting =
             (_) => throw const FormatException('always');
         expect(
-          () => TrainingBlockMigration.prepareGraph(twoBlocks()),
+          () => TrainingBlockMigration.prepareGraph(twoBlocks(), rescue: true),
           throwsFormatException,
         );
         expect(logs.where((l) => l.contains('skipped')), isEmpty);

@@ -73,6 +73,42 @@ void main() {
       expect(stored(block.id).dirty, isTrue);
     });
 
+    for (final underneath in [4, 8]) {
+      test('a name-only update leaves a length another device set to '
+          '$underneath untouched, count and clock', () async {
+        final block = await newBlock(weeks: 6);
+        final clock = DateTime.utc(2026, 11, 5, 9);
+        await HiveService.putTrainingBlockRaw(
+          stored(block.id).copyWith(
+            plannedWeekCount: underneath,
+            plannedWeekCountUpdatedAt: clock,
+          ),
+        );
+        final updated = await repo.updateBlock(
+          splitId: splitId,
+          blockId: block.id,
+          name: 'Power',
+        );
+        expect(updated.name, 'Power');
+        expect(stored(block.id).name, 'Power');
+        expect(stored(block.id).plannedWeekCount, underneath);
+        expect(stored(block.id).plannedWeekCountUpdatedAt, clock);
+        expect(stored(block.id).dirty, isTrue);
+      });
+    }
+
+    test('a name-only update with an unchanged name is not written', () async {
+      final block = await newBlock();
+      final before = stored(block.id).updatedAt;
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      await repo.updateBlock(
+        splitId: splitId,
+        blockId: block.id,
+        name: 'Strength',
+      );
+      expect(stored(block.id).updatedAt, before);
+    });
+
     test('extends only, without allocating week rows', () async {
       final block = await newBlock(weeks: 2);
       final weeksBefore = repo.weeksForBlock(splitId, block.id).length;

@@ -19,6 +19,7 @@ class SplitRepository {
         }
         await HiveService.recoverTrainingOperations(ownerId: split.userId);
         final graph = TrainingBlockMigration.prepareGraph(
+          rescue: TrainingBlockMigration.rescueAvailableFor(split.userId),
           HiveService.readTrainingGraph(ownerId: split.userId)
               .ownedBy(split.userId)
               .copyWith(splits: [...HiveService.getAllSplitsRaw(), split])
