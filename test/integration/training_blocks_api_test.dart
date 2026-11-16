@@ -73,7 +73,11 @@ void main() {
       expect(HiveService.getAllTrainingWeeksRaw(), isNotEmpty);
       expect(HiveService.getAllWorkoutProgressRaw(), isNotEmpty);
       expect(HiveService.getAllSessionsRaw(), isNotEmpty);
-      expect(headers.every((h) => h == '3'), isTrue);
+      // Header 4 is tried first; a server without the block lifecycle
+      // migration refuses it and everything after uses 3.
+      final negotiated = headers.last;
+      expect(negotiated, anyOf('3', '4'));
+      expect(headers.skip(2).every((h) => h == negotiated), isTrue);
       final beforeCount = HiveService.getAllSessionsRaw().length;
       final template = HiveService.getAllSessionsRaw().first;
       final batch = List.generate(1003, (i) {
@@ -98,7 +102,7 @@ void main() {
         Uri.parse('http://127.0.0.1:55440/workout_sessions'),
         headers: {
           'Authorization': 'Bearer $_token',
-          'x-opengym-training-schema': '3',
+          'x-opengym-training-schema': negotiated!,
           'Content-Type': 'application/json',
           'Prefer': 'return=minimal',
         },

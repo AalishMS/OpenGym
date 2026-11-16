@@ -43,6 +43,13 @@ class TrainingBlock extends HiveObject {
   @HiveField(9)
   final int? plannedWeekCount;
 
+  /// When [plannedWeekCount] last changed on purpose (create, extend, shorten).
+  /// It is the duration's own clock: the newer clock wins, a tie keeps the
+  /// larger count, and null means "before this field existed". Renames and
+  /// reorders never touch it.
+  @HiveField(10)
+  final DateTime? plannedWeekCountUpdatedAt;
+
   TrainingBlock({
     required this.id,
     required this.splitId,
@@ -54,6 +61,7 @@ class TrainingBlock extends HiveObject {
     this.deletedAt,
     this.dirty,
     this.plannedWeekCount,
+    this.plannedWeekCountUpdatedAt,
   });
 
   TrainingBlock copyWith({
@@ -63,6 +71,7 @@ class TrainingBlock extends HiveObject {
     int? position,
     DateTime? createdAt,
     int? plannedWeekCount,
+    Object? plannedWeekCountUpdatedAt = _notProvided,
     Object? userId = _notProvided,
     Object? updatedAt = _notProvided,
     Object? deletedAt = _notProvided,
@@ -72,6 +81,10 @@ class TrainingBlock extends HiveObject {
     splitId: splitId ?? this.splitId,
     name: name ?? this.name,
     plannedWeekCount: plannedWeekCount ?? this.plannedWeekCount,
+    plannedWeekCountUpdatedAt:
+        identical(plannedWeekCountUpdatedAt, _notProvided)
+            ? this.plannedWeekCountUpdatedAt
+            : plannedWeekCountUpdatedAt as DateTime?,
     position: position ?? this.position,
     createdAt: createdAt ?? this.createdAt,
     userId: identical(userId, _notProvided) ? this.userId : userId as String?,
@@ -91,6 +104,7 @@ class TrainingBlock extends HiveObject {
     'splitId': splitId,
     'name': name,
     'plannedWeekCount': plannedWeekCount,
+    'plannedWeekCountUpdatedAt': plannedWeekCountUpdatedAt?.toIso8601String(),
     'position': position,
     'createdAt': createdAt.toIso8601String(),
     'userId': userId,
@@ -109,6 +123,10 @@ class TrainingBlock extends HiveObject {
       splitId: json['splitId'] as String,
       name: json['name'] as String,
       plannedWeekCount: json['plannedWeekCount'] as int?,
+      plannedWeekCountUpdatedAt:
+          json['plannedWeekCountUpdatedAt'] == null
+              ? null
+              : DateTime.parse(json['plannedWeekCountUpdatedAt'] as String),
       position: json['position'] as int,
       createdAt: DateTime.parse(json['createdAt'] as String),
       userId: json['userId'] as String?,
@@ -122,6 +140,37 @@ class TrainingBlock extends HiveObject {
               : DateTime.parse(json['deletedAt'] as String),
     );
   }
+}
+
+/// A block's length with the time it was last chosen.
+typedef BlockDuration = ({int? count, DateTime? changedAt});
+
+/// Resolves two versions of a block's duration, mirroring the server's
+/// `keep_newest_row`: the newer clock wins; on a tie (including null against
+/// null) the larger count wins; a null count never replaces a value. The
+/// result is symmetric and idempotent, so replicas converge.
+BlockDuration mergeBlockDuration(BlockDuration a, BlockDuration b) {
+  if (a.count == null) {
+    // Nothing to resolve; settle the clock the same way from either side.
+    return b.count == null && _compareClock(a.changedAt, b.changedAt) >= 0
+        ? a
+        : b;
+  }
+  if (b.count == null) return a;
+  final int cmp = _compareClock(a.changedAt, b.changedAt);
+  if (cmp > 0) return a;
+  if (cmp < 0) return b;
+  return (
+    count: a.count! >= b.count! ? a.count : b.count,
+    changedAt: a.changedAt ?? b.changedAt,
+  );
+}
+
+int _compareClock(DateTime? a, DateTime? b) {
+  if (a == null && b == null) return 0;
+  if (a == null) return -1;
+  if (b == null) return 1;
+  return a.compareTo(b);
 }
 
 const Object _notProvided = Object();

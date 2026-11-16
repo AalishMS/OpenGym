@@ -5,8 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'exercise_catalog.dart';
 import 'exercise_identity_migration.dart';
+import '../models/split.dart';
 import '../models/training_block.dart';
 import '../models/training_week.dart';
+import '../models/workout_plan.dart';
 import '../models/workout_progress.dart';
 import '../models/workout_session.dart';
 import 'training_recovery_snapshots.dart';
@@ -248,6 +250,15 @@ class TrainingBlockMigration {
         );
       }
     }
+    _rescueDeletedBlocks(
+      ownerId: input.ownerId,
+      splits: splits,
+      plans: plans,
+      blocks: blocks,
+      weeks: weeks,
+      sessions: sessions,
+      progress: progress,
+    );
     for (final w in weeks.values.toList()) {
       final parent = blocks[w.blockId]!;
       if (parent.deletedAt != null && w.deletedAt == null) {
@@ -516,6 +527,22 @@ class TrainingBlockMigration {
           );
       blocks[block.id] = block.copyWith(plannedWeekCount: count, dirty: true);
     }
+    // A shorter count can reach a replica which already allocated a later
+    // week. The count follows the allocated weeks; the clock and updatedAt stay
+    // so the larger count wins the tie everywhere.
+    for (final block in blocks.values.toList()) {
+      final count = block.plannedWeekCount;
+      if (block.deletedAt != null || count == null) continue;
+      final highest = weeks.values
+          .where((w) => w.blockId == block.id && w.deletedAt == null)
+          .fold<int>(0, (top, w) => w.number > top ? w.number : top);
+      if (count < highest) {
+        blocks[block.id] = block.copyWith(
+          plannedWeekCount: highest,
+          dirty: true,
+        );
+      }
+    }
     for (final p in progress.values.toList()) {
       if (p.availableWeekIds != null) continue;
       final reached = <String>{p.activeWeekId};
@@ -571,6 +598,210 @@ class TrainingBlockMigration {
     );
     graph.validate();
     return WorkoutProgressionService.reconcileGraph(graph);
+  }
+
+  /// A deleted block must never take live work with it. When a replica deleted
+  /// a block that this device still uses, the live sessions and progress of
+  /// live plans move into a successor block with an ID derived from the
+  /// deleted one, so every replica rescuing it chooses the same rows.
+  ///
+  /// Only a session in the block's weeks or a progress row whose active week is
+  /// in the block triggers a rescue. A progress row that merely lists a week of
+  /// the block as available does not: a user's own delete leaves such rows
+  /// behind and must stay deleted. Once a rescue runs, those entries move too.
+  static void _rescueDeletedBlocks({
+    required String? ownerId,
+    required Map<String, Split> splits,
+    required Map<String, WorkoutPlan> plans,
+    required Map<String, TrainingBlock> blocks,
+    required Map<String, TrainingWeek> weeks,
+    required Map<String, WorkoutSession> sessions,
+    required Map<String, WorkoutProgress> progress,
+  }) {
+    bool livePlan(String? id) =>
+        id != null && plans[id]?.deletedAt == null && plans.containsKey(id);
+    // Each pass can only move work off a deleted block, so this settles.
+    for (var pass = 0; pass < 8; pass++) {
+      var rescued = false;
+      final deleted =
+          blocks.values
+              .where(
+                (b) =>
+                    b.deletedAt != null &&
+                    splits[b.splitId]?.deletedAt == null &&
+                    splits.containsKey(b.splitId),
+              )
+              .toList()
+            ..sort((a, b) => a.id.compareTo(b.id));
+      for (final x in deleted) {
+        final xWeeks = {
+          for (final w in weeks.values)
+            if (w.blockId == x.id) w.id: w,
+        };
+        if (xWeeks.isEmpty) continue;
+        final movedSessions =
+            sessions.values.where((s) {
+              if (s.deletedAt != null || !livePlan(s.planId)) return false;
+              if (xWeeks.containsKey(s.trainingWeekId)) return true;
+              final t = s.completionTransition;
+              return t != null &&
+                  (xWeeks.containsKey(t['sourceWeekId']) ||
+                      xWeeks.containsKey(t['nextWeekId']));
+            }).toList();
+        final activeProgress =
+            progress.values
+                .where(
+                  (p) =>
+                      p.deletedAt == null &&
+                      livePlan(p.planId) &&
+                      xWeeks.containsKey(p.activeWeekId),
+                )
+                .toList();
+        if (movedSessions.isEmpty && activeProgress.isEmpty) continue;
+        final movedProgress =
+            progress.values
+                .where(
+                  (p) =>
+                      p.deletedAt == null &&
+                      livePlan(p.planId) &&
+                      (xWeeks.containsKey(p.activeWeekId) ||
+                          (p.availableWeekIds ?? const <String>[]).any(
+                            xWeeks.containsKey,
+                          )),
+                )
+                .toList();
+        final numbers = <int>{};
+        for (final s in movedSessions) {
+          final t = s.completionTransition;
+          for (final id in [
+            s.trainingWeekId,
+            t?['sourceWeekId'],
+            t?['nextWeekId'],
+          ]) {
+            if (xWeeks[id] case final w?) numbers.add(w.number);
+          }
+        }
+        for (final p in movedProgress) {
+          for (final id in [p.activeWeekId, ...?p.availableWeekIds]) {
+            if (xWeeks[id] case final w?) numbers.add(w.number);
+          }
+        }
+        final highest = numbers.reduce((a, b) => a > b ? a : b);
+        // Find the successor: the derived block, or the next derivation when
+        // that one (or one of the weeks it needs) is itself tombstoned.
+        var targetId = rescuedTrainingBlockId(x.id);
+        TrainingBlock? target;
+        late Map<int, String> weekIds;
+        for (var i = 0; i < 16; i++) {
+          final existing = blocks[targetId];
+          final candidate = <int, String>{};
+          var usable = existing == null || existing.deletedAt == null;
+          for (final n in numbers) {
+            if (!usable) break;
+            final live =
+                weeks.values
+                    .where(
+                      (w) =>
+                          w.blockId == targetId &&
+                          w.number == n &&
+                          w.deletedAt == null,
+                    )
+                    .toList()
+                  ..sort((a, b) => a.id.compareTo(b.id));
+            if (live.isNotEmpty) {
+              candidate[n] = live.first.id;
+              continue;
+            }
+            final lazy = lazyTrainingWeekId(x.splitId, targetId, n);
+            if (weeks[lazy] != null) {
+              usable = false;
+            } else {
+              candidate[n] = lazy;
+            }
+          }
+          if (usable) {
+            target = existing;
+            weekIds = candidate;
+            break;
+          }
+          targetId = rescuedTrainingBlockId(targetId);
+        }
+        if (weekIds.length != numbers.length) {
+          throw StateError('A rescued training block could not be derived.');
+        }
+        final planned = [
+          x.plannedWeekCount ?? 1,
+          highest,
+        ].reduce((a, b) => a > b ? a : b);
+        if (target == null) {
+          target = TrainingBlock(
+            id: targetId,
+            splitId: x.splitId,
+            name: x.name,
+            position: x.position,
+            createdAt: x.createdAt,
+            updatedAt: x.deletedAt,
+            userId: ownerId,
+            plannedWeekCount: planned,
+            plannedWeekCountUpdatedAt: x.plannedWeekCountUpdatedAt,
+            dirty: true,
+          );
+          blocks[targetId] = target;
+        } else if ((target.plannedWeekCount ?? 0) < highest) {
+          blocks[targetId] = target.copyWith(
+            plannedWeekCount: highest,
+            dirty: true,
+          );
+        }
+        for (final entry in weekIds.entries) {
+          if (weeks.containsKey(entry.value)) continue;
+          weeks[entry.value] = TrainingWeek(
+            id: entry.value,
+            splitId: x.splitId,
+            blockId: targetId,
+            number: entry.key,
+            createdAt: x.createdAt,
+            updatedAt: x.deletedAt,
+            userId: ownerId,
+            dirty: true,
+          );
+        }
+        String? remap(String? id) {
+          final w = xWeeks[id];
+          return w == null ? id : weekIds[w.number];
+        }
+
+        for (final s in movedSessions) {
+          final t = s.completionTransition;
+          sessions[s.id!] = s.copyWith(
+            trainingWeekId: remap(s.trainingWeekId),
+            completionTransition:
+                t == null
+                    ? null
+                    : {
+                      ...t,
+                      'sourceWeekId': remap(t['sourceWeekId'] as String?),
+                      'nextWeekId': remap(t['nextWeekId'] as String?),
+                    },
+            dirty: true,
+          );
+        }
+        for (final p in movedProgress) {
+          final available = <String>[];
+          for (final id in p.availableWeekIds ?? const <String>[]) {
+            final mapped = remap(id)!;
+            if (!available.contains(mapped)) available.add(mapped);
+          }
+          progress[p.id] = p.copyWith(
+            activeWeekId: remap(p.activeWeekId),
+            availableWeekIds: p.availableWeekIds == null ? null : available,
+            dirty: true,
+          );
+        }
+        rescued = true;
+      }
+      if (!rescued) return;
+    }
   }
 
   static int compareSessionRecency(WorkoutSession a, WorkoutSession b) {

@@ -299,6 +299,7 @@ class SampleDataSeeder {
         splitId: splitId,
         name: spec.name,
         plannedWeekCount: spec.plannedWeeks,
+        plannedWeekCountUpdatedAt: now,
         position: blockIndex,
         createdAt: created,
         userId: ownerId,

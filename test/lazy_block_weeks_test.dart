@@ -670,4 +670,116 @@ void main() {
       HiveService.readTrainingGraph(ownerId: null).validate();
     },
   );
+
+  group('block duration after a shorten', () {
+    late TrainingBlockRepository lifecycle;
+    setUp(() {
+      lifecycle = TrainingBlockRepository(
+        ownerId: () => null,
+        lifecycleAvailable: (_) => true,
+      );
+    });
+
+    Future<TrainingBlock> shorten(TrainingBlock block, int count) =>
+        lifecycle.updateBlock(
+          splitId: splitId,
+          blockId: block.id,
+          name: block.name,
+          weekCount: count,
+        );
+    TrainingBlock stored(String id) => HiveService.getTrainingBlockById(id)!;
+
+    test('shortening stops at the reached week, then advance ends at the new '
+        'limit', () async {
+      final block = await setupBlock(count: 6);
+      await logWeek('push', 'push-1');
+      expect(lifecycle.minimumWeekCount(splitId, block.id), 2);
+      await expectLater(shorten(block, 1), throwsArgumentError);
+      await shorten(block, 2);
+      expect(stored(block.id).plannedWeekCount, 2);
+      await logWeek('push', 'push-2');
+      expect(progress('push').state, WorkoutProgressState.awaitingBoundary);
+      // No Week 3 was allocated past the shortened end.
+      expect(repo.weeksForBlock(splitId, block.id).map((w) => w.number), [
+        1,
+        2,
+      ]);
+      expect(
+        HiveService.readTrainingGraph(ownerId: null).validate,
+        returnsNormally,
+      );
+    });
+
+    test(
+      'extending after a shorten continues the block with a newer clock',
+      () async {
+        final block = await setupBlock(count: 6);
+        await logWeek('push', 'push-1');
+        await shorten(block, 2);
+        final shortenedAt = stored(block.id).plannedWeekCountUpdatedAt!;
+        await logWeek('push', 'push-2');
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        final third = await WorkoutProgressionService(
+          ownerId: () => null,
+        ).extendBoundary(
+          planId: 'push',
+          expectedRevision: progress('push').revision,
+        );
+        expect(third.number, 3);
+        final extended = stored(block.id);
+        expect(extended.plannedWeekCount, 3);
+        expect(
+          extended.plannedWeekCountUpdatedAt!.isAfter(shortenedAt),
+          isTrue,
+        );
+        expect(progress('push').activeWeekId, third.id);
+        // And Edit block can lengthen it again past that.
+        await shorten(block, 6);
+        expect(stored(block.id).plannedWeekCount, 6);
+        expect(
+          stored(block.id).plannedWeekCountUpdatedAt!.isAfter(
+            extended.plannedWeekCountUpdatedAt!,
+          ),
+          isTrue,
+        );
+      },
+    );
+
+    test('a shorter count that reaches a device already past it is healed '
+        'up to the allocated week, keeping the clock', () async {
+      final block = await setupBlock(count: 6);
+      for (var n = 1; n <= 4; n++) {
+        await logWeek('push', 'push-$n');
+      }
+      expect(repo.weeksForBlock(splitId, block.id).last.number, 5);
+      final t2 = DateTime.utc(2026, 11, 20);
+      final pulledAt = DateTime.utc(2026, 11, 20, 1);
+      // What a pull of the other device's 6 -> 4 shorten leaves behind.
+      await HiveService.putTrainingBlockRaw(
+        stored(block.id).copyWith(
+          plannedWeekCount: 4,
+          plannedWeekCountUpdatedAt: t2,
+          updatedAt: pulledAt,
+          dirty: false,
+        ),
+      );
+      await TrainingBlockMigration().normalize(ownerId: null);
+      final healed = stored(block.id);
+      expect(healed.plannedWeekCount, 5);
+      expect(healed.plannedWeekCountUpdatedAt, t2);
+      expect(healed.updatedAt, pulledAt);
+      expect(healed.dirty, isTrue);
+      // The plan can finish Week 5 and wait at the boundary as usual.
+      await logWeek('push', 'push-5');
+      expect(progress('push').state, WorkoutProgressState.awaitingBoundary);
+      expect(
+        HiveService.readTrainingGraph(ownerId: null).validate,
+        returnsNormally,
+      );
+      // Healing is stable on a second pass.
+      final again = jsonEncode(stored(block.id).toJson());
+      await TrainingBlockMigration().normalize(ownerId: null);
+      expect(jsonEncode(stored(block.id).toJson()), again);
+    });
+  });
 }

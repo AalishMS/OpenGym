@@ -1,12 +1,18 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/models/split.dart';
 import 'package:gymapp/models/completion_transition.dart';
 import 'package:gymapp/models/training_block.dart';
 import 'package:gymapp/models/training_week.dart';
+import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_progress.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/repositories/training_block_repository.dart';
 import 'package:gymapp/services/hive_service.dart';
+import 'package:gymapp/services/sync_service.dart';
+import 'package:gymapp/services/training_block_lifecycle.dart';
+import 'package:gymapp/utils/training_block_identity.dart';
 import 'package:hive/hive.dart';
 
 import 'support/hive_test_harness.dart';
@@ -238,4 +244,280 @@ void main() {
       expect(repository.progressForPlan(splitId, 'p')!.revision, 'r');
     },
   );
+
+  group('the duration clock', () {
+    test(
+      'creating a block and appending a week stamp it; renames do not',
+      () async {
+        final block = await repository.createBlock(
+          splitId: splitId,
+          name: 'Clocked',
+          weekCount: 2,
+        );
+        final created = HiveService.getTrainingBlockById(block.id)!;
+        expect(created.plannedWeekCountUpdatedAt, created.createdAt);
+        // The clock survives a trip through the Hive adapter.
+        await Hive.box<TrainingBlock>(HiveService.trainingBlocksBox).close();
+        await Hive.openBox<TrainingBlock>(HiveService.trainingBlocksBox);
+        expect(
+          HiveService.getTrainingBlockById(block.id)!.plannedWeekCountUpdatedAt,
+          created.createdAt,
+        );
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        await repository.renameBlock(splitId, block.id, 'Renamed');
+        expect(
+          HiveService.getTrainingBlockById(block.id)!.plannedWeekCountUpdatedAt,
+          created.createdAt,
+        );
+        await repository.appendWeek(splitId, block.id);
+        await repository.appendWeek(splitId, block.id);
+        final extended = HiveService.getTrainingBlockById(block.id)!;
+        expect(extended.plannedWeekCount, 3);
+        expect(
+          extended.plannedWeekCountUpdatedAt!.isAfter(created.createdAt),
+          isTrue,
+        );
+        final stamped = extended.plannedWeekCountUpdatedAt;
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+        await repository.reorderBlocks(splitId, [
+          for (final b in repository.blocksForSplit(splitId).reversed) b.id,
+        ]);
+        expect(
+          HiveService.getTrainingBlockById(block.id)!.plannedWeekCountUpdatedAt,
+          stamped,
+        );
+      },
+    );
+  });
+
+  group('deleting a block on local-only data', () {
+    late TrainingBlock keep;
+    late TrainingBlock target;
+    late TrainingWeek targetWeek;
+
+    setUp(() async {
+      await HiveService.putPlanRaw(
+        WorkoutPlan(id: 'plan', name: 'Push', exercises: [], splitId: splitId),
+      );
+      keep = await repository.createBlock(
+        splitId: splitId,
+        name: 'Keep',
+        weekCount: 3,
+      );
+      target = await repository.createBlock(
+        splitId: splitId,
+        name: 'Target',
+        weekCount: 4,
+      );
+      await repository.appendWeek(splitId, target.id);
+      targetWeek = repository.weeksForBlock(splitId, target.id).first;
+      // The plan sits in the kept block.
+      final week = repository.weeksForBlock(splitId, keep.id).first;
+      await HiveService.putWorkoutProgressRaw(
+        WorkoutProgress(
+          id: workoutProgressId(splitId, 'plan'),
+          splitId: splitId,
+          planId: 'plan',
+          activeWeekId: week.id,
+          availableWeekIds: [week.id],
+          state: WorkoutProgressState.ready,
+          revision: 'rev',
+        ),
+      );
+    });
+
+    String snapshot() => jsonEncode({
+      'blocks':
+          HiveService.getAllTrainingBlocksRaw().map((b) => b.toJson()).toList(),
+      'weeks':
+          HiveService.getAllTrainingWeeksRaw().map((w) => w.toJson()).toList(),
+      'dirty': [
+        ...HiveService.getAllTrainingBlocksRaw().map((b) => b.dirty),
+        ...HiveService.getAllTrainingWeeksRaw().map((w) => w.dirty),
+      ],
+    });
+
+    test(
+      'tombstones the block and its weeks and leaves the rest alone',
+      () async {
+        final others = {
+          for (final b in HiveService.getAllTrainingBlocksRaw())
+            if (b.id != target.id) b.id: jsonEncode(b.toJson()),
+        };
+        await repository.deleteBlock(splitId: splitId, blockId: target.id);
+        final gone = HiveService.getTrainingBlockById(target.id)!;
+        expect(gone.deletedAt, isNotNull);
+        expect(gone.dirty, isTrue);
+        expect(gone.position, target.position);
+        final weeks = HiveService.getAllTrainingWeeksRaw().where(
+          (w) => w.blockId == target.id,
+        );
+        expect(weeks, hasLength(2));
+        for (final w in weeks) {
+          expect(w.deletedAt, isNotNull);
+          expect(w.dirty, isTrue);
+        }
+        expect(
+          repository.blocksForSplit(splitId).map((b) => b.id),
+          contains(keep.id),
+        );
+        expect(
+          repository.blocksForSplit(splitId).map((b) => b.id),
+          isNot(contains(target.id)),
+        );
+        expect(repository.weeksForBlock(splitId, target.id), isEmpty);
+        for (final entry in others.entries) {
+          expect(
+            jsonEncode(HiveService.getTrainingBlockById(entry.key)!.toJson()),
+            entry.value,
+          );
+        }
+        expect(
+          HiveService.readTrainingGraph(ownerId: null).validate,
+          returnsNormally,
+        );
+      },
+    );
+
+    test('is refused for the last block', () async {
+      await repository.deleteBlock(splitId: splitId, blockId: target.id);
+      // The first block created with the split is still live too.
+      for (final b in repository.blocksForSplit(splitId).skip(1)) {
+        await repository.deleteBlock(splitId: splitId, blockId: b.id);
+      }
+      final last = repository.blocksForSplit(splitId).single;
+      final before = snapshot();
+      await expectLater(
+        repository.deleteBlock(splitId: splitId, blockId: last.id),
+        throwsA(
+          isA<TrainingBlockDeletionException>().having(
+            (e) => e.reason,
+            'reason',
+            TrainingBlockDeletionReason.lastBlock,
+          ),
+        ),
+      );
+      expect(snapshot(), before);
+    });
+
+    for (final completed in [true, false]) {
+      test('is refused when a ${completed ? 'completed' : 'draft'} workout '
+          'is in it, leaving data untouched', () async {
+        await HiveService.putSessionRaw(
+          WorkoutSession(
+            id: 'log',
+            date: now,
+            planName: 'Push',
+            planId: 'plan',
+            splitId: splitId,
+            trainingWeekId: targetWeek.id,
+            weekNumber: targetWeek.number,
+            isCompleted: completed,
+            exercises: [],
+          ),
+        );
+        final before = snapshot();
+        await expectLater(
+          repository.deleteBlock(splitId: splitId, blockId: target.id),
+          throwsA(
+            isA<TrainingBlockDeletionException>()
+                .having(
+                  (e) => e.reason,
+                  'reason',
+                  TrainingBlockDeletionReason.inUse,
+                )
+                .having(
+                  (e) => e.blocker,
+                  'blocker',
+                  BlockDeletionBlocker.hasWorkouts,
+                ),
+          ),
+        );
+        expect(snapshot(), before);
+        expect(
+          repository.deleteBlocker(splitId, target.id),
+          BlockDeletionBlocker.hasWorkouts,
+        );
+      });
+    }
+
+    test('is refused while a plan is positioned in it', () async {
+      await HiveService.putWorkoutProgressRaw(
+        repository
+            .progressForPlan(splitId, 'plan')!
+            .copyWith(
+              activeWeekId: targetWeek.id,
+              availableWeekIds: [targetWeek.id],
+            ),
+      );
+      final before = snapshot();
+      await expectLater(
+        repository.deleteBlock(splitId: splitId, blockId: target.id),
+        throwsA(
+          isA<TrainingBlockDeletionException>().having(
+            (e) => e.blocker,
+            'blocker',
+            BlockDeletionBlocker.workoutInBlock,
+          ),
+        ),
+      );
+      expect(snapshot(), before);
+    });
+
+    test('lists of available weeks do not stop a delete', () async {
+      final keepWeek = repository.weeksForBlock(splitId, keep.id).first;
+      await HiveService.putWorkoutProgressRaw(
+        repository
+            .progressForPlan(splitId, 'plan')!
+            .copyWith(
+              activeWeekId: keepWeek.id,
+              availableWeekIds: [targetWeek.id, keepWeek.id],
+            ),
+      );
+      expect(repository.deleteBlocker(splitId, target.id), isNull);
+      await repository.deleteBlock(splitId: splitId, blockId: target.id);
+      expect(HiveService.getTrainingBlockById(target.id)!.deletedAt, isNotNull);
+      expect(
+        HiveService.readTrainingGraph(ownerId: null).validate,
+        returnsNormally,
+      );
+    });
+
+    test('is idempotent', () async {
+      await repository.deleteBlock(splitId: splitId, blockId: target.id);
+      await expectLater(
+        repository.deleteBlock(splitId: splitId, blockId: target.id),
+        throwsStateError,
+      );
+    });
+
+    test('drains pending structural intents first', () async {
+      final pending = TrainingBlock(
+        id: 'pending',
+        splitId: splitId,
+        name: 'Pending',
+        position: 9,
+        createdAt: now,
+        plannedWeekCount: 2,
+      );
+      final pendingWeek = TrainingWeek(
+        id: 'pending-week',
+        splitId: splitId,
+        blockId: 'pending',
+        number: 1,
+        createdAt: now,
+      );
+      await Hive.box<dynamic>(HiveService.trainingOperationsBox).put('create', {
+        'ownerId': null,
+        'block': pending.toJson(),
+        'weeks': [pendingWeek.toJson()],
+      });
+      await repository.deleteBlock(splitId: splitId, blockId: target.id);
+      expect(HiveService.getTrainingBlockById('pending'), isNotNull);
+      expect(
+        Hive.box<dynamic>(HiveService.trainingOperationsBox).isEmpty,
+        isTrue,
+      );
+    });
+  });
 }

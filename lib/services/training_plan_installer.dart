@@ -62,13 +62,15 @@ Future<void> installTrainingPlansUnderGate({
     // A block that already existed (a reused default split) is grow-only,
     // like every block length: it keeps a larger count than requested.
     if ((block.plannedWeekCount ?? 1) < initialBlockWeekCount) {
+      final raisedAt = DateTime.now();
       input = input.copyWith(
         blocks: [
           for (final b in input.blocks)
             if (b.id == block.id)
               b.copyWith(
                 plannedWeekCount: initialBlockWeekCount,
-                updatedAt: DateTime.now(),
+                plannedWeekCountUpdatedAt: raisedAt,
+                updatedAt: raisedAt,
                 dirty: true,
               )
             else

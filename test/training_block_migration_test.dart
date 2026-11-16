@@ -5,12 +5,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/split.dart';
+import 'package:gymapp/models/training_block.dart';
+import 'package:gymapp/models/training_week.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_progress.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/repositories/training_block_repository.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/adopt_local_data.dart';
+import 'package:gymapp/services/training_block_graph.dart';
 import 'package:gymapp/services/training_block_migration.dart';
 import 'package:gymapp/utils/training_block_identity.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -453,4 +456,641 @@ void main() {
       },
     );
   }
+
+  group('rescuing work from a deleted block', () {
+    const u = 'user-1';
+    const planA = 'plan-a';
+    const planB = 'plan-b';
+    final t0 = DateTime.utc(2026, 1, 1);
+    final tDelete = DateTime.utc(2026, 11, 16, 12);
+    final clock = DateTime.utc(2026, 6, 1);
+
+    Split split0([String id = splitId, DateTime? deleted]) => Split(
+      id: id,
+      name: 'S-${id.substring(0, 4)}',
+      createdAt: t0,
+      userId: u,
+      updatedAt: t0,
+      deletedAt: deleted,
+      dirty: false,
+    );
+    WorkoutPlan plan0(String id, {DateTime? deleted, String sid = splitId}) =>
+        WorkoutPlan(
+          id: id,
+          name: id,
+          exercises: [],
+          splitId: sid,
+          userId: u,
+          updatedAt: t0,
+          deletedAt: deleted,
+          dirty: false,
+        );
+    TrainingBlock block0(
+      String id, {
+      int count = 4,
+      int position = 0,
+      DateTime? deleted,
+      String sid = splitId,
+      DateTime? durationClock,
+      String name = 'Block',
+    }) => TrainingBlock(
+      id: id,
+      splitId: sid,
+      name: name,
+      position: position,
+      createdAt: t0,
+      userId: u,
+      updatedAt: deleted ?? t0,
+      deletedAt: deleted,
+      plannedWeekCount: count,
+      plannedWeekCountUpdatedAt: durationClock,
+      dirty: false,
+    );
+    TrainingWeek week0(
+      String id,
+      String blockId,
+      int n, {
+      DateTime? deleted,
+      String sid = splitId,
+    }) => TrainingWeek(
+      id: id,
+      splitId: sid,
+      blockId: blockId,
+      number: n,
+      createdAt: t0,
+      userId: u,
+      updatedAt: deleted ?? t0,
+      deletedAt: deleted,
+      dirty: false,
+    );
+    WorkoutProgress progress0(
+      String plan,
+      String active,
+      List<String> available, {
+      String state = WorkoutProgressState.ready,
+      String sid = splitId,
+      DateTime? deleted,
+    }) => WorkoutProgress(
+      id: workoutProgressId(sid, plan),
+      splitId: sid,
+      planId: plan,
+      activeWeekId: active,
+      availableWeekIds: available,
+      state: state,
+      revision: 'rev-$plan',
+      userId: u,
+      updatedAt: t0,
+      deletedAt: deleted,
+      dirty: false,
+    );
+    WorkoutSession session0(
+      String id,
+      String plan,
+      String weekId,
+      int number, {
+      String? nextWeekId,
+      bool completed = true,
+      DateTime? deleted,
+      String sid = splitId,
+    }) => WorkoutSession(
+      id: id,
+      date: t0.add(Duration(days: number)),
+      planName: plan,
+      planId: plan,
+      splitId: sid,
+      weekNumber: number,
+      trainingWeekId: weekId,
+      isCompleted: completed,
+      completionTransition:
+          nextWeekId == null
+              ? null
+              : {
+                'expectedRevision': 'rev-$plan',
+                'sourceWeekId': weekId,
+                'nextWeekId': nextWeekId,
+                'resultRevision': id,
+                'committedAt': t0.toIso8601String(),
+              },
+      exercises: [],
+      userId: u,
+      updatedAt: t0,
+      deletedAt: deleted,
+      dirty: false,
+    );
+    TrainingBlockGraph graph0({
+      List<Split>? splits,
+      List<WorkoutPlan>? plans,
+      required List<TrainingBlock> blocks,
+      required List<TrainingWeek> weeks,
+      List<WorkoutProgress> progress = const [],
+      List<WorkoutSession> sessions = const [],
+    }) => TrainingBlockGraph(
+      ownerId: u,
+      splits: splits ?? [split0()],
+      plans: plans ?? [plan0(planA)],
+      blocks: blocks,
+      weeks: weeks,
+      progress: progress,
+      sessions: sessions,
+    );
+    String dump(TrainingBlockGraph g) => jsonEncode(g.toJson());
+    TrainingBlockGraph prep(TrainingBlockGraph g) {
+      final out = TrainingBlockMigration.prepareGraph(g);
+      out.validate();
+      return out;
+    }
+
+    const x = 'block-x';
+    const y = 'block-y';
+    final xw1 = lazyTrainingWeekId(splitId, x, 1);
+    final xw2 = lazyTrainingWeekId(splitId, x, 2);
+    final xw3 = lazyTrainingWeekId(splitId, x, 3);
+    final yw1 = lazyTrainingWeekId(splitId, y, 1);
+    final xPrime = rescuedTrainingBlockId(x);
+    String xpw(int n) => lazyTrainingWeekId(splitId, xPrime, n);
+
+    /// Block X deleted elsewhere, Y live. Weeks 1..3 of X exist (tombstoned as
+    /// the server does it); Y has Week 1.
+    TrainingBlockGraph deleted({
+      List<WorkoutProgress>? progress,
+      List<WorkoutSession> sessions = const [],
+      List<WorkoutPlan>? plans,
+      List<TrainingBlock> extraBlocks = const [],
+      List<TrainingWeek> extraWeeks = const [],
+      bool xWeeksTombstoned = true,
+      int xCount = 4,
+    }) => graph0(
+      plans: plans,
+      blocks: [
+        block0(
+          x,
+          count: xCount,
+          position: 0,
+          deleted: tDelete,
+          durationClock: clock,
+          name: 'Bulk',
+        ),
+        block0(y, position: 1),
+        ...extraBlocks,
+      ],
+      weeks: [
+        week0(xw1, x, 1, deleted: xWeeksTombstoned ? tDelete : null),
+        week0(xw2, x, 2, deleted: xWeeksTombstoned ? tDelete : null),
+        week0(xw3, x, 3, deleted: xWeeksTombstoned ? tDelete : null),
+        week0(yw1, y, 1),
+        ...extraWeeks,
+      ],
+      progress:
+          progress ??
+          [
+            progress0(planA, yw1, [yw1]),
+          ],
+      sessions: sessions,
+    );
+
+    test('no deleted block: the graph comes back byte for byte', () {
+      final g = graph0(
+        blocks: [block0(x, durationClock: clock), block0(y, position: 1)],
+        weeks: [week0(xw1, x, 1), week0(xw2, x, 2), week0(yw1, y, 1)],
+        progress: [
+          progress0(planA, xw2, [xw1, xw2]),
+        ],
+        sessions: [session0('s1', planA, xw1, 1, nextWeekId: xw2)],
+      );
+      final out = prep(g);
+      expect(dump(out), dump(g));
+      expect(out.blocks.any((b) => b.dirty == true), isFalse);
+      expect(out.sessions.any((s) => s.dirty == true), isFalse);
+      expect(out.progress.any((p) => p.dirty == true), isFalse);
+      expect(dump(prep(out)), dump(out));
+    });
+
+    test('a deleted block with no live dependents keeps today behaviour', () {
+      final g = deleted(
+        xWeeksTombstoned: false,
+        sessions: [
+          // A session of a deleted plan does not count as a dependent.
+          session0('old', planB, xw1, 1),
+        ],
+        plans: [plan0(planA), plan0(planB, deleted: tDelete)],
+      );
+      final out = prep(g);
+      expect(out.blocks.map((b) => b.id), isNot(contains(xPrime)));
+      expect(out.blocks, hasLength(2));
+      // The existing cascade: weeks and sessions under the deleted block go.
+      for (final w in out.weeks.where((w) => w.blockId == x)) {
+        expect(w.deletedAt, isNotNull);
+      }
+      expect(out.sessions.single.deletedAt, isNotNull);
+      expect(out.sessions.single.dirty, isTrue);
+      expect(out.progress.single.deletedAt, isNull);
+    });
+
+    test('live progress alone moves into a rescued block', () {
+      final out = prep(
+        deleted(
+          progress: [
+            progress0(planA, xw2, [xw1, xw2]),
+          ],
+        ),
+      );
+      final rescued = out.blocks.singleWhere((b) => b.id == xPrime);
+      expect(rescued.deletedAt, isNull);
+      expect(rescued.dirty, isTrue);
+      expect(rescued.name, 'Bulk');
+      expect(rescued.position, 0);
+      expect(rescued.plannedWeekCount, 4);
+      expect(rescued.plannedWeekCountUpdatedAt, clock);
+      expect(rescued.userId, u);
+      final weeks =
+          out.weeks.where((w) => w.blockId == xPrime).toList()
+            ..sort((a, b) => a.number.compareTo(b.number));
+      expect(weeks.map((w) => (w.id, w.number, w.dirty, w.deletedAt)), [
+        (xpw(1), 1, true, null),
+        (xpw(2), 2, true, null),
+      ]);
+      final p = out.progress.single;
+      expect(p.activeWeekId, xpw(2));
+      expect(p.availableWeekIds, [xpw(1), xpw(2)]);
+      expect(p.revision, 'rev-$planA');
+      expect(p.deletedAt, isNull);
+      expect(p.dirty, isTrue);
+      // The deleted block itself stays deleted.
+      expect(out.blocks.singleWhere((b) => b.id == x).deletedAt, tDelete);
+    });
+
+    test('live sessions alone are relinked and keep their identity', () {
+      final done = session0('s1', planA, xw3, 3);
+      final out = prep(deleted(sessions: [done]));
+      final s = out.sessions.single;
+      expect(s.id, 's1');
+      expect(s.trainingWeekId, xpw(3));
+      expect(s.weekNumber, 3);
+      expect(s.deletedAt, isNull);
+      expect(s.dirty, isTrue);
+      expect(s.updatedAt, t0);
+      expect(out.blocks.singleWhere((b) => b.id == xPrime).plannedWeekCount, 4);
+      // Only the referenced number is allocated.
+      expect(out.weeks.where((w) => w.blockId == xPrime).map((w) => w.number), [
+        3,
+      ]);
+    });
+
+    test('progress and sessions together move to the same weeks', () {
+      final out = prep(
+        deleted(
+          progress: [
+            progress0(planA, xw2, [xw1, xw2]),
+          ],
+          sessions: [session0('s1', planA, xw1, 1, nextWeekId: xw2)],
+        ),
+      );
+      final s = out.sessions.single;
+      expect(s.trainingWeekId, xpw(1));
+      expect(s.completionTransition!['sourceWeekId'], xpw(1));
+      expect(s.completionTransition!['nextWeekId'], xpw(2));
+      expect(s.completionTransition!['resultRevision'], 's1');
+      expect(s.completionTransition!['expectedRevision'], 'rev-$planA');
+      expect(out.progress.single.activeWeekId, xpw(2));
+      expect(out.weeks.where((w) => w.blockId == xPrime).map((w) => w.number), [
+        1,
+        2,
+      ]);
+    });
+
+    test(
+      'the rescued length covers the highest week even past the old one',
+      () {
+        final out = prep(
+          deleted(
+            xCount: 2,
+            progress: [
+              progress0(planA, xw3, [xw3]),
+            ],
+          ),
+        );
+        expect(
+          out.blocks.singleWhere((b) => b.id == xPrime).plannedWeekCount,
+          3,
+        );
+      },
+    );
+
+    test('a progress row that only lists the block as available does not '
+        'bring a deleted block back', () {
+      final out = prep(
+        deleted(
+          progress: [
+            progress0(planA, yw1, [xw1, yw1]),
+          ],
+        ),
+      );
+      expect(out.blocks.map((b) => b.id), isNot(contains(xPrime)));
+      expect(out.progress.single.deletedAt, isNull);
+      expect(out.progress.single.availableWeekIds, [xw1, yw1]);
+    });
+
+    test(
+      'once a rescue runs, other available entries in the block move too',
+      () {
+        final out = prep(
+          deleted(
+            plans: [plan0(planA), plan0(planB)],
+            progress: [
+              progress0(planA, xw2, [xw2]),
+              progress0(planB, yw1, [xw1, yw1]),
+            ],
+          ),
+        );
+        final b = out.progress.singleWhere((p) => p.planId == planB);
+        expect(b.activeWeekId, yw1);
+        expect(b.availableWeekIds, [xpw(1), yw1]);
+      },
+    );
+
+    test('only live plans have their work rescued', () {
+      final out = prep(
+        deleted(
+          plans: [plan0(planA), plan0(planB, deleted: tDelete)],
+          progress: [
+            progress0(planA, yw1, [yw1]),
+            progress0(planB, xw1, [xw1], deleted: tDelete),
+          ],
+          sessions: [session0('gone', planB, xw1, 1, deleted: tDelete)],
+        ),
+      );
+      expect(out.blocks.map((b) => b.id), isNot(contains(xPrime)));
+    });
+
+    test('running again changes nothing', () {
+      final once = prep(
+        deleted(
+          progress: [
+            progress0(planA, xw2, [xw1, xw2]),
+          ],
+          sessions: [
+            session0('s1', planA, xw1, 1, nextWeekId: xw2),
+            session0('s2', planA, xw2, 2, completed: false),
+          ],
+        ),
+      );
+      final twice = prep(once);
+      expect(dump(twice), dump(once));
+      expect(dump(prep(twice)), dump(once));
+    });
+
+    test('two replicas rescuing the same block produce identical rows', () {
+      TrainingBlockGraph replica(bool dirtyLocal, DateTime createdAt) => prep(
+        deleted(
+          progress: [
+            progress0(planA, xw2, [xw1, xw2]),
+          ],
+          sessions: [
+            session0(
+              'mine-${dirtyLocal ? 1 : 2}',
+              planA,
+              xw1,
+              1,
+              nextWeekId: xw2,
+            ),
+          ],
+        ),
+      );
+      final a = replica(true, t0);
+      final b = replica(false, t0.add(const Duration(days: 9)));
+      String rows(TrainingBlockGraph g) => jsonEncode([
+        for (final blk in g.blocks.where((b) => b.id == xPrime)) blk.toJson(),
+        for (final w in g.weeks.where((w) => w.blockId == xPrime)) w.toJson(),
+      ]);
+      expect(rows(a), rows(b));
+      expect(rows(a), contains(xPrime));
+      expect(
+        rescuedTrainingBlockId(x),
+        rescuedTrainingBlockId(x.toUpperCase()),
+      );
+    });
+
+    test('a rescued id that is itself deleted derives the next one', () {
+      final second = rescuedTrainingBlockId(xPrime);
+      final out = prep(
+        deleted(
+          progress: [
+            progress0(planA, xw2, [xw2]),
+          ],
+          extraBlocks: [block0(xPrime, deleted: tDelete, position: 0)],
+          extraWeeks: [week0(xpw(2), xPrime, 2, deleted: tDelete)],
+        ),
+      );
+      expect(out.blocks.singleWhere((b) => b.id == second).deletedAt, isNull);
+      expect(
+        out.blocks.singleWhere((b) => b.id == xPrime).deletedAt,
+        isNotNull,
+      );
+      expect(
+        out.progress.single.activeWeekId,
+        lazyTrainingWeekId(splitId, second, 2),
+      );
+    });
+
+    test('work in an already deleted successor moves on in the same run', () {
+      final second = rescuedTrainingBlockId(xPrime);
+      final out = prep(
+        deleted(
+          progress: [
+            progress0(planA, xpw(1), [xpw(1)]),
+          ],
+          sessions: [session0('s1', planA, xw1, 1)],
+          extraBlocks: [block0(xPrime, deleted: tDelete)],
+          extraWeeks: [week0(xpw(1), xPrime, 1, deleted: tDelete)],
+        ),
+      );
+      final target = lazyTrainingWeekId(splitId, second, 1);
+      expect(out.progress.single.activeWeekId, target);
+      expect(out.sessions.single.trainingWeekId, target);
+      expect(out.blocks.where((b) => b.deletedAt == null && b.dirty == true), [
+        isA<TrainingBlock>().having((b) => b.id, 'id', second),
+      ]);
+    });
+
+    test('a partly persisted rescue is completed without duplicates', () {
+      final out = prep(
+        deleted(
+          progress: [
+            progress0(planA, xw2, [xw1, xw2]),
+          ],
+          extraBlocks: [block0(xPrime, count: 4)],
+          extraWeeks: [week0(xpw(1), xPrime, 1)],
+        ),
+      );
+      expect(out.blocks.where((b) => b.id == xPrime), hasLength(1));
+      expect(out.weeks.where((w) => w.blockId == xPrime).map((w) => w.number), [
+        1,
+        2,
+      ]);
+      expect(out.progress.single.availableWeekIds, [xpw(1), xpw(2)]);
+    });
+
+    test('an unsent live week of the deleted block is still cascaded', () {
+      final out = prep(
+        deleted(
+          xWeeksTombstoned: false,
+          progress: [
+            progress0(planA, xw1, [xw1]),
+          ],
+        ),
+      );
+      for (final w in out.weeks.where((w) => w.blockId == x)) {
+        expect(w.deletedAt, isNotNull);
+      }
+      expect(out.progress.single.deletedAt, isNull);
+      expect(out.progress.single.activeWeekId, xpw(1));
+    });
+
+    test('Clear All Data and a deleted split rescue nothing', () {
+      final live = graph0(
+        blocks: [block0(x), block0(y, position: 1)],
+        weeks: [week0(xw1, x, 1), week0(yw1, y, 1)],
+        progress: [
+          progress0(planA, xw1, [xw1]),
+        ],
+        sessions: [session0('s1', planA, xw1, 1)],
+      );
+      final cleared = prep(live.clearWorkouts());
+      expect(cleared.blocks.map((b) => b.id), isNot(contains(xPrime)));
+      expect(cleared.sessions.single.deletedAt, isNotNull);
+      expect(cleared.progress.single.deletedAt, isNotNull);
+      expect(cleared.blocks.where((b) => b.deletedAt == null), hasLength(1));
+      final byParent = prep(
+        graph0(
+          splits: [split0(splitId, tDelete)],
+          blocks: [block0(x, deleted: tDelete)],
+          weeks: [week0(xw1, x, 1, deleted: tDelete)],
+          plans: [plan0(planA, deleted: tDelete)],
+          progress: [
+            progress0(planA, xw1, [xw1], deleted: tDelete),
+          ],
+        ),
+      );
+      expect(byParent.blocks.single.id, x);
+    });
+
+    test('the legacy deterministic block is rescued like any other', () {
+      final legacy = legacyTrainingBlockId(splitId);
+      final legacyWeek = legacyTrainingWeekId(splitId, 1);
+      final out = prep(
+        graph0(
+          blocks: [block0(legacy, deleted: tDelete), block0(y, position: 1)],
+          weeks: [
+            week0(legacyWeek, legacy, 1, deleted: tDelete),
+            week0(yw1, y, 1),
+          ],
+          progress: [
+            progress0(planA, legacyWeek, [legacyWeek]),
+          ],
+        ),
+      );
+      final rescued = rescuedTrainingBlockId(legacy);
+      expect(out.blocks.singleWhere((b) => b.id == rescued).deletedAt, isNull);
+      expect(
+        out.progress.single.activeWeekId,
+        lazyTrainingWeekId(splitId, rescued, 1),
+      );
+    });
+
+    test('split-scoped: another split is untouched', () {
+      const other = '99999999-9999-4999-8999-999999999999';
+      final ox = lazyTrainingWeekId(other, 'o-block', 1);
+      final g = deleted(
+        progress: [
+          progress0(planA, xw1, [xw1]),
+        ],
+        extraBlocks: [block0('o-block', sid: other)],
+        extraWeeks: [week0(ox, 'o-block', 1, sid: other)],
+      ).copyWith(
+        splits: [split0(), split0(other)],
+        plans: [plan0(planA), plan0('plan-o', sid: other)],
+        progress: [
+          progress0(planA, xw1, [xw1]),
+          progress0('plan-o', ox, [ox], sid: other),
+        ],
+      );
+      final out = prep(g);
+      expect(
+        out.progress.singleWhere((p) => p.planId == 'plan-o').dirty,
+        isFalse,
+      );
+      expect(out.blocks.where((b) => b.splitId == other), hasLength(1));
+    });
+
+    test(
+      'heal raises a count below the highest live week and keeps the clock',
+      () {
+        final g = graph0(
+          blocks: [block0(y, count: 4, durationClock: clock)],
+          weeks: [
+            for (var n = 1; n <= 5; n++)
+              week0(lazyTrainingWeekId(splitId, y, n), y, n),
+          ],
+          progress: [
+            progress0(planA, lazyTrainingWeekId(splitId, y, 5), [
+              for (var n = 1; n <= 5; n++) lazyTrainingWeekId(splitId, y, n),
+            ]),
+          ],
+        );
+        final out = prep(g);
+        final b = out.blocks.single;
+        expect(b.plannedWeekCount, 5);
+        expect(b.plannedWeekCountUpdatedAt, clock);
+        expect(b.updatedAt, t0);
+        expect(b.dirty, isTrue);
+        expect(dump(prep(out)), dump(out));
+      },
+    );
+
+    test('heal leaves healthy, deleted and unknown counts alone', () {
+      final healthy = graph0(
+        blocks: [block0(y, count: 5, durationClock: clock)],
+        weeks: [
+          week0(yw1, y, 1),
+          week0(lazyTrainingWeekId(splitId, y, 5), y, 5),
+          // A tombstoned later week never raises the count.
+          week0(lazyTrainingWeekId(splitId, y, 9), y, 9, deleted: tDelete),
+        ],
+        progress: [
+          progress0(planA, yw1, [yw1]),
+        ],
+      );
+      final out = prep(healthy);
+      expect(out.blocks.single.plannedWeekCount, 5);
+      expect(out.blocks.single.dirty, isFalse);
+      expect(dump(out), dump(healthy));
+    });
+
+    test('a null count is still normalised from the allocated weeks', () {
+      final g = graph0(
+        blocks: [
+          TrainingBlock(
+            id: y,
+            splitId: splitId,
+            name: 'Block',
+            position: 0,
+            createdAt: t0,
+            userId: u,
+            updatedAt: t0,
+            dirty: false,
+          ),
+        ],
+        weeks: [
+          week0(yw1, y, 1),
+          week0(lazyTrainingWeekId(splitId, y, 3), y, 3),
+        ],
+        progress: [
+          progress0(planA, yw1, [yw1]),
+        ],
+      );
+      final b = prep(g).blocks.single;
+      expect(b.plannedWeekCount, 3);
+      expect(b.plannedWeekCountUpdatedAt, isNull);
+    });
+  });
 }

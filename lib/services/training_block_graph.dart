@@ -75,6 +75,7 @@ class TrainingBlockGraph {
       splitId: splitId,
       name: 'Block 1',
       plannedWeekCount: weekCount,
+      plannedWeekCountUpdatedAt: now,
       position: 0,
       createdAt: now,
       updatedAt: now,

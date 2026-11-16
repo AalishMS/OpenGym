@@ -12,14 +12,17 @@ import 'package:gymapp/services/exercise_catalog.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/models/split.dart';
 import 'package:gymapp/models/training_block.dart';
+import 'package:gymapp/models/training_week.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/repositories/training_block_repository.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/supabase_service.dart';
 import 'package:gymapp/services/sync_service.dart';
+import 'package:gymapp/services/training_block_lifecycle.dart';
 import 'package:gymapp/services/training_block_migration.dart';
 import 'package:gymapp/services/workout_progression_service.dart';
+import 'package:gymapp/utils/training_block_identity.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -39,6 +42,147 @@ class ReplicaApi {
   Future<http.Response?> Function(http.Request)? intercept;
   String userId = owner;
 
+  /// 3 models a server without the block lifecycle migration: activation
+  /// refuses header 4 and block rows have no duration clock column. 4 models
+  /// the migrated server.
+  int serverSchema = 3;
+
+  /// The account's `minimum_training_schema`; null until it is first activated.
+  int? accountSchema;
+
+  int headerSchema(http.Request request) =>
+      int.tryParse(request.headers['x-opengym-training-schema'] ?? '') ?? 0;
+
+  http.Response failure(int status, String code, String message, [String? d]) =>
+      http.Response(
+        jsonEncode({'code': code, 'message': message, 'details': d}),
+        status,
+      );
+
+  /// The PT426 fence every request passes through on the real server.
+  http.Response? guard(http.Request request) {
+    final minimum = accountSchema;
+    if (request.url.path.startsWith('/rest/') &&
+        minimum != null &&
+        headerSchema(request) < minimum) {
+      return failure(426, 'PT426', 'Update OpenGym to sync this account');
+    }
+    return null;
+  }
+
+  http.Response rpc(http.Request request) {
+    final name = request.url.pathSegments.last;
+    if (name == 'activate_training_schema') {
+      final header = headerSchema(request);
+      if (header < 1 || header > serverSchema) {
+        return failure(426, 'PT426', 'Update OpenGym to prepare training data');
+      }
+      accountSchema = header > (accountSchema ?? 0) ? header : accountSchema;
+      return http.Response('$header', 200);
+    }
+    if (name == 'delete_training_block') return deleteBlock(request);
+    return http.Response('null', 200);
+  }
+
+  http.Response deleteBlock(http.Request request) {
+    if ((accountSchema ?? 0) < 4) {
+      return failure(426, 'PT426', 'Update OpenGym to delete training blocks');
+    }
+    final target = (jsonDecode(request.body) as Map)['target'];
+    final blocks = tables.putIfAbsent('training_blocks', () => []);
+    final weeks = tables.putIfAbsent('training_weeks', () => []);
+    final found =
+        blocks
+            .where((b) => b['id'] == target && b['user_id'] == userId)
+            .firstOrNull;
+    if (found == null) return http.Response('null', 200);
+    final mine = weeks.where((w) => w['block_id'] == target).toList();
+    if (found['deleted_at'] == null) {
+      final split = (tables['splits'] ?? []).where(
+        (r) => r['id'] == found['split_id'],
+      );
+      if (split.any((r) => r['deleted_at'] != null)) {
+        return failure(409, 'PT409', 'unavailable', 'split_deleted');
+      }
+      if (!blocks.any(
+        (b) =>
+            b['split_id'] == found['split_id'] &&
+            b['deleted_at'] == null &&
+            b['id'] != target,
+      )) {
+        return failure(409, 'PT409', 'keeps one block', 'last_block');
+      }
+      final ids = mine.map((w) => w['id']).toSet();
+      final used =
+          (tables['workout_sessions'] ?? []).any(
+            (r) =>
+                r['deleted_at'] == null && ids.contains(r['training_week_id']),
+          ) ||
+          (tables['workout_progress'] ?? []).any(
+            (r) => r['deleted_at'] == null && ids.contains(r['active_week_id']),
+          );
+      if (used) return failure(409, 'PT409', 'in use', 'in_use');
+      final at = DateTime.utc(2026, 11, 16, 12).toIso8601String();
+      for (final row in [
+        found,
+        ...mine.where((w) => w['deleted_at'] == null),
+      ]) {
+        row['deleted_at'] = at;
+        row['updated_at'] = at;
+        row['server_seq'] = '${DateTime.utc(2026, 11, 16, 12, 0, 1)}'
+            .replaceFirst(' ', 'T');
+      }
+    }
+    return http.Response(
+      jsonEncode({
+        'block': found,
+        'weeks': [...mine]
+          ..sort((a, b) => (a['number'] as int) - (b['number'] as int)),
+      }),
+      200,
+    );
+  }
+
+  /// `keep_newest_row` for blocks: the duration resolves on its own clock.
+  Map<String, dynamic> mergeBlock(
+    Map<String, dynamic> old,
+    Map<String, dynamic> incoming,
+  ) {
+    DateTime clock(Map<String, dynamic> r) =>
+        r['planned_week_count_updated_at'] == null
+            ? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true)
+            : DateTime.parse(r['planned_week_count_updated_at'] as String);
+    final row = Map<String, dynamic>.from(incoming);
+    final oldCount = old['planned_week_count'] as int?;
+    final newCount = row['planned_week_count'] as int?;
+    if (newCount == null ||
+        (oldCount != null && clock(old).isAfter(clock(row)))) {
+      row['planned_week_count'] = oldCount;
+      row['planned_week_count_updated_at'] =
+          old['planned_week_count_updated_at'];
+    } else if (oldCount != null && clock(old) == clock(row)) {
+      row['planned_week_count'] = oldCount > newCount ? oldCount : newCount;
+    }
+    Map<String, dynamic> result;
+    if (old['deleted_at'] != null && row['deleted_at'] == null) {
+      result = Map<String, dynamic>.from(old);
+    } else if (old['deleted_at'] == null && row['deleted_at'] != null) {
+      result = row;
+    } else if (DateTime.parse(
+      row['updated_at'] as String,
+    ).isBefore(DateTime.parse(old['updated_at'] as String))) {
+      result = Map<String, dynamic>.from(old);
+    } else {
+      result = row;
+    }
+    result['planned_week_count'] = row['planned_week_count'];
+    if (serverSchema >= 4) {
+      result['planned_week_count_updated_at'] =
+          row['planned_week_count_updated_at'];
+    }
+    return result;
+  }
+
   Future<http.Response> handle(http.Request request) async {
     requests.add(request);
     if (request.url.path.endsWith('/user')) {
@@ -57,7 +201,9 @@ class ReplicaApi {
     }
     final override = await intercept?.call(request);
     if (override != null) return override;
-    if (request.url.path.contains('/rpc/')) return http.Response('3', 200);
+    final fenced = guard(request);
+    if (fenced != null) return fenced;
+    if (request.url.path.contains('/rpc/')) return rpc(request);
     final table = request.url.pathSegments.last;
     final rows = tables.putIfAbsent(table, () => []);
     if (request.method == 'GET') {
@@ -124,11 +270,24 @@ class ReplicaApi {
             rows.any((r) => r[key] == row[key])) {
           continue;
         }
+        var stored = row;
+        if (table == 'training_blocks') {
+          if (serverSchema < 4 &&
+              row.containsKey('planned_week_count_updated_at')) {
+            return failure(
+              400,
+              'PGRST204',
+              "Could not find the 'planned_week_count_updated_at' column",
+            );
+          }
+          final old = rows.where((r) => r[key] == row[key]).firstOrNull;
+          if (old != null) stored = mergeBlock(old, row);
+        }
         rows.removeWhere((r) => r[key] == row[key]);
-        row['server_seq'] =
+        stored['server_seq'] =
             stamp.add(const Duration(days: 1)).toIso8601String();
-        rows.add(row);
-        saved.add(row);
+        rows.add(stored);
+        saved.add(stored);
       }
       return http.Response(jsonEncode(saved), 201);
     }
@@ -158,6 +317,7 @@ void main() {
   tearDownAll(() => Supabase.instance.dispose());
   setUp(() async {
     api = ReplicaApi();
+    SyncService.instance.forgetNegotiatedSchemas();
     SharedPreferences.setMockInitialValues({});
     await storage.open(includeSplits: true);
     await SupabaseService.auth.getSessionFromUrl(
@@ -493,42 +653,6 @@ void main() {
       expect(saved.name, 'Renamed');
       expect(saved.plannedWeekCount, 5);
       expect(api.tables['training_blocks']!.single['planned_week_count'], 5);
-    },
-  );
-
-  test(
-    'negotiates capability before graph uploads and sends the installed SDK header',
-    () async {
-      await SyncService.instance.syncNow();
-      final rest =
-          api.requests.where((r) => r.url.path.startsWith('/rest/')).toList();
-      expect(
-        rest.every((r) => r.headers['x-opengym-training-schema'] == '3'),
-        isTrue,
-      );
-      final writes =
-          rest
-              .where((r) => r.method == 'POST')
-              .map((r) => r.url.pathSegments.last)
-              .toList();
-      expect(writes.first, 'activate_training_schema');
-      expect(
-        writes.indexOf('splits'),
-        lessThan(writes.indexOf('training_blocks')),
-      );
-      expect(
-        writes.indexOf('training_blocks'),
-        lessThan(writes.indexOf('training_weeks')),
-      );
-      expect(
-        writes.indexOf('training_weeks'),
-        lessThan(writes.indexOf('workout_plans')),
-      );
-      expect(
-        writes.indexOf('workout_plans'),
-        lessThan(writes.indexOf('workout_progress')),
-      );
-      expect(HiveService.getAllWorkoutProgressRaw().single.dirty, isFalse);
     },
   );
 
@@ -1293,4 +1417,873 @@ void main() {
       expect(SyncService.instance.status, SyncStatus.upgradeRequired);
     },
   );
+
+  List<String> writeOrder() =>
+      api.requests
+          .where((r) => r.method == 'POST')
+          .map((r) => r.url.pathSegments.last)
+          .toList();
+  Iterable<http.Request> activations() => api.requests.where(
+    (r) => r.url.path.endsWith('/rpc/activate_training_schema'),
+  );
+  Iterable<http.Request> restRequests() =>
+      api.requests.where((r) => r.url.path.startsWith('/rest/'));
+  Map<String, dynamic> serverBlock(String id) =>
+      api.tables['training_blocks']!.singleWhere((r) => r['id'] == id);
+  TrainingBlock localBlock(String id) => HiveService.getTrainingBlockById(id)!;
+  final tServer = DateTime.utc(2026, 11, 16, 12);
+  void serverDeletes(String blockId) {
+    for (final row in [
+      ...api.tables['training_blocks']!.where((r) => r['id'] == blockId),
+      ...api.tables['training_weeks']!.where((r) => r['block_id'] == blockId),
+    ]) {
+      row['deleted_at'] = tServer.toIso8601String();
+      row['updated_at'] = tServer.toIso8601String();
+      row['server_seq'] = '2026-11-16T12:00:01.000Z';
+    }
+  }
+
+  group('schema negotiation', () {
+    test('an unmigrated server: header 4 is refused, 3 is used for everything '
+        'after, and the clock column is never sent', () async {
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(activations().map((r) => r.headers['x-opengym-training-schema']), [
+        '4',
+        '3',
+      ]);
+      final afterNegotiation = restRequests().toList().sublist(2);
+      expect(
+        afterNegotiation.every(
+          (r) => r.headers['x-opengym-training-schema'] == '3',
+        ),
+        isTrue,
+      );
+      final writes = writeOrder();
+      expect(writes.first, 'activate_training_schema');
+      expect(
+        writes.indexOf('splits'),
+        lessThan(writes.indexOf('training_blocks')),
+      );
+      expect(
+        writes.indexOf('training_blocks'),
+        lessThan(writes.indexOf('training_weeks')),
+      );
+      expect(
+        writes.indexOf('training_weeks'),
+        lessThan(writes.indexOf('workout_plans')),
+      );
+      expect(
+        writes.indexOf('workout_plans'),
+        lessThan(writes.indexOf('workout_progress')),
+      );
+      expect(HiveService.getAllWorkoutProgressRaw().single.dirty, isFalse);
+      for (final row in api.tables['training_blocks']!) {
+        expect(row.containsKey('planned_week_count_updated_at'), isFalse);
+      }
+      expect(SyncService.instance.blockLifecycleAvailable(owner), isFalse);
+      expect(SyncService.instance.blockLifecycleAvailable(null), isTrue);
+      expect(
+        (await SharedPreferences.getInstance()).getInt(
+          'training_schema_$owner',
+        ),
+        3,
+      );
+    });
+
+    test(
+      'a migrated server accepts 4 first and every request carries it',
+      () async {
+        api.serverSchema = 4;
+        await SyncService.instance.syncNow();
+        expect(SyncService.instance.status, SyncStatus.synced);
+        expect(
+          activations().map((r) => r.headers['x-opengym-training-schema']),
+          ['4'],
+        );
+        expect(
+          restRequests().every(
+            (r) => r.headers['x-opengym-training-schema'] == '4',
+          ),
+          isTrue,
+        );
+        expect(api.accountSchema, 4);
+        expect(
+          api.tables['training_blocks']!.every(
+            (r) => r.containsKey('planned_week_count_updated_at'),
+          ),
+          isTrue,
+        );
+        expect(SyncService.instance.blockLifecycleAvailable(owner), isTrue);
+        expect(
+          (await SharedPreferences.getInstance()).getInt(
+            'training_schema_$owner',
+          ),
+          4,
+        );
+      },
+    );
+
+    test(
+      'an account already at 4 keeps working and is fenced from header 3',
+      () async {
+        api.serverSchema = 4;
+        api.accountSchema = 4;
+        await SyncService.instance.syncNow();
+        expect(SyncService.instance.status, SyncStatus.synced);
+        expect(
+          api.guard(
+            http.Request('GET', Uri.parse('http://x/rest/v1/splits'))
+              ..headers['x-opengym-training-schema'] = '3',
+          ),
+          isNotNull,
+        );
+      },
+    );
+
+    test(
+      'a server migrated later turns the lifecycle on at the next sync',
+      () async {
+        await SyncService.instance.syncNow();
+        expect(SyncService.instance.blockLifecycleAvailable(owner), isFalse);
+        api.serverSchema = 4;
+        var notified = 0;
+        final sub = SyncService.instance.changes.listen((_) => notified++);
+        addTearDown(sub.cancel);
+        await SyncService.instance.syncNow();
+        await Future<void>.delayed(Duration.zero);
+        expect(SyncService.instance.status, SyncStatus.synced);
+        expect(SyncService.instance.blockLifecycleAvailable(owner), isTrue);
+        expect(notified, greaterThan(0));
+        // Its block rows now carry the clock.
+        final created = await TrainingBlockRepository(
+          ownerId: () => owner,
+        ).createBlock(splitId: splitId, name: 'New', weekCount: 3);
+        await SyncService.instance.syncNow();
+        expect(
+          serverBlock(created.id).containsKey('planned_week_count_updated_at'),
+          isTrue,
+        );
+      },
+    );
+
+    test('an account that needs a newer app than this one still reports '
+        'upgrade required, and uploads nothing', () async {
+      api.serverSchema = 4;
+      api.accountSchema = 5;
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.upgradeRequired);
+      expect(activations().map((r) => r.headers['x-opengym-training-schema']), [
+        '4',
+        '3',
+      ]);
+      expect(
+        writeOrder().where((w) => w != 'activate_training_schema'),
+        isEmpty,
+      );
+      expect(SyncService.instance.blockLifecycleAvailable(owner), isFalse);
+    });
+
+    test('a transport failure on header 4 does not fall back to 3', () async {
+      api.intercept =
+          (r) async =>
+              r.url.path.endsWith('/rpc/activate_training_schema')
+                  ? http.Response('{"message":"offline","code":"OFFLINE"}', 503)
+                  : null;
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.retryableError);
+      expect(activations(), hasLength(1));
+    });
+
+    test(
+      'a remembered level answers before the first sync of a session',
+      () async {
+        SharedPreferences.setMockInitialValues({'training_schema_$owner': 4});
+        expect(SyncService.instance.blockLifecycleAvailable(owner), isFalse);
+        await SyncService.instance.restoreNegotiatedSchemas();
+        expect(SyncService.instance.blockLifecycleAvailable(owner), isTrue);
+        expect(
+          SyncService.instance.blockLifecycleAvailable('someone-else'),
+          isFalse,
+        );
+      },
+    );
+  });
+
+  group('block duration merge during sync', () {
+    final c0 = DateTime.utc(2026, 3, 1);
+    final c1 = DateTime.utc(2026, 4, 1);
+    final c2 = DateTime.utc(2026, 5, 1);
+    late TrainingBlockRepository repo;
+    late TrainingBlock block;
+
+    Future<void> migratedWithBlock({int count = 4}) async {
+      api.serverSchema = 4;
+      repo = TrainingBlockRepository(ownerId: () => owner);
+      block = await repo.createBlock(
+        splitId: splitId,
+        name: 'Block',
+        weekCount: count,
+      );
+      await HiveService.putTrainingBlockRaw(
+        localBlock(block.id).copyWith(plannedWeekCountUpdatedAt: c0),
+      );
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(serverBlock(block.id)['planned_week_count'], count);
+      expect(
+        DateTime.parse(
+          serverBlock(block.id)['planned_week_count_updated_at'] as String,
+        ),
+        c0,
+      );
+    }
+
+    void serverSets(
+      int? count,
+      DateTime? clock, {
+      String? name,
+      DateTime? updatedAt,
+    }) {
+      final row = serverBlock(block.id);
+      row['planned_week_count'] = count;
+      row['planned_week_count_updated_at'] = clock?.toIso8601String();
+      if (name != null) row['name'] = name;
+      if (updatedAt != null) row['updated_at'] = updatedAt.toIso8601String();
+      row['server_seq'] = '2026-12-01T00:00:00.000Z';
+    }
+
+    test('a newer local rename keeps a remote extension, which wins the count '
+        'by its clock', () async {
+      await migratedWithBlock();
+      await HiveService.putTrainingBlockRaw(
+        localBlock(block.id).copyWith(
+          name: 'Renamed',
+          updatedAt: DateTime.utc(2026, 11, 1),
+          dirty: true,
+        ),
+      );
+      serverSets(6, c1, name: 'Remote', updatedAt: DateTime.utc(2026, 10, 1));
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      final saved = localBlock(block.id);
+      expect(saved.name, 'Renamed');
+      expect(saved.plannedWeekCount, 6);
+      expect(saved.plannedWeekCountUpdatedAt, c1);
+      expect(serverBlock(block.id)['name'], 'Renamed');
+      expect(serverBlock(block.id)['planned_week_count'], 6);
+      expect(saved.dirty, isFalse);
+    });
+
+    test(
+      'a newer remote rename keeps a local extension and uploads it',
+      () async {
+        await migratedWithBlock();
+        await HiveService.putTrainingBlockRaw(
+          localBlock(block.id).copyWith(
+            plannedWeekCount: 6,
+            plannedWeekCountUpdatedAt: c1,
+            updatedAt: DateTime.utc(2026, 10, 1),
+            dirty: true,
+          ),
+        );
+        serverSets(4, c0, name: 'Remote', updatedAt: DateTime.utc(2026, 11, 1));
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        final saved = localBlock(block.id);
+        expect(saved.name, 'Remote');
+        expect(saved.plannedWeekCount, 6);
+        expect(saved.plannedWeekCountUpdatedAt, c1);
+        expect(serverBlock(block.id)['planned_week_count'], 6);
+        expect(saved.dirty, isFalse);
+      },
+    );
+
+    test('a pulled shorten lowers a clean local count', () async {
+      await migratedWithBlock(count: 6);
+      serverSets(4, c2, updatedAt: DateTime.utc(2030));
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      final saved = localBlock(block.id);
+      expect(saved.plannedWeekCount, 4);
+      expect(saved.plannedWeekCountUpdatedAt, c2);
+      expect(saved.dirty, isFalse);
+      expect(serverBlock(block.id)['planned_week_count'], 4);
+    });
+
+    test('a tie keeps the larger count on both sides', () async {
+      await migratedWithBlock();
+      await HiveService.putTrainingBlockRaw(
+        localBlock(block.id).copyWith(
+          plannedWeekCount: 6,
+          plannedWeekCountUpdatedAt: c1,
+          updatedAt: DateTime.utc(2026, 11, 1),
+          dirty: true,
+        ),
+      );
+      serverSets(4, c1, updatedAt: DateTime.utc(2026, 10, 1));
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(localBlock(block.id).plannedWeekCount, 6);
+      expect(serverBlock(block.id)['planned_week_count'], 6);
+      expect(localBlock(block.id).dirty, isFalse);
+      // The other way round: the remote holds the larger tie.
+      serverSets(8, c1, updatedAt: DateTime.utc(2026, 12, 1));
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(localBlock(block.id).plannedWeekCount, 8);
+    });
+
+    test(
+      'a partly uploaded block (null remote count) keeps the local value',
+      () async {
+        await migratedWithBlock();
+        serverSets(null, null, updatedAt: DateTime.utc(2030));
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        expect(localBlock(block.id).plannedWeekCount, 4);
+        expect(serverBlock(block.id)['planned_week_count'], 4);
+      },
+    );
+
+    test('a replica ahead of a pulled shorten heals the count, keeps the '
+        'clock, and both sides settle on the larger value', () async {
+      await migratedWithBlock(count: 6);
+      for (var n = 2; n <= 5; n++) {
+        await repo.appendWeek(splitId, block.id);
+      }
+      // appendWeek keeps the count at 6 (it only grows), so allocate the
+      // weeks and push them first.
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      expect(repo.weeksForBlock(splitId, block.id), hasLength(5));
+      serverSets(4, c2, updatedAt: DateTime.utc(2030));
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      final saved = localBlock(block.id);
+      expect(saved.plannedWeekCount, 5);
+      expect(saved.plannedWeekCountUpdatedAt, c2);
+      expect(serverBlock(block.id)['planned_week_count'], 5);
+      expect(saved.dirty, isFalse);
+      expect(
+        DateTime.parse(
+          serverBlock(block.id)['planned_week_count_updated_at'] as String,
+        ),
+        c2,
+      );
+    });
+
+    test(
+      'an unmigrated server is grow-only whatever the local clock says',
+      () async {
+        repo = TrainingBlockRepository(ownerId: () => owner);
+        block = await repo.createBlock(
+          splitId: splitId,
+          name: 'Block',
+          weekCount: 4,
+        );
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        expect(SyncService.instance.blockLifecycleAvailable(owner), isFalse);
+        // Another device (old app) extended it; this device stamped a clock.
+        serverBlock(block.id)['planned_week_count'] = 7;
+        serverBlock(block.id)['server_seq'] = '2026-12-01T00:00:00.000Z';
+        expect(localBlock(block.id).plannedWeekCountUpdatedAt, isNotNull);
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        expect(localBlock(block.id).plannedWeekCount, 7);
+        expect(serverBlock(block.id)['planned_week_count'], 7);
+        expect(localBlock(block.id).dirty, isFalse);
+      },
+    );
+  });
+
+  group('a block deleted on another device', () {
+    late TrainingBlockRepository repo;
+    late TrainingBlock x;
+    late TrainingBlock y;
+    late TrainingWeek xWeek;
+
+    Future<void> setUpBlocks() async {
+      repo = TrainingBlockRepository(ownerId: () => owner);
+      x = await repo.createBlock(splitId: splitId, name: 'X', weekCount: 4);
+      y = await repo.createBlock(splitId: splitId, name: 'Y', weekCount: 3);
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      xWeek = repo.weeksForBlock(splitId, x.id).single;
+    }
+
+    /// This replica, offline, moves the plan into X and logs a workout there.
+    Future<void> useBlockXOffline() async {
+      final progress = HiveService.getAllWorkoutProgressRaw().single;
+      await HiveService.putWorkoutProgressRaw(
+        progress.copyWith(
+          activeWeekId: xWeek.id,
+          availableWeekIds: [...?progress.availableWeekIds, xWeek.id],
+          revision: 'moved-into-x',
+          updatedAt: DateTime.utc(2026, 11, 10),
+          dirty: true,
+        ),
+      );
+      await HiveService.putSessionRaw(
+        WorkoutSession(
+          id: 'logged-in-x',
+          date: DateTime.utc(2026, 11, 10),
+          planName: 'Push',
+          planId: planId,
+          splitId: splitId,
+          userId: owner,
+          trainingWeekId: xWeek.id,
+          weekNumber: 1,
+          isCompleted: false,
+          updatedAt: DateTime.utc(2026, 11, 10),
+          dirty: true,
+          exercises: [],
+        ),
+      );
+    }
+
+    for (final migrated in [true, false]) {
+      test('work done offline in it is rescued into a successor and uploaded '
+          'parents first (migrated: $migrated)', () async {
+        api.serverSchema = migrated ? 4 : 3;
+        await setUpBlocks();
+        await useBlockXOffline();
+        serverDeletes(x.id);
+        api.requests.clear();
+        await SyncService.instance.syncNow();
+        expect(SyncService.instance.status, SyncStatus.synced);
+
+        final successor = rescuedTrainingBlockId(x.id);
+        final rescued = localBlock(successor);
+        expect(rescued.deletedAt, isNull);
+        expect(rescued.name, 'X');
+        expect(rescued.plannedWeekCount, 4);
+        expect(rescued.dirty, isFalse);
+        expect(localBlock(x.id).deletedAt, isNotNull);
+        final week =
+            HiveService.getTrainingWeekById(
+              lazyTrainingWeekId(splitId, successor, 1),
+            )!;
+        expect(week.deletedAt, isNull);
+        expect(
+          HiveService.getSessionById('logged-in-x')!.trainingWeekId,
+          week.id,
+        );
+        expect(HiveService.getSessionById('logged-in-x')!.deletedAt, isNull);
+        expect(
+          HiveService.getAllWorkoutProgressRaw().single.activeWeekId,
+          week.id,
+        );
+        expect(
+          HiveService.readTrainingGraph(ownerId: owner).validate,
+          returnsNormally,
+        );
+
+        // The server has the successor, its week, and the relinked work.
+        expect(serverBlock(successor)['deleted_at'], isNull);
+        expect(serverBlock(successor)['planned_week_count'], 4);
+        final session = api.tables['workout_sessions']!.singleWhere(
+          (r) => r['id'] == 'logged-in-x',
+        );
+        expect(session['training_week_id'], week.id);
+        expect(
+          api.tables['workout_progress']!.single['active_week_id'],
+          week.id,
+        );
+        expect(serverBlock(x.id)['deleted_at'], isNotNull);
+
+        final order = writeOrder();
+        expect(
+          order.indexOf('training_blocks'),
+          lessThan(order.indexOf('training_weeks')),
+        );
+        expect(
+          order.indexOf('training_weeks'),
+          lessThan(order.indexOf('workout_sessions')),
+        );
+        expect(
+          order.indexOf('workout_sessions'),
+          lessThan(order.indexOf('workout_progress')),
+        );
+
+        // Nothing is left to do, and nothing else was lost.
+        api.requests.clear();
+        await SyncService.instance.syncNow(fullReconciliation: true);
+        expect(
+          writeOrder().where((w) => w != 'activate_training_schema'),
+          isEmpty,
+        );
+        expect(HiveService.getSessionById('logged-in-x')!.deletedAt, isNull);
+        expect(repo.blocksForSplit(splitId).map((b) => b.id), contains(y.id));
+      });
+    }
+
+    test('a delete that lands between this replica\'s pull and push is retried '
+        'and then rescued', () async {
+      api.serverSchema = 4;
+      await setUpBlocks();
+      await useBlockXOffline();
+      var raced = false;
+      api.intercept = (r) async {
+        if (!raced &&
+            r.method == 'POST' &&
+            r.url.path.endsWith('/workout_progress')) {
+          raced = true;
+          serverDeletes(x.id);
+          return http.Response(
+            '{"code":"23514","message":"week is deleted"}',
+            400,
+          );
+        }
+        return null;
+      };
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.retryableError);
+      api.intercept = null;
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      final successor = rescuedTrainingBlockId(x.id);
+      expect(localBlock(successor).deletedAt, isNull);
+      expect(
+        HiveService.getSessionById('logged-in-x')!.trainingWeekId,
+        lazyTrainingWeekId(splitId, successor, 1),
+      );
+      expect(
+        api.tables['workout_progress']!.single['active_week_id'],
+        isNot(xWeek.id),
+      );
+    });
+
+    test('a rename or extension made offline on a block with no work loses to '
+        'the delete', () async {
+      api.serverSchema = 4;
+      await setUpBlocks();
+      await repo.renameBlock(splitId, x.id, 'Renamed offline');
+      await repo.updateBlock(
+        splitId: splitId,
+        blockId: x.id,
+        name: 'Renamed offline',
+        weekCount: 9,
+      );
+      serverDeletes(x.id);
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(localBlock(x.id).deletedAt, isNotNull);
+      expect(
+        HiveService.getAllTrainingBlocksRaw().map((b) => b.id),
+        isNot(contains(rescuedTrainingBlockId(x.id))),
+      );
+      expect(
+        repo.blocksForSplit(splitId).map((b) => b.id),
+        isNot(contains(x.id)),
+      );
+    });
+  });
+
+  group('deleting a block through the server', () {
+    late TrainingBlockRepository repo;
+    late TrainingBlock x;
+    late TrainingWeek xWeek;
+
+    Future<void> setUpBlocks({int schema = 4}) async {
+      api.serverSchema = schema;
+      repo = TrainingBlockRepository(ownerId: () => owner);
+      x = await repo.createBlock(splitId: splitId, name: 'X', weekCount: 4);
+      await repo.createBlock(splitId: splitId, name: 'Y', weekCount: 3);
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      xWeek = repo.weeksForBlock(splitId, x.id).single;
+    }
+
+    String snapshot() => jsonEncode({
+      'blocks':
+          HiveService.getAllTrainingBlocksRaw().map((b) => b.toJson()).toList(),
+      'weeks':
+          HiveService.getAllTrainingWeeksRaw().map((w) => w.toJson()).toList(),
+      'dirty': [
+        ...HiveService.getAllTrainingBlocksRaw().map((b) => b.dirty),
+        ...HiveService.getAllTrainingWeeksRaw().map((w) => w.dirty),
+      ],
+    });
+    Iterable<http.Request> deleteCalls() => api.requests.where(
+      (r) => r.url.path.endsWith('/rpc/delete_training_block'),
+    );
+    Matcher refused(TrainingBlockDeletionReason reason) =>
+        isA<TrainingBlockDeletionException>().having(
+          (e) => e.reason,
+          'reason',
+          reason,
+        );
+
+    test('success tombstones the block and its weeks, clean, with the '
+        'server\'s stamp', () async {
+      await setUpBlocks();
+      api.requests.clear();
+      await repo.deleteBlock(splitId: splitId, blockId: x.id);
+      expect(jsonDecode(deleteCalls().single.body), {'target': x.id});
+      expect(deleteCalls().single.headers['x-opengym-training-schema'], '4');
+      final gone = localBlock(x.id);
+      expect(gone.deletedAt, tServer);
+      expect(gone.dirty, isFalse);
+      expect(HiveService.getTrainingWeekById(xWeek.id)!.deletedAt, tServer);
+      expect(HiveService.getTrainingWeekById(xWeek.id)!.dirty, isFalse);
+      expect(serverBlock(x.id)['deleted_at'], isNotNull);
+      expect(
+        repo.blocksForSplit(splitId).map((b) => b.id),
+        isNot(contains(x.id)),
+      );
+      expect(SyncService.instance.status, SyncStatus.synced);
+      api.requests.clear();
+      await SyncService.instance.syncNow();
+      expect(
+        writeOrder().where((w) => w != 'activate_training_schema'),
+        isEmpty,
+      );
+    });
+
+    test('is not offered against a server that has not reached schema 4, and '
+        'sends nothing', () async {
+      await setUpBlocks(schema: 3);
+      expect(repo.lifecycleAvailable, isFalse);
+      final before = snapshot();
+      await expectLater(
+        repo.deleteBlock(splitId: splitId, blockId: x.id),
+        throwsA(refused(TrainingBlockDeletionReason.updateRequired)),
+      );
+      expect(deleteCalls(), isEmpty);
+      expect(snapshot(), before);
+    });
+
+    test('a workout logged elsewhere is refused by the server as in use and '
+        'nothing changes here', () async {
+      await setUpBlocks();
+      // Another device logged into X after this one last looked: the sessions
+      // table (not pulled before the RPC check) has a live row.
+      api.intercept = (r) async {
+        if (r.url.path.endsWith('/rpc/delete_training_block')) {
+          api.tables['workout_sessions'] = [
+            {
+              'id': 'elsewhere',
+              'user_id': owner,
+              'training_week_id': xWeek.id,
+              'deleted_at': null,
+            },
+          ];
+        }
+        return null;
+      };
+      final before = snapshot();
+      await expectLater(
+        repo.deleteBlock(splitId: splitId, blockId: x.id),
+        throwsA(refused(TrainingBlockDeletionReason.inUse)),
+      );
+      expect(snapshot(), before);
+      expect(serverBlock(x.id)['deleted_at'], isNull);
+    });
+
+    for (final entry
+        in {
+          'last_block': TrainingBlockDeletionReason.lastBlock,
+          'split_deleted': TrainingBlockDeletionReason.splitDeleted,
+          'in_use': TrainingBlockDeletionReason.inUse,
+          'something_new': TrainingBlockDeletionReason.inUse,
+        }.entries) {
+      test('PT409 ${entry.key} maps to ${entry.value.name} and leaves local '
+          'data untouched', () async {
+        await setUpBlocks();
+        api.intercept =
+            (r) async =>
+                r.url.path.endsWith('/rpc/delete_training_block')
+                    ? api.failure(409, 'PT409', 'refused', entry.key)
+                    : null;
+        final before = snapshot();
+        await expectLater(
+          repo.deleteBlock(splitId: splitId, blockId: x.id),
+          throwsA(refused(entry.value)),
+        );
+        expect(snapshot(), before);
+      });
+    }
+
+    test('PT426 from the procedure means update required', () async {
+      await setUpBlocks();
+      api.intercept =
+          (r) async =>
+              r.url.path.endsWith('/rpc/delete_training_block')
+                  ? api.failure(426, 'PT426', 'Update OpenGym')
+                  : null;
+      final before = snapshot();
+      await expectLater(
+        repo.deleteBlock(splitId: splitId, blockId: x.id),
+        throwsA(refused(TrainingBlockDeletionReason.updateRequired)),
+      );
+      expect(snapshot(), before);
+    });
+
+    test(
+      'this device\'s own workouts are refused before the server is asked',
+      () async {
+        await setUpBlocks();
+        await HiveService.putSessionRaw(
+          WorkoutSession(
+            id: 'mine',
+            date: stamp,
+            planName: 'Push',
+            planId: planId,
+            splitId: splitId,
+            userId: owner,
+            trainingWeekId: xWeek.id,
+            weekNumber: 1,
+            exercises: [],
+            updatedAt: stamp,
+            dirty: false,
+          ),
+        );
+        api.requests.clear();
+        await expectLater(
+          repo.deleteBlock(splitId: splitId, blockId: x.id),
+          throwsA(
+            isA<TrainingBlockDeletionException>()
+                .having(
+                  (e) => e.reason,
+                  'reason',
+                  TrainingBlockDeletionReason.inUse,
+                )
+                .having(
+                  (e) => e.blocker,
+                  'blocker',
+                  BlockDeletionBlocker.hasWorkouts,
+                ),
+          ),
+        );
+        expect(deleteCalls(), isEmpty);
+      },
+    );
+
+    test('a block the server never received is tombstoned locally and the '
+        'tombstone uploads as an insert, blocks before weeks', () async {
+      api.serverSchema = 4;
+      await SyncService.instance.syncNow(fullReconciliation: true);
+      repo = TrainingBlockRepository(ownerId: () => owner);
+      // The first upload of the new block fails, so the server never has it.
+      api.intercept =
+          (r) async =>
+              r.method == 'POST' && r.url.path.endsWith('/training_blocks')
+                  ? http.Response('{"message":"offline","code":"OFFLINE"}', 503)
+                  : null;
+      final lonely = await repo.createBlock(
+        splitId: splitId,
+        name: 'Lonely',
+        weekCount: 3,
+      );
+      await repo.appendWeek(splitId, lonely.id);
+      await repo.createBlock(splitId: splitId, name: 'Other', weekCount: 3);
+      await repo.deleteBlock(splitId: splitId, blockId: lonely.id);
+      expect(
+        api.tables['training_blocks']!.any((r) => r['id'] == lonely.id),
+        isFalse,
+      );
+      expect(localBlock(lonely.id).deletedAt, isNotNull);
+      expect(localBlock(lonely.id).dirty, isTrue);
+      final weeks = HiveService.getAllTrainingWeeksRaw().where(
+        (w) => w.blockId == lonely.id,
+      );
+      expect(weeks, hasLength(2));
+      expect(
+        weeks.every((w) => w.deletedAt != null && w.dirty == true),
+        isTrue,
+      );
+      api.intercept = null;
+      api.requests.clear();
+      await SyncService.instance.syncNow();
+      expect(SyncService.instance.status, SyncStatus.synced);
+      expect(serverBlock(lonely.id)['deleted_at'], isNotNull);
+      expect(
+        api.tables['training_weeks']!
+            .where((r) => r['block_id'] == lonely.id)
+            .every((r) => r['deleted_at'] != null),
+        isTrue,
+      );
+      final order = writeOrder();
+      expect(
+        order.indexOf('training_blocks'),
+        lessThan(order.indexOf('training_weeks')),
+      );
+    });
+
+    test(
+      'drains pending structural intents under the gate before checking',
+      () async {
+        await setUpBlocks();
+        final pending = TrainingBlock(
+          id: 'pending',
+          splitId: splitId,
+          name: 'Pending',
+          position: 9,
+          createdAt: stamp,
+          plannedWeekCount: 2,
+          userId: owner,
+        );
+        final pendingWeek = TrainingWeek(
+          id: 'pending-week',
+          splitId: splitId,
+          blockId: 'pending',
+          number: 1,
+          createdAt: stamp,
+          userId: owner,
+        );
+        await Hive.box<dynamic>(HiveService.trainingOperationsBox).put(
+          'create',
+          {
+            'ownerId': owner,
+            'block': pending.toJson(),
+            'weeks': [pendingWeek.toJson()],
+          },
+        );
+        await repo.deleteBlock(splitId: splitId, blockId: x.id);
+        expect(localBlock('pending').deletedAt, isNull);
+        expect(
+          Hive.box<dynamic>(HiveService.trainingOperationsBox).isEmpty,
+          isTrue,
+        );
+      },
+    );
+
+    test('a delete requested while a sync is in flight waits for it and '
+        'does not deadlock', () async {
+      await setUpBlocks();
+      final release = Completer<void>();
+      var held = false;
+      api.intercept = (r) async {
+        if (!held && r.method == 'GET' && r.url.path.endsWith('/splits')) {
+          held = true;
+          await release.future;
+        }
+        return null;
+      };
+      final inFlight = SyncService.instance.syncNow(fullReconciliation: true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(held, isTrue);
+      final deletion = repo.deleteBlock(splitId: splitId, blockId: x.id);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(deleteCalls(), isEmpty, reason: 'it waits for the sync');
+      release.complete();
+      await Future.wait([
+        inFlight,
+        deletion,
+      ]).timeout(const Duration(seconds: 20));
+      expect(localBlock(x.id).deletedAt, isNotNull);
+      expect(localBlock(x.id).dirty, isFalse);
+    });
+
+    test('a local mutation running when a delete starts is not interleaved '
+        'with it', () async {
+      await setUpBlocks();
+      final order = <String>[];
+      final gate = Completer<void>();
+      final mutation = SyncService.instance.runExclusiveLocalMutation(() async {
+        order.add('mutation start');
+        await gate.future;
+        order.add('mutation end');
+      });
+      final deletion = repo
+          .deleteBlock(splitId: splitId, blockId: x.id)
+          .then((_) => order.add('delete'));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      gate.complete();
+      await Future.wait([
+        mutation,
+        deletion,
+      ]).timeout(const Duration(seconds: 20));
+      expect(order, ['mutation start', 'mutation end', 'delete']);
+    });
+  });
 }

@@ -16,8 +16,40 @@ import '../models/workout_session.dart';
 import '../utils/training_block_identity.dart';
 import 'hive_service.dart';
 import 'supabase_service.dart';
+import 'training_block_lifecycle.dart';
 import 'training_block_migration.dart';
 import 'training_block_restore.dart';
+import 'workout_progression_service.dart';
+
+/// Why deleting a training block was refused.
+enum TrainingBlockDeletionReason {
+  /// A split keeps at least one block.
+  lastBlock,
+
+  /// A workout or a plan's position is in the block, here or on another device.
+  inUse,
+
+  /// The block's split was deleted elsewhere.
+  splitDeleted,
+
+  /// This account has not reached the training schema that can delete blocks,
+  /// or the server asks for a newer app.
+  updateRequired,
+
+  /// The block is not available in this account.
+  unavailable,
+}
+
+class TrainingBlockDeletionException implements Exception {
+  final TrainingBlockDeletionReason reason;
+
+  /// The local reason, when this device found the block in use itself.
+  final BlockDeletionBlocker? blocker;
+  const TrainingBlockDeletionException(this.reason, {this.blocker});
+
+  @override
+  String toString() => 'TrainingBlockDeletionException($reason)';
+}
 
 enum SyncStatus {
   savedOnDevice,
@@ -64,6 +96,12 @@ class SyncService {
   String? _lastSuccessfulUserId;
   String? _lastFailedUserId;
   String? _upgradeRequiredUserId;
+
+  /// The training schema each account last negotiated with the server: 4 once
+  /// the migration is live, 3 against an older server. Absent until known.
+  final Map<String, int> _schemaByUser = {};
+  static const String _schemaHeader = 'x-opengym-training-schema';
+  static String _schemaKey(String user) => 'training_schema_$user';
   Stream<void> get changes => _changes.stream;
   Stream<void> get statusChanges => _statusChanges.stream;
   SupabaseClient get _db => SupabaseService.client;
@@ -90,6 +128,215 @@ class SyncService {
       return SyncStatus.savedOnDevice;
     }
     return SyncStatus.synced;
+  }
+
+  int _schemaFor(String? user) => user == null ? 3 : _schemaByUser[user] ?? 3;
+
+  /// Block deletion and shortening are offered only once the server has
+  /// accepted training schema 4 for [owner]. Local-only data (no owner) has no
+  /// server to disagree with. [changes] fires when a sync cycle finishes, which
+  /// is when this can flip from false to true.
+  bool blockLifecycleAvailable(String? owner) =>
+      owner == null || _schemaFor(owner) >= 4;
+
+  @visibleForTesting
+  void forgetNegotiatedSchemas() {
+    _schemaByUser.clear();
+    _upgradeRequiredUserId = null;
+  }
+
+  /// Loads the levels remembered from earlier runs so the answer is right
+  /// before the first sync of a session.
+  Future<void> restoreNegotiatedSchemas() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in prefs.getKeys()) {
+      if (!key.startsWith('training_schema_')) continue;
+      final level = prefs.getInt(key);
+      if (level != null) {
+        _schemaByUser.putIfAbsent(
+          key.substring('training_schema_'.length),
+          () => level,
+        );
+      }
+    }
+  }
+
+  /// Asks for schema 4, then 3. Against a server without the block lifecycle
+  /// migration activation refuses header 4 with PT426 and header 3 works. If 3
+  /// is refused too the account needs a newer app than this one, so the first
+  /// PT426 is rethrown and the update-required state is kept.
+  Future<int> _negotiateSchema(_SyncAccount account) async {
+    try {
+      return await _activateSchema(account, 4);
+    } on PostgrestException catch (first) {
+      if (first.code != 'PT426') rethrow;
+      try {
+        return await _activateSchema(account, 3);
+      } on PostgrestException catch (second) {
+        if (second.code == 'PT426') throw first;
+        rethrow;
+      }
+    }
+  }
+
+  Future<int> _activateSchema(_SyncAccount account, int level) async {
+    _db.rest.headers[_schemaHeader] = '$level';
+    final capability = await _checked(
+      _db.rpc('activate_training_schema'),
+      account,
+    );
+    if (capability is! int || capability != level) {
+      throw StateError('The training schema was not acknowledged.');
+    }
+    return level;
+  }
+
+  /// Deletes an unused training block through the server's guarded procedure,
+  /// which re-checks everything under the account lock, and mirrors the result
+  /// locally. Throws [TrainingBlockDeletionException] for a refusal, in which
+  /// case no local data changed.
+  ///
+  /// The sync runs before the mutation gate is taken and never inside it:
+  /// [syncNow] waits for the gate, so calling it from inside would deadlock.
+  Future<void> deleteTrainingBlock({
+    required String splitId,
+    required String blockId,
+  }) async {
+    final user = SupabaseService.currentUserId;
+    if (!_canSync || user == null) {
+      throw StateError('Sign in to delete a training block here.');
+    }
+    // Let this device's pending work reach the server first, so the server's
+    // in-use check sees it. Errors are retried by the next trigger.
+    await syncNow();
+    final account = _SyncAccount(user);
+    await runExclusiveLocalMutation(() async {
+      if (_schemaFor(user) < 4) {
+        throw const TrainingBlockDeletionException(
+          TrainingBlockDeletionReason.updateRequired,
+        );
+      }
+      await TrainingBlockRestore().recover(ownerId: user);
+      await HiveService.recoverTrainingOperations(ownerId: user);
+      await WorkoutProgressionService(ownerId: () => user).replayUnderGate();
+      final block = HiveService.getTrainingBlockById(blockId);
+      if (block == null ||
+          block.splitId != splitId ||
+          block.userId != user ||
+          block.deletedAt != null) {
+        throw const TrainingBlockDeletionException(
+          TrainingBlockDeletionReason.unavailable,
+        );
+      }
+      final split = HiveService.getSplitById(splitId);
+      if (split == null || split.userId != user || split.deletedAt != null) {
+        throw const TrainingBlockDeletionException(
+          TrainingBlockDeletionReason.splitDeleted,
+        );
+      }
+      final blocker = blockDeletionBlocker(
+        block,
+        blocks: HiveService.getAllTrainingBlocksRaw().where(
+          (b) => b.userId == user,
+        ),
+        weeks: HiveService.getAllTrainingWeeksRaw().where(
+          (w) => w.userId == user,
+        ),
+        progress: HiveService.getAllWorkoutProgressRaw().where(
+          (p) => p.userId == user,
+        ),
+        sessions: HiveService.getAllSessionsRaw().where(
+          (s) => s.userId == user,
+        ),
+      );
+      if (blocker != null) {
+        throw TrainingBlockDeletionException(switch (blocker) {
+          BlockDeletionBlocker.lastBlock =>
+            TrainingBlockDeletionReason.lastBlock,
+          _ => TrainingBlockDeletionReason.inUse,
+        }, blocker: blocker);
+      }
+      dynamic result;
+      try {
+        result = await _checked(
+          _db.rpc('delete_training_block', params: {'target': blockId}),
+          account,
+        );
+      } on PostgrestException catch (error) {
+        if (error.code == 'PT426') {
+          _upgradeRequiredUserId = user;
+          _statusChanges.add(null);
+          throw const TrainingBlockDeletionException(
+            TrainingBlockDeletionReason.updateRequired,
+          );
+        }
+        if (error.code == 'PT409') {
+          throw TrainingBlockDeletionException(switch (error.details) {
+            'last_block' => TrainingBlockDeletionReason.lastBlock,
+            'split_deleted' => TrainingBlockDeletionReason.splitDeleted,
+            _ => TrainingBlockDeletionReason.inUse,
+          });
+        }
+        rethrow;
+      }
+      if (result is Map && result['block'] is Map) {
+        final remoteWeeks =
+            (result['weeks'] as List? ?? const [])
+                .map((w) => Map<String, dynamic>.from(w as Map))
+                .toList();
+        await _applyRow(
+          'training_blocks',
+          Map<String, dynamic>.from(result['block'] as Map),
+          user,
+        );
+        for (final week in remoteWeeks) {
+          await _applyRow('training_weeks', week, user);
+        }
+        // Weeks the server never saw (allocated here, not yet uploaded) are
+        // part of the deleted block too.
+        final stored = HiveService.getTrainingBlockById(blockId);
+        await tombstoneTrainingBlockLocally(
+          blockId,
+          at: stored?.deletedAt,
+          onlyLiveWeeks: true,
+        );
+      } else {
+        // The server has never seen this block. Its tombstone uploads with the
+        // next sync, as an insert.
+        await tombstoneTrainingBlockLocally(blockId);
+      }
+      await HiveService.flushTrainingData();
+    });
+    _changes.add(null);
+    _statusChanges.add(null);
+    if (HiveService.getTrainingBlockById(blockId)?.dirty == true) {
+      scheduleSync();
+    }
+  }
+
+  /// Marks a block and its live weeks deleted on this device and queues the
+  /// tombstones for upload. The caller owns the mutation gate. With
+  /// [onlyLiveWeeks] the block itself is left as it is.
+  static Future<void> tombstoneTrainingBlockLocally(
+    String blockId, {
+    DateTime? at,
+    bool onlyLiveWeeks = false,
+  }) async {
+    final now = at ?? DateTime.now();
+    final block = HiveService.getTrainingBlockById(blockId);
+    if (block == null) return;
+    if (!onlyLiveWeeks && block.deletedAt == null) {
+      await HiveService.putTrainingBlockRaw(
+        block.copyWith(deletedAt: now, updatedAt: now, dirty: true),
+      );
+    }
+    for (final week in HiveService.getAllTrainingWeeksRaw().where(
+      (w) => w.blockId == blockId && w.deletedAt == null,
+    )) {
+      await HiveService.putTrainingWeekRaw(
+        week.copyWith(deletedAt: now, updatedAt: now, dirty: true),
+      );
+    }
   }
 
   void notifyLocalChange() {
@@ -151,21 +398,20 @@ class SyncService {
     final account = _SyncAccount(user);
     try {
       await _checked(TrainingBlockRestore().recover(ownerId: user), account);
-      _db.rest.headers['x-opengym-training-schema'] = '3';
       await _checked(
         HiveService.recoverTrainingWeekRebase(ownerId: user),
         account,
       );
       // Activation/backfill is serialized on the server, and runs before any
       // migrated upload. Missing schema or an incompatible API fails closed.
-      final capability = await _checked(
-        _db.rpc('activate_training_schema'),
-        account,
-      );
-      if (capability is! int || capability != 3) {
-        throw StateError('The training schema was not acknowledged.');
-      }
+      final schema = await _negotiateSchema(account);
+      final previous = _schemaByUser[user] ?? 0;
+      _schemaByUser[user] = schema;
       final prefs = await _checked(SharedPreferences.getInstance(), account);
+      if (schema > (prefs.getInt(_schemaKey(user)) ?? 0)) {
+        await _checked(prefs.setInt(_schemaKey(user), schema), account);
+      }
+      if (schema != previous) _changes.add(null);
       final lastFull = DateTime.tryParse(
         prefs.getString('training_full_pull_$user') ?? '',
       );
@@ -691,30 +937,63 @@ class SyncService {
       wins = row['deleted_at'] != null || local['deleted_at'] == null;
     }
     if (_isBootstrap(table, id) && local?['deleted_at'] == null) wins = true;
-    // Intended duration only grows (creation + explicit extension). Preserve
-    // offline legacy weeks and concurrent extensions without reviving stale
-    // names/order or mistaking eagerly allocated legacy rows for new progress.
-    int? blockDuration;
+    // A block's duration resolves on its own clock (see mergeBlockDuration)
+    // rather than by the row's last-write-wins: a rename must not undo an
+    // extension, nor an extension a rename. Against a server which has not
+    // reached schema 4 there is no clock to compare, so the count only grows,
+    // as it always has.
+    final clockAware = _schemaFor(owner) >= 4;
+    BlockDuration? merged;
     if (table == 'training_blocks' &&
         local != null &&
         local['user_id'] == owner &&
         local['split_id'] == row['split_id'] &&
         local['deleted_at'] == null &&
         row['deleted_at'] == null) {
-      final localDuration =
-          local['planned_week_count'] as int? ??
+      final block = HiveService.getTrainingBlockById(id)!;
+      final localCount =
+          block.plannedWeekCount ??
           HiveService.weeksForBlock(row['split_id'] as String, id).fold<int>(
             1,
             (highest, w) => w.number > highest ? w.number : highest,
           );
-      final remoteDuration = row['planned_week_count'] as int? ?? 0;
-      blockDuration =
-          localDuration > remoteDuration ? localDuration : remoteDuration;
-      if (!wins && blockDuration > localDuration) {
-        final block = HiveService.getTrainingBlockById(id)!;
-        await HiveService.putTrainingBlockRaw(
-          block.copyWith(plannedWeekCount: blockDuration, dirty: true),
+      final remoteCount = row['planned_week_count'] as int?;
+      final remoteClock = _parseTs(row['planned_week_count_updated_at']);
+      merged = mergeBlockDuration(
+        (
+          count: localCount,
+          changedAt: clockAware ? block.plannedWeekCountUpdatedAt : null,
+        ),
+        (count: remoteCount, changedAt: clockAware ? remoteClock : null),
+      );
+      if (!clockAware) {
+        // The clock cannot change the outcome here; keep the one that goes
+        // with the surviving count.
+        merged = (
+          count: merged.count,
+          changedAt:
+              merged.count == localCount
+                  ? block.plannedWeekCountUpdatedAt
+                  : null,
         );
+      }
+      final differsFromRemote =
+          merged.count != remoteCount ||
+          (clockAware && !_sameInstant(merged.changedAt, remoteClock));
+      if (!wins) {
+        final differsFromLocal =
+            merged.count != localCount ||
+            !_sameInstant(merged.changedAt, block.plannedWeekCountUpdatedAt);
+        if (differsFromLocal) {
+          await HiveService.putTrainingBlockRaw(
+            block.copyWith(
+              plannedWeekCount: merged.count,
+              plannedWeekCountUpdatedAt: merged.changedAt,
+              dirty:
+                  block.dirty == true || differsFromRemote ? true : block.dirty,
+            ),
+          );
+        }
       }
     }
     if (!wins) return;
@@ -742,14 +1021,28 @@ class SyncService {
         await HiveService.putSplitRaw(value);
         if (value.deletedAt != null) await _tombstoneSplitChildren(value);
       case 'training_blocks':
-        final duration = blockDuration ?? row['planned_week_count'] as int?;
-        final repairDuration = duration != row['planned_week_count'];
+        final duration = merged?.count ?? row['planned_week_count'] as int?;
+        final clock =
+            merged != null
+                ? merged.changedAt
+                : (clockAware
+                    ? _parseTs(row['planned_week_count_updated_at'])
+                    : null);
+        final repairDuration =
+            merged != null &&
+            (duration != row['planned_week_count'] ||
+                (clockAware &&
+                    !_sameInstant(
+                      clock,
+                      _parseTs(row['planned_week_count_updated_at']),
+                    )));
         await HiveService.putTrainingBlockRaw(
           TrainingBlock(
             id: id,
             splitId: row['split_id'] as String,
             name: row['name'] as String,
             plannedWeekCount: duration,
+            plannedWeekCountUpdatedAt: clock,
             position: row['position'] as int,
             createdAt: _parseTs(row['created_at'])!,
             updatedAt:
@@ -921,6 +1214,13 @@ class SyncService {
     'name': r.name,
     'position': r.position,
     'planned_week_count': r.plannedWeekCount,
+    // An older server has no such column, so sending it fails every block
+    // upsert. It is sent only once schema 4 was negotiated for the owner.
+    if (_schemaFor(r.userId) >= 4)
+      'planned_week_count_updated_at':
+          r.plannedWeekCountUpdatedAt == null
+              ? null
+              : _ts(r.plannedWeekCountUpdatedAt),
     'created_at': _ts(r.createdAt),
     'updated_at': _ts(r.updatedAt),
     'deleted_at': r.deletedAt == null ? null : _ts(r.deletedAt),
@@ -1035,7 +1335,13 @@ class SyncService {
   bool _rowMatches(Map<String, dynamic> sent, Map<String, dynamic> saved) =>
       sent.entries.every(
         (e) =>
-            ['updated_at', 'created_at', 'deleted_at', 'date'].contains(e.key)
+            [
+                  'updated_at',
+                  'created_at',
+                  'deleted_at',
+                  'date',
+                  'planned_week_count_updated_at',
+                ].contains(e.key)
                 ? _parseTs(e.value) == _parseTs(saved[e.key])
                 : _same(e.value, saved[e.key]),
       );
@@ -1053,6 +1359,10 @@ class SyncService {
     }
     return a == b;
   }
+
+  /// DateTime equality also compares the UTC flag; Hive hands back local times.
+  static bool _sameInstant(DateTime? a, DateTime? b) =>
+      a == null || b == null ? a == b : a.isAtSameMomentAs(b);
 
   DateTime? _parseTs(dynamic value) =>
       value == null ? null : DateTime.parse(value as String).toUtc();

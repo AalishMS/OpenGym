@@ -28,3 +28,11 @@ String lazyTrainingWeekId(String splitId, String blockId, int number) {
     'https://opengym.app/splits/${splitId.toLowerCase()}/blocks/${blockId.toLowerCase()}/lazy-weeks/$number',
   );
 }
+
+/// The block that adopts live work when a replica deletes the block it was in.
+/// Derived from the deleted block's id so replicas rescuing the same block
+/// choose one ID.
+String rescuedTrainingBlockId(String blockId) => _uuid.v5(
+  Namespace.url.value,
+  'https://opengym.app/blocks/${blockId.toLowerCase()}/rescued-v1',
+);
