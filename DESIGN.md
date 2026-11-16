@@ -425,7 +425,16 @@ unavailable. Deleting a block goes through a guarded RPC that refuses a split's
 last block and a block in use. A block deleted on another device while this one
 still has a workout in it or a plan positioned in it is rescued: that live work
 moves to a successor block with an ID derived from the deleted one. A block
-shorter than its highest allocated week is healed up to that week. Once an
+shorter than its highest allocated week is healed up to that week. Known limits:
+rescue keeps every live workout in the deleted block, including history of
+deleted plans, so a rescued block cannot be deleted while it holds them. Each
+block is rescued on its own, and one which cannot be rescued cleanly (the graph
+would stop validating, or its weeks cannot be mapped) follows the older cascade,
+which tombstones the live workouts in it; every such skip is logged with the
+block ID and the reason. A block-length change made offline by an app version
+older than schema 4 carries no clock, so it loses to a length another device has
+since set at schema 4 (weeks already reached are still kept by the heal step),
+and device clocks decide which length edit is newest. Once an
 account is at schema 4, older app versions are fenced off and stop syncing
 until updated. There is no set-level merge.
 

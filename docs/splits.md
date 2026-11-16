@@ -77,7 +77,14 @@ versions that predate it stop syncing until updated. If another device deletes
 a block this device still uses (a workout logged in it, or a plan positioned in
 it), the live work moves into a successor block rather than being deleted with
 it. A block whose planned length is below its highest allocated week is healed
-up to that week during normalization. History still
+up to that week during normalization. Rescue keeps every live workout in the
+deleted block, including history of deleted plans, so a rescued block cannot be
+deleted while it holds them. If a block cannot be rescued cleanly the older
+behaviour applies, which deletes the live workouts in it, and the skip is logged
+with the block ID and reason. A block-length change made offline by an app
+version older than schema 4 is not carried over if another device has since set
+the length at schema 4 (weeks already reached are still kept by the heal step),
+and device clocks decide which length edit is newest. History still
 includes every completed live session by date across blocks, even when its
 original plan no longer exists. Exact-session resume keeps duplicate logs and
 nonactive started drafts distinct. See [DESIGN.md](../DESIGN.md) for inheritance,

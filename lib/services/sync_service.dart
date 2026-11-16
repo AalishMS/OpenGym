@@ -304,6 +304,12 @@ class SyncService {
               .timeout(blockDeleteTimeout),
           account,
         );
+      } on TimeoutException {
+        // The server may have committed with the response lost; a prompt sync
+        // pulls the tombstones if it did. The debounce is only armed here: the
+        // mutation gate is still held and is released as this throws.
+        scheduleSync();
+        rethrow;
       } on PostgrestException catch (error) {
         if (error.code == 'PT426') {
           _upgradeRequiredUserId = user;
@@ -802,7 +808,14 @@ class SyncService {
     }
   }
 
-  void _validateRow(String table, Map<String, dynamic> row, String owner) {
+  /// [allowDeletedWeek] accepts a live session or progress row whose week is
+  /// deleted, for the one case [_survivesDeletedWeek] describes.
+  void _validateRow(
+    String table,
+    Map<String, dynamic> row,
+    String owner, {
+    bool allowDeletedWeek = false,
+  }) {
     if (row['user_id'] != owner) {
       throw StateError('Remote row has the wrong owner.');
     }
@@ -848,7 +861,9 @@ class SyncService {
       if (week == null ||
           week.splitId != splitId ||
           week.userId != owner ||
-          (row['deleted_at'] == null && week.deletedAt != null)) {
+          (row['deleted_at'] == null &&
+              week.deletedAt != null &&
+              !allowDeletedWeek)) {
         throw StateError(
           'The linked training week is unavailable. Retry sync.',
         );
@@ -911,6 +926,15 @@ class SyncService {
         return true;
       }
     }
+    if (table == 'workout_progress') {
+      final plan = HiveService.getPlanById(row['plan_id'] as String);
+      if (plan != null &&
+          plan.userId == owner &&
+          plan.splitId == splitId &&
+          plan.deletedAt != null) {
+        return true;
+      }
+    }
     if (table == 'workout_sessions' || table == 'workout_progress') {
       final weekId =
           (table == 'workout_progress'
@@ -923,19 +947,42 @@ class SyncService {
           week.userId == owner &&
           week.splitId == splitId &&
           week.deletedAt != null) {
-        return true;
-      }
-    }
-    if (table == 'workout_progress') {
-      final plan = HiveService.getPlanById(row['plan_id'] as String);
-      if (plan != null &&
-          plan.userId == owner &&
-          plan.splitId == splitId &&
-          plan.deletedAt != null) {
-        return true;
+        return !_survivesDeletedWeek(table, row, owner);
       }
     }
     return false;
+  }
+
+  /// A live row the server holds under a deleted week is normally stale and is
+  /// skipped. It is not when this device has a live row with the same id (and,
+  /// for progress, a live plan): that row is either being rescued or was
+  /// rescued already, and the server's version may be newer than the one this
+  /// device rescued. Applying it lets last-write-wins pick the newest version,
+  /// and the normalisation which ends the cycle rescues that one, so the next
+  /// push wins on the server instead of losing there as a silent no-op for
+  /// ever.
+  bool _survivesDeletedWeek(
+    String table,
+    Map<String, dynamic> row,
+    String owner,
+  ) {
+    final id = row['id'] as String;
+    if (table == 'workout_sessions') {
+      final local = HiveService.getSessionById(id);
+      return local != null &&
+          local.userId == owner &&
+          local.splitId == row['split_id'] &&
+          local.deletedAt == null;
+    }
+    final local = HiveService.getWorkoutProgressById(id);
+    final plan = HiveService.getPlanById(row['plan_id'] as String);
+    return local != null &&
+        local.userId == owner &&
+        local.splitId == row['split_id'] &&
+        local.deletedAt == null &&
+        plan != null &&
+        plan.userId == owner &&
+        plan.deletedAt == null;
   }
 
   Future<void> _applyRow(
@@ -946,7 +993,15 @@ class SyncService {
     // A durable parent deletion already represents the outcome for stale live
     // descendants. Do not resurrect them or block uploading the pending delete.
     if (_dominatedByParentDeletion(table, row, owner)) return;
-    _validateRow(table, row, owner);
+    _validateRow(
+      table,
+      row,
+      owner,
+      allowDeletedWeek:
+          row['deleted_at'] == null &&
+          (table == 'workout_sessions' || table == 'workout_progress') &&
+          _survivesDeletedWeek(table, row, owner),
+    );
     final id = (row['id'] ?? row['user_id']) as String;
     final local = _localRow(table, id);
     final remoteTime = _parseTs(row['updated_at']);

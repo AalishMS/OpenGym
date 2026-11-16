@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/set.dart';
@@ -714,11 +715,11 @@ void main() {
       expect(p.availableWeekIds, [xpw(1), xpw(2)]);
       // It must win last-write-wins on the server, whose stored row still
       // points into the deleted block: a new revision derived from the old one
-      // and the successor, and a time strictly after both the row's own and
-      // the deletion.
+      // and the successor, and a time one millisecond after the row's own, never
+      // the deletion's.
       expect(p.revision, rescuedProgressRevision('rev-$planA', xPrime));
       expect(p.revision, isNot('rev-$planA'));
-      expect(p.updatedAt, tDelete.add(const Duration(milliseconds: 1)));
+      expect(p.updatedAt, t0.add(const Duration(milliseconds: 1)));
       expect(p.deletedAt, isNull);
       expect(p.dirty, isTrue);
       // The deleted block itself stays deleted.
@@ -1144,9 +1145,11 @@ void main() {
     });
 
     // F1: a rescued progress row has to win last-write-wins on the server.
-    test('a rescued progress row gets a new revision and a strictly later '
-        'time, the same on every replica, never the bootstrap revision', () {
+    test('a rescued progress row gets a new revision and a time one '
+        'millisecond after its own, the same on every replica, never the '
+        'bootstrap revision and never the deletion\'s time', () {
       final late = tDelete.add(const Duration(hours: 5));
+      final epoch = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
       for (final updated in [t0, late, null]) {
         final row = progress0(planA, xw2, [xw1, xw2]).copyWith(
           updatedAt: updated,
@@ -1158,11 +1161,40 @@ void main() {
         expect(first.updatedAt, second.updatedAt);
         expect(first.revision, isNot(row.revision));
         expect(first.revision, isNot(initialProgressRevision(splitId, planA)));
-        final floor =
-            updated != null && updated.isAfter(tDelete) ? updated : tDelete;
-        expect(first.updatedAt, floor.add(const Duration(milliseconds: 1)));
-        expect(first.updatedAt!.isAfter(updated ?? tDelete), isTrue);
+        expect(
+          first.updatedAt,
+          (updated ?? epoch).add(const Duration(milliseconds: 1)),
+        );
+        expect(first.updatedAt!.isAfter(updated ?? epoch), isTrue);
       }
+    });
+
+    test('R1: a deleting device\'s clock never reaches a rescued row, and '
+        'two versions of a row keep their order after the rescue', () {
+      final ahead = DateTime.utc(2030);
+      final blockAhead = deleted().copyWith(
+        blocks: [
+          block0(x, deleted: ahead, durationClock: clock, name: 'Bulk'),
+          block0(y, position: 1),
+        ],
+      );
+      final older = progress0(planA, xw2, [
+        xw1,
+        xw2,
+      ]).copyWith(updatedAt: t0, revision: 'rev-old');
+      final newer = older.copyWith(
+        updatedAt: t0.add(const Duration(days: 3)),
+        revision: 'rev-new',
+      );
+      final a = prep(blockAhead.copyWith(progress: [older])).progress.single;
+      final b = prep(blockAhead.copyWith(progress: [newer])).progress.single;
+      expect(a.updatedAt, t0.add(const Duration(milliseconds: 1)));
+      expect(
+        b.updatedAt,
+        newer.updatedAt!.add(const Duration(milliseconds: 1)),
+      );
+      expect(b.updatedAt!.isAfter(a.updatedAt!), isTrue);
+      expect(a.updatedAt!.isBefore(ahead), isTrue);
     });
 
     test(
@@ -1292,125 +1324,345 @@ void main() {
       });
     });
 
-    test('random graphs: rescue is never the reason preparation throws, a '
-        'result always validates, and running again changes nothing', () {
-      final blockIds = ['b0', 'b1', 'b2', 'b3'];
-      var rescuedGraphs = 0;
-      var unrescuedGraphs = 0;
-      var thrownByBaseline = 0;
-      for (var seed = 0; seed < 600; seed++) {
-        final r = Random(seed);
-        T pick<T>(List<T> items) => items[r.nextInt(items.length)];
-        bool chance(double p) => r.nextDouble() < p;
-        final splitDeleted = chance(0.1);
-        final plans = [
-          plan0(planA),
-          if (chance(0.7)) plan0(planB, deleted: chance(0.5) ? tDelete : null),
-        ];
-        // Blocks, some tombstoned, some holding a derived rescue id so that
-        // derivations collide.
-        final blocks = <TrainingBlock>[];
-        final ids = <String>{};
-        for (var i = 0; i < 1 + r.nextInt(3); i++) {
-          final id =
-              i == 0 || !chance(0.25)
-                  ? blockIds[i]
-                  : rescuedTrainingBlockId(blockIds[i - 1]);
-          if (!ids.add(id)) continue;
-          blocks.add(
-            block0(
-              id,
-              position: i,
-              count: 1 + r.nextInt(4),
-              deleted: chance(0.5) ? tDelete : null,
-            ),
-          );
+    // R3: every block is rescued or skipped on its own, and every skip is
+    // logged. A block whose rescue breaks validation is the only one left to
+    // the older cascade.
+    group('rescue is isolated per block and every skip is visible', () {
+      const z = 'block-z';
+      final zw1 = lazyTrainingWeekId(splitId, z, 1);
+      final zPrime = rescuedTrainingBlockId(z);
+
+      TrainingBlockGraph twoBlocks() => deleted(
+        sessions: [
+          session0('sx', planA, xw1, 1),
+          session0('sz', planA, zw1, 1),
+        ],
+        extraBlocks: [block0(z, deleted: tDelete, position: 2)],
+        extraWeeks: [week0(zw1, z, 1, deleted: tDelete)],
+      );
+
+      late List<String> logs;
+      late DebugPrintCallback savedPrint;
+      var validations = 0;
+      setUp(() {
+        logs = [];
+        validations = 0;
+        savedPrint = debugPrint;
+        debugPrint = (String? m, {int? wrapWidth}) => logs.add(m ?? '');
+      });
+      tearDown(() {
+        debugPrint = savedPrint;
+        TrainingBlockMigration.extraValidationForTesting = null;
+      });
+
+      test('without a failure both blocks are rescued, nothing is logged '
+          'and the graph is prepared once', () {
+        TrainingBlockMigration.extraValidationForTesting = (_) => validations++;
+        final r = TrainingBlockMigration.prepareGraphReporting(twoBlocks());
+        expect(r.report.rescued, unorderedEquals([x, z]));
+        expect(r.report.skipped, isEmpty);
+        expect(r.report.fallbacks, 0);
+        expect(logs, isEmpty);
+        expect(validations, 1);
+        for (final s in r.graph.sessions) {
+          expect(s.deletedAt, isNull, reason: s.id);
         }
-        if (chance(0.2) && blocks.any((b) => b.deletedAt != null)) {
-          final id = rescuedTrainingBlockId(
-            rescuedTrainingBlockId(blocks.first.id),
-          );
-          if (ids.add(id)) {
-            blocks.add(block0(id, position: 9, deleted: tDelete));
-          }
-        }
-        if (blocks.every((b) => b.deletedAt != null) && chance(0.8)) {
-          blocks.add(block0('b9', position: 8));
-        }
-        final weeks = <TrainingWeek>[];
-        for (final b in blocks) {
-          final count = r.nextInt(4);
-          for (var k = 0; k < count; k++) {
-            final n = 1 + (chance(0.3) ? 0 : r.nextInt(3));
-            final id =
-                chance(0.5)
-                    ? lazyTrainingWeekId(splitId, b.id, n)
-                    : '${b.id}-w$k-$n';
-            if (weeks.any((w) => w.id == id)) continue;
-            // Never two live weeks of one number in a live block (strict
-            // validation rejects that before any rescue runs).
-            weeks.add(
-              week0(
-                id,
-                b.id,
-                n,
-                deleted: b.deletedAt != null || chance(0.3) ? tDelete : null,
-              ),
-            );
-          }
-        }
-        if (weeks.isEmpty) continue;
-        final sessions = <WorkoutSession>[];
-        for (var i = 0; i < r.nextInt(5); i++) {
-          final w = pick(weeks);
-          final planChoice = r.nextInt(4);
-          final plan =
-              planChoice == 0 ? null : (planChoice == 1 ? planB : planA);
-          final sameBlock =
-              weeks
-                  .where((o) => o.blockId == w.blockId && o.id != w.id)
-                  .toList();
-          final evidenceNext =
-              sameBlock.isNotEmpty && chance(0.5) ? pick(sameBlock) : null;
-          var session = session0(
-            's$i',
-            plan ?? planA,
-            w.id,
-            w.number,
-            nextWeekId: evidenceNext?.id,
-            completed: evidenceNext != null || chance(0.5),
-            deleted: chance(0.2) ? tDelete : null,
-          );
-          if (plan == null) session = session.copyWith(planId: null);
-          sessions.add(session);
-        }
-        final progress = <WorkoutProgress>[];
-        for (final plan in plans) {
-          if (chance(0.15)) continue;
-          final active = pick(weeks);
-          final available =
-              {
-                active.id,
-                for (final w in weeks)
-                  if (chance(0.3)) w.id,
-              }.toList();
-          progress.add(
-            progress0(
-              plan.id!,
-              active.id,
-              available,
-              deleted: plan.deletedAt != null || chance(0.15) ? tDelete : null,
-            ),
-          );
-        }
+      });
+
+      test('with nothing deleted the graph is prepared once and nothing is '
+          'logged', () {
+        TrainingBlockMigration.extraValidationForTesting = (_) => validations++;
         final g = graph0(
+          blocks: [block0(x), block0(y, position: 1)],
+          weeks: [week0(xw1, x, 1), week0(yw1, y, 1)],
+          progress: [
+            progress0(planA, xw1, [xw1]),
+          ],
+        );
+        final r = TrainingBlockMigration.prepareGraphReporting(g);
+        expect(r.report.rescued, isEmpty);
+        expect(r.report.skipped, isEmpty);
+        expect(validations, 1);
+        expect(logs, isEmpty);
+      });
+
+      test('a block whose rescue breaks validation is skipped and logged; the '
+          'other one stays rescued', () {
+        TrainingBlockMigration.extraValidationForTesting = (g) {
+          validations++;
+          if (g.blocks.any((b) => b.id == zPrime && b.deletedAt == null)) {
+            throw const FormatException('injected');
+          }
+        };
+        final g = twoBlocks();
+        final r = TrainingBlockMigration.prepareGraphReporting(g);
+        expect(r.report.rescued, [x]);
+        expect(r.report.skipped.keys, [z]);
+        expect(r.report.skipped[z], contains('does not validate'));
+        expect(r.report.fallbacks, 1);
+        final sx = r.graph.sessions.singleWhere((s) => s.id == 'sx');
+        final sz = r.graph.sessions.singleWhere((s) => s.id == 'sz');
+        expect(sx.deletedAt, isNull);
+        expect(sx.trainingWeekId, xpw(1));
+        // Z follows the older cascade.
+        expect(sz.deletedAt, isNotNull);
+        expect(r.graph.blocks.map((b) => b.id), isNot(contains(zPrime)));
+        // Every skip is logged with the block id and a reason, no user data.
+        final skipLogs = logs.where((l) => l.contains('skipped')).toList();
+        expect(skipLogs, hasLength(1));
+        expect(skipLogs.single, contains(z));
+        expect(skipLogs.single, isNot(contains(planA)));
+        expect(logs.any((l) => l.contains('one at a time')), isTrue);
+        // Pure and idempotent.
+        expect(dump(prep(r.graph)), dump(r.graph));
+        validations = 0;
+        final again = TrainingBlockMigration.prepareGraphReporting(g);
+        expect(dump(again.graph), dump(r.graph));
+      });
+
+      test('when every rescue fails the result is the pre-rescue graph', () {
+        TrainingBlockMigration.extraValidationForTesting = (g) {
+          if (g.blocks.any(
+            (b) => b.deletedAt == null && b.id != y && b.id != 'b9',
+          )) {
+            throw const FormatException('injected');
+          }
+        };
+        final g = twoBlocks();
+        final r = TrainingBlockMigration.prepareGraphReporting(g);
+        expect(r.report.rescued, isEmpty);
+        expect(r.report.skipped.keys, unorderedEquals([x, z]));
+        expect(
+          dump(r.graph),
+          dump(TrainingBlockMigration.prepareGraphWithoutRescue(g)),
+        );
+        expect(logs.where((l) => l.contains('skipped')), hasLength(2));
+      });
+
+      test('a graph the pre-rescue path rejects is rejected, and no block '
+          'is blamed', () {
+        TrainingBlockMigration.extraValidationForTesting =
+            (_) => throw const FormatException('always');
+        expect(
+          () => TrainingBlockMigration.prepareGraph(twoBlocks()),
+          throwsFormatException,
+        );
+        expect(logs.where((l) => l.contains('skipped')), isEmpty);
+      });
+
+      test('a skip decided inside the rescue is reported and logged too', () {
+        // A completion between two weeks of one number cannot be relinked.
+        final xw2dup = lazyTrainingWeekId(splitId, 'dup-source', 2);
+        final g = deleted(
+          sessions: [session0('c', planA, xw2, 2, nextWeekId: xw2dup)],
+          extraWeeks: [week0(xw2dup, x, 2, deleted: null)],
+        );
+        final r = TrainingBlockMigration.prepareGraphReporting(g);
+        expect(r.report.rescued, isEmpty);
+        expect(r.report.skipped.keys, [x]);
+        expect(r.report.fallbacks, 0);
+        final line = logs.singleWhere((l) => l.contains('skipped'));
+        expect(line, contains(x));
+        expect(line, contains('relinked'));
+      });
+    });
+
+    // Random graphs. A well-formed graph has distinct week numbers in each
+    // block and evidence between different weeks; the malformed generator
+    // breaks that on purpose, which makes some rescues skip.
+    ({TrainingBlockGraph g, bool splitDeleted})? generate(
+      int seed, {
+      required bool wellFormed,
+    }) {
+      final blockIds = ['b0', 'b1', 'b2', 'b3'];
+      final r = Random(seed);
+      T pick<T>(List<T> items) => items[r.nextInt(items.length)];
+      bool chance(double p) => r.nextDouble() < p;
+      final splitDeleted = chance(0.1);
+      final plans = [
+        plan0(planA),
+        if (chance(0.7)) plan0(planB, deleted: chance(0.5) ? tDelete : null),
+      ];
+      // Blocks, some tombstoned, some holding a derived rescue id so that
+      // derivations collide.
+      final blocks = <TrainingBlock>[];
+      final ids = <String>{};
+      for (var i = 0; i < 1 + r.nextInt(3); i++) {
+        final id =
+            i == 0 || !chance(0.25)
+                ? blockIds[i]
+                : rescuedTrainingBlockId(blockIds[i - 1]);
+        if (!ids.add(id)) continue;
+        blocks.add(
+          block0(
+            id,
+            position: i,
+            count: 1 + r.nextInt(4),
+            deleted: chance(0.5) ? tDelete : null,
+          ),
+        );
+      }
+      if (chance(0.2) && blocks.any((b) => b.deletedAt != null)) {
+        final id = rescuedTrainingBlockId(
+          rescuedTrainingBlockId(blocks.first.id),
+        );
+        if (ids.add(id)) {
+          blocks.add(block0(id, position: 9, deleted: tDelete));
+        }
+      }
+      if (blocks.every((b) => b.deletedAt != null) && chance(0.8)) {
+        blocks.add(block0('b9', position: 8));
+      }
+      final weeks = <TrainingWeek>[];
+      for (final b in blocks) {
+        final count = r.nextInt(4);
+        final numbers = [1, 2, 3]..shuffle(r);
+        for (var k = 0; k < count; k++) {
+          final n =
+              wellFormed ? numbers[k] : 1 + (chance(0.3) ? 0 : r.nextInt(3));
+          final id =
+              chance(0.5)
+                  ? lazyTrainingWeekId(splitId, b.id, n)
+                  : '${b.id}-w$k-$n';
+          if (weeks.any((w) => w.id == id)) continue;
+          weeks.add(
+            week0(
+              id,
+              b.id,
+              n,
+              // Weeks only go with their block, unless the graph is malformed.
+              deleted:
+                  b.deletedAt != null || (!wellFormed && chance(0.3))
+                      ? tDelete
+                      : null,
+            ),
+          );
+        }
+      }
+      if (weeks.isEmpty) return null;
+      final sessions = <WorkoutSession>[];
+      for (var i = 0; i < r.nextInt(5); i++) {
+        final w = pick(weeks);
+        final planChoice = r.nextInt(4);
+        final plan = planChoice == 0 ? null : (planChoice == 1 ? planB : planA);
+        final sameBlock =
+            weeks
+                .where(
+                  (o) =>
+                      o.blockId == w.blockId &&
+                      o.id != w.id &&
+                      (!wellFormed || o.number != w.number),
+                )
+                .toList();
+        final evidenceNext =
+            sameBlock.isNotEmpty && chance(0.5) ? pick(sameBlock) : null;
+        var session = session0(
+          's$i',
+          plan ?? planA,
+          w.id,
+          w.number,
+          nextWeekId: evidenceNext?.id,
+          completed: evidenceNext != null || chance(0.5),
+          deleted: chance(0.2) ? tDelete : null,
+        );
+        if (plan == null) session = session.copyWith(planId: null);
+        sessions.add(session);
+      }
+      final progress = <WorkoutProgress>[];
+      for (final plan in plans) {
+        if (chance(0.15)) continue;
+        final active = pick(weeks);
+        final available =
+            {
+              active.id,
+              for (final w in weeks)
+                if (chance(0.3)) w.id,
+            }.toList();
+        progress.add(
+          progress0(
+            plan.id!,
+            active.id,
+            available,
+            deleted: plan.deletedAt != null || chance(0.15) ? tDelete : null,
+          ),
+        );
+      }
+      return (
+        g: graph0(
           splits: [split0(splitId, splitDeleted ? tDelete : null)],
           plans: plans,
           blocks: blocks,
           weeks: weeks,
           sessions: sessions,
           progress: progress,
+        ),
+        splitDeleted: splitDeleted,
+      );
+    }
+
+    bool acceptedAsInput(TrainingBlockGraph g) {
+      try {
+        g.validate(
+          allowLegacyLinks: true,
+          allowLiveChildrenOfDeletedParents: true,
         );
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    /// Deleted blocks of a live split which a live session or the active week
+    /// of live progress of a live plan points into.
+    List<String> referencedBlocks(TrainingBlockGraph g, bool splitDeleted) => [
+      if (!splitDeleted)
+        for (final b in g.blocks)
+          if (b.deletedAt != null)
+            if (() {
+              final ids = {
+                for (final w in g.weeks)
+                  if (w.blockId == b.id) w.id,
+              };
+              return g.sessions.any(
+                    (s) =>
+                        s.deletedAt == null &&
+                        (ids.contains(s.trainingWeekId) ||
+                            ids.contains(
+                              s.completionTransition?['sourceWeekId'],
+                            ) ||
+                            ids.contains(
+                              s.completionTransition?['nextWeekId'],
+                            )),
+                  ) ||
+                  g.progress.any(
+                    (p) =>
+                        p.deletedAt == null &&
+                        g.plans.any(
+                          (pl) => pl.id == p.planId && pl.deletedAt == null,
+                        ) &&
+                        ids.contains(p.activeWeekId),
+                  );
+            }())
+              b.id,
+    ];
+
+    void fuzz({required bool wellFormed}) {
+      var generated = 0;
+      var inputAccepted = 0;
+      var accepted = 0;
+      var referencedGraphs = 0;
+      var rescues = 0;
+      var skips = 0;
+      var fallbacks = 0;
+      var thrownByBaseline = 0;
+      var graphsWithSkips = 0;
+      for (var seed = 0; seed < 600; seed++) {
+        final made = generate(seed, wellFormed: wellFormed);
+        if (made == null) continue;
+        generated++;
+        final g = made.g;
+        if (acceptedAsInput(g)) inputAccepted++;
+        final reason = 'seed $seed';
         String baseline;
         try {
           baseline = dump(TrainingBlockMigration.prepareGraphWithoutRescue(g));
@@ -1418,59 +1670,91 @@ void main() {
           baseline = 'throws $e';
           thrownByBaseline++;
         }
-        TrainingBlockGraph? out;
-        String actual;
+        ({TrainingBlockGraph graph, BlockRescueReport report}) result;
         try {
-          out = TrainingBlockMigration.prepareGraph(g);
-          out.validate();
-          actual = dump(out);
+          result = TrainingBlockMigration.prepareGraphReporting(g);
+          result.graph.validate();
         } catch (e) {
-          actual = 'throws $e';
-        }
-        final reason = 'seed $seed';
-        if (actual.startsWith('throws ')) {
           // Rescue is never the reason: the plain path throws the same way.
-          expect(actual, baseline, reason: reason);
+          expect('throws $e', baseline, reason: reason);
           continue;
         }
-        if (out!.blocks.any(
-          (b) => b.dirty == true && !g.blocks.any((o) => o.id == b.id),
-        )) {
-          rescuedGraphs++;
+        accepted++;
+        final out = result.graph;
+        final report = result.report;
+        final referenced = referencedBlocks(g, made.splitDeleted).toSet();
+        if (referenced.isNotEmpty) referencedGraphs++;
+        rescues += report.rescued.length;
+        skips += report.skipped.length;
+        fallbacks += report.fallbacks;
+        if (report.skipped.isNotEmpty) graphsWithSkips++;
+        // (i) No live session is tombstoned unless its block's rescue was
+        // skipped (or its split was deleted, or only its own week was).
+        final weekBlock = {for (final w in g.weeks) w.id: w.blockId};
+        final blockById = {for (final b in g.blocks) b.id: b};
+        for (final before in g.sessions.where((s) => s.deletedAt == null)) {
+          final after = out.sessions.singleWhere((s) => s.id == before.id);
+          if (after.deletedAt == null || made.splitDeleted) continue;
+          final block = blockById[weekBlock[before.trainingWeekId]]!;
+          expect(
+            block.deletedAt == null || report.skipped.containsKey(block.id),
+            isTrue,
+            reason:
+                '$reason: ${before.id} lost although block ${block.id} was '
+                'not skipped',
+          );
         }
-        final referenced = blocks.any((b) {
-          if (b.deletedAt == null || splitDeleted) return false;
-          final ids = {
-            for (final w in weeks)
-              if (w.blockId == b.id) w.id,
-          };
-          return sessions.any(
-                (s) =>
-                    s.deletedAt == null &&
-                    (ids.contains(s.trainingWeekId) ||
-                        ids.contains(s.completionTransition?['sourceWeekId']) ||
-                        ids.contains(s.completionTransition?['nextWeekId'])),
-              ) ||
-              progress.any(
-                (p) =>
-                    p.deletedAt == null &&
-                    plans.any(
-                      (pl) => pl.id == p.planId && pl.deletedAt == null,
-                    ) &&
-                    ids.contains(p.activeWeekId),
-              );
-        });
-        if (!referenced) {
-          unrescuedGraphs++;
-          expect(actual, baseline, reason: reason);
+        if (wellFormed) {
+          // (ii) A well-formed graph never skips, never falls back, and every
+          // referenced block is rescued.
+          expect(report.skipped, isEmpty, reason: reason);
+          expect(report.fallbacks, 0, reason: reason);
+          expect(
+            report.rescued.toSet().containsAll(referenced),
+            isTrue,
+            reason: '$reason: ${report.rescued} vs $referenced',
+          );
+        } else if (referenced.isEmpty) {
+          expect(report.rescued, isEmpty, reason: reason);
         }
-        // Running it again changes nothing.
-        expect(dump(prep(out)), actual, reason: reason);
+        if (referenced.isEmpty) expect(dump(out), baseline, reason: reason);
+        // (iii) The result validates and a second run changes nothing.
+        expect(out.validate, returnsNormally, reason: reason);
+        final again = TrainingBlockMigration.prepareGraphReporting(out);
+        expect(dump(again.graph), dump(out), reason: reason);
+        expect(again.report.rescued, isEmpty, reason: reason);
       }
-      // The generator has to reach the interesting cases.
-      expect(rescuedGraphs, greaterThan(20));
-      expect(unrescuedGraphs, greaterThan(20));
-      expect(thrownByBaseline, greaterThan(0));
-    });
+      // ignore: avoid_print
+      print(
+        '${wellFormed ? 'well-formed' : 'malformed'}: generated $generated, '
+        'validator accepts the input $inputAccepted, prepared $accepted, with a tombstoned-but-referenced block '
+        '$referencedGraphs, rescues $rescues, skips $skips (in '
+        '$graphsWithSkips graphs), fallbacks $fallbacks, baseline throws '
+        '$thrownByBaseline',
+      );
+      expect(referencedGraphs, greaterThan(20));
+      expect(rescues, greaterThan(20));
+      if (wellFormed) {
+        expect(skips, 0);
+        expect(fallbacks, 0);
+      } else {
+        expect(skips, greaterThan(0));
+        expect(thrownByBaseline, greaterThan(0));
+      }
+    }
+
+    test(
+      'well-formed random graphs: every referenced block is rescued, '
+      'none is skipped, no live workout is lost, results validate and a '
+      'second run changes nothing',
+      () => fuzz(wellFormed: true),
+    );
+
+    test(
+      'malformed random graphs: rescue is never the reason preparation '
+      'throws, skips happen only where expected, results validate and a '
+      'second run changes nothing',
+      () => fuzz(wellFormed: false),
+    );
   });
 }

@@ -19,8 +19,18 @@ import 'training_block_graph.dart';
 import 'sync_service.dart';
 import 'workout_progression_service.dart';
 
-class _RescueReport {
-  bool applied = false;
+/// What the rescue of work out of remotely deleted blocks did in one
+/// preparation. [rescued] and [skipped] hold deleted block ids; a skipped block
+/// is left to the older cascade, which tombstones the live work in it, so every
+/// skip is also logged with its reason (ids and reasons only, no user data).
+@visibleForTesting
+class BlockRescueReport {
+  final List<String> rescued = [];
+  final Map<String, String> skipped = {};
+
+  /// How often the graph with every rescue applied failed validation, so the
+  /// blocks were then rescued one at a time.
+  int fallbacks = 0;
 }
 
 class TrainingPreparationException implements Exception {
@@ -220,28 +230,82 @@ class TrainingBlockMigration {
 
   /// Normalizes [input] into a valid graph. Rescuing live work out of a block
   /// another replica deleted is applied first; it can never be the reason this
-  /// throws: if the rescued graph is invalid the result is exactly what the
-  /// same input produces without any rescue.
-  static TrainingBlockGraph prepareGraph(TrainingBlockGraph input) {
-    final rescue = _RescueReport();
+  /// throws. If the graph with every rescue fails validation the blocks are
+  /// rescued one at a time and a block is kept only if the graph still
+  /// validates with it; one which does not is left to the older cascade and
+  /// logged, and the other blocks stay rescued.
+  static TrainingBlockGraph prepareGraph(TrainingBlockGraph input) =>
+      prepareGraphReporting(input).graph;
+
+  /// [prepareGraph] with a report of what the rescue did.
+  @visibleForTesting
+  static ({TrainingBlockGraph graph, BlockRescueReport report})
+  prepareGraphReporting(TrainingBlockGraph input) {
+    final all = BlockRescueReport();
     try {
-      return _prepareGraph(input, rescue);
+      final graph = _prepareGraph(input, report: all);
+      _logRescueSkips(all);
+      return (graph: graph, report: all);
     } catch (_) {
-      if (!rescue.applied) rethrow;
-      return _prepareGraph(input, null);
+      // Nothing was rescued, so rescue is not the reason.
+      if (all.rescued.isEmpty) rethrow;
+    }
+    // If the pre-rescue path throws as well, rescue is not the reason: that
+    // error is the result.
+    var best = _prepareGraph(input);
+    final report =
+        BlockRescueReport()
+          ..fallbacks = 1
+          ..skipped.addAll(all.skipped);
+    debugPrint(
+      'Training block rescue: the rescued graph is invalid, trying '
+      '${all.rescued.length} block(s) one at a time.',
+    );
+    final accepted = <String>{};
+    for (final id in all.rescued) {
+      try {
+        best = _prepareGraph(
+          input,
+          report: BlockRescueReport(),
+          allowed: {...accepted, id},
+        );
+        accepted.add(id);
+        report.rescued.add(id);
+      } catch (error) {
+        report.skipped[id] = 'the graph does not validate with it ($error)';
+      }
+    }
+    _logRescueSkips(report);
+    return (graph: best, report: report);
+  }
+
+  static void _logRescueSkips(BlockRescueReport report) {
+    for (final entry in report.skipped.entries) {
+      debugPrint(
+        'Training block rescue skipped for block ${entry.key}: ${entry.value}. '
+        'Its live workouts follow the older cascade.',
+      );
     }
   }
+
+  /// An extra check run on every prepared graph, for tests of the isolation of
+  /// a block whose rescue makes the graph invalid.
+  @visibleForTesting
+  static void Function(TrainingBlockGraph graph)? extraValidationForTesting;
 
   /// The pre-rescue behaviour, for tests that compare against it.
   @visibleForTesting
   static TrainingBlockGraph prepareGraphWithoutRescue(
     TrainingBlockGraph input,
-  ) => _prepareGraph(input, null);
+  ) => _prepareGraph(input);
 
+  /// Without a [report] no rescue runs. [allowed] limits the rescue to those
+  /// deleted block ids.
   static TrainingBlockGraph _prepareGraph(
-    TrainingBlockGraph input,
-    _RescueReport? rescue,
-  ) {
+    TrainingBlockGraph input, {
+    BlockRescueReport? report,
+    Set<String>? allowed,
+  }) {
     input = ExerciseIdentityMigration.prepare(input);
     input.validate(
       allowLegacyLinks: true,
@@ -278,8 +342,10 @@ class TrainingBlockMigration {
         );
       }
     }
-    if (rescue != null) {
-      rescue.applied = _rescueDeletedBlocks(
+    if (report != null) {
+      _rescueDeletedBlocks(
+        report: report,
+        allowed: allowed,
         ownerId: input.ownerId,
         splits: splits,
         plans: plans,
@@ -627,6 +693,7 @@ class TrainingBlockMigration {
       progress: progress.values.toList(),
     );
     graph.validate();
+    extraValidationForTesting?.call(graph);
     return WorkoutProgressionService.reconcileGraph(graph);
   }
 
@@ -643,11 +710,13 @@ class TrainingBlockMigration {
   /// too. Sessions a restore or Clear All Data tombstoned are not live, so
   /// nothing is rescued for them.
   ///
-  /// Rescue is all-or-nothing per block and can never be the reason preparation
-  /// fails: a block which cannot be rescued cleanly is left exactly as the
-  /// cascade below treats it without any rescue. Returns whether any block was
-  /// rescued.
-  static bool _rescueDeletedBlocks({
+  /// Rescue is all-or-nothing per block: a block which cannot be rescued
+  /// cleanly is left exactly as the cascade below treats it without any rescue,
+  /// and the reason is recorded in [report]. With [allowed], only those blocks
+  /// are rescued.
+  static void _rescueDeletedBlocks({
+    required BlockRescueReport report,
+    required Set<String>? allowed,
     required String? ownerId,
     required Map<String, Split> splits,
     required Map<String, WorkoutPlan> plans,
@@ -658,9 +727,7 @@ class TrainingBlockMigration {
   }) {
     bool livePlan(String? id) =>
         id != null && plans.containsKey(id) && plans[id]!.deletedAt == null;
-    var changed = false;
-    // Blocks which could not be rescued cleanly stay as they are.
-    final skipped = <String>{};
+    final skipped = report.skipped;
     // Each pass can only move work off a deleted block, so this settles.
     for (var pass = 0; pass < 8; pass++) {
       var rescued = false;
@@ -669,7 +736,7 @@ class TrainingBlockMigration {
               .where(
                 (b) =>
                     b.deletedAt != null &&
-                    !skipped.contains(b.id) &&
+                    !skipped.containsKey(b.id) &&
                     splits[b.splitId]?.deletedAt == null &&
                     splits.containsKey(b.splitId),
               )
@@ -700,6 +767,10 @@ class TrainingBlockMigration {
                 )
                 .toList();
         if (movedSessions.isEmpty && activeProgress.isEmpty) continue;
+        if (allowed != null && !allowed.contains(x.id)) {
+          skipped[x.id] = 'left out of the rescue after a validation failure';
+          continue;
+        }
         final movedProgress =
             progress.values
                 .where(
@@ -729,7 +800,7 @@ class TrainingBlockMigration {
           }
         }
         if (numbers.isEmpty) {
-          skipped.add(x.id);
+          skipped[x.id] = 'none of its weeks can be identified';
           continue;
         }
         final highest = numbers.reduce((a, b) => a > b ? a : b);
@@ -775,7 +846,7 @@ class TrainingBlockMigration {
           targetId = rescuedTrainingBlockId(targetId);
         }
         if (weekIds == null || weekIds.length != numbers.length) {
-          skipped.add(x.id);
+          skipped[x.id] = 'no usable successor block id';
           continue;
         }
         // Week ids map by id: each source week goes to the successor's week of
@@ -822,7 +893,7 @@ class TrainingBlockMigration {
           );
         }
         if (!clean) {
-          skipped.add(x.id);
+          skipped[x.id] = 'a session cannot be relinked cleanly';
           continue;
         }
         final stagedProgress = <String, WorkoutProgress>{};
@@ -842,14 +913,18 @@ class TrainingBlockMigration {
             // week is deleted, over a rescued row with an unchanged revision
             // and time. Win it instead, with values every replica derives
             // alike: a revision from the old one and the successor, and a time
-            // just after both the row's own and the deletion.
-            final base = p.updatedAt ?? x.deletedAt!;
-            final from = base.isAfter(x.deletedAt!) ? base : x.deletedAt!;
+            // just after the row's own. Never the deletion's time: two replicas
+            // holding different versions would tie there and the older one
+            // could win, and a deleting device with a fast clock would hand
+            // its future to every replica that rescues.
+            final base =
+                p.updatedAt ??
+                DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
             stagedProgress[p.id] = p.copyWith(
               activeWeekId: active,
               availableWeekIds: p.availableWeekIds == null ? null : available,
               revision: rescuedProgressRevision(p.revision, targetId),
-              updatedAt: from.add(const Duration(milliseconds: 1)),
+              updatedAt: base.add(const Duration(milliseconds: 1)),
               dirty: true,
             );
           } else {
@@ -860,7 +935,7 @@ class TrainingBlockMigration {
           }
         }
         if (!clean) {
-          skipped.add(x.id);
+          skipped[x.id] = 'a progress row cannot be relinked cleanly';
           continue;
         }
         final planned = [
@@ -901,12 +976,11 @@ class TrainingBlockMigration {
         }
         sessions.addAll(stagedSessions);
         progress.addAll(stagedProgress);
+        report.rescued.add(x.id);
         rescued = true;
-        changed = true;
       }
-      if (!rescued) return changed;
+      if (!rescued) return;
     }
-    return changed;
   }
 
   static int compareSessionRecency(WorkoutSession a, WorkoutSession b) {
