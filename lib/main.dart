@@ -35,6 +35,7 @@ void main() async {
     // system default keeps light instead of changing appearance on update.
     await SettingsProvider.resolveStoredThemeMode();
     await Future.wait([HiveService.init(), SupabaseService.init()]);
+    await SyncService.instance.restoreNegotiatedSchemas();
     await AdoptLocalData.prepareLocal();
   } catch (e) {
     debugPrint('Local startup error: $e');

@@ -29,8 +29,10 @@ No remote schema change or account activation was performed for this inventory.
 
 Use PostgreSQL 17.6 and PostgREST 16.5, listening only on `127.0.0.1:55439` and
 `127.0.0.1:55440`. Create the database `opengym_training_blocks_test` owned by your
-local OS user, load `base_schema.sql`, then both training-block migrations (the initial schema and lazy independent
-weeks). Do not
+local OS user, load `base_schema.sql`, then every migration from
+`20261028072415` onward, in order (the training-block schema, lazy independent
+weeks, the exercise identity catalog, and the block lifecycle). The fixture
+already contains the earlier split migrations. Do not
 load this fixture into a Supabase project. The Python tests truncate **only this
 named loopback test database** before every case.
 
@@ -50,6 +52,8 @@ Install `psycopg[binary]` in an isolated Python environment, then run:
 ```bash
 python3 supabase/tests/training_blocks/test_api.py
 python3 supabase/tests/training_blocks/test_lazy_weeks.py
+python3 supabase/tests/training_blocks/test_block_lifecycle.py
+python3 supabase/tests/training_blocks/test_exercise_identity.py
 flutter test --dart-define=OPENGYM_LOCAL_API_TESTS=true test/integration/training_blocks_api_test.dart
 flutter test test/training_block_sync_test.dart test/sync_sequence_test.dart test/sync_data_flow_test.dart
 flutter analyze
@@ -105,7 +109,7 @@ truncate only the named loopback fixture; never run them against a remote projec
 
 The exercise identity migration adds schema 3. Its standalone SQL proof creates
 its own temporary database on the loopback PostgreSQL instance, applies the
-base fixture and all three migrations, then drops only that database:
+base fixture and all four migrations, then drops only that database:
 
 ```bash
 python3 supabase/tests/training_blocks/test_exercise_identity.py
@@ -117,3 +121,22 @@ newer unmerged writes, stale edits, and schema 2 rejection after activation.
 The existing schema 1/2 suites remain useful compatibility proofs for accounts
 which have not activated schema 3. Apply the catalog migration to a separate
 fixture before running the current opt-in SDK trials; those now send schema 3.
+
+The block lifecycle migration adds schema 4 (`test_block_lifecycle.py`): the
+`planned_week_count_updated_at` duration clock (newer clock wins, a tie keeps the
+larger count, a null count never replaces a stored one, and a writer that omits
+the clock ties with the stored value, so schema 1-3 writers stay grow-only), and
+`public.delete_training_block(target uuid)`, which tombstones an unused block
+and its weeks in one transaction under the account lock. It refuses with PT409
+(`last_block`, `in_use`, `split_deleted`) and PT426 below schema 4, returns null
+for an unknown or foreign id, and is idempotent. An account activated at 4
+rejects headers 1-3 with PT426. `test_lazy_weeks.py` must keep passing unchanged:
+it is the proof that the legacy rule survives.
+
+`RescueAndLosingUpsertTest` (same file) covers the rescue contract: a session in a
+tombstoned week can move to a live week of another block with its completion
+evidence re-pointed (and only re-pointed), a progress row that wins last-write-wins
+is accepted, and an upsert that loses it is a silent no-op even when the stored
+row's parent is a tombstone. Its race tests open two direct connections and take no
+advisory lock: the delete RPC row-locks the block's weeks, and every session /
+progress write holds its week `FOR SHARE`, so the in-use check cannot miss a write.

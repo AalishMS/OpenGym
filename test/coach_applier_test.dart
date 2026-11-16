@@ -411,6 +411,7 @@ void main() {
       await TrainingBlockRestore().replace(
         graph: TrainingBlockMigration.prepareGraph(
           HiveService.readTrainingGraph(ownerId: _userId).ownedBy(_userId),
+          rescue: true,
         ),
         stampRecords: false,
       );

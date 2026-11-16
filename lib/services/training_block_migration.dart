@@ -1,12 +1,15 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'exercise_catalog.dart';
 import 'exercise_identity_migration.dart';
+import '../models/split.dart';
 import '../models/training_block.dart';
 import '../models/training_week.dart';
+import '../models/workout_plan.dart';
 import '../models/workout_progress.dart';
 import '../models/workout_session.dart';
 import 'training_recovery_snapshots.dart';
@@ -15,6 +18,20 @@ import 'hive_service.dart';
 import 'training_block_graph.dart';
 import 'sync_service.dart';
 import 'workout_progression_service.dart';
+
+/// What the rescue of work out of remotely deleted blocks did in one
+/// preparation. [rescued] and [skipped] hold deleted block ids; a skipped block
+/// is left to the older cascade, which tombstones the live work in it, so every
+/// skip is also logged with its reason (ids and reasons only, no user data).
+@visibleForTesting
+class BlockRescueReport {
+  final List<String> rescued = [];
+  final Map<String, String> skipped = {};
+
+  /// How often the graph with every rescue applied failed validation, so the
+  /// blocks were then rescued one at a time.
+  int fallbacks = 0;
+}
 
 class TrainingPreparationException implements Exception {
   final Object cause;
@@ -133,7 +150,10 @@ class TrainingBlockMigration {
       await checkpoint(_ownerKey(ownerId), journal, 'snapshot');
       await HiveService.recoverTrainingOperations(ownerId: ownerId);
       final count = HiveService.getAllSessionsRaw().length;
-      final prepared = prepareGraph(_readGraph(ownerId));
+      final prepared = prepareGraph(
+        _readGraph(ownerId),
+        rescue: rescueAvailableFor(ownerId),
+      );
       for (final d in prepared.exerciseDefinitions) {
         if (jsonEncode(ExerciseCatalog.getById(d.id)?.toJson()) !=
             jsonEncode(d.toJson())) {
@@ -211,7 +231,101 @@ class TrainingBlockMigration {
     );
   }
 
-  static TrainingBlockGraph prepareGraph(TrainingBlockGraph input) {
+  /// Whether work in [owner]'s data may be rescued out of a deleted block:
+  /// only where the uploads of a rescue are accepted, which is local-only data
+  /// or an account whose negotiated training schema is 4 or higher. A server
+  /// below 4 restores a stored session's evidence over the rescued one and
+  /// refuses the relinked row on every sync. An account whose level is not
+  /// known yet counts as below 4. Callers pass this as `rescue` for the graph
+  /// of the same owner.
+  static bool rescueAvailableFor(String? owner) =>
+      SyncService.instance.blockLifecycleAvailable(owner);
+
+  /// Normalizes [input] into a valid graph. With [rescue], rescuing live work
+  /// out of a block another replica deleted is applied first; it can never be
+  /// the reason this throws. Without it the result is exactly what the app did
+  /// before rescue existed: the live work in a deleted block is tombstoned
+  /// with it. [rescue] is a parameter, not read here, so this stays pure. If the graph with every rescue fails validation the blocks are
+  /// rescued one at a time and a block is kept only if the graph still
+  /// validates with it; one which does not is left to the older cascade and
+  /// logged, and the other blocks stay rescued.
+  static TrainingBlockGraph prepareGraph(
+    TrainingBlockGraph input, {
+    required bool rescue,
+  }) => prepareGraphReporting(input, rescue: rescue).graph;
+
+  /// [prepareGraph] with a report of what the rescue did.
+  @visibleForTesting
+  static ({TrainingBlockGraph graph, BlockRescueReport report})
+  prepareGraphReporting(TrainingBlockGraph input, {bool rescue = true}) {
+    if (!rescue) {
+      return (graph: _prepareGraph(input), report: BlockRescueReport());
+    }
+    final all = BlockRescueReport();
+    try {
+      final graph = _prepareGraph(input, report: all);
+      _logRescueSkips(all);
+      return (graph: graph, report: all);
+    } catch (_) {
+      // Nothing was rescued, so rescue is not the reason.
+      if (all.rescued.isEmpty) rethrow;
+    }
+    // If the pre-rescue path throws as well, rescue is not the reason: that
+    // error is the result.
+    var best = _prepareGraph(input);
+    final report =
+        BlockRescueReport()
+          ..fallbacks = 1
+          ..skipped.addAll(all.skipped);
+    debugPrint(
+      'Training block rescue: the rescued graph is invalid, trying '
+      '${all.rescued.length} block(s) one at a time.',
+    );
+    final accepted = <String>{};
+    for (final id in all.rescued) {
+      try {
+        best = _prepareGraph(
+          input,
+          report: BlockRescueReport(),
+          allowed: {...accepted, id},
+        );
+        accepted.add(id);
+        report.rescued.add(id);
+      } catch (error) {
+        report.skipped[id] = 'the graph does not validate with it ($error)';
+      }
+    }
+    _logRescueSkips(report);
+    return (graph: best, report: report);
+  }
+
+  static void _logRescueSkips(BlockRescueReport report) {
+    for (final entry in report.skipped.entries) {
+      debugPrint(
+        'Training block rescue skipped for block ${entry.key}: ${entry.value}. '
+        'Its live workouts follow the older cascade.',
+      );
+    }
+  }
+
+  /// An extra check run on every prepared graph, for tests of the isolation of
+  /// a block whose rescue makes the graph invalid.
+  @visibleForTesting
+  static void Function(TrainingBlockGraph graph)? extraValidationForTesting;
+
+  /// The pre-rescue behaviour, for tests that compare against it.
+  @visibleForTesting
+  static TrainingBlockGraph prepareGraphWithoutRescue(
+    TrainingBlockGraph input,
+  ) => _prepareGraph(input);
+
+  /// Without a [report] no rescue runs. [allowed] limits the rescue to those
+  /// deleted block ids.
+  static TrainingBlockGraph _prepareGraph(
+    TrainingBlockGraph input, {
+    BlockRescueReport? report,
+    Set<String>? allowed,
+  }) {
     input = ExerciseIdentityMigration.prepare(input);
     input.validate(
       allowLegacyLinks: true,
@@ -247,6 +361,19 @@ class TrainingBlockMigration {
           dirty: true,
         );
       }
+    }
+    if (report != null) {
+      _rescueDeletedBlocks(
+        report: report,
+        allowed: allowed,
+        ownerId: input.ownerId,
+        splits: splits,
+        plans: plans,
+        blocks: blocks,
+        weeks: weeks,
+        sessions: sessions,
+        progress: progress,
+      );
     }
     for (final w in weeks.values.toList()) {
       final parent = blocks[w.blockId]!;
@@ -516,6 +643,22 @@ class TrainingBlockMigration {
           );
       blocks[block.id] = block.copyWith(plannedWeekCount: count, dirty: true);
     }
+    // A shorter count can reach a replica which already allocated a later
+    // week. The count follows the allocated weeks; the clock and updatedAt stay
+    // so the larger count wins the tie everywhere.
+    for (final block in blocks.values.toList()) {
+      final count = block.plannedWeekCount;
+      if (block.deletedAt != null || count == null) continue;
+      final highest = weeks.values
+          .where((w) => w.blockId == block.id && w.deletedAt == null)
+          .fold<int>(0, (top, w) => w.number > top ? w.number : top);
+      if (count < highest) {
+        blocks[block.id] = block.copyWith(
+          plannedWeekCount: highest,
+          dirty: true,
+        );
+      }
+    }
     for (final p in progress.values.toList()) {
       if (p.availableWeekIds != null) continue;
       final reached = <String>{p.activeWeekId};
@@ -570,7 +713,313 @@ class TrainingBlockMigration {
       progress: progress.values.toList(),
     );
     graph.validate();
+    extraValidationForTesting?.call(graph);
     return WorkoutProgressionService.reconcileGraph(graph);
+  }
+
+  /// A deleted block must never take live work with it. When a replica deleted
+  /// a block that this device still uses, every live session in it (whatever
+  /// its plan's state: a deleted plan keeps its sessions as history) and the
+  /// live progress of live plans move into a successor block with an ID derived
+  /// from the deleted one, so every replica rescuing it chooses the same rows.
+  ///
+  /// Only a live session in the block's weeks or a progress row whose active
+  /// week is in the block triggers a rescue. A progress row that merely lists a
+  /// week of the block as available does not: a user's own delete leaves such
+  /// rows behind and must stay deleted. Once a rescue runs, those entries move
+  /// too. Sessions a restore or Clear All Data tombstoned are not live, so
+  /// nothing is rescued for them.
+  ///
+  /// Rescue is all-or-nothing per block: a block which cannot be rescued
+  /// cleanly is left exactly as the cascade below treats it without any rescue,
+  /// and the reason is recorded in [report]. With [allowed], only those blocks
+  /// are rescued.
+  static void _rescueDeletedBlocks({
+    required BlockRescueReport report,
+    required Set<String>? allowed,
+    required String? ownerId,
+    required Map<String, Split> splits,
+    required Map<String, WorkoutPlan> plans,
+    required Map<String, TrainingBlock> blocks,
+    required Map<String, TrainingWeek> weeks,
+    required Map<String, WorkoutSession> sessions,
+    required Map<String, WorkoutProgress> progress,
+  }) {
+    bool livePlan(String? id) =>
+        id != null && plans.containsKey(id) && plans[id]!.deletedAt == null;
+    final skipped = report.skipped;
+    // Each pass can only move work off a deleted block, so this settles.
+    for (var pass = 0; pass < 8; pass++) {
+      var rescued = false;
+      // A completion whose progress write never happened is still pending: its
+      // evidence expects the progress row's current revision, which a rescue
+      // replaces. Settle those first, on a copy, so a rescued row carries the
+      // advance and one left to the cascade is untouched.
+      final settled = {
+        for (final p
+            in WorkoutProgressionService.reconcileGraph(
+              TrainingBlockGraph(
+                ownerId: ownerId,
+                splits: splits.values.toList(),
+                plans: plans.values.toList(),
+                sessions: sessions.values.toList(),
+                blocks: blocks.values.toList(),
+                weeks: weeks.values.toList(),
+                progress: progress.values.toList(),
+              ),
+            ).progress)
+          p.id: p,
+      };
+      final deleted =
+          blocks.values
+              .where(
+                (b) =>
+                    b.deletedAt != null &&
+                    !skipped.containsKey(b.id) &&
+                    splits[b.splitId]?.deletedAt == null &&
+                    splits.containsKey(b.splitId),
+              )
+              .toList()
+            ..sort((a, b) => a.id.compareTo(b.id));
+      for (final x in deleted) {
+        final xWeeks = {
+          for (final w in weeks.values)
+            if (w.blockId == x.id) w.id: w,
+        };
+        if (xWeeks.isEmpty) continue;
+        final movedSessions =
+            sessions.values.where((s) {
+              if (s.deletedAt != null || s.splitId != x.splitId) return false;
+              if (xWeeks.containsKey(s.trainingWeekId)) return true;
+              final t = s.completionTransition;
+              return t != null &&
+                  (xWeeks.containsKey(t['sourceWeekId']) ||
+                      xWeeks.containsKey(t['nextWeekId']));
+            }).toList();
+        final activeProgress =
+            settled.values
+                .where(
+                  (p) =>
+                      p.deletedAt == null &&
+                      livePlan(p.planId) &&
+                      xWeeks.containsKey(p.activeWeekId),
+                )
+                .toList();
+        if (movedSessions.isEmpty && activeProgress.isEmpty) continue;
+        if (allowed != null && !allowed.contains(x.id)) {
+          skipped[x.id] = 'left out of the rescue after a validation failure';
+          continue;
+        }
+        final movedProgress =
+            settled.values
+                .where(
+                  (p) =>
+                      p.deletedAt == null &&
+                      livePlan(p.planId) &&
+                      (xWeeks.containsKey(p.activeWeekId) ||
+                          (p.availableWeekIds ?? const <String>[]).any(
+                            xWeeks.containsKey,
+                          )),
+                )
+                .toList();
+        final numbers = <int>{};
+        for (final s in movedSessions) {
+          final t = s.completionTransition;
+          for (final id in [
+            s.trainingWeekId,
+            t?['sourceWeekId'],
+            t?['nextWeekId'],
+          ]) {
+            if (xWeeks[id] case final w?) numbers.add(w.number);
+          }
+        }
+        for (final p in movedProgress) {
+          for (final id in [p.activeWeekId, ...?p.availableWeekIds]) {
+            if (xWeeks[id] case final w?) numbers.add(w.number);
+          }
+        }
+        if (numbers.isEmpty) {
+          skipped[x.id] = 'none of its weeks can be identified';
+          continue;
+        }
+        final highest = numbers.reduce((a, b) => a > b ? a : b);
+        // Find the successor: the derived block, or the next derivation when
+        // that one (or one of the weeks it needs) is itself tombstoned.
+        var targetId = rescuedTrainingBlockId(x.id);
+        TrainingBlock? target;
+        Map<int, String>? weekIds;
+        for (var i = 0; i < 16; i++) {
+          final existing = blocks[targetId];
+          final candidate = <int, String>{};
+          var usable =
+              existing == null ||
+              (existing.deletedAt == null && existing.splitId == x.splitId);
+          for (final n in numbers) {
+            if (!usable) break;
+            final live =
+                weeks.values
+                    .where(
+                      (w) =>
+                          w.blockId == targetId &&
+                          w.number == n &&
+                          w.deletedAt == null,
+                    )
+                    .toList()
+                  ..sort((a, b) => a.id.compareTo(b.id));
+            if (live.isNotEmpty) {
+              candidate[n] = live.first.id;
+              continue;
+            }
+            final lazy = lazyTrainingWeekId(x.splitId, targetId, n);
+            if (weeks[lazy] != null) {
+              usable = false;
+            } else {
+              candidate[n] = lazy;
+            }
+          }
+          if (usable) {
+            target = existing;
+            weekIds = candidate;
+            break;
+          }
+          targetId = rescuedTrainingBlockId(targetId);
+        }
+        if (weekIds == null || weekIds.length != numbers.length) {
+          skipped[x.id] = 'no usable successor block id';
+          continue;
+        }
+        // Week ids map by id: each source week goes to the successor's week of
+        // its number. Weeks of one block sharing a number (one of them
+        // tombstoned) share that target, so anything which would then collapse
+        // two distinct weeks of a completion into one makes the block
+        // unrescuable rather than invalid.
+        String? remap(String? id) {
+          final w = xWeeks[id];
+          return w == null ? id : weekIds![w.number];
+        }
+
+        final targetWeekIds = weekIds.values.toSet();
+        final stagedSessions = <String, WorkoutSession>{};
+        var clean = true;
+        for (final s in movedSessions) {
+          final t = s.completionTransition;
+          final week = remap(s.trainingWeekId);
+          final number =
+              xWeeks[s.trainingWeekId]?.number ??
+              (s.trainingWeekId == null
+                  ? null
+                  : weeks[s.trainingWeekId]?.number);
+          if (week == null || number != s.weekNumber) {
+            clean = false;
+            break;
+          }
+          Map<String, dynamic>? evidence;
+          if (t != null) {
+            final source = remap(t['sourceWeekId'] as String?);
+            final next = remap(t['nextWeekId'] as String?);
+            if (source != week ||
+                (next != null &&
+                    (next == source || !targetWeekIds.contains(next)))) {
+              clean = false;
+              break;
+            }
+            evidence = {...t, 'sourceWeekId': source, 'nextWeekId': next};
+          }
+          stagedSessions[s.id!] = s.copyWith(
+            trainingWeekId: week,
+            completionTransition: evidence,
+            dirty: true,
+          );
+        }
+        if (!clean) {
+          skipped[x.id] = 'a session cannot be relinked cleanly';
+          continue;
+        }
+        final stagedProgress = <String, WorkoutProgress>{};
+        for (final p in movedProgress) {
+          final available = <String>[];
+          for (final id in p.availableWeekIds ?? const <String>[]) {
+            final mapped = remap(id)!;
+            if (!available.contains(mapped)) available.add(mapped);
+          }
+          final active = remap(p.activeWeekId)!;
+          if (p.availableWeekIds != null && !available.contains(active)) {
+            clean = false;
+            break;
+          }
+          if (xWeeks.containsKey(p.activeWeekId)) {
+            // The server's last-write-wins would keep its stored row, whose
+            // week is deleted, over a rescued row with an unchanged revision
+            // and time. Win it instead, with values every replica derives
+            // alike: a revision from the old one and the successor, and a time
+            // just after the row's own. Never the deletion's time: two replicas
+            // holding different versions would tie there and the older one
+            // could win, and a deleting device with a fast clock would hand
+            // its future to every replica that rescues.
+            final base =
+                p.updatedAt ??
+                DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+            stagedProgress[p.id] = p.copyWith(
+              activeWeekId: active,
+              availableWeekIds: p.availableWeekIds == null ? null : available,
+              revision: rescuedProgressRevision(p.revision, targetId),
+              updatedAt: base.add(const Duration(milliseconds: 1)),
+              dirty: true,
+            );
+          } else {
+            stagedProgress[p.id] = p.copyWith(
+              availableWeekIds: p.availableWeekIds == null ? null : available,
+              dirty: true,
+            );
+          }
+        }
+        if (!clean) {
+          skipped[x.id] = 'a progress row cannot be relinked cleanly';
+          continue;
+        }
+        final planned = [
+          x.plannedWeekCount ?? 1,
+          highest,
+        ].reduce((a, b) => a > b ? a : b);
+        if (target == null) {
+          blocks[targetId] = TrainingBlock(
+            id: targetId,
+            splitId: x.splitId,
+            name: x.name,
+            position: x.position,
+            createdAt: x.createdAt,
+            updatedAt: x.deletedAt,
+            userId: ownerId,
+            plannedWeekCount: planned,
+            plannedWeekCountUpdatedAt: x.plannedWeekCountUpdatedAt,
+            dirty: true,
+          );
+        } else if ((target.plannedWeekCount ?? 0) < highest) {
+          blocks[targetId] = target.copyWith(
+            plannedWeekCount: highest,
+            dirty: true,
+          );
+        }
+        for (final entry in weekIds.entries) {
+          if (weeks.containsKey(entry.value)) continue;
+          weeks[entry.value] = TrainingWeek(
+            id: entry.value,
+            splitId: x.splitId,
+            blockId: targetId,
+            number: entry.key,
+            createdAt: x.createdAt,
+            updatedAt: x.deletedAt,
+            userId: ownerId,
+            dirty: true,
+          );
+        }
+        sessions.addAll(stagedSessions);
+        progress.addAll(stagedProgress);
+        report.rescued.add(x.id);
+        rescued = true;
+      }
+      if (!rescued) return;
+    }
   }
 
   static int compareSessionRecency(WorkoutSession a, WorkoutSession b) {

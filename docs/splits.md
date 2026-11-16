@@ -29,16 +29,17 @@ Split deletion is irreversible in the product. Locally and in Supabase it is
 represented by durable tombstones so an offline device cannot restore deleted
 workout data during a later sync.
 
-Backups use format version 5 and include all splits, intended block lengths,
+Backups use format version 6 and include all splits, intended block lengths,
 allocated weeks, per-plan available/active weeks, linked logs, owner provenance
-and the active selection. Versions 1–4 are normalized on import;
+and the active selection. Versions 1–5 are normalized on import;
 foreign/unknown-provenance copies receive new IDs. Global settings remain account-wide;
 sample data affects only the active split, while Clear All Data removes workout
 data across every split without deleting the split profiles.
 
 ## Blocks and workout progress
 
-A new workspace supplies Block 1 / Week 1. Blocks and week identities are
+A new workspace supplies Block 1 with an intended length of four weeks
+(`kDefaultBlockWeeks`), allocating only Week 1. Blocks and week identities are
 shared; available weeks and active progress are independent for each workout.
 A block's chosen length is its intended duration, not a request to allocate
 all weeks upfront. A four-week block starts with Week 1. Logging Push creates
@@ -54,8 +55,38 @@ moves only the choosing workout. The strip cannot add future weeks early.
 New/duplicated/Coach-added plans choose their start from intended weeks, with
 allocation deferred until saving; existing plan edits retain their position.
 
-Create, rename and reorder blocks, or extend a block at its boundary. Individual
-block/week deletion and week rename/reorder are unavailable. History still
+Create, edit (rename, extend and shorten), delete and reorder blocks, or extend
+a block at its boundary. Blocks can be managed from the workout screen's block
+menu and from the plan editor (the new-plan starting-week sheet, and the
+*Training block* field when editing a plan), and from Home's *Duplicate plan*
+sheet, which is the same starting-week sheet. Edit block can shorten a block
+down to the highest week anything has reached (a week with a workout, a plan's
+active or available week, or an allocated week row); it never removes weeks that
+were reached, and shortening or extending allocates no week rows. *Delete block*
+appears in Edit block and is enabled only for a block with no workouts logged in
+it and no plan currently positioned in it, and never for a split's last block;
+otherwise it stays visible but disabled with the reason beneath it. Deleting
+confirms first and tombstones the block and its weeks; the other blocks keep
+their order. Week rename/reorder is unavailable. For a signed-in account
+shortening and deleting appear only once the server supports training schema 4
+(`supabase/migrations/20261116120000_block_lifecycle.sql`); until then blocks
+are grow-only and cannot be deleted, as before. Deleting a signed-in block calls
+a guarded server function, so it needs a connection and can still be refused if
+the block is in use on another device. Once an account is at schema 4, app
+versions that predate it stop syncing until updated. If another device deletes
+a block this device still uses (a workout logged in it, or a plan positioned in
+it), the live work moves into a successor block rather than being deleted with
+it. This rescue applies to local-only data and to an account at schema 4; below
+schema 4 the older behaviour applies and the live work in the deleted block is
+deleted with it. A block whose planned length is below its highest allocated week is healed
+up to that week during normalization. Rescue keeps every live workout in the
+deleted block, including history of deleted plans, so a rescued block cannot be
+deleted while it holds them. If a block cannot be rescued cleanly the older
+behaviour applies, which deletes the live workouts in it, and the skip is logged
+with the block ID and reason. A block-length change made offline by an app
+version older than schema 4 is not carried over if another device has since set
+the length at schema 4 (weeks already reached are still kept by the heal step),
+and device clocks decide which length edit is newest. History still
 includes every completed live session by date across blocks, even when its
 original plan no longer exists. Exact-session resume keeps duplicate logs and
 nonactive started drafts distinct. See [DESIGN.md](../DESIGN.md) for inheritance,

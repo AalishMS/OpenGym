@@ -644,33 +644,37 @@ class _SpecSheet extends StatelessWidget {
                 ],
               ),
             ),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.lg,
-              vertical: AppSpacing.md,
-            ),
-            decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: hairline)),
-            ),
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  const TextSpan(text: 'Best for  '),
-                  TextSpan(
-                    text: preset.bestFit,
-                    style: TextStyle(
-                      color: textPrimaryColor(context),
-                      fontWeight: FontWeight.w600,
+          for (final fact in [
+            ('Best for  ', preset.bestFit),
+            ('Starts with  ', '${preset.blockWeeks}-week block'),
+          ])
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
+                vertical: AppSpacing.md,
+              ),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: hairline)),
+              ),
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: fact.$1),
+                    TextSpan(
+                      text: fact.$2,
+                      style: TextStyle(
+                        color: textPrimaryColor(context),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              style: textTheme.bodySmall?.copyWith(
-                color: textSecondaryColor(context),
-                fontSize: 13,
+                  ],
+                ),
+                style: textTheme.bodySmall?.copyWith(
+                  color: textSecondaryColor(context),
+                  fontSize: 13,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );

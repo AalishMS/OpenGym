@@ -286,7 +286,8 @@ void main() {
             Uri.parse('http://127.0.0.1:55440/splits?id=eq.$trialSplitId'),
             headers: {
               'Authorization': 'Bearer $_token',
-              'x-opengym-training-schema': '3',
+              // Never below the account's level on either server version.
+              'x-opengym-training-schema': '4',
               'Content-Type': 'application/json',
             },
             body: jsonEncode({'deleted_at': stamp, 'updated_at': stamp}),

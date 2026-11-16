@@ -11,6 +11,7 @@ import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_progress.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/repositories/training_block_repository.dart';
+import 'package:gymapp/services/sync_service.dart';
 import 'package:gymapp/services/backup_service.dart';
 import 'package:gymapp/services/adopt_local_data.dart';
 import 'package:gymapp/services/sample_data_seeder.dart';
@@ -233,6 +234,124 @@ void main() {
         operationId: result.operationId,
         settings: result.settings!,
       );
+
+  group('the duration clock', () {
+    final clock = DateTime.utc(2026, 5, 5, 5);
+
+    Future<TrainingBlock> stampedBlock() async {
+      final block = await TrainingBlockRepository(
+        ownerId: () => owner,
+      ).createBlock(splitId: splitId, name: 'Stamped', weekCount: 5);
+      await HiveService.putTrainingBlockRaw(
+        block.copyWith(plannedWeekCountUpdatedAt: clock),
+      );
+      return block;
+    }
+
+    test(
+      'round-trips through export and import without a version bump',
+      () async {
+        final block = await stampedBlock();
+        final json = jsonDecode(backup().jsonString) as Map<String, dynamic>;
+        expect(json['version'], 6);
+        final row = (json['trainingBlocks'] as List).cast<Map>().firstWhere(
+          (r) => r['id'] == block.id,
+        );
+        expect(row['plannedWeekCountUpdatedAt'], clock.toIso8601String());
+        final result = BackupService.importData(
+          backup().jsonString,
+          userId: owner,
+        );
+        expect(result.success, isTrue, reason: result.errorMessage);
+        expect(
+          result.blocks!
+              .singleWhere((b) => b.id == block.id)
+              .plannedWeekCountUpdatedAt,
+          clock,
+        );
+      },
+    );
+
+    test('an older reader ignoring the field, and an older file lacking it, '
+        'both import', () async {
+      await stampedBlock();
+      final json = jsonDecode(backup().jsonString) as Map<String, dynamic>;
+      // A file from before the field existed.
+      for (final row in json['trainingBlocks'] as List) {
+        (row as Map).remove('plannedWeekCountUpdatedAt');
+      }
+      final older = BackupService.importData(jsonEncode(json), userId: owner);
+      expect(older.success, isTrue, reason: older.errorMessage);
+      expect(
+        older.blocks!.every((b) => b.plannedWeekCountUpdatedAt == null),
+        isTrue,
+      );
+      // Import validation does not reject keys it does not know, which is how
+      // an older app treats the new one.
+      for (final row in json['trainingBlocks'] as List) {
+        (row as Map)['someFutureField'] = 1;
+      }
+      final future = BackupService.importData(jsonEncode(json), userId: owner);
+      expect(future.success, isTrue, reason: future.errorMessage);
+    });
+
+    test('below schema 4 restoring and the sample seeder stamp no clock, and '
+        'at 4 the seeder does', () async {
+      await stampedBlock();
+      await restore(
+        BackupService.importData(backup().jsonString, userId: owner),
+      );
+      final restored = HiveService.getAllTrainingBlocksRaw().where(
+        (b) => b.deletedAt == null,
+      );
+      expect(restored, isNotEmpty);
+      expect(
+        restored.every((b) => b.plannedWeekCountUpdatedAt == null),
+        isTrue,
+      );
+      await SampleDataSeeder.seedSampleData(splitId: splitId);
+      List<TrainingBlock> live() =>
+          HiveService.blocksForSplit(splitId).toList();
+      expect(live(), isNotEmpty);
+      expect(live().every((b) => b.plannedWeekCountUpdatedAt == null), isTrue);
+      SyncService.instance.setNegotiatedSchema(owner, 4);
+      addTearDown(SyncService.instance.forgetNegotiatedSchemas);
+      await SampleDataSeeder.seedSampleData(splitId: splitId);
+      expect(live().every((b) => b.plannedWeekCountUpdatedAt != null), isTrue);
+    });
+
+    test('restoring stamps the clock on every restored block', () async {
+      SyncService.instance.setNegotiatedSchema(owner, 4);
+      addTearDown(SyncService.instance.forgetNegotiatedSchemas);
+      final block = await stampedBlock();
+      final saved = BackupService.importData(
+        backup().jsonString,
+        userId: owner,
+      );
+      final before = DateTime.now();
+      await restore(saved);
+      final restored = HiveService.getAllTrainingBlocksRaw().where(
+        (b) => b.deletedAt == null,
+      );
+      expect(restored, isNotEmpty);
+      for (final b in restored) {
+        expect(b.plannedWeekCountUpdatedAt, isNotNull, reason: b.name);
+        expect(
+          b.plannedWeekCountUpdatedAt!.isBefore(
+            before.subtract(const Duration(seconds: 1)),
+          ),
+          isFalse,
+          reason: b.name,
+        );
+        expect(b.dirty, isTrue);
+      }
+      expect(
+        restored.where((b) => b.name == 'Stamped').single.plannedWeekCount,
+        5,
+      );
+      expect(block.plannedWeekCount, 5);
+    });
+  });
 
   test(
     'restoring a deleted graph copies it without reviving tombstone IDs',

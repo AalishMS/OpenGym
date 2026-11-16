@@ -165,6 +165,7 @@ class SampleDataSeeder {
       await HiveService.recoverTrainingOperations(ownerId: owner);
       final current = TrainingBlockMigration.prepareGraph(
         HiveService.readTrainingGraph(ownerId: owner).ownedBy(owner),
+        rescue: TrainingBlockMigration.rescueAvailableFor(owner),
       );
       final cleared = current.clearWorkouts(splitId: splitId);
       // clearWorkouts supplies an unsaved bootstrap Block 1 / Week 1; the
@@ -179,6 +180,7 @@ class SampleDataSeeder {
         now: DateTime.now(),
       );
       final graph = TrainingBlockMigration.prepareGraph(
+        rescue: TrainingBlockMigration.rescueAvailableFor(owner),
         cleared.copyWith(
           blocks: [
             ...cleared.blocks.where((b) => b.id != bootstrap),
@@ -299,6 +301,10 @@ class SampleDataSeeder {
         splitId: splitId,
         name: spec.name,
         plannedWeekCount: spec.plannedWeeks,
+        plannedWeekCountUpdatedAt: SyncService.instance.durationClockFor(
+          ownerId,
+          now,
+        ),
         position: blockIndex,
         createdAt: created,
         userId: ownerId,

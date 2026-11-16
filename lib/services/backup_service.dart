@@ -99,7 +99,9 @@ class BackupService {
             owners.any((id) => id != sourceAccountId))) {
       throw const FormatException('Cannot export mixed account data.');
     }
+    final exportOwner = sourceAccountId ?? owners.firstOrNull;
     final graph = TrainingBlockMigration.prepareGraph(
+      rescue: TrainingBlockMigration.rescueAvailableFor(exportOwner),
       TrainingBlockGraph(
         ownerId: sourceAccountId ?? owners.firstOrNull,
         exerciseDefinitions: exerciseDefinitions,
@@ -110,7 +112,7 @@ class BackupService {
         blocks: blocks,
         weeks: weeks,
         progress: progress,
-      ).ownedBy(sourceAccountId ?? owners.firstOrNull),
+      ).ownedBy(exportOwner),
     );
     final now = DateTime.now();
     final date =
@@ -246,7 +248,10 @@ class BackupService {
       }
       graph = ExerciseIdentityMigration.prepare(graph);
       if (version < 5) {
-        graph = TrainingBlockMigration.prepareGraph(graph);
+        graph = TrainingBlockMigration.prepareGraph(
+          graph,
+          rescue: TrainingBlockMigration.rescueAvailableFor(graph.ownerId),
+        );
       } else {
         if (graph.blocks.any((b) => b.plannedWeekCount == null) ||
             graph.progress.any((p) => p.availableWeekIds == null)) {

@@ -51,6 +51,7 @@ try:
             '20261028072415_add_training_blocks_and_compatibility_gate.sql',
             '20261029135002_lazy_independent_block_weeks.sql',
             '20261105120000_exercise_identity_catalog.sql',
+            '20261116120000_block_lifecycle.sql',
         ]:
             c.execute((ROOT / 'supabase/migrations' / filename).read_text(), prepare=False)
         c.execute('insert into auth.users values(%s),(%s)', (OWNER, OTHER))

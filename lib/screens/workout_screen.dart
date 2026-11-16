@@ -1418,17 +1418,51 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       );
   }
 
-  Future<void> _renameBlock(String blockId) async {
+  Future<void> _editBlock(String blockId) async {
     final block = _blocks.where((b) => b.id == blockId).firstOrNull;
     if (block == null) return;
-    await TrainingBlockDialogs.rename(
-      context,
-      block,
-      onSave:
-          (name) => _structureMutation(
-            () => _structure.renameBlock(widget.plan.splitId!, blockId, name),
+    final splitId = widget.plan.splitId!;
+    final lifecycle = TrainingBlockLifecycle.of(
+      _structure,
+      splitId: splitId,
+      delete:
+          (block) => _structureMutation(
+            () => _structure.deleteBlock(splitId: splitId, blockId: block.id),
+            label: 'Deleting block',
           ),
     );
+    final lifecycleOn = lifecycle.available();
+    final blocker = lifecycleOn ? lifecycle.deleteBlocker(block) : null;
+    final viewed = _weeks.isEmpty ? null : _currentWeek;
+    final result = await TrainingBlockDialogs.edit(
+      context,
+      block,
+      currentWeekCount: trainingBlockLength(
+        block,
+        _training.weeksByBlock[blockId] ?? const <TrainingWeek>[],
+      ),
+      minimumWeekCount: lifecycleOn ? lifecycle.minimumWeekCount(block) : null,
+      onSave:
+          (name, count) => _structureMutation(
+            () => _structure.updateBlock(
+              splitId: splitId,
+              blockId: blockId,
+              name: name,
+              weekCount: count,
+            ),
+          ),
+      onDelete: lifecycleOn ? () => lifecycle.delete(block) : null,
+      deleteUnavailableReason:
+          blocker == null ? null : TrainingBlockDialogs.blockerMessage(blocker),
+    );
+    if (!mounted || result is! TrainingBlockDeleted) return;
+    _viewedWeekByBlock.remove(blockId);
+    // A workout can view a block other than the one its progress is in. When
+    // that block is deleted, return to the workout's active week.
+    if (viewed != null && !_weeks.contains(viewed)) _selectProgress();
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text('${result.name} deleted')));
   }
 
   Future<void> _reorderBlocks() => TrainingBlockDialogs.reorder(
@@ -1619,6 +1653,14 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                                 w.number),
                                   )
                                   .toList();
+                      final planned =
+                          source != null &&
+                          supplied.isEmpty &&
+                          (_training
+                                      .blockById[source.blockId]
+                                      ?.plannedWeekCount ??
+                                  0) >
+                              source.number;
                       final blockIndex =
                           source == null
                               ? -1
@@ -1727,8 +1769,18 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                 )
                               else
                                 TrainingBoundaryOption(
-                                  icon: LucideIcons.plus,
-                                  title: 'Add week',
+                                  icon:
+                                      planned
+                                          ? LucideIcons.arrowRight
+                                          : LucideIcons.plus,
+                                  // The block was made longer after this
+                                  // workout reached its end: the next week is
+                                  // already planned, just not allocated yet.
+                                  title:
+                                      planned
+                                          ? 'Continue to Week '
+                                              '${source.number + 1}'
+                                          : 'Add week',
                                   detail:
                                       source == null || blockName == null
                                           ? 'Keep going in this block.'
@@ -2245,7 +2297,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       activeWeekId: _progress?.activeWeekId,
       onSelectWeek: _onWeekChanged,
       onSelectBlock: _selectBlock,
-      onRenameBlock: _renameBlock,
+      onEditBlock: _editBlock,
       onReorderBlocks: _reorderBlocks,
       onAddWeek: _addWeek,
       onDeleteWeek: widget.plan.id == null ? null : _showWeekActions,

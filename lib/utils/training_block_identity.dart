@@ -28,3 +28,23 @@ String lazyTrainingWeekId(String splitId, String blockId, int number) {
     'https://opengym.app/splits/${splitId.toLowerCase()}/blocks/${blockId.toLowerCase()}/lazy-weeks/$number',
   );
 }
+
+/// The block that adopts live work when a replica deletes the block it was in.
+/// Derived from the deleted block's id so replicas rescuing the same block
+/// choose one ID.
+String rescuedTrainingBlockId(String blockId) => _uuid.v5(
+  Namespace.url.value,
+  'https://opengym.app/blocks/${blockId.toLowerCase()}/rescued-v1',
+);
+
+/// The revision a progress row gets when its block is rescued. Derived from the
+/// row's own revision and the successor block, so every replica rescuing the
+/// same row writes the same revision, and never the bootstrap one the server
+/// refuses to let overwrite a stored row.
+String rescuedProgressRevision(
+  String revision,
+  String successorBlockId,
+) => _uuid.v5(
+  Namespace.url.value,
+  'https://opengym.app/progress-revisions/${revision.toLowerCase()}/rescued-into/${successorBlockId.toLowerCase()}',
+);

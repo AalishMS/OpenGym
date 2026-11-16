@@ -815,6 +815,7 @@ class HiveService {
         plan.dirty = true;
         await recoverTrainingOperations(ownerId: split.userId);
         var graph = TrainingBlockMigration.prepareGraph(
+          rescue: TrainingBlockMigration.rescueAvailableFor(split.userId),
           readTrainingGraph(ownerId: split.userId)
               .ownedBy(split.userId)
               .copyWith(plans: [...getAllPlansRaw(), plan])
@@ -1355,6 +1356,7 @@ class HiveService {
     await recoverTrainingOperations(ownerId: owner);
     final graph = TrainingBlockMigration.prepareGraph(
       readTrainingGraph(ownerId: owner).ownedBy(owner),
+      rescue: TrainingBlockMigration.rescueAvailableFor(owner),
     );
     final cleared = graph.clearWorkouts(splitId: splitId);
     await TrainingBlockRestore().replaceUnderGate(

@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../data/exercise_library.dart';
 import '../data/plan_colors.dart';
 import '../data/workout_presets.dart';
+import '../models/training_block.dart';
 import '../models/workout_plan.dart';
 import 'split_install_target.dart';
 import 'sync_service.dart';
@@ -71,7 +72,7 @@ class WorkoutPresetInstaller {
           ownerId: userId,
           plans: planMap,
           split: target.split,
-          initialBlockWeekCount: 4,
+          initialBlockWeekCount: preset.blockWeeks,
           activeSplitId: target.splitId,
           onPhase: (phase) async {
             if (phase == 'plans') {
@@ -104,7 +105,9 @@ class WorkoutPresetInstaller {
         preset.installName.isEmpty ||
         preset.installName.length > 24 ||
         preset.scheduleSlots.isEmpty ||
-        preset.plans.isEmpty) {
+        preset.plans.isEmpty ||
+        preset.blockWeeks < 1 ||
+        preset.blockWeeks > kMaxBlockWeeks) {
       throw const FormatException('Preset metadata is incomplete.');
     }
     final library = ExerciseLibrary.allExercises.toSet();

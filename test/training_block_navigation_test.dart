@@ -91,7 +91,7 @@ void main() {
                   onSelectWeek: (id) => setState(() => selected = id),
                   onSelectBlock:
                       (id) => setState(() => selected = slots[id]!.first.id),
-                  onRenameBlock: (id) => onAction?.call('rename:$id'),
+                  onEditBlock: (id) => onAction?.call('edit:$id'),
                   onReorderBlocks: () => onAction?.call('reorder'),
                   onCreateBlock: () => onAction?.call('create'),
                   onAddWeek: (id) => onAction?.call('add:$id'),
@@ -161,7 +161,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Block 2'), findsOneWidget);
     expect(find.text('Create block'), findsOneWidget);
-    expect(find.text('Rename block'), findsOneWidget);
+    expect(find.text('Edit block'), findsOneWidget);
     expect(find.text('Reorder blocks'), findsOneWidget);
     await tester.tap(find.text('Block 2'));
     await tester.pumpAndSettle();
@@ -210,13 +210,13 @@ void main() {
     );
     await tester.binding.handlePopRoute();
     await tester.pumpAndSettle();
-    expect(find.text('Rename block'), findsNothing);
+    expect(find.text('Edit block'), findsNothing);
     expect(find.text('Selected b0-w1'), findsOneWidget);
     await tester.tap(find.text('Block 1'));
     await tester.pumpAndSettle();
     await tester.tapAt(const Offset(380, 100));
     await tester.pumpAndSettle();
-    expect(find.text('Rename block'), findsNothing);
+    expect(find.text('Edit block'), findsNothing);
   });
 
   testWidgets(
@@ -228,13 +228,13 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Add week'));
-      for (final label in ['Create block', 'Rename block', 'Reorder blocks']) {
+      for (final label in ['Create block', 'Edit block', 'Reorder blocks']) {
         await tester.tap(find.text('Block 1'));
         await tester.pumpAndSettle();
         await tester.tap(find.text(label));
         await tester.pumpAndSettle();
       }
-      expect(actions, ['add:b0', 'create', 'rename:b0', 'reorder']);
+      expect(actions, ['add:b0', 'create', 'edit:b0', 'reorder']);
       await tester.pumpWidget(
         host(
           structure: blocks(1),
@@ -862,7 +862,7 @@ void main() {
         await tester.tap(find.text('Create'));
         await pumpWithStorage(tester);
         expect(find.text('Strength · Week 1'), findsOneWidget);
-        await choose('Strength', 'Rename block');
+        await choose('Strength', 'Edit block');
         await tester.enterText(find.bySemanticsLabel('Block name'), 'Power');
         await tester.tap(find.text('Save'));
         await pumpWithStorage(tester);
@@ -875,11 +875,7 @@ void main() {
         await pumpWithStorage(tester);
         expect(HiveService.blocksForSplit('s').first.name, 'Power');
         expect(find.text('Power · Week 1'), findsOneWidget);
-        for (final action in [
-          'Create block',
-          'Rename block',
-          'Reorder blocks',
-        ]) {
+        for (final action in ['Create block', 'Edit block', 'Reorder blocks']) {
           await choose('Power', action);
           await tester.tap(find.text('Cancel'));
           await tester.pumpAndSettle();
@@ -887,6 +883,109 @@ void main() {
         }
         expect(HiveService.getAllTrainingBlocksRaw(), hasLength(2));
         expect(HiveService.getAllSessionsRaw(), isEmpty);
+      },
+    );
+
+    Future<void> openBlockMenuAction(
+      WidgetTester tester,
+      String blockName,
+      String action,
+    ) async {
+      await tester.tap(find.text(blockName));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(action));
+      await tester.pumpAndSettle();
+    }
+
+    locationTest(
+      'deleting the block being viewed falls back to the active week',
+      (tester) async {
+        await tester.runAsync(() async {
+          await TrainingBlockMigration().normalize(ownerId: null);
+          await TrainingBlockRepository(
+            ownerId: () => null,
+          ).createBlock(splitId: 's', name: 'Strength', weekCount: 3);
+        });
+        await open(tester);
+        await tester.tap(find.text('Block 1'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Strength'));
+        await pumpWithStorage(tester);
+        expect(find.text('Strength · Week 1'), findsOneWidget);
+
+        await openBlockMenuAction(tester, 'Strength', 'Edit block');
+        expect(find.text('Delete block'), findsOneWidget);
+        await tester.tap(find.text('Delete block'));
+        await tester.pumpAndSettle();
+        expect(find.text('Delete Strength?'), findsOneWidget);
+        await tester.runAsync(() async {
+          await tester.tap(
+            find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.text('Delete'),
+            ),
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        });
+        await pumpWithStorage(tester);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Strength deleted'), findsOneWidget);
+        expect(find.text('Block 1 · Week 1'), findsOneWidget);
+        expect(find.text('Strength · Week 1'), findsNothing);
+        expect(HiveService.blocksForSplit('s').map((b) => b.name), ['Block 1']);
+        expect(
+          HiveService.readTrainingGraph(ownerId: null).validate,
+          returnsNormally,
+        );
+      },
+    );
+
+    locationTest(
+      'the block the workout is in cannot be deleted and can be shortened '
+      'only to its reached week',
+      (tester) async {
+        await tester.runAsync(() async {
+          await TrainingBlockMigration().normalize(ownerId: null);
+          final repo = TrainingBlockRepository(ownerId: () => null);
+          final first = repo.blocksForSplit('s').single;
+          await repo.updateBlock(
+            splitId: 's',
+            blockId: first.id,
+            name: first.name,
+            weekCount: 4,
+          );
+          await repo.createBlock(splitId: 's', name: 'Strength', weekCount: 3);
+        });
+        await open(tester);
+        await openBlockMenuAction(tester, 'Block 1', 'Edit block');
+        expect(
+          find.text(
+            'A workout is in this block right now. Move it to another block '
+            'first.',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          tester
+              .widget<ButtonStyleButton>(
+                find.ancestor(
+                  of: find.text('Delete block'),
+                  matching: find.bySubtype<ButtonStyleButton>(),
+                ),
+              )
+              .onPressed,
+          isNull,
+        );
+        await tester.enterText(find.bySemanticsLabel('Weeks'), '1');
+        await tester.runAsync(() async {
+          await tester.tap(find.text('Save'));
+          await Future<void>.delayed(const Duration(milliseconds: 300));
+        });
+        await pumpWithStorage(tester);
+        await tester.pumpAndSettle();
+        expect(HiveService.blocksForSplit('s').first.plannedWeekCount, 1);
+        expect(find.text('Block 1 · Week 1'), findsOneWidget);
       },
     );
 

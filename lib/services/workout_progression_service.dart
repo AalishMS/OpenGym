@@ -562,6 +562,10 @@ class WorkoutProgressionService {
     final block = HiveService.getTrainingBlockById(source.blockId)!;
     final extended = block.copyWith(
       plannedWeekCount: week.number,
+      plannedWeekCountUpdatedAt: SyncService.instance.durationClockFor(
+        _owner(),
+        now,
+      ),
       updatedAt: now,
       dirty: true,
     );
@@ -623,6 +627,10 @@ class WorkoutProgressionService {
       splitId: progress.splitId,
       name: trimmed,
       plannedWeekCount: weekCount,
+      plannedWeekCountUpdatedAt: SyncService.instance.durationClockFor(
+        _owner(),
+        now,
+      ),
       position:
           blocks.map((b) => b.position).reduce((a, b) => a > b ? a : b) + 1,
       createdAt: now,
@@ -723,8 +731,27 @@ class WorkoutProgressionService {
         throw StateError('Conflicting boundary block.');
       }
       final saved = HiveService.getTrainingBlockById(block.id);
+      if (saved != null &&
+          saved.deletedAt != null &&
+          intent['action'] == 'append') {
+        // The block was deleted elsewhere before this extension was applied.
+        // Nothing was written yet, and the plan stays at its boundary until
+        // startup moves it out of the deleted block.
+        await operations.delete('boundary');
+        await operations.flush();
+        return null;
+      }
+      // The intent may have been stamped under another schema than the
+      // account has now.
+      final intentClock = block.plannedWeekCountUpdatedAt;
+      final stamped =
+          intentClock != null &&
+                  SyncService.instance.durationClockFor(ownerId, intentClock) !=
+                      null
+              ? block
+              : block.copyWith(plannedWeekCountUpdatedAt: null);
       if (saved == null) {
-        await HiveService.putTrainingBlockRaw(block);
+        await HiveService.putTrainingBlockRaw(stamped);
       } else if (saved.deletedAt != null ||
           saved.splitId != block.splitId ||
           saved.userId != ownerId) {
@@ -734,6 +761,7 @@ class WorkoutProgressionService {
         await HiveService.putTrainingBlockRaw(
           saved.copyWith(
             plannedWeekCount: block.plannedWeekCount,
+            plannedWeekCountUpdatedAt: stamped.plannedWeekCountUpdatedAt,
             updatedAt: block.updatedAt,
             dirty: true,
           ),

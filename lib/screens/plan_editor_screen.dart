@@ -26,10 +26,12 @@ import '../widgets/workout/set_entry_table.dart';
 import '../utils/set_history.dart';
 import '../utils/weight_units.dart';
 import '../widgets/workout/workout_dialogs.dart';
+import '../widgets/workout/training_block_actions.dart';
 import '../widgets/workout/training_block_dialogs.dart';
 import '../models/training_block.dart';
 import '../models/training_week.dart';
 import '../providers/training_block_provider.dart';
+import '../widgets/workout/training_block_strip.dart';
 
 class PlanEditorScreen extends StatefulWidget {
   final WorkoutPlan? plan;
@@ -60,6 +62,9 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   bool _showColors = false;
   String? _draftId;
   String? _startingWeekId;
+  // The block the starting week is in, kept so a week removed by shortening
+  // can fall back to that block's last remaining week.
+  String? _startingBlockId;
 
   bool get _canSave => _nameController.text.trim().isNotEmpty;
 
@@ -109,6 +114,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
               _splitId!,
               blocks.first.id,
             ).firstOrNull?.id;
+        _startingBlockId = blocks.first.id;
       }
     }
     _initialSignature = _signature();
@@ -176,15 +182,115 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     return 'Choose starting week';
   }
 
+  TrainingBlockSnapshot _loadBlocks() => (
+    blocks: _startingBlocks,
+    weeksByBlock: _startingWeeks,
+  );
+
+  /// Block changes write straight to storage, outside this form's Save and
+  /// Discard, so they never touch the dirty signature.
+  TrainingBlockActions get _blockActions => TrainingBlockActions(
+    context: () => context,
+    splitId: _splitId!,
+    ownerId:
+        () =>
+            widget.plan?.userId ?? HiveService.getSplitById(_splitId!)?.userId,
+    onChanged: () => setState(_settleStartingWeek),
+  );
+
+  /// Keeps the chosen starting week on a week that exists: blocks change
+  /// outside this form's Save, so a delete or a shorten can remove it.
+  void _settleStartingWeek() {
+    final id = _startingWeekId;
+    if (id == null || _splitId == null) return;
+    final weeks = _startingWeeks;
+    for (final entry in weeks.entries) {
+      if (entry.value.any((w) => w.id == id)) {
+        _startingBlockId = entry.key;
+        return;
+      }
+    }
+    final kept = weeks[_startingBlockId]?.lastOrNull;
+    if (kept != null) {
+      _startingWeekId = kept.id;
+      return;
+    }
+    final first = _startingBlocks.firstOrNull;
+    _startingBlockId = first?.id;
+    _startingWeekId = first == null ? null : weeks[first.id]?.firstOrNull?.id;
+  }
+
+  String? _blockOfStartingWeek(String weekId) {
+    for (final entry in _startingWeeks.entries) {
+      if (entry.value.any((w) => w.id == weekId)) return entry.key;
+    }
+    return null;
+  }
+
   Future<void> _chooseStart() async {
     final chosen = await TrainingBlockDialogs.startingWeek(
       context,
       blocks: _startingBlocks,
       weeksByBlock: _startingWeeks,
       selectedWeekId: _startingWeekId,
+      load: _loadBlocks,
+      onCreateBlock: (name, count) => _blockActions.create(name, count),
+      onEditBlock:
+          (block, name, count) => _blockActions.edit(block, name, count),
+      lifecycle: _blockActions.lifecycle,
     );
-    if (chosen != null && mounted) setState(() => _startingWeekId = chosen);
+    if (!mounted) return;
+    setState(() {
+      if (chosen != null) {
+        _startingWeekId = chosen;
+        _startingBlockId = _blockOfStartingWeek(chosen);
+      }
+      // Blocks may have been deleted or shortened while the sheet was open,
+      // whether or not a week was confirmed.
+      _settleStartingWeek();
+    });
   }
+
+  /// The block the plan is in now, e.g. `Strength · Week 2 of 4`.
+  String get _currentBlockLabel {
+    final planId = widget.plan?.id;
+    final progress =
+        planId == null || _splitId == null
+            ? null
+            : HiveService.progressForPlan(_splitId!, planId);
+    final week =
+        progress == null
+            ? null
+            : HiveService.getTrainingWeekById(progress.activeWeekId);
+    final block =
+        week == null || week.deletedAt != null
+            ? null
+            : HiveService.getTrainingBlockById(week.blockId);
+    if (block == null || block.deletedAt != null) return 'Not in a block';
+    final length = trainingBlockLength(
+      block,
+      HiveService.weeksForBlock(_splitId!, block.id),
+    );
+    return '${block.name} · Week ${week!.number} of $length';
+  }
+
+  String? get _currentBlockId {
+    final planId = widget.plan?.id;
+    if (planId == null || _splitId == null) return null;
+    final progress = HiveService.progressForPlan(_splitId!, planId);
+    return progress == null
+        ? null
+        : HiveService.getTrainingWeekById(progress.activeWeekId)?.blockId;
+  }
+
+  Future<void> _manageBlocks() => TrainingBlockDialogs.manage(
+    context,
+    load: _loadBlocks,
+    onCreateBlock: (name, count) => _blockActions.create(name, count),
+    onEditBlock: (block, name, count) => _blockActions.edit(block, name, count),
+    currentBlockId: _currentBlockId,
+    lifecycle: _blockActions.lifecycle,
+  );
 
   Future<void> _savePlan() async {
     if (_isSaving || _saved || !_canSave) return;
@@ -502,13 +608,19 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                               controller: _nameController,
                               marker: planColor,
                             ),
-                            if (!widget.isEdit &&
-                                _startingBlocks.isNotEmpty) ...[
+                            if (_startingBlocks.isNotEmpty) ...[
                               const SizedBox(height: AppSpacing.md),
-                              StartingWeekField(
-                                value: _startingLabel,
-                                onTap: _isSaving ? null : _chooseStart,
-                              ),
+                              if (widget.isEdit)
+                                StartingWeekField(
+                                  label: 'Training block',
+                                  value: _currentBlockLabel,
+                                  onTap: _isSaving ? null : _manageBlocks,
+                                )
+                              else
+                                StartingWeekField(
+                                  value: _startingLabel,
+                                  onTap: _isSaving ? null : _chooseStart,
+                                ),
                             ],
                             const SizedBox(height: AppSpacing.xl),
                             Wrap(

@@ -11,10 +11,16 @@ import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 
-/// `4 weeks` for a block's intended length, falling back to the weeks this
-/// workout can see when a migrated block has no stored length.
+/// A block's intended length. A migrated block with no stored length falls
+/// back to its highest week number, the same rule
+/// `TrainingBlockRepository.updateBlock` uses for the shortest it may become.
+int trainingBlockLength(TrainingBlock block, List<TrainingWeek> weeks) =>
+    block.plannedWeekCount ??
+    weeks.fold<int>(1, (highest, w) => w.number > highest ? w.number : highest);
+
+/// `4 weeks` for [trainingBlockLength].
 String trainingBlockLengthLabel(TrainingBlock block, List<TrainingWeek> weeks) {
-  final count = block.plannedWeekCount ?? weeks.length;
+  final count = trainingBlockLength(block, weeks);
   return count == 1 ? '1 week' : '$count weeks';
 }
 
@@ -25,7 +31,7 @@ class TrainingBlockStrip extends StatefulWidget {
   final String? selectedWeekId;
   final ValueChanged<String> onSelectWeek;
   final ValueChanged<String> onSelectBlock;
-  final ValueChanged<String> onRenameBlock;
+  final ValueChanged<String> onEditBlock;
   final VoidCallback onReorderBlocks;
   final VoidCallback onCreateBlock;
   final ValueChanged<String> onAddWeek;
@@ -49,7 +55,7 @@ class TrainingBlockStrip extends StatefulWidget {
     required this.selectedWeekId,
     required this.onSelectWeek,
     required this.onSelectBlock,
-    required this.onRenameBlock,
+    required this.onEditBlock,
     required this.onReorderBlocks,
     required this.onCreateBlock,
     required this.onAddWeek,
@@ -167,7 +173,7 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
           currentId: block.id,
           onSelectBlock: widget.onSelectBlock,
           onCreateBlock: widget.onCreateBlock,
-          onRenameBlock: () => widget.onRenameBlock(block.id),
+          onEditBlock: () => widget.onEditBlock(block.id),
           onReorderBlocks: widget.onReorderBlocks,
         ),
       ),
@@ -373,9 +379,7 @@ class _BlockButton extends StatelessWidget {
         message: name,
         child: Material(
           color: open ? accentMutedColor(context) : Colors.transparent,
-          shape: const RoundedRectangleBorder(
-            borderRadius: AppRadius.control,
-          ),
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.control),
           clipBehavior: Clip.antiAlias,
           child: InkWell(
             onTap: onPressed,
@@ -649,7 +653,7 @@ class _BlockMenu extends StatefulWidget {
   final String currentId;
   final ValueChanged<String> onSelectBlock;
   final VoidCallback onCreateBlock;
-  final VoidCallback onRenameBlock;
+  final VoidCallback onEditBlock;
   final VoidCallback onReorderBlocks;
 
   const _BlockMenu({
@@ -658,7 +662,7 @@ class _BlockMenu extends StatefulWidget {
     required this.currentId,
     required this.onSelectBlock,
     required this.onCreateBlock,
-    required this.onRenameBlock,
+    required this.onEditBlock,
     required this.onReorderBlocks,
   });
 
@@ -758,8 +762,8 @@ class _BlockMenuState extends State<_BlockMenu> {
       ),
       _BlockMenuAction(
         icon: LucideIcons.pencilLine,
-        label: 'Rename block',
-        onTap: () => _close(widget.onRenameBlock),
+        label: 'Edit block',
+        onTap: () => _close(widget.onEditBlock),
       ),
       _BlockMenuAction(
         icon: LucideIcons.arrowUpDown,
