@@ -109,6 +109,7 @@ declare
   evidence jsonb;
   target public.training_weeks;
   old_week_deleted boolean := false;
+  stored public.workout_sessions;
 begin
   if auth.uid() is not null and new.user_id<>auth.uid() then raise insufficient_privilege; end if;
   -- Not for a row that still lacks its link: normalize_account repairs those with
@@ -116,6 +117,32 @@ begin
   if tg_op='UPDATE' and old.training_week_id is not null and old.data->>'trainingWeekId'=old.training_week_id::text and
      pg_catalog.to_jsonb(new) is not distinct from pg_catalog.to_jsonb(old) then return new; end if;
   if not exists(select 1 from public.account_training_capabilities where user_id=new.user_id) then return new; end if;
+  -- 3. A tombstone never moves a session. Deleting must always be accepted, even
+  --    from a device that still holds the session in a week it has since been
+  --    rescued out of (or names a week that is gone, foreign or unrelated). The
+  --    week a tombstone names is not evidence of anything, so a row that is a
+  --    tombstone and already has a stored link is pinned to the STORED link, its
+  --    week number and the stored evidence (or its absence), and then validated
+  --    like any other row against that week. This runs in the BEFORE INSERT pass
+  --    of an upsert too (it looks the stored row up by id and owner), because
+  --    ON CONFLICT DO UPDATE receives the row as that pass left it. It applies
+  --    only to rows with deleted_at set, so a live row can never change week by
+  --    this path, and it only ever copies values from the stored row, so it
+  --    cannot point a session anywhere new. A tombstone still cannot be undone:
+  --    keep_newest_row refuses a live row over a stored tombstone.
+  if new.deleted_at is not null then
+    if tg_op='UPDATE' then stored := old;
+    else select * into stored from public.workout_sessions where id=new.id and user_id=new.user_id; end if;
+    if stored.training_week_id is not null and
+       (new.training_week_id is distinct from stored.training_week_id or
+        (new.data->>'trainingWeekId' is not null and new.data->>'trainingWeekId' is distinct from stored.training_week_id::text)) then
+      new.training_week_id := stored.training_week_id;
+      new.week_number := stored.week_number;
+      new.data := jsonb_set(jsonb_set(new.data,'{trainingWeekId}',to_jsonb(stored.training_week_id::text)),'{weekNumber}',to_jsonb(stored.week_number));
+      if stored.data->'completionTransition' is null then new.data := new.data - 'completionTransition';
+      else new.data := jsonb_set(new.data,'{completionTransition}',stored.data->'completionTransition'); end if;
+    end if;
+  end if;
   if new.week_number < 1 then raise check_violation using message='Invalid legacy training week'; end if;
   if coalesce(new.data->>'trainingSchemaVersion','1')<>'1' then raise check_violation using message='Unsupported training schema version'; end if;
   if new.data->>'splitId' is not null and (new.data->>'splitId')::uuid<>new.split_id then raise check_violation using message='Conflicting session split'; end if;
@@ -226,8 +253,15 @@ begin
   if not found then return null; end if;
   if b.deleted_at is null then
     -- Row locks, so the checks below are correct even without the advisory lock
-    -- (a write that skipped the pre-request guard). Order: block, then its weeks
-    -- by id; the normal write path only ever locks block (share) before week.
+    -- (a write that skipped the pre-request guard). This RPC locks the block, then
+    -- its weeks by id. That is NOT a global lock order: an upsert of an existing
+    -- week locks the week row before check_training_parent takes the block FOR
+    -- SHARE, and the split-tombstone cascade locks split, blocks, weeks while this
+    -- RPC's block UPDATE takes the split FOR SHARE after the block is locked. Those
+    -- orderings predate the RPC's row locks. In practice they are serialised by
+    -- the per-account advisory lock that the pre-request guard and this RPC both
+    -- take; a writer that skipped the guard could at worst deadlock with this
+    -- RPC, and Postgres then aborts one side with a deadlock error.
     -- A session / progress write holds its week FOR SHARE (link_session,
     -- check_training_parent) until it commits, so either that write has
     -- committed by the time this lock is granted and the in-use check below, a

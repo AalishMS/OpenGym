@@ -691,6 +691,170 @@ class RescueAndLosingUpsertTest(unittest.TestCase):
         self.post('workout_sessions', moved)
         self.assertEqual(self.stored_session(draft['id'])['data']['completionTransition']['sourceWeekId'], new_one)
 
+    # --- a stale tombstone of a rescued session -----------------------------------
+
+    def stale_tombstone(self, stored, week, following, updated=T4, **changes):
+        """What a device that still holds the session in `week` pushes after deleting it."""
+        row = json.loads(json.dumps(stored))
+        row.update(deleted_at=updated, updated_at=updated, training_week_id=week)
+        row['data']['trainingWeekId'] = week
+        row['data']['completionTransition'] = self.evidence(week, following, stored['id'])
+        row.update(changes)
+        return row
+
+    def rescue(self):
+        """Finding 1 steps 1-3: S completed in week W of X, X and W tombstoned by a
+        restore with S left live, then S rescued into W' of Y (accepted)."""
+        old_block, old_weeks, stored, new_block, (new_one, new_two) = self.graph()
+        self.tombstone(old_block, old_weeks)
+        self.post('workout_sessions', self.rescued(stored, new_one, new_two))
+        self.assertEqual(self.stored_session(stored['id'])['training_week_id'], new_one)
+        return old_block, old_weeks, stored, new_block, (new_one, new_two)
+
+    def assert_deleted_in_place(self, session_id, week, following, tombstoned_at=T4, evidence=True):
+        after = self.stored_session(session_id)
+        self.assertEqual(when(after['deleted_at']), when(tombstoned_at))
+        self.assertEqual(after['training_week_id'], week)
+        self.assertEqual(after['data']['trainingWeekId'], week)
+        self.assertEqual(after['week_number'], 1)
+        self.assertEqual(after['data']['weekNumber'], 1)
+        if evidence:
+            self.assertEqual(after['data']['completionTransition'], self.evidence(week, following, session_id))
+        else:
+            self.assertNotIn('completionTransition', after['data'])
+        return after
+
+    def test_a_stale_tombstone_naming_the_old_week_is_accepted_after_a_rescue(self):
+        old_block, (old_one, old_two), stored, new_block, (new_one, new_two) = self.rescue()
+        stale = self.stale_tombstone(stored, old_one, old_two)
+        status, body = api('workout_sessions', 'POST', stale, schema=4)
+        self.assertLess(status, 300, body)
+        after = self.assert_deleted_in_place(stored['id'], new_one, new_two)
+        self.assertEqual(when(after['updated_at']), when(T4))
+        self.assertEqual(body, [after])  # The acknowledgement is the stored row, pinned to W'.
+        self.assertEqual(sql(f"select count(*) from workout_sessions where id='{stored['id']}'"), '1')
+        # Every later sync cycle re-pushes the same tombstone: still fine.
+        status, again = api('workout_sessions', 'POST', stale, schema=4)
+        self.assertEqual(status, 200, again)
+        self.assertEqual(strip_seq(again[0]), strip_seq(after))
+        # A tombstone is final: a live push naming the new week cannot resurrect it.
+        status, body = api('workout_sessions', 'POST', {**self.rescued(stored, new_one, new_two), 'updated_at': LATE}, schema=4)
+        self.assertEqual(status, 200, body)
+        self.assertEqual(strip_seq(self.stored_session(stored['id'])), strip_seq(after))
+
+    def test_a_stale_tombstone_is_accepted_through_a_plain_update_too(self):
+        old_block, (old_one, old_two), stored, new_block, (new_one, new_two) = self.rescue()
+        stale = self.stale_tombstone(stored, old_one, old_two)
+        status, body = api(f"workout_sessions?id=eq.{stored['id']}", 'PATCH',
+                           {k: stale[k] for k in ('deleted_at', 'updated_at', 'training_week_id', 'data')}, schema=4)
+        self.assertLess(status, 300, body)
+        self.assert_deleted_in_place(stored['id'], new_one, new_two)
+
+    def test_a_tombstone_is_accepted_whatever_week_it_names(self):
+        self.activate()
+        other_block, (other_one,) = self.new_block(name='Elsewhere', position=7, count=1, clock=T1, weeks=[1])
+        other_split_block, (foreign_one,) = self.new_block(split=SECOND, name='Other split', count=1, clock=T1, weeks=[1])
+        old_block, old_weeks, stored, new_block, (new_one, new_two) = self.graph()
+        self.tombstone(old_block, old_weeks)
+        self.post('workout_sessions', self.rescued(stored, new_one, new_two))
+        names = {
+            'a live week of another block': other_one,
+            'a live week of another split': foreign_one,
+            'a week that does not exist': str(uuid.uuid4()),
+            'the other live week of the same block': new_two,
+        }
+        for number, (label, week) in enumerate(names.items()):
+            for method in ('POST', 'PATCH'):
+                stale = self.stale_tombstone(stored, week, new_two, updated='2026-11-16T00:00:0%dZ' % (5 + number))
+                if method == 'POST':
+                    status, body = api('workout_sessions', 'POST', stale, schema=4)
+                else:
+                    status, body = api(f"workout_sessions?id=eq.{stored['id']}", 'PATCH',
+                                       {k: stale[k] for k in ('deleted_at', 'updated_at', 'training_week_id', 'data')}, schema=4)
+                self.assertLess(status, 300, (label, method, body))
+                self.assert_deleted_in_place(stored['id'], new_one, new_two, tombstoned_at=stale['updated_at'])
+        # Tombstones that name a week through only one of the two fields.
+        only_data = self.stale_tombstone(stored, old_weeks[0], old_weeks[1], updated='2026-11-16T00:00:09Z')
+        del only_data['training_week_id']
+        self.assertLess(api('workout_sessions', 'POST', only_data, schema=4)[0], 300)
+        self.assert_deleted_in_place(stored['id'], new_one, new_two, tombstoned_at='2026-11-16T00:00:09Z')
+        # A malformed week id is still a malformed row, not a delete.
+        junk = self.stale_tombstone(stored, 'not-a-uuid', new_two, updated='2026-11-16T00:00:10Z')
+        self.assertGreaterEqual(api('workout_sessions', 'POST', junk, schema=4)[0], 400)
+
+    def test_a_stale_tombstone_without_evidence_or_over_missing_evidence(self):
+        old_block, (old_one, old_two), stored, new_block, (new_one, new_two) = self.rescue()
+        bare = self.stale_tombstone(stored, old_one, old_two)
+        del bare['data']['completionTransition']
+        self.assertLess(api('workout_sessions', 'POST', bare, schema=4)[0], 300)
+        self.assert_deleted_in_place(stored['id'], new_one, new_two)  # Stored evidence kept.
+        # A session that never had evidence: the stale evidence is not trusted.
+        self.activate()
+        draft = self.post('workout_sessions', self.session_in(new_two, 2, updated_at=T2))
+        stale = self.stale_tombstone(draft, old_one, old_two)
+        stale['week_number'] = 1
+        stale['data']['weekNumber'] = 1
+        status, body = api('workout_sessions', 'POST', stale, schema=4)
+        self.assertLess(status, 300, body)
+        after = self.stored_session(draft['id'])
+        self.assertEqual((after['training_week_id'], after['week_number'], after['data']['weekNumber']), (new_two, 2, 2))
+        self.assertNotIn('completionTransition', after['data'])
+        self.assertEqual(when(after['deleted_at']), when(T4))
+
+    def test_a_tombstone_over_a_stored_tombstone_stays_where_it_is(self):
+        old_block, (old_one, old_two), stored, new_block, (new_one, new_two) = self.rescue()
+        self.assertLess(api('workout_sessions', 'POST', self.stale_tombstone(stored, new_one, new_two, updated=T3), schema=4)[0], 300)
+        first = self.assert_deleted_in_place(stored['id'], new_one, new_two, tombstoned_at=T3)
+        # A newer tombstone naming the old week: accepted, still pinned to W'.
+        self.assertLess(api('workout_sessions', 'POST', self.stale_tombstone(stored, old_one, old_two, updated=T4), schema=4)[0], 300)
+        self.assert_deleted_in_place(stored['id'], new_one, new_two, tombstoned_at=T4)
+        # An older one loses last-write-wins and changes nothing.
+        before = self.stored_session(stored['id'])
+        status, body = api('workout_sessions', 'POST', self.stale_tombstone(stored, old_one, old_two, updated=T2), schema=4)
+        self.assertEqual(status, 200, body)
+        self.assertEqual(strip_seq(self.stored_session(stored['id'])), strip_seq(before))
+        self.assertNotEqual(when(first['updated_at']), when(before['updated_at']))
+
+    def test_a_live_session_still_cannot_move_between_weeks_by_this_path(self):
+        old_block, (old_one, old_two), stored, new_block, (new_one, new_two) = self.graph()
+        before = self.stored_session(stored['id'])
+        # Live W -> live W' (same week number) is refused, as before.
+        self.assertGreaterEqual(api('workout_sessions', 'POST', self.rescued(stored, new_one, new_two), schema=4)[0], 400)
+        self.assertEqual(self.stored_session(stored['id']), before)
+        # Live W -> tombstoned week is refused, however the evidence is dressed.
+        self.tombstone(new_block, (new_one, new_two), weeks_only=True)
+        self.assertGreaterEqual(api('workout_sessions', 'POST', self.rescued(stored, new_one, new_two), schema=4)[0], 400)
+        self.assertEqual(self.stored_session(stored['id']), before)
+        # A live row that merely carries a deleted_at of null cannot ride the tombstone rule.
+        stale = self.stale_tombstone(stored, new_one, new_two)
+        stale['deleted_at'] = None
+        self.assertGreaterEqual(api('workout_sessions', 'POST', stale, schema=4)[0], 400)
+        self.assertEqual(self.stored_session(stored['id']), before)
+        # A live edit that stays under a week that is now a tombstone is refused too.
+        self.tombstone(old_block, (old_one, old_two))
+        edited = {**before, 'updated_at': LATE, 'plan_name': 'Edited'}
+        self.assertGreaterEqual(api('workout_sessions', 'POST', edited, schema=4)[0], 400)
+        self.assertEqual(self.stored_session(stored['id']), before)
+
+    def test_stale_progress_and_week_tombstones_are_accepted_after_a_rescue(self):
+        self.activate()
+        old_block, old_weeks = self.new_block(count=2, clock=T1, weeks=[1, 2])
+        new_block, new_weeks = self.new_block(name='Rescue', position=6, count=2, clock=T1, weeks=[1, 2])
+        self.move_progress(old_weeks[0], revision='00000000-0000-4000-8000-0000000000aa', updated=T2)
+        self.tombstone(old_block, old_weeks)
+        stale = dict(self.stored_progress())
+        row = {**stale, 'active_week_id': new_weeks[0], 'available_week_ids': list(new_weeks),
+               'revision': str(uuid.uuid4()), 'updated_at': T3}
+        self.post('workout_progress', row)
+        # The other device deletes the plan's progress while still pointing at the old week.
+        old_pointing = {**stale, 'deleted_at': T4, 'updated_at': T4, 'revision': str(uuid.uuid4())}
+        status, body = api('workout_progress', 'POST', old_pointing, schema=4)
+        self.assertLess(status, 300, body)
+        self.assertEqual(when(self.stored_progress()['deleted_at']), when(T4))
+        # Stale tombstones of the old weeks and the old block are fine as well.
+        self.tombstone(old_block, old_weeks, updated=LATE)
+        self.assertEqual(self.get(f'training_weeks?id=eq.{old_weeks[0]}')[0]['block_id'], old_block)
+
     # --- losing upserts are silent no-ops ----------------------------------------
 
     def test_a_losing_session_upsert_is_a_no_op_when_the_stored_week_is_tombstoned(self):
