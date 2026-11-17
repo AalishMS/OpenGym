@@ -172,13 +172,12 @@ abstract final class TrainingBlockDialogs {
     required Future<TrainingBlock> Function(String name, int count) onSave,
     int initialWeekCount = kDefaultBlockWeeks,
   }) async =>
-      await showDialog<Object>(
-            context: context,
-            builder:
-                (_) => _BlockForm(
-                  onSave: (name, count) => onSave(name, count!),
-                  initialWeekCount: initialWeekCount,
-                ),
+      await _showBlockSheet<Object>(
+            context,
+            _BlockForm(
+              onSave: (name, count) => onSave(name, count!),
+              initialWeekCount: initialWeekCount,
+            ),
           )
           as TrainingBlock?;
 
@@ -204,21 +203,20 @@ abstract final class TrainingBlockDialogs {
     Future<void> Function()? onDelete,
     String? deleteUnavailableReason,
   }) async {
-    final result = await showDialog<Object>(
-      context: context,
-      builder:
-          (_) => _BlockForm(
-            initialName: block.name,
-            initialWeekCount: currentWeekCount,
-            minWeekCount: (minimumWeekCount ?? currentWeekCount).clamp(
-              1,
-              currentWeekCount,
-            ),
-            lifecycle: onDelete != null,
-            onSave: onSave,
-            onDelete: onDelete,
-            deleteUnavailableReason: deleteUnavailableReason,
-          ),
+    final result = await _showBlockSheet<Object>(
+      context,
+      _BlockForm(
+        initialName: block.name,
+        initialWeekCount: currentWeekCount,
+        minWeekCount: (minimumWeekCount ?? currentWeekCount).clamp(
+          1,
+          currentWeekCount,
+        ),
+        lifecycle: onDelete != null,
+        onSave: onSave,
+        onDelete: onDelete,
+        deleteUnavailableReason: deleteUnavailableReason,
+      ),
     );
     return result as TrainingBlockEditResult?;
   }
@@ -227,9 +225,9 @@ abstract final class TrainingBlockDialogs {
     BuildContext context,
     List<TrainingBlock> blocks, {
     required Future<void> Function(List<String> ids) onSave,
-  }) => showDialog<void>(
-    context: context,
-    builder: (_) => _BlockOrder(blocks: blocks, onSave: onSave),
+  }) => _showBlockSheet<void>(
+    context,
+    _BlockOrder(blocks: blocks, onSave: onSave),
   );
 }
 
@@ -291,45 +289,55 @@ class StartingWeekField extends StatelessWidget {
         ),
       );
     }
-    return Material(
-      color: surfaceColor(context),
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.field,
-        side: BorderSide(color: borderColor(context)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            children: [
-              icon,
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: textTheme.labelMedium?.copyWith(
-                        color: textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xxs),
-                    Text(
+    // A pill rather than a boxed field: it names the block and week in one
+    // line, and the whole thing opens the block sheet.
+    return Semantics(
+      button: enabled,
+      child: Material(
+        color: controlFillColor(context),
+        borderRadius: AppRadius.pill,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.md,
+                AppSpacing.sm,
+                AppSpacing.sm + AppSpacing.xxs,
+                AppSpacing.sm,
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  icon,
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    label,
+                    style: textTheme.bodyMedium?.copyWith(color: textSecondary),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Flexible(
+                    child: Text(
                       value,
-                      style: textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
+                      style: textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
                         color: textPrimaryColor(context),
                       ),
                     ),
+                  ),
+                  if (enabled) ...[
+                    const SizedBox(width: AppSpacing.xs),
+                    Icon(
+                      LucideIcons.chevronRight,
+                      size: 16,
+                      color: textSecondary,
+                    ),
                   ],
-                ),
+                ],
               ),
-              const SizedBox(width: AppSpacing.sm),
-              Icon(LucideIcons.chevronRight, size: 18, color: textSecondary),
-            ],
+            ),
           ),
         ),
       ),
@@ -337,67 +345,162 @@ class StartingWeekField extends StatelessWidget {
   }
 }
 
-/// Title, supporting line, body and actions on the app's dialog ground — the
-/// same frame as the split dialogs, so block management reads as one family.
-class _BlockDialogFrame extends StatelessWidget {
-  final String title;
-  final String description;
-  final Widget body;
-  final String? error;
-  final List<Widget> actions;
-  final double maxWidth;
+/// Horizontal inset of everything inside a block sheet.
+const double _sheetGutter = AppSpacing.lg + AppSpacing.xs;
 
-  const _BlockDialogFrame({
-    required this.title,
-    required this.description,
-    required this.body,
-    required this.actions,
-    this.error,
-    this.maxWidth = 400,
-  });
+/// The title block at the top of every block sheet — a large title, a
+/// supporting line and an optional footnote — so picking, creating, editing
+/// and reordering read as one family.
+class _SheetHeader extends StatelessWidget {
+  final String title;
+  final String? description;
+  final String? footnote;
+
+  const _SheetHeader({required this.title, this.description, this.footnote});
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: maxWidth),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                title,
-                style: textTheme.headlineSmall?.copyWith(
-                  color: accentColor(context),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                description,
-                style: textTheme.bodyMedium?.copyWith(
-                  color: textSecondaryColor(context),
-                  height: 1.45,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Flexible(child: body),
-              if (error != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                _ErrorLine(error!),
-              ],
-              const SizedBox(height: AppSpacing.lg),
-              Wrap(
-                alignment: WrapAlignment.end,
-                spacing: AppSpacing.sm,
-                runSpacing: AppSpacing.sm,
-                children: actions,
-              ),
-            ],
+    final secondary = textSecondaryColor(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          header: true,
+          child: Text(
+            title,
+            style: textTheme.titleLarge?.copyWith(
+              fontSize: 22,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.4,
+              color: textPrimaryColor(context),
+            ),
           ),
         ),
+        if (description != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            description!,
+            style: textTheme.bodyMedium?.copyWith(
+              color: secondary,
+              height: 1.45,
+            ),
+          ),
+        ],
+        if (footnote != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            footnote!,
+            style: textTheme.bodySmall?.copyWith(
+              color: secondary,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// Two equal buttons at the foot of a sheet — the quiet one first — tall
+/// enough to be the obvious end of the sheet.
+class _SheetActions extends StatelessWidget {
+  final Widget secondary;
+  final Widget primary;
+
+  const _SheetActions({required this.secondary, required this.primary});
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 52),
+    child: IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: secondary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: primary),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Shows [child] as a modal block sheet: drag handle, keyboard-aware, scrolls
+/// when the content outgrows the screen.
+Future<T?> _showBlockSheet<T>(BuildContext context, Widget child) =>
+    showModalBottomSheet<T>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder:
+          (sheetContext) => Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+            ),
+            child: child,
+          ),
+    );
+
+/// Header, body, error and actions laid out as a sheet's content.
+class _SheetFrame extends StatelessWidget {
+  final String title;
+  final String description;
+  final Widget body;
+  final String? error;
+  final Widget secondaryAction;
+  final Widget primaryAction;
+
+  const _SheetFrame({
+    required this.title,
+    required this.description,
+    required this.body,
+    required this.secondaryAction,
+    required this.primaryAction,
+    this.error,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.sizeOf(context).height * .85,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Flexible(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: _sheetGutter),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _SheetHeader(title: title, description: description),
+                  const SizedBox(height: AppSpacing.xl),
+                  body,
+                  if (error != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    _ErrorLine(error!),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: EdgeInsets.fromLTRB(
+              _sheetGutter,
+              AppSpacing.lg,
+              _sheetGutter,
+              _sheetGutter + MediaQuery.paddingOf(context).bottom,
+            ),
+            child: _SheetActions(
+              secondary: secondaryAction,
+              primary: primaryAction,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -483,7 +586,13 @@ class _BlockForm extends StatefulWidget {
   final Future<TrainingBlock> Function(String, int?) onSave;
   final Future<void> Function()? onDelete;
   final String? deleteUnavailableReason;
+
+  /// Called with the result instead of popping a route, when the form is
+  /// shown inside the block sheet rather than in a sheet of its own. Cancel
+  /// and back then return to the block list.
+  final ValueChanged<Object?>? onClose;
   const _BlockForm({
+    super.key,
     this.initialName,
     required this.initialWeekCount,
     this.minWeekCount = 1,
@@ -491,6 +600,7 @@ class _BlockForm extends StatefulWidget {
     required this.onSave,
     this.onDelete,
     this.deleteUnavailableReason,
+    this.onClose,
   });
   @override
   State<_BlockForm> createState() => _BlockFormState();
@@ -525,6 +635,15 @@ class _BlockFormState extends State<_BlockForm> {
     super.dispose();
   }
 
+  void _close(Object? result) {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose(result);
+    } else {
+      Navigator.pop(context, result);
+    }
+  }
+
   void _step(int delta) {
     final next = ((_weeks ?? _minWeeks) + delta).clamp(_minWeeks, _maxWeeks);
     setState(() => _count.text = '$next');
@@ -546,9 +665,7 @@ class _BlockFormState extends State<_BlockForm> {
         _name.text.trim(),
         _creating || weeks != widget.initialWeekCount ? weeks : null,
       );
-      if (mounted) {
-        Navigator.pop(context, _creating ? result : TrainingBlockSaved(result));
-      }
+      if (mounted) _close(_creating ? result : TrainingBlockSaved(result));
     } on ArgumentError {
       // The repository refused the values: while this dialog was open the
       // block changed (a sync or another workout made it longer), so retrying
@@ -583,7 +700,7 @@ class _BlockFormState extends State<_BlockForm> {
     });
     try {
       await widget.onDelete!();
-      if (mounted) Navigator.pop(context, TrainingBlockDeleted(name));
+      if (mounted) _close(TrainingBlockDeleted(name));
     } on TrainingBlockDeletionException catch (e) {
       if (mounted) setState(() => _error = _deletionMessage(e));
     } catch (_) {
@@ -635,45 +752,64 @@ class _BlockFormState extends State<_BlockForm> {
   @override
   Widget build(BuildContext context) {
     final weeks = _weeks;
+    final textTheme = Theme.of(context).textTheme;
+    final secondary = textSecondaryColor(context);
     final stepStyle = IconButton.styleFrom(
       minimumSize: const Size(48, 48),
-      side: BorderSide(color: borderColor(context)),
-      shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
+      backgroundColor: _stepperKeyColor(context),
+      foregroundColor: textPrimaryColor(context),
+      disabledBackgroundColor: _stepperKeyColor(context),
+      shape: const CircleBorder(),
     );
+    final embedded = widget.onClose != null;
     return PopScope(
-      canPop: !_busy,
-      child: _BlockDialogFrame(
+      // Inside the block sheet, back steps out to the block list.
+      canPop: !embedded && !_busy,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && embedded && !_busy) _close(null);
+      },
+      child: _SheetFrame(
         title: _creating ? 'Create block' : 'Edit block',
         description: _description,
         error: _error,
-        body: SingleChildScrollView(
-          child: Form(
-            key: _form,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextFormField(
-                  controller: _name,
-                  enabled: !_busy,
-                  maxLength: 40,
-                  autofocus: true,
-                  textCapitalization: TextCapitalization.sentences,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    labelText: 'Block name',
-                    helperText: '1–40 characters',
-                    counterText: '',
-                  ),
-                  validator:
-                      (value) =>
-                          (value ?? '').trim().isEmpty
-                              ? 'Enter a block name.'
-                              : null,
+        body: Form(
+          key: _form,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: _name,
+                enabled: !_busy,
+                maxLength: 40,
+                autofocus: _creating,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.next,
+                style: textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: textPrimaryColor(context),
                 ),
-                const SizedBox(height: AppSpacing.lg),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                decoration: const InputDecoration(
+                  labelText: 'Block name',
+                  helperText: '1–40 characters',
+                  counterText: '',
+                ),
+                validator:
+                    (value) =>
+                        (value ?? '').trim().isEmpty
+                            ? 'Enter a block name.'
+                            : null,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              // One control, not three boxes: the steppers sit inside the
+              // same fill as the figure they change.
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: controlFillColor(context),
+                  borderRadius: AppRadius.card,
+                ),
+                child: Row(
                   children: [
                     IconButton(
                       tooltip: 'Fewer weeks',
@@ -684,7 +820,6 @@ class _BlockFormState extends State<_BlockForm> {
                               : () => _step(-1),
                       icon: const Icon(LucideIcons.minus, size: 20),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: TextFormField(
                         controller: _count,
@@ -696,20 +831,26 @@ class _BlockFormState extends State<_BlockForm> {
                         ],
                         onChanged: (_) => setState(() {}),
                         style: AppTypography.figures(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 34,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
                           color: textPrimaryColor(context),
                         ),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Weeks',
                           isDense: true,
-                          // Matches the 48px steppers on either side.
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: AppSpacing.md,
-                            vertical: 11,
+                          filled: false,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                            vertical: AppSpacing.xs,
                           ),
                           floatingLabelAlignment: FloatingLabelAlignment.center,
                           floatingLabelBehavior: FloatingLabelBehavior.always,
+                          floatingLabelStyle: textTheme.labelMedium?.copyWith(
+                            color: secondary,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          errorMaxLines: 3,
                         ),
                         validator: (value) {
                           final count = int.tryParse(value ?? '');
@@ -726,7 +867,6 @@ class _BlockFormState extends State<_BlockForm> {
                         },
                       ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
                     IconButton(
                       tooltip: 'More weeks',
                       style: stepStyle,
@@ -738,60 +878,135 @@ class _BlockFormState extends State<_BlockForm> {
                     ),
                   ],
                 ),
-                if (!_creating && widget.lifecycle && !_canShorten) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  Text(
-                    'Every week here has been reached, so this block can\'t '
-                    'be shorter.',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: textSecondaryColor(context),
+              ),
+              if (weeks != null && weeks >= 1 && weeks <= _maxWeeks) ...[
+                const SizedBox(height: AppSpacing.md),
+                _WeekTrack(
+                  count: weeks,
+                  // Only an edit knows which weeks are spoken for.
+                  fixed: _creating ? 0 : _minWeeks,
+                ),
+              ],
+              if (!_creating && widget.lifecycle && !_canShorten) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Every week here has been reached, so this block can\'t '
+                  'be shorter.',
+                  style: textTheme.bodySmall?.copyWith(color: secondary),
+                ),
+              ] else if (_canShorten && _minWeeks > 1) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Weeks 1–$_minWeeks have been reached, so $_minWeeks is the '
+                  'shortest it can be.',
+                  style: textTheme.bodySmall?.copyWith(color: secondary),
+                ),
+              ],
+              if (_canDelete) ...[
+                const SizedBox(height: AppSpacing.lg),
+                Divider(height: 1, color: hairlineColor(context)),
+                const SizedBox(height: AppSpacing.sm),
+                _DeleteBlockButton(
+                  deleting: _deleting,
+                  onPressed:
+                      _busy || widget.deleteUnavailableReason != null
+                          ? null
+                          : _delete,
+                ),
+                if (widget.deleteUnavailableReason != null)
+                  Padding(
+                    padding: const EdgeInsets.only(
+                      left: AppSpacing.sm + 18 + AppSpacing.sm,
+                    ),
+                    child: Text(
+                      widget.deleteUnavailableReason!,
+                      style: textTheme.bodySmall?.copyWith(color: secondary),
                     ),
                   ),
-                ],
-                if (_canDelete) ...[
-                  const SizedBox(height: AppSpacing.lg),
-                  Divider(height: 1, color: borderColor(context)),
-                  const SizedBox(height: AppSpacing.lg),
-                  _DeleteBlockButton(
-                    deleting: _deleting,
-                    onPressed:
-                        _busy || widget.deleteUnavailableReason != null
-                            ? null
-                            : _delete,
+              ],
+            ],
+          ),
+        ),
+        secondaryAction: OutlinedButton(
+          onPressed: _busy ? null : () => _close(null),
+          child: const Text('Cancel'),
+        ),
+        primaryAction: _SaveButton(
+          label: _creating ? 'Create' : 'Save',
+          saving: _saving,
+          onPressed: _busy ? null : _save,
+        ),
+      ),
+    );
+  }
+}
+
+/// The steppers' own ground: a step lighter than the control fill they sit
+/// in — white on light grey, lifted grey on dark.
+Color _stepperKeyColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? Color.lerp(controlFillColor(context), textPrimaryColor(context), .08)!
+        : surfaceColor(context);
+
+/// The block's weeks as a row of bars: the ones already spoken for filled,
+/// the ones still free to remove outlined. It answers, before anyone asks,
+/// why the block won't go shorter.
+class _WeekTrack extends StatelessWidget {
+  final int count;
+
+  /// How many leading weeks can't be removed.
+  final int fixed;
+
+  const _WeekTrack({required this.count, required this.fixed});
+
+  @override
+  Widget build(BuildContext context) {
+    // Past a dozen weeks the bars get too thin to read as weeks.
+    if (count > 16) return const SizedBox.shrink();
+    final secondary = textSecondaryColor(context);
+    return ExcludeSemantics(
+      child: Row(
+        children: [
+          for (var week = 1; week <= count; week++) ...[
+            if (week > 1) const SizedBox(width: AppSpacing.xs + AppSpacing.xxs),
+            Expanded(
+              child: Column(
+                children: [
+                  Container(
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: week <= fixed ? accentDimColor(context) : null,
+                      border:
+                          week <= fixed
+                              ? null
+                              : Border.all(color: borderColor(context)),
+                      borderRadius: AppRadius.badge,
+                    ),
                   ),
-                  if (widget.deleteUnavailableReason != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
+                  if (count <= 8) ...[
+                    const SizedBox(height: AppSpacing.xs + AppSpacing.xxs),
                     Text(
-                      widget.deleteUnavailableReason!,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: textSecondaryColor(context),
+                      '$week',
+                      style: AppTypography.figures(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: secondary,
                       ),
                     ),
                   ],
                 ],
-              ],
+              ),
             ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: _busy ? null : () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          _SaveButton(
-            label: _creating ? 'Create' : 'Save',
-            saving: _saving,
-            onPressed: _busy ? null : _save,
-          ),
+          ],
         ],
       ),
     );
   }
 }
 
-/// The destructive entry point in Edit block. It sits apart from Cancel and
-/// Save, outlined in the error colour, and is disabled rather than hidden when
-/// the block can't be deleted.
+/// The destructive entry point in Edit block: a quiet row in the error colour,
+/// set apart from Cancel and Save, disabled rather than hidden when the block
+/// can't be deleted.
 class _DeleteBlockButton extends StatelessWidget {
   final bool deleting;
   final VoidCallback? onPressed;
@@ -800,30 +1015,31 @@ class _DeleteBlockButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final error = errorColor(context);
-    return OutlinedButton.icon(
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(48),
-        foregroundColor: error,
-        side: BorderSide(
-          color: onPressed == null ? borderColor(context) : error,
+    return Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: TextButton.icon(
+        onPressed: onPressed,
+        style: TextButton.styleFrom(
+          foregroundColor: error,
+          disabledForegroundColor: error.withAlpha(110),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+          overlayColor: error,
         ),
-        shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
-      ),
-      icon:
-          deleting
-              ? Semantics(
-                label: 'Deleting',
-                child: SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: textSecondaryColor(context),
+        icon:
+            deleting
+                ? Semantics(
+                  label: 'Deleting',
+                  child: SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: textSecondaryColor(context),
+                    ),
                   ),
-                ),
-              )
-              : const Icon(LucideIcons.trash2, size: 18),
-      label: const Text('Delete block'),
+                )
+                : const Icon(LucideIcons.trash2, size: 18),
+        label: const Text('Delete block'),
+      ),
     );
   }
 }
@@ -907,12 +1123,11 @@ class _BlockOrderState extends State<_BlockOrder> {
     final disableAnimations = MediaQuery.disableAnimationsOf(context);
     return PopScope(
       canPop: !_saving,
-      child: _BlockDialogFrame(
+      child: _SheetFrame(
         title: 'Reorder blocks',
         description:
             'Hold and drag a block, or use the arrows. Its weeks and logs '
             'move with it.',
-        maxWidth: 420,
         error: _error,
         body: ConstrainedBox(
           constraints: BoxConstraints(
@@ -930,7 +1145,7 @@ class _BlockOrderState extends State<_BlockOrder> {
                       (context, child) => Material(
                         elevation: 6 * animation.value,
                         color: surfaceColor(context),
-                        shadowColor: backgroundColor(context).withAlpha(128),
+                        shadowColor: Theme.of(context).colorScheme.shadow,
                         borderRadius: AppRadius.control,
                         child: child,
                       ),
@@ -952,7 +1167,7 @@ class _BlockOrderState extends State<_BlockOrder> {
                         index == _blocks.length - 1
                             ? null
                             : Border(
-                              bottom: BorderSide(color: borderColor(context)),
+                              bottom: BorderSide(color: hairlineColor(context)),
                             ),
                   ),
                   child: _OrderRow(
@@ -972,17 +1187,15 @@ class _BlockOrderState extends State<_BlockOrder> {
             },
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: _saving ? null : () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          _SaveButton(
-            label: 'Save',
-            saving: _saving,
-            onPressed: _changed ? _save : null,
-          ),
-        ],
+        secondaryAction: OutlinedButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        primaryAction: _SaveButton(
+          label: 'Save',
+          saving: _saving,
+          onPressed: _changed ? _save : null,
+        ),
       ),
     );
   }
@@ -1176,11 +1389,25 @@ class _StartingWeekState extends State<_StartingWeek> {
   int _lengthOf(TrainingBlock block) =>
       trainingBlockLength(block, _weeks[block.id] ?? const []);
 
-  Future<void> _create() async {
-    final created = await TrainingBlockDialogs.create(
-      context,
-      onSave: widget.onCreateBlock!,
+  /// The create or edit form showing in place of the block list, if any.
+  /// Editing happens inside this sheet, so only one layer is ever open.
+  Widget? _form;
+
+  void _create() {
+    setState(
+      () =>
+          _form = _BlockForm(
+            key: const ValueKey('create-block'),
+            onSave: (name, count) => widget.onCreateBlock!(name, count!),
+            initialWeekCount: kDefaultBlockWeeks,
+            onClose: _created,
+          ),
     );
+  }
+
+  void _created(Object? result) {
+    setState(() => _form = null);
+    final created = result as TrainingBlock?;
     if (created == null || !mounted) return;
     _reload();
     if (widget.picking && (_weeks[created.id] ?? []).isNotEmpty) {
@@ -1189,20 +1416,33 @@ class _StartingWeekState extends State<_StartingWeek> {
     }
   }
 
-  Future<void> _edit(TrainingBlock block) async {
+  void _edit(TrainingBlock block) {
     final lifecycle = widget.lifecycle;
     final lifecycleOn = lifecycle != null && lifecycle.available();
     final blocker = lifecycleOn ? lifecycle.deleteBlocker(block) : null;
-    final result = await TrainingBlockDialogs.edit(
-      context,
-      block,
-      currentWeekCount: _lengthOf(block),
-      minimumWeekCount: lifecycleOn ? lifecycle.minimumWeekCount(block) : null,
-      onSave: (name, count) => widget.onEditBlock!(block, name, count),
-      onDelete: lifecycleOn ? () => lifecycle.delete(block) : null,
-      deleteUnavailableReason:
-          blocker == null ? null : TrainingBlockDialogs.blockerMessage(blocker),
+    final length = _lengthOf(block);
+    final minimum = lifecycleOn ? lifecycle.minimumWeekCount(block) : null;
+    setState(
+      () =>
+          _form = _BlockForm(
+            key: ValueKey('edit-${block.id}'),
+            initialName: block.name,
+            initialWeekCount: length,
+            minWeekCount: (minimum ?? length).clamp(1, length),
+            lifecycle: lifecycleOn,
+            onSave: (name, count) => widget.onEditBlock!(block, name, count),
+            onDelete: lifecycleOn ? () => lifecycle.delete(block) : null,
+            deleteUnavailableReason:
+                blocker == null
+                    ? null
+                    : TrainingBlockDialogs.blockerMessage(blocker),
+            onClose: _edited,
+          ),
     );
+  }
+
+  void _edited(Object? result) {
+    setState(() => _form = null);
     if (result == null || !mounted) return;
     _reload();
     if (result is TrainingBlockDeleted) {
@@ -1214,8 +1454,35 @@ class _StartingWeekState extends State<_StartingWeek> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final textSecondary = textSecondaryColor(context);
+    final duration =
+        MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 220);
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: AnimatedSize(
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.bottomCenter,
+        child: AnimatedSwitcher(
+          duration: duration,
+          layoutBuilder:
+              (current, previous) => Stack(
+                alignment: Alignment.bottomCenter,
+                children: [...previous, if (current != null) current],
+              ),
+          child:
+              _form ??
+              KeyedSubtree(
+                key: const ValueKey('blocks'),
+                child: _list(context),
+              ),
+        ),
+      ),
+    );
+  }
+
+  Widget _list(BuildContext context) {
     final choices = _choices;
     return ConstrainedBox(
       constraints: BoxConstraints(
@@ -1226,21 +1493,11 @@ class _StartingWeekState extends State<_StartingWeek> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Semantics(
-                  header: true,
-                  child: Text(
-                    widget.picking ? 'Choose starting week' : 'Training blocks',
-                    style: textTheme.titleLarge?.copyWith(
-                      color: textPrimaryColor(context),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
+            padding: const EdgeInsets.symmetric(horizontal: _sheetGutter),
+            child: _SheetHeader(
+              title:
+                  widget.picking ? 'Choose starting week' : 'Training blocks',
+              description:
                   widget.picking
                       ? 'This workout starts here. Later weeks appear as you '
                           'complete it.'
@@ -1248,122 +1505,105 @@ class _StartingWeekState extends State<_StartingWeek> {
                       ? 'Rename a block, change its length, or delete it.'
                       : 'Add weeks or rename a block. Weeks can be added but '
                           'not removed.',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: textSecondary,
-                    height: 1.45,
-                  ),
-                ),
-                if (_canManage) ...[
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Blocks are shared by every workout in this split. '
-                    'Changes to a block save right away, not with Save or '
-                    'Discard.',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: textSecondary,
-                      height: 1.45,
-                    ),
-                  ),
-                ],
-              ],
+              footnote:
+                  _canManage
+                      ? 'Blocks are shared by every workout in this split. '
+                          'Changes to a block save right away, not with Save '
+                          'or Discard.'
+                      : null,
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
+          const SizedBox(height: AppSpacing.md),
           Flexible(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (final block in choices) ...[
-                    _StartBlockTile(
-                      name: block.name,
-                      caption: trainingBlockLengthLabel(
-                        block,
-                        _weeks[block.id]!,
+                  for (var i = 0; i < choices.length; i++) ...[
+                    if (i > 0)
+                      Divider(
+                        height: 1,
+                        indent:
+                            _sheetGutter + _BlockRow.markSize + AppSpacing.md,
+                        color: hairlineColor(context),
                       ),
-                      note:
-                          !widget.picking && block.id == widget.currentBlockId
-                              ? 'Current block'
-                              : null,
-                      selected:
-                          widget.picking
-                              ? block.id == _block
-                              : block.id == widget.currentBlockId,
-                      onTap:
-                          widget.picking ? () => _chooseBlock(block.id) : null,
-                      onEdit: _canManage ? () => _edit(block) : null,
-                      weeks: [
-                        if (widget.picking)
-                          for (final week in _weeks[block.id]!)
-                            _WeekChip(
-                              key: week.id == _week ? _selectedChip : null,
-                              number: week.number,
-                              selected: week.id == _week,
-                              onTap: () => setState(() => _week = week.id),
-                            ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
+                    _blockRow(choices[i]),
                   ],
-                  if (_canManage)
-                    OutlinedButton.icon(
-                      onPressed: _create,
-                      icon: const Icon(LucideIcons.plus, size: 18),
-                      label: const Text('Create block'),
-                    ),
+                  if (_canManage) _CreateBlockRow(onTap: _create),
                 ],
               ),
             ),
           ),
           Padding(
             padding: EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.sm,
-              AppSpacing.lg,
-              AppSpacing.lg + MediaQuery.paddingOf(context).bottom,
+              _sheetGutter,
+              AppSpacing.md,
+              _sheetGutter,
+              _sheetGutter + MediaQuery.paddingOf(context).bottom,
             ),
             child:
                 widget.picking
-                    ? Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Cancel'),
-                          ),
+                    ? _SheetActions(
+                      secondary: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Cancel'),
+                      ),
+                      primary: ElevatedButton(
+                        onPressed:
+                            _week == null
+                                ? null
+                                : () => Navigator.pop(context, _week),
+                        child: const Text(
+                          'Use this week',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed:
-                                _week == null
-                                    ? null
-                                    : () => Navigator.pop(context, _week),
-                            child: const Text(
-                              'Use this week',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     )
-                    : ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Done'),
+                    : ConstrainedBox(
+                      constraints: const BoxConstraints(minHeight: 52),
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Done'),
+                      ),
                     ),
           ),
         ],
       ),
     );
   }
+
+  Widget _blockRow(TrainingBlock block) {
+    final current = !widget.picking && block.id == widget.currentBlockId;
+    return _BlockRow(
+      name: block.name,
+      caption: trainingBlockLengthLabel(block, _weeks[block.id]!),
+      note: current ? 'Current block' : null,
+      selected: widget.picking ? block.id == _block : current,
+      onTap: widget.picking ? () => _chooseBlock(block.id) : null,
+      onEdit: _canManage ? () => _edit(block) : null,
+      weeks: [
+        if (widget.picking)
+          for (final week in _weeks[block.id]!)
+            _WeekChip(
+              key: week.id == _week ? _selectedChip : null,
+              number: week.number,
+              selected: week.id == _week,
+              onTap: () => setState(() => _week = week.id),
+            ),
+      ],
+    );
+  }
 }
 
-/// One block in the sheet. When picking, the chosen block opens to show its
-/// weeks, so the two choices read as one decision rather than two dropdowns.
-/// When managing, [selected] marks the current block and [onEdit] edits it.
-class _StartBlockTile extends StatelessWidget {
+/// One block in the sheet: a row on the sheet, not a tile in it. When picking,
+/// the chosen block opens to show its weeks, so the two choices read as one
+/// decision. When managing, [selected] marks the current block and [onEdit]
+/// edits it.
+class _BlockRow extends StatelessWidget {
+  /// The leading check or ring.
+  static const double markSize = 22;
+
   final String name;
   final String caption;
   final String? note;
@@ -1372,7 +1612,7 @@ class _StartBlockTile extends StatelessWidget {
   final VoidCallback? onEdit;
   final List<Widget> weeks;
 
-  const _StartBlockTile({
+  const _BlockRow({
     required this.name,
     required this.caption,
     required this.selected,
@@ -1384,127 +1624,185 @@ class _StartBlockTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor(context);
-    final textSecondary = textSecondaryColor(context);
     final textTheme = Theme.of(context).textTheme;
+    final secondary = textSecondaryColor(context);
     final duration =
         MediaQuery.disableAnimationsOf(context)
             ? Duration.zero
             : const Duration(milliseconds: 180);
-    return AnimatedContainer(
-      duration: duration,
-      decoration: BoxDecoration(
-        borderRadius: AppRadius.card,
-        border: Border.all(
-          color: selected ? accent : borderColor(context),
-          width: selected ? 1.5 : 1,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Semantics(
-            button: onTap != null,
-            selected: selected,
-            child: InkWell(
-              onTap: onTap,
-              borderRadius:
-                  selected && weeks.isNotEmpty
-                      ? AppRadius.cardTop
-                      : AppRadius.card,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 56),
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    left: AppSpacing.md,
-                    right: onEdit == null ? AppSpacing.md : AppSpacing.xs,
-                    top: AppSpacing.sm,
-                    bottom: AppSpacing.sm,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        selected ? LucideIcons.circleCheck : LucideIcons.circle,
-                        size: 18,
-                        color: selected ? accent : textSecondary,
+    final fill = accentFillColor(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          button: onTap != null,
+          selected: selected,
+          child: InkWell(
+            onTap: onTap,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 64),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  _sheetGutter,
+                  AppSpacing.sm,
+                  onEdit == null ? _sheetGutter : AppSpacing.sm,
+                  AppSpacing.sm,
+                ),
+                child: Row(
+                  children: [
+                    AnimatedContainer(
+                      duration: duration,
+                      width: markSize,
+                      height: markSize,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: selected ? fill : null,
+                        border:
+                            selected
+                                ? null
+                                : Border.all(
+                                  color: borderColor(context),
+                                  width: 1.75,
+                                ),
                       ),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              name,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: textTheme.bodyLarge?.copyWith(
-                                fontWeight:
-                                    selected
-                                        ? FontWeight.w700
-                                        : FontWeight.w500,
-                                color: textPrimaryColor(context),
-                              ),
+                      child:
+                          selected
+                              ? Icon(
+                                LucideIcons.check,
+                                size: 14,
+                                color: onAccentColor(context),
+                              )
+                              : null,
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.1,
+                              color: textPrimaryColor(context),
                             ),
-                            if (note != null)
+                          ),
+                          Wrap(
+                            children: [
                               Text(
-                                note!,
-                                style: textTheme.bodySmall?.copyWith(
-                                  color: textSecondary,
+                                caption,
+                                style: AppTypography.figures(
+                                  fontSize: 13,
+                                  color: secondary,
                                 ),
                               ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        caption,
-                        style: AppTypography.figures(
-                          fontSize: 12,
-                          color: textSecondary,
-                        ),
-                      ),
-                      if (onEdit != null)
-                        IconButton(
-                          tooltip: 'Edit $name',
-                          constraints: const BoxConstraints(
-                            minWidth: 48,
-                            minHeight: 48,
+                              if (note != null) ...[
+                                Text(
+                                  '  ·  ',
+                                  style: textTheme.bodySmall?.copyWith(
+                                    fontSize: 13,
+                                    color: secondary,
+                                  ),
+                                ),
+                                Text(
+                                  note!,
+                                  style: textTheme.bodySmall?.copyWith(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w700,
+                                    color: accentColor(context),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
-                          onPressed: onEdit,
-                          icon: Icon(
-                            LucideIcons.pencilLine,
-                            size: 20,
-                            color: accent,
-                          ),
-                        ),
-                    ],
-                  ),
+                        ],
+                      ),
+                    ),
+                    if (onEdit != null)
+                      IconButton(
+                        tooltip: 'Edit $name',
+                        onPressed: onEdit,
+                        color: secondary,
+                        icon: const Icon(LucideIcons.pencilLine, size: 20),
+                      ),
+                  ],
                 ),
               ),
             ),
           ),
-          AnimatedSize(
-            duration: duration,
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child:
-                selected && weeks.isNotEmpty
-                    ? Padding(
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.md,
-                        0,
-                        AppSpacing.md,
-                        AppSpacing.md,
-                      ),
-                      child: Wrap(
-                        spacing: AppSpacing.sm,
-                        runSpacing: AppSpacing.sm,
-                        children: weeks,
-                      ),
-                    )
-                    : const SizedBox(width: double.infinity),
+        ),
+        AnimatedSize(
+          duration: duration,
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.topCenter,
+          child:
+              selected && weeks.isNotEmpty
+                  ? Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      _sheetGutter + markSize + AppSpacing.md,
+                      0,
+                      _sheetGutter,
+                      AppSpacing.md,
+                    ),
+                    child: Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: weeks,
+                    ),
+                  )
+                  : const SizedBox(width: double.infinity),
+        ),
+      ],
+    );
+  }
+}
+
+/// Create block, as the last row of the list rather than one more box.
+class _CreateBlockRow extends StatelessWidget {
+  final VoidCallback onTap;
+  const _CreateBlockRow({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = accentColor(context);
+    return Semantics(
+      button: true,
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: _sheetGutter),
+            child: Row(
+              children: [
+                Container(
+                  width: _BlockRow.markSize,
+                  height: _BlockRow.markSize,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: accentMutedColor(context),
+                  ),
+                  child: Icon(
+                    LucideIcons.plus,
+                    size: 14,
+                    color: onColor(accentMutedColor(context)),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Text(
+                  'Create block',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: accent,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1524,16 +1822,14 @@ class _WeekChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ground = selected ? accentFillColor(context) : surfaceColor(context);
+    final ground =
+        selected ? accentFillColor(context) : controlFillColor(context);
     return Semantics(
       button: true,
       selected: selected,
       child: Material(
         color: ground,
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.chip,
-          side: BorderSide(color: selected ? ground : borderColor(context)),
-        ),
+        borderRadius: AppRadius.pill,
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
@@ -1547,7 +1843,7 @@ class _WeekChip extends StatelessWidget {
                   'Week $number',
                   style: AppTypography.figures(
                     fontSize: 14,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
                     color:
                         selected
                             ? onAccentColor(context)

@@ -32,6 +32,14 @@ import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
 import 'support/test_fonts.dart';
 
+/// Block forms are bottom sheets that scroll on the 800×600 test screen, so a
+/// control near the bottom (Delete block) is scrolled into view before the tap.
+Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+}
+
 void main() {
   setUpAll(() async {
     await loadTestFonts();
@@ -397,7 +405,7 @@ void main() {
           onDelete: () async => deletes++,
         );
         expect(deleteButton(tester).onPressed, isNotNull);
-        await tester.tap(find.text('Delete block'));
+        await tapVisible(tester, find.text('Delete block'));
         await tester.pumpAndSettle();
         expect(find.text('Delete Strength?'), findsOneWidget);
         await tester.tap(
@@ -410,7 +418,7 @@ void main() {
         expect(deletes, 0);
         expect(find.text('Edit block'), findsOneWidget);
 
-        await tester.tap(find.text('Delete block'));
+        await tapVisible(tester, find.text('Delete block'));
         await tester.pumpAndSettle();
         await tester.tap(
           find.descendant(
@@ -500,7 +508,7 @@ void main() {
             },
           );
           for (var i = 1; i <= 2; i++) {
-            await tester.tap(find.text('Delete block'));
+            await tapVisible(tester, find.text('Delete block'));
             await tester.pumpAndSettle();
             await tester.tap(
               find.descendant(
@@ -531,7 +539,7 @@ void main() {
             return gate.future;
           },
         );
-        await tester.tap(find.text('Delete block'));
+        await tapVisible(tester, find.text('Delete block'));
         await tester.pumpAndSettle();
         await tester.tap(
           find.descendant(
@@ -670,7 +678,7 @@ void main() {
     }
 
     Future<void> confirmDelete(WidgetTester tester) async {
-      await tester.tap(find.text('Delete block'));
+      await tapVisible(tester, find.text('Delete block'));
       await tester.pumpAndSettle();
       await tester.tap(
         find.descendant(
@@ -978,7 +986,7 @@ void main() {
           await tester.enterText(find.bySemanticsLabel('Block name'), 'Power');
           await tester.tap(
             find.descendant(
-              of: find.byType(Dialog),
+              of: find.byType(BottomSheet),
               matching: find.text('Save'),
             ),
           );
@@ -1028,7 +1036,7 @@ void main() {
         await tester.tap(find.byTooltip('More weeks'));
         await tester.pumpAndSettle();
         await tester.tap(
-          find.descendant(of: find.byType(Dialog), matching: find.text('Save')),
+          find.descendant(of: find.byType(BottomSheet), matching: find.text('Save')),
         );
         await pumpWithStorage(tester);
         expect(find.text('5 weeks'), findsOneWidget);
@@ -1138,7 +1146,7 @@ void main() {
     }
 
     Future<void> confirmDeleteBlock(WidgetTester tester) async {
-      await tester.tap(find.text('Delete block'));
+      await tapVisible(tester, find.text('Delete block'));
       await tester.pumpAndSettle();
       await tester.runAsync(() async {
         await tester.tap(
@@ -1229,7 +1237,7 @@ void main() {
         await tester.runAsync(() async {
           await tester.tap(
             find.descendant(
-              of: find.byType(Dialog),
+              of: find.byType(BottomSheet),
               matching: find.text('Save'),
             ),
           );
@@ -1290,7 +1298,7 @@ void main() {
         );
         await tester.enterText(find.bySemanticsLabel('Weeks'), '1');
         await tester.tap(
-          find.descendant(of: find.byType(Dialog), matching: find.text('Save')),
+          find.descendant(of: find.byType(BottomSheet), matching: find.text('Save')),
         );
         await tester.pumpAndSettle();
         expect(find.text('Choose 2–52 weeks.'), findsOneWidget);
@@ -1298,7 +1306,7 @@ void main() {
         await tester.runAsync(() async {
           await tester.tap(
             find.descendant(
-              of: find.byType(Dialog),
+              of: find.byType(BottomSheet),
               matching: find.text('Save'),
             ),
           );

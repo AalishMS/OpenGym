@@ -407,18 +407,21 @@ void main() {
     expect(ground.color, accentFillColor(context));
     expect(painted('Save'), onAccentColor(context));
     expect(ground.color, isNot(planColorOf(kPlanColors[0], context)));
-    // The header stretches actions; Save must stay a 48px button inside it.
+    // The header stretches actions; Save must stay a 48px target inside it
+    // (a 40px pill with Material's padded tap target).
     expect(tester.getSize(save).height, 48);
 
+    // Add exercise is the tonal accent: the accent's wash with accent ink.
     final add = find.ancestor(
       of: find.text('Add exercise'),
-      matching: find.byType(OutlinedButton),
+      matching: find.byType(ElevatedButton),
     );
-    expect(painted('Add exercise'), accentColor(context));
-    final outline = tester.widget<Material>(
+    expect(painted('Add exercise'), accentOnMutedColor(context));
+    final wash = tester.widget<Material>(
       find.descendant(of: add, matching: find.byType(Material)).first,
     );
-    expect((outline.shape! as OutlinedBorder).side.color, accentColor(context));
+    expect(wash.color, accentMutedColor(context));
+    expect(wash.color, isNot(planColorOf(kPlanColors[0], context)));
   });
 
   testWidgets('editor save and add exercise actions have 48 pixel targets', (
@@ -428,9 +431,10 @@ void main() {
     await tester.enterText(find.byType(TextField).first, 'Push Day');
 
     for (final label in ['Save', 'Add exercise']) {
+      // The button's own box, which includes Material's padded tap target.
       final target = find.ancestor(
         of: find.text(label),
-        matching: find.byType(InkWell),
+        matching: find.byType(ElevatedButton),
       );
       expect(target, findsOneWidget, reason: label);
       expect(tester.getSize(target).height, greaterThanOrEqualTo(48));
