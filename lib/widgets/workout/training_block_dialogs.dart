@@ -754,11 +754,15 @@ class _BlockFormState extends State<_BlockForm> {
     final weeks = _weeks;
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
+    // A key that can't be pressed sinks into the track: no raised disc, a
+    // faded glyph. Keeping the disc made a dead "−" look exactly as live as
+    // the "+" beside it.
     final stepStyle = IconButton.styleFrom(
       minimumSize: const Size(48, 48),
       backgroundColor: _stepperKeyColor(context),
       foregroundColor: textPrimaryColor(context),
-      disabledBackgroundColor: _stepperKeyColor(context),
+      disabledBackgroundColor: Colors.transparent,
+      disabledForegroundColor: textSecondaryColor(context).withAlpha(120),
       shape: const CircleBorder(),
     );
     final embedded = widget.onClose != null;
@@ -948,9 +952,11 @@ Color _stepperKeyColor(BuildContext context) =>
         ? Color.lerp(controlFillColor(context), textPrimaryColor(context), .08)!
         : surfaceColor(context);
 
-/// The block's weeks as a row of bars: the ones already spoken for filled,
-/// the ones still free to remove outlined. It answers, before anyone asks,
-/// why the block won't go shorter.
+/// The block's weeks as a row of bars: the ones already reached in the
+/// accent, the ones still only planned in its quiet wash. It answers, before
+/// anyone asks, why the block won't go shorter. Planned weeks are filled
+/// rather than outlined: an outlined bar reads as an empty slot, and a new
+/// block is nothing but planned weeks.
 class _WeekTrack extends StatelessWidget {
   final int count;
 
@@ -975,11 +981,10 @@ class _WeekTrack extends StatelessWidget {
                   Container(
                     height: 8,
                     decoration: BoxDecoration(
-                      color: week <= fixed ? accentDimColor(context) : null,
-                      border:
+                      color:
                           week <= fixed
-                              ? null
-                              : Border.all(color: borderColor(context)),
+                              ? accentFillColor(context)
+                              : accentMutedColor(context),
                       borderRadius: AppRadius.badge,
                     ),
                   ),
@@ -1575,13 +1580,16 @@ class _StartingWeekState extends State<_StartingWeek> {
 
   Widget _blockRow(TrainingBlock block) {
     final current = !widget.picking && block.id == widget.currentBlockId;
+    final edit = _canManage ? () => _edit(block) : null;
     return _BlockRow(
       name: block.name,
       caption: trainingBlockLengthLabel(block, _weeks[block.id]!),
       note: current ? 'Current block' : null,
+      picking: widget.picking,
       selected: widget.picking ? block.id == _block : current,
-      onTap: widget.picking ? () => _chooseBlock(block.id) : null,
-      onEdit: _canManage ? () => _edit(block) : null,
+      // Managing has nothing to choose, so the whole row edits the block.
+      onTap: widget.picking ? () => _chooseBlock(block.id) : edit,
+      onEdit: edit,
       weeks: [
         if (widget.picking)
           for (final week in _weeks[block.id]!)
@@ -1598,8 +1606,8 @@ class _StartingWeekState extends State<_StartingWeek> {
 
 /// One block in the sheet: a row on the sheet, not a tile in it. When picking,
 /// the chosen block opens to show its weeks, so the two choices read as one
-/// decision. When managing, [selected] marks the current block and [onEdit]
-/// edits it.
+/// decision. When managing, [selected] marks the current block with a check
+/// and tapping the row edits it.
 class _BlockRow extends StatelessWidget {
   /// The leading check or ring.
   static const double markSize = 22;
@@ -1607,6 +1615,11 @@ class _BlockRow extends StatelessWidget {
   final String name;
   final String caption;
   final String? note;
+
+  /// Whether the rows are choices. Only then do the others carry an empty
+  /// ring: a ring that does nothing when tapped promises a choice that isn't
+  /// there.
+  final bool picking;
   final bool selected;
   final VoidCallback? onTap;
   final VoidCallback? onEdit;
@@ -1615,6 +1628,7 @@ class _BlockRow extends StatelessWidget {
   const _BlockRow({
     required this.name,
     required this.caption,
+    required this.picking,
     required this.selected,
     required this.onTap,
     required this.weeks,
@@ -1637,6 +1651,7 @@ class _BlockRow extends StatelessWidget {
         Semantics(
           button: onTap != null,
           selected: selected,
+          onTapHint: picking || onTap == null ? null : 'Edit block',
           child: InkWell(
             onTap: onTap,
             child: ConstrainedBox(
@@ -1658,7 +1673,7 @@ class _BlockRow extends StatelessWidget {
                         shape: BoxShape.circle,
                         color: selected ? fill : null,
                         border:
-                            selected
+                            selected || !picking
                                 ? null
                                 : Border.all(
                                   color: borderColor(context),
@@ -1784,10 +1799,12 @@ class _CreateBlockRow extends StatelessWidget {
                     shape: BoxShape.circle,
                     color: accentMutedColor(context),
                   ),
+                  // Accent ink on the accent's wash, like the label beside it
+                  // and the tonal button: one colour for "add".
                   child: Icon(
                     LucideIcons.plus,
                     size: 14,
-                    color: onColor(accentMutedColor(context)),
+                    color: accentOnMutedColor(context),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
@@ -1834,7 +1851,8 @@ class _WeekChip extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 40, minWidth: 76),
+            // The same height as the other pills in the block flow.
+            constraints: const BoxConstraints(minHeight: 44, minWidth: 76),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
               child: Center(

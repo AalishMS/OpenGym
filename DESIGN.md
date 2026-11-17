@@ -291,13 +291,16 @@ button (Home's *Duplicate plan* sheet offers the same through
 still be chosen before *Use this week*. Editing an existing plan shows a
 *Training block* pill under the name (e.g. `Strength · Week 2 of 4`) that opens
 the same sheet in a management mode: blocks with their lengths, the plan's
-current block marked, Edit block and Create block, and a Done button.
+current block marked with a check, Edit block and Create block, and a Done
+button. Nothing is picked there, so the other rows carry no empty radio ring,
+and tapping a row edits that block.
 Create block and Edit block open inside that sheet, replacing the block list
 until Cancel or Back returns to it, so only one layer is ever open; from the
 workout's block menu they, and Reorder blocks, open as a bottom sheet of their
 own. The form sets the length with one stepper (minus, the week count, plus)
-on a control fill, and a week track beneath it fills the weeks that can't be
-removed and outlines the ones that can. It cannot
+on a control fill; a key that can't be pressed sinks into the fill. A week
+track beneath it shows the weeks already reached, which can't be removed, in
+the accent and the planned ones in its quiet wash. It cannot
 move the plan to another block or week. Block changes save immediately and are
 shared by every workout in the split, so they are outside the editor's
 Save/Discard. Extending a block while a workout waits at its boundary needs no
@@ -598,7 +601,9 @@ signature:
   and the scrim separates them. Nothing sits darker than the page except a
   control's own fill, and a card is never nested in another ground.
 - Controls are fills, not outlines. Text fields, steppers, chips, segment
-  tracks, secondary buttons and keypad keys sit on the control fill; a field
+  tracks, secondary buttons and keypad keys sit on the control fill. A segment
+  track (`SegmentTrack`, Settings' theme and weight unit) marks the choice with
+  a rounded accent thumb inset in the track, not a square-edged segment; a field
   rings only for focus or an error (`RingInputBorder`). Secondary buttons are
   filled neutrals, and frequent-but-not-primary actions such as Add exercise
   use the tonal accent: the accent's quiet wash with accent ink.

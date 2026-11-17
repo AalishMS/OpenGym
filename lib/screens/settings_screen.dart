@@ -30,6 +30,7 @@ import '../widgets/app_header.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/persistence_dialog.dart';
+import '../widgets/segment_track.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -560,39 +561,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 12),
           Semantics(
             label: 'Theme',
-            child: SegmentedButton<ThemeMode>(
-              expandedInsets: EdgeInsets.zero,
+            child: SegmentTrack<ThemeMode>(
               segments: const [
-                ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
-                ButtonSegment(value: ThemeMode.light, label: Text('Light')),
-                ButtonSegment(value: ThemeMode.system, label: Text('System')),
+                TrackSegment(value: ThemeMode.dark, label: 'Dark'),
+                TrackSegment(value: ThemeMode.light, label: 'Light'),
+                TrackSegment(value: ThemeMode.system, label: 'System'),
               ],
-              selected: {settings.themeMode},
-              onSelectionChanged:
-                  (selection) => _runSettingsAction(
+              selected: settings.themeMode,
+              onChanged:
+                  (mode) => _runSettingsAction(
                     context,
-                    () => settings.setThemeMode(selection.first),
+                    () => settings.setThemeMode(mode),
                   ),
-              multiSelectionEnabled: false,
-              showSelectedIcon: false,
-              style: SegmentedButton.styleFrom(
-                // A filled track with the choice filled in the accent: no
-                // outline round the group or between its segments.
-                backgroundColor: controlFillColor(context),
-                foregroundColor: textPrimaryColor(context),
-                selectedBackgroundColor: accentFillColor(context),
-                selectedForegroundColor: onAccentColor(context),
-                side: BorderSide.none,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: AppRadius.button,
-                ),
-                minimumSize: const Size(72, 48),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 12,
-                ),
-                textStyle: Theme.of(context).textTheme.labelLarge,
-              ),
             ),
           ),
         ],
@@ -621,39 +601,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 12),
           Semantics(
             label: 'Weight unit',
-            child: SegmentedButton<String>(
+            child: SegmentTrack<String>(
               key: const ValueKey('weight-unit-selector'),
-              expandedInsets: EdgeInsets.zero,
               segments: const [
-                ButtonSegment(value: kWeightUnitKg, label: Text('Kilograms')),
-                ButtonSegment(value: kWeightUnitLbs, label: Text('Pounds')),
+                TrackSegment(value: kWeightUnitKg, label: 'Kilograms'),
+                TrackSegment(value: kWeightUnitLbs, label: 'Pounds'),
               ],
-              selected: {normalizeWeightUnit(settings.weightUnit)},
-              onSelectionChanged:
-                  (selection) => _runSettingsAction(
+              selected: normalizeWeightUnit(settings.weightUnit),
+              onChanged:
+                  (unit) => _runSettingsAction(
                     context,
-                    () => settings.setWeightUnit(selection.first),
+                    () => settings.setWeightUnit(unit),
                   ),
-              multiSelectionEnabled: false,
-              showSelectedIcon: false,
-              style: SegmentedButton.styleFrom(
-                // A filled track with the choice filled in the accent: no
-                // outline round the group or between its segments.
-                backgroundColor: controlFillColor(context),
-                foregroundColor: textPrimaryColor(context),
-                selectedBackgroundColor: accentFillColor(context),
-                selectedForegroundColor: onAccentColor(context),
-                side: BorderSide.none,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: AppRadius.button,
-                ),
-                minimumSize: const Size(72, 48),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 12,
-                ),
-                textStyle: Theme.of(context).textTheme.labelLarge,
-              ),
             ),
           ),
         ],

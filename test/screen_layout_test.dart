@@ -30,6 +30,7 @@ import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
 import 'package:gymapp/services/update_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/widgets/segment_track.dart';
 
 void main() {
   final hiveHarness = HiveTestHarness();
@@ -436,7 +437,7 @@ void main() {
       ]) {
         expect(find.text(name), findsOneWidget);
       }
-      expect(find.byType(SegmentedButton<ThemeMode>), findsOneWidget);
+      expect(find.byType(SegmentTrack<ThemeMode>), findsOneWidget);
       for (var index = 0; index < SettingsProvider.accents.length; index++) {
         final size = tester.getSize(
           find.byKey(ValueKey('accent-swatch-$index')),
@@ -533,26 +534,24 @@ void main() {
           settingsProvider: settings,
         ),
       );
-      await tester.pump();
+      // Let the theme and the labels' colour finish animating to dark.
+      await tester.pumpAndSettle();
 
-      final selector = tester.widget<SegmentedButton<ThemeMode>>(
-        find.byType(SegmentedButton<ThemeMode>),
-      );
-      final context = tester.element(find.byType(SegmentedButton<ThemeMode>));
-      expect(selector.showSelectedIcon, isFalse);
-      expect(selector.selected, {ThemeMode.dark});
+      final track = find.byType(SegmentTrack<ThemeMode>);
+      final selector = tester.widget<SegmentTrack<ThemeMode>>(track);
+      final context = tester.element(track);
+      expect(selector.selected, ThemeMode.dark);
+      // The choice is an accent thumb with its own foreground, inset in a
+      // control-fill track: no outline round the group.
+      expect(segmentThumbColor(tester, track), accentFillColor(context));
+      expect(segmentTrackColor(tester, track), controlFillColor(context));
       expect(
-        selector.style!.backgroundColor!.resolve({WidgetState.selected}),
-        accentFillColor(context),
-      );
-      expect(
-        selector.style!.foregroundColor!.resolve({WidgetState.selected}),
+        DefaultTextStyle.of(tester.element(find.text('Dark'))).style.color,
         onAccentColor(context),
       );
-      // Unselected segments sit on the control fill: a track, not an outline.
       expect(
-        selector.style!.backgroundColor!.resolve({}),
-        controlFillColor(context),
+        DefaultTextStyle.of(tester.element(find.text('Light'))).style.color,
+        textPrimaryColor(context),
       );
       expect([
         for (final label in ['Dark', 'Light', 'System']) segmentSize(label),
@@ -608,16 +607,11 @@ void main() {
       ),
     );
 
-    SegmentedButton<String> selector() => tester.widget(
-      find.byKey(const ValueKey('weight-unit-selector')),
-    );
-    expect(selector().selected, {'kg'});
-    expect(selector().showSelectedIcon, isFalse);
+    final unitTrack = find.byKey(const ValueKey('weight-unit-selector'));
+    SegmentTrack<String> selector() => tester.widget(unitTrack);
+    expect(selector().selected, 'kg');
     final context = tester.element(find.text('Weight unit'));
-    expect(
-      selector().style!.backgroundColor!.resolve({WidgetState.selected}),
-      accentFillColor(context),
-    );
+    expect(segmentThumbColor(tester, unitTrack), accentFillColor(context));
     expect(
       tester.getSize(
         find.ancestor(of: find.text('Pounds'), matching: find.byType(TextButton)),
@@ -628,7 +622,7 @@ void main() {
     await tester.tap(find.text('Pounds'));
     await tester.pumpAndSettle();
     expect(settings.weightUnit, 'lbs');
-    expect(selector().selected, {'lbs'});
+    expect(selector().selected, 'lbs');
     expect(
       (await SharedPreferences.getInstance()).getString('weight_unit'),
       'lbs',
@@ -923,4 +917,23 @@ class _Updates extends UpdateProvider {
 
   @override
   Future<void> loadInstalledVersion() async {}
+}
+
+/// The fill of the chosen option's thumb inside a [SegmentTrack].
+Color? segmentThumbColor(WidgetTester tester, Finder track) {
+  final thumb = tester.widget<DecoratedBox>(
+    find.descendant(
+      of: track,
+      matching: find.byKey(const ValueKey('segment-thumb')),
+    ),
+  );
+  return (thumb.decoration as BoxDecoration).color;
+}
+
+/// The fill of a [SegmentTrack]'s track.
+Color? segmentTrackColor(WidgetTester tester, Finder track) {
+  final box = tester.widget<Container>(
+    find.descendant(of: track, matching: find.byType(Container)).first,
+  );
+  return (box.decoration as BoxDecoration?)?.color;
 }
