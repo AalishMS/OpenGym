@@ -20,6 +20,7 @@ import 'package:gymapp/screens/login_screen.dart';
 import 'package:gymapp/services/supabase_service.dart';
 import 'package:gymapp/services/adopt_local_data.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/widgets/floating_notice.dart';
 
 import 'support/test_fonts.dart';
 import 'support/hive_test_harness.dart';
@@ -501,11 +502,11 @@ void main() {
       StackTrace.current,
     );
     await tester.pumpAndSettle();
-    expect(find.byType(MaterialBanner), findsOneWidget);
+    expect(find.byType(FloatingNotice), findsOneWidget);
     expect(find.text('Unsaved notes'), findsOneWidget);
-    await tester.tap(find.text('Dismiss'));
+    await tester.tap(find.byTooltip('Dismiss'));
     await tester.pumpAndSettle();
-    expect(find.byType(MaterialBanner), findsNothing);
+    expect(find.byType(FloatingNotice), findsNothing);
     expect(find.text('Unsaved notes'), findsOneWidget);
     expect(
       identical(
@@ -536,14 +537,14 @@ void main() {
       StackTrace.current,
     );
     await tester.pumpAndSettle();
-    expect(find.byType(MaterialBanner), findsOneWidget);
+    expect(find.byType(FloatingNotice), findsOneWidget);
     expect(find.textContaining("You're offline"), findsOneWidget);
     expect(
       find.textContaining('Could not verify the sign-in or reset link'),
       findsNothing,
     );
     expect(find.text('Signed-in home'), findsOneWidget);
-    await tester.tap(find.text('Dismiss'));
+    await tester.tap(find.byTooltip('Dismiss'));
     await tester.pumpAndSettle();
 
     void emitOffline() {
@@ -557,7 +558,7 @@ void main() {
     for (var retry = 0; retry < 3; retry++) {
       emitOffline();
       await tester.pumpAndSettle();
-      expect(find.byType(MaterialBanner), findsNothing);
+      expect(find.byType(FloatingNotice), findsNothing);
     }
     // Different failures must still be visible during the offline cooldown.
     // ignore: invalid_use_of_internal_member
@@ -566,20 +567,101 @@ void main() {
       StackTrace.current,
     );
     await tester.pumpAndSettle();
-    expect(find.byType(MaterialBanner), findsOneWidget);
-    await tester.tap(find.text('Dismiss'));
+    expect(find.byType(FloatingNotice), findsOneWidget);
+    await tester.tap(find.byTooltip('Dismiss'));
     await tester.pumpAndSettle();
 
     await tester.pump(const Duration(minutes: 29));
     emitOffline();
     await tester.pumpAndSettle();
-    expect(find.byType(MaterialBanner), findsNothing);
+    expect(find.byType(FloatingNotice), findsNothing);
     await tester.pump(const Duration(minutes: 1));
     emitOffline();
     await tester.pumpAndSettle();
     expect(find.textContaining("You're offline"), findsOneWidget);
     expect(find.text('Signed-in home'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  group('offline notice', () {
+    Future<void> signedIn(WidgetTester tester) async {
+      await SupabaseService.auth.getSessionFromUrl(
+        Uri.parse(
+          'io.opengym.app://callback/#access_token=test-token&refresh_token=refresh-token&expires_in=3600&token_type=bearer&type=signup',
+        ),
+      );
+      await tester.pumpWidget(gateHost());
+      await tester.pumpAndSettle();
+    }
+
+    void emitOffline() {
+      // ignore: invalid_use_of_internal_member
+      SupabaseService.auth.notifyException(
+        AuthRetryableFetchException(message: 'No connection'),
+        StackTrace.current,
+      );
+    }
+
+    testWidgets('floats over the app and leaves on its own', (tester) async {
+      await signedIn(tester);
+      final homeTop = tester.getTopLeft(find.text('Signed-in home')).dy;
+      emitOffline();
+      await tester.pumpAndSettle();
+      expect(find.byType(FloatingNotice), findsOneWidget);
+      expect(find.text("You're offline"), findsOneWidget);
+      expect(
+        find.text(
+          'Your workouts are saved on this device and will sync when you reconnect.',
+        ),
+        findsOneWidget,
+      );
+      // It overlays the screen rather than pushing it down.
+      expect(tester.getTopLeft(find.text('Signed-in home')).dy, homeTop);
+
+      await tester.pump(kOfflineNoticeDuration);
+      await tester.pumpAndSettle();
+      expect(find.byType(FloatingNotice), findsNothing);
+      // Leaving on its own counts as a dismissal, so retries stay quiet.
+      emitOffline();
+      await tester.pumpAndSettle();
+      expect(find.byType(FloatingNotice), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('swipes away', (tester) async {
+      await signedIn(tester);
+      emitOffline();
+      await tester.pumpAndSettle();
+      await tester.fling(
+        find.byType(FloatingNotice),
+        const Offset(0, -200),
+        1000,
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(FloatingNotice), findsNothing);
+      emitOffline();
+      await tester.pumpAndSettle();
+      expect(find.byType(FloatingNotice), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('stays for a screen reader until it is closed', (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(accessibleNavigation: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      await signedIn(tester);
+      emitOffline();
+      await tester.pumpAndSettle();
+      await tester.pump(kOfflineNoticeDuration * 2);
+      await tester.pumpAndSettle();
+      expect(find.byType(FloatingNotice), findsOneWidget);
+      await tester.tap(find.byTooltip('Dismiss'));
+      await tester.pumpAndSettle();
+      expect(find.byType(FloatingNotice), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
   });
 
   testWidgets(
@@ -617,10 +699,12 @@ void main() {
         find.textContaining('Could not verify the sign-in or reset link'),
         findsOneWidget,
       );
-      expect(find.byType(MaterialBanner), findsOneWidget);
-      await tester.tap(find.text('Dismiss'));
+      expect(find.byType(FloatingNotice), findsOneWidget);
+      await tester.tap(find.byTooltip('Dismiss'));
       await tester.pump();
-      expect(find.byType(MaterialBanner), findsNothing);
+      // Let the notice finish sliding away.
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.byType(FloatingNotice), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );

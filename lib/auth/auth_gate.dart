@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/supabase_service.dart';
@@ -15,6 +16,16 @@ import '../providers/split_provider.dart';
 import '../screens/login_screen.dart';
 import '../app_shell.dart';
 import '../theme/app_theme.dart';
+import '../widgets/floating_notice.dart';
+
+const String _kOfflineTitle = "You're offline";
+const String _kOfflineDetail =
+    'Your workouts are saved on this device and will sync when you reconnect.';
+
+/// How long the offline notice stays before it leaves on its own. Closing it
+/// either way starts the same cooldown, so a retrying token refresh can't keep
+/// bringing it back.
+const Duration kOfflineNoticeDuration = Duration(seconds: 6);
 
 class AuthGate extends StatefulWidget {
   /// Wrap the app Navigator so incoming recovery is visible above pushed routes.
@@ -90,10 +101,10 @@ class _AuthGateState extends State<AuthGate> {
           if (offline && _offlineNoticeCooldown != null) return;
           _authErrorIsOffline = offline;
           // A background token refresh with no network lands here too; it is
-          // retried automatically and the next auth event clears the banner.
+          // retried automatically and the next auth event clears the notice.
           _authError =
               offline
-                  ? "You're offline. Your workouts are saved on this device and will sync when you reconnect."
+                  ? '$_kOfflineTitle. $_kOfflineDetail'
                   : error is AuthRetryableFetchException
                   ? kServerUnavailableMessage
                   : 'Could not verify the sign-in or reset link. Request a new link and try again.';
@@ -120,6 +131,30 @@ class _AuthGateState extends State<AuthGate> {
       _authError = null;
       _authErrorIsOffline = false;
     });
+  }
+
+  /// Every gate message is a headline sentence followed by advice; the notice
+  /// shows the headline as its title and the advice beneath it.
+  Widget _buildNotice(String message) {
+    final split = message.indexOf('. ');
+    final title = split < 0 ? message : message.substring(0, split);
+    final detail = split < 0 ? null : message.substring(split + 2);
+    return FloatingNotice(
+      key: ValueKey(message),
+      icon:
+          _authErrorIsOffline ? LucideIcons.cloudOff : LucideIcons.circleAlert,
+      title: title,
+      detail: detail,
+      isError: !_authErrorIsOffline,
+      // Being offline is information, not a problem to solve, so it leaves on
+      // its own. A failed link or server error waits to be read.
+      autoDismissAfter: _authErrorIsOffline ? kOfflineNoticeDuration : null,
+      // An outgoing notice is still mounted while it animates away; its timer
+      // or a late swipe must not close the message that replaced it.
+      onDismiss: () {
+        if (_authError == message) _dismissAuthError();
+      },
+    );
   }
 
   @override
@@ -156,29 +191,19 @@ class _AuthGateState extends State<AuthGate> {
             child: Focus(
               descendantsAreFocusable: !recovering,
               descendantsAreTraversable: !recovering,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: Stack(
+                fit: StackFit.expand,
                 children: [
-                  if (_authError != null && !recovering)
-                    SafeArea(
-                      bottom: false,
-                      child: MaterialBanner(
-                        backgroundColor: surfaceColor(context),
-                        content: Semantics(
-                          liveRegion: true,
-                          child: Text(_authError!),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: _dismissAuthError,
-                            child: const Text('Dismiss'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  Expanded(
+                  KeyedSubtree(
                     key: const ValueKey('signed-in-content'),
                     child: widget.child,
+                  ),
+                  // Floats over the app rather than pushing every screen down.
+                  FloatingNoticeHost(
+                    notice:
+                        _authError != null && !recovering
+                            ? _buildNotice(_authError!)
+                            : null,
                   ),
                 ],
               ),
