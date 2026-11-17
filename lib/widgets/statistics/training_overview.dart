@@ -219,7 +219,7 @@ class _TrainingOverviewState extends State<TrainingOverview> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           for (var i = 0; i < 3; i++)
-                            Container(height: 1, color: borderColor(context)),
+                            Container(height: 1, color: hairlineColor(context)),
                         ],
                       ),
                     ),
@@ -343,7 +343,7 @@ class _TrainingOverviewState extends State<TrainingOverview> {
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
-        Divider(color: borderColor(context), height: 1),
+        Divider(color: hairlineColor(context), height: 1),
         const SizedBox(height: AppSpacing.lg),
         WorkoutHeatmap(sessions: widget.sessions, compact: true),
       ],

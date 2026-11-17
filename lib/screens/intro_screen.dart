@@ -6,6 +6,7 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../widgets/app_wordmark.dart';
 import '../widgets/action_progress.dart';
+import '../widgets/raised_card.dart';
 
 /// A short, optional introduction shown once on a new installation.
 class IntroScreen extends StatefulWidget {
@@ -261,11 +262,7 @@ class _TrainingPreview extends StatelessWidget {
     return Container(
       height: 278,
       padding: const EdgeInsets.all(AppSpacing.xl),
-      decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border.all(color: borderColor(context)),
-        borderRadius: AppRadius.card,
-      ),
+      decoration: raisedDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

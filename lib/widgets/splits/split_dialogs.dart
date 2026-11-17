@@ -86,16 +86,11 @@ class _SplitNameDialogState extends State<_SplitNameDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor(context);
     final textSecondary = textSecondaryColor(context);
     return PopScope(
       canPop: !_saving,
       child: Dialog(
         backgroundColor: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context)),
-        ),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 400),
           child: Padding(
@@ -108,7 +103,7 @@ class _SplitNameDialogState extends State<_SplitNameDialog> {
                   _isRename ? 'Rename split' : 'New split',
                   style: Theme.of(
                     context,
-                  ).textTheme.headlineSmall?.copyWith(color: accent),
+                  ).dialogTheme.titleTextStyle,
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
@@ -138,9 +133,6 @@ class _SplitNameDialogState extends State<_SplitNameDialog> {
                     helperText: '1–24 characters',
                     errorText: _error,
                     counterText: '',
-                    border: const OutlineInputBorder(
-                      borderRadius: AppRadius.field,
-                    ),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -184,14 +176,9 @@ class _ManageSplitsDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<SplitProvider>(
       builder: (context, provider, _) {
-        final accent = accentColor(context);
         final textSecondary = textSecondaryColor(context);
         return Dialog(
           backgroundColor: surfaceColor(context),
-          shape: RoundedRectangleBorder(
-            borderRadius: AppRadius.card,
-            side: BorderSide(color: borderColor(context)),
-          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440, maxHeight: 640),
             child: Padding(
@@ -204,7 +191,7 @@ class _ManageSplitsDialog extends StatelessWidget {
                     'Manage splits',
                     style: Theme.of(
                       context,
-                    ).textTheme.headlineSmall?.copyWith(color: accent),
+                    ).dialogTheme.titleTextStyle,
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
@@ -288,9 +275,12 @@ class _ManageSplitRow extends StatelessWidget {
     final border = borderColor(context);
     final textPrimary = textPrimaryColor(context);
     return Container(
+      // Rows are fills, not outlines; the active split takes the accent wash
+      // and keeps an accent edge, so the choice reads without colour alone.
       decoration: BoxDecoration(
-        color: isActive ? accentMutedColor(context) : backgroundColor(context),
-        border: Border.all(color: isActive ? accent : border),
+        color:
+            isActive ? selectedGroundColor(context) : controlFillColor(context),
+        border: isActive ? Border.all(color: accent, width: 1.5) : null,
         borderRadius: AppRadius.button,
       ),
       padding: const EdgeInsets.fromLTRB(
@@ -410,10 +400,6 @@ class _DeleteSplitDialogState extends State<_DeleteSplitDialog> {
       canPop: !_deleting,
       child: Dialog(
         backgroundColor: surfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: borderColor(context)),
-        ),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
           child: SingleChildScrollView(
@@ -533,8 +519,10 @@ class _ReplacementRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           decoration: BoxDecoration(
             color:
-                selected ? accentMutedColor(context) : backgroundColor(context),
-            border: Border.all(color: selected ? accent : borderColor(context)),
+                selected
+                    ? selectedGroundColor(context)
+                    : controlFillColor(context),
+            border: selected ? Border.all(color: accent, width: 1.5) : null,
             borderRadius: AppRadius.button,
           ),
           child: Row(

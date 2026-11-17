@@ -277,7 +277,7 @@ class _ConnectionNotice extends StatelessWidget {
           vertical: AppSpacing.md,
         ),
         decoration: BoxDecoration(
-          border: Border(bottom: BorderSide(color: borderColor(context))),
+          border: Border(bottom: BorderSide(color: hairlineColor(context))),
         ),
         child: Row(
           children: [
@@ -379,7 +379,7 @@ class _SuggestionRow extends StatelessWidget {
     final secondary = textSecondaryColor(context);
     return DecoratedBox(
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: borderColor(context))),
+        border: Border(bottom: BorderSide(color: hairlineColor(context))),
       ),
       child: Semantics(
         button: true,
@@ -499,7 +499,7 @@ class _InputBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: backgroundColor(context),
-        border: Border(top: BorderSide(color: borderColor(context))),
+        border: Border(top: BorderSide(color: hairlineColor(context))),
       ),
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -535,7 +535,7 @@ class _InputBar extends StatelessWidget {
           SizedBox.square(
             dimension: 48,
             child: Material(
-              color: enabled ? fill : surfaceColor(context),
+              color: enabled ? fill : controlFillColor(context),
               borderRadius: AppRadius.button,
               child: InkWell(
                 key: const ValueKey('coach-send'),

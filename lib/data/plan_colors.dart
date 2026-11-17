@@ -34,16 +34,15 @@ Color planSeed(int index) =>
 final List<int> kPlanColors =
     List.unmodifiable(List.generate(_slots, (i) => planSeed(i).toARGB32()));
 
-/// Solves slot [slot] against the card it will be drawn on.
+/// Solves slot [slot] against the hardest ground it can be drawn on.
 ///
-/// The surface is the harder of the two grounds in both modes — in dark it is
-/// the lighter one and tones are found lighter still, in light it is the darker
-/// one and tones are found darker — so a colour that clears 4.5:1 here clears
-/// it on the background too. One tone therefore serves as both a label colour
-/// (needs 4.5:1) and a 2px stripe (needs 3:1).
+/// A plan colour labels rows on the page, cards and sheets, and sits beside
+/// controls, so it is solved against whichever of those it reads worst on
+/// ([hardestGroundFor]). One tone therefore serves as both a label colour
+/// (needs 4.5:1) and a 2px stripe (needs 3:1) everywhere.
 Color _resolve(int slot, BuildContext context) => solveForContrast(
       seed: planSeed(slot),
-      against: surfaceColor(context),
+      against: hardestGroundFor(planSeed(slot), context),
       target: 4.5,
       preferLighter: Theme.of(context).brightness == Brightness.dark,
       anchor: ToneAnchor.seed,

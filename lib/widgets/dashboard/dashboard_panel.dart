@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../raised_card.dart';
 
 /// The shared frame every dashboard tile sits in: 1px hairline box, a
 /// sans title header separated by a rule, and an optional muted caption on the
@@ -27,14 +27,10 @@ class DashboardPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final border = borderColor(context);
+    final border = hairlineColor(context);
 
     return Container(
-      decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border.all(color: border, width: 1),
-        borderRadius: AppRadius.card,
-      ),
+      decoration: raisedDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

@@ -316,17 +316,6 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
                           labelText: 'Exercise name',
                           hintText: 'Enter exercise name',
                           errorText: errorText,
-                          border: const OutlineInputBorder(
-                            borderRadius: AppRadius.field,
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: AppRadius.field,
-                            borderSide: BorderSide(color: borderColor(context)),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: AppRadius.field,
-                            borderSide: BorderSide(color: accentColor(context)),
-                          ),
                         ),
                         onChanged: (value) {
                           setDialogState(() {
@@ -723,7 +712,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
       ),
       decoration: BoxDecoration(
         color: surfaceColor(context),
-        border: Border(top: BorderSide(color: borderColor(context))),
+        border: Border(top: BorderSide(color: hairlineColor(context))),
       ),
       child: Semantics(
         label:
@@ -798,15 +787,6 @@ class _SearchField extends StatelessWidget {
                   },
                   icon: const Icon(LucideIcons.x, size: 18),
                 ),
-        border: const OutlineInputBorder(borderRadius: AppRadius.field),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: AppRadius.field,
-          borderSide: BorderSide(color: borderColor(context)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: AppRadius.field,
-          borderSide: BorderSide(color: accentColor(context)),
-        ),
       ),
     );
   }
@@ -955,11 +935,15 @@ class _MuscleGroupTile extends StatelessWidget {
       excludeSemantics: true,
       onTap: onTap,
       child: Material(
-        color: surfaceColor(context),
+        color:
+            hasSelection
+                ? selectedGroundColor(context)
+                : controlFillColor(context),
         shape: RoundedRectangleBorder(
-          side: BorderSide(
-            color: hasSelection ? accentColor(context) : borderColor(context),
-          ),
+          side:
+              hasSelection
+                  ? BorderSide(color: accentColor(context), width: 1.5)
+                  : BorderSide.none,
           borderRadius: AppRadius.card,
         ),
         child: InkWell(
@@ -1042,7 +1026,7 @@ class _ExerciseList extends StatelessWidget {
             height: 1,
             indent: AppSpacing.md,
             endIndent: AppSpacing.md,
-            color: borderColor(context),
+            color: hairlineColor(context),
           ),
       itemBuilder: (context, index) {
         final result = results[index];

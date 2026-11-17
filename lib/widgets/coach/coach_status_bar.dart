@@ -66,7 +66,7 @@ class CoachStatusBar extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: surfaceColor(context),
-        border: Border(bottom: BorderSide(color: borderColor(context))),
+        border: Border(bottom: BorderSide(color: hairlineColor(context))),
       ),
       child: Center(
         child: ConstrainedBox(

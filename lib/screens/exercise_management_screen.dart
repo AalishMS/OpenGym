@@ -208,7 +208,7 @@ class _ExerciseManagementScreenState extends State<ExerciseManagementScreen> {
                       itemCount: exercises.length,
                       separatorBuilder:
                           (_, _) =>
-                              Divider(height: 1, color: borderColor(context)),
+                              Divider(height: 1, color: hairlineColor(context)),
                       itemBuilder: (context, index) {
                         final d = exercises[index];
                         return ListTile(

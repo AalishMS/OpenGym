@@ -57,10 +57,6 @@ class WorkoutDialogs {
           builder: (context, setDialogState) {
             return Dialog(
               backgroundColor: surfaceColor(context),
-              shape: RoundedRectangleBorder(
-                borderRadius: AppRadius.card,
-                side: BorderSide(color: borderColor(context), width: 1),
-              ),
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: SingleChildScrollView(
@@ -113,13 +109,7 @@ class WorkoutDialogs {
                                   color:
                                       selectedRpe == rpe
                                           ? accentFillColor(context)
-                                          : Colors.transparent,
-                                  border: Border.all(
-                                    color:
-                                        selectedRpe == rpe
-                                            ? accentFillColor(context)
-                                            : borderColor(context),
-                                  ),
+                                          : controlFillColor(context),
                                   borderRadius: AppRadius.chip,
                                 ),
                                 child: Center(
@@ -244,10 +234,6 @@ class WorkoutDialogs {
       builder: (context) {
         return Dialog(
           backgroundColor: surfaceColor(context),
-          shape: RoundedRectangleBorder(
-            borderRadius: AppRadius.card,
-            side: BorderSide(color: borderColor(context), width: 1),
-          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: SingleChildScrollView(

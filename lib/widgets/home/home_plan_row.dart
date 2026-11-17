@@ -9,8 +9,9 @@ import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import '../app_button.dart';
+import '../raised_card.dart';
 
-/// A quiet plan entry, with a distinct outline for the next workout.
+/// A quiet plan entry; the next workout rises into a raised card.
 class HomePlanRow extends StatelessWidget {
   final WorkoutPlan plan;
   final int workoutNumber;
@@ -33,12 +34,7 @@ class HomePlanRow extends StatelessWidget {
     final name = titleCase(plan.name);
     final markerGround = Color.alphaBlend(
       planColorOf(plan.planColor, context).withAlpha(32),
-      raisedSurfaceColor(context),
-    );
-    final nextColor = textSecondaryColor(context);
-    final nextGround = Color.alphaBlend(
-      nextColor.withAlpha(28),
-      raisedSurfaceColor(context),
+      isNext ? surfaceColor(context) : backgroundColor(context),
     );
     final exercises = plan.exercises.length;
     final sets = plan.exercises.fold<int>(
@@ -48,96 +44,81 @@ class HomePlanRow extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
-      child: Material(
-        color: isNext ? raisedSurfaceColor(context) : Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: isNext ? BorderSide(color: nextColor) : BorderSide.none,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onOpen,
-          onLongPress: onShowActions,
-          borderRadius: AppRadius.card,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.lg,
-            ),
-            child: Row(
-              children: [
-                Semantics(
-                  label: '$name plan marker',
-                  value: 'Workout $workoutNumber',
-                  child: Container(
-                    width: 44,
-                    height: 44,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: markerGround,
-                      borderRadius: AppRadius.button,
-                    ),
-                    child: ExcludeSemantics(
-                      child: Text(
-                        '$workoutNumber',
-                        style: AppTypography.figures(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: onColor(markerGround),
-                        ),
-                      ),
-                    ),
+      // The next workout lifts off the ledger as a raised card; the rest are
+      // rows on the page.
+      child: RaisedCard(
+        raised: isNext,
+        onTap: onOpen,
+        onLongPress: onShowActions,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.lg,
+          ),
+          child: Row(
+            children: [
+              Semantics(
+                label: '$name plan marker',
+                value: 'Workout $workoutNumber',
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: markerGround,
+                    borderRadius: AppRadius.button,
                   ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: textTheme.titleMedium?.copyWith(
-                          color: textPrimaryColor(context),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        '$exercises ${exercises == 1 ? 'exercise' : 'exercises'} · '
-                        '$sets ${sets == 1 ? 'set' : 'sets'}',
-                        style: textTheme.bodySmall?.copyWith(
-                          color: textSecondaryColor(context),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                if (isNext)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: AppSpacing.xs,
-                    ),
-                    decoration: BoxDecoration(
-                      color: nextGround,
-                      borderRadius: AppRadius.chip,
-                    ),
+                  child: ExcludeSemantics(
                     child: Text(
-                      'Next',
-                      style: textTheme.labelSmall?.copyWith(
-                        color: onColor(nextGround),
+                      '$workoutNumber',
+                      style: AppTypography.figures(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: onColor(markerGround),
                       ),
                     ),
                   ),
-                AppIconButton(
-                  label: 'Actions for $name',
-                  icon: LucideIcons.ellipsis,
-                  color: textSecondaryColor(context),
-                  onPressed: onShowActions,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: textTheme.titleMedium?.copyWith(
+                        color: textPrimaryColor(context),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '$exercises ${exercises == 1 ? 'exercise' : 'exercises'} · '
+                      '$sets ${sets == 1 ? 'set' : 'sets'}',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: textSecondaryColor(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              if (isNext)
+                Text(
+                  'Next',
+                  style: textTheme.labelMedium?.copyWith(
+                    color: accentColor(context),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              AppIconButton(
+                label: 'Actions for $name',
+                icon: LucideIcons.ellipsis,
+                color: textSecondaryColor(context),
+                onPressed: onShowActions,
+              ),
+            ],
           ),
         ),
       ),

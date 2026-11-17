@@ -205,7 +205,7 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
       color: backgroundColor(context),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: borderColor(context))),
+          border: Border(top: BorderSide(color: hairlineColor(context))),
         ),
         child: SizedBox(
           height: height,
@@ -243,7 +243,7 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
                         child: SizedBox(
                           width: 1,
                           height: 28,
-                          child: ColoredBox(color: borderColor(context)),
+                          child: ColoredBox(color: hairlineColor(context)),
                         ),
                       ),
                     ),
@@ -688,7 +688,7 @@ class _BlockMenuState extends State<_BlockMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final border = borderColor(context);
+    final border = hairlineColor(context);
     final textSecondary = textSecondaryColor(context);
     final scaler = MediaQuery.textScalerOf(context);
     final count = widget.blocks.length;
@@ -776,10 +776,13 @@ class _BlockMenuState extends State<_BlockMenu> {
     return Material(
       color: surfaceColor(context),
       elevation: 8,
-      shadowColor: backgroundColor(context).withAlpha(128),
+      shadowColor: Theme.of(context).colorScheme.shadow.withAlpha(90),
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.card,
-        side: BorderSide(color: border),
+        side:
+            Theme.of(context).brightness == Brightness.dark
+                ? BorderSide(color: border)
+                : BorderSide.none,
       ),
       clipBehavior: Clip.antiAlias,
       child: LayoutBuilder(
@@ -848,11 +851,10 @@ class _BlockMenuRow extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
+      // The check and the weight mark the current block; a wash behind the
+      // row would only add a coloured slab to the menu.
       child: Ink(
-        decoration: BoxDecoration(
-          color: selected ? accentMutedColor(context) : null,
-          borderRadius: AppRadius.control,
-        ),
+        decoration: const BoxDecoration(borderRadius: AppRadius.control),
         child: InkWell(
           onTap: onTap,
           borderRadius: AppRadius.control,
@@ -893,14 +895,9 @@ class _BlockMenuRow extends StatelessWidget {
                           caption,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          // Secondary grey is too faint on the selected
-                          // row's accent wash, so it takes the primary ink.
                           style: AppTypography.figures(
                             fontSize: 12,
-                            color:
-                                selected
-                                    ? textPrimaryColor(context)
-                                    : textSecondary,
+                            color: textSecondary,
                           ),
                         ),
                       ],

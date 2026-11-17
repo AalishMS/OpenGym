@@ -146,10 +146,6 @@ class UpdateDialog extends StatelessWidget {
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       backgroundColor: surfaceColor(context),
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.card,
-        side: BorderSide(color: borderColor(context), width: 1),
-      ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: 440,
@@ -293,7 +289,7 @@ class _MetadataChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
-        border: Border.all(color: borderColor(context)),
+        border: Border.all(color: hairlineColor(context)),
         borderRadius: AppRadius.chip,
       ),
       child: Text(
@@ -434,7 +430,7 @@ class _Progress extends StatelessWidget {
           child: LinearProgressIndicator(
             value: installing ? null : progress,
             minHeight: 5,
-            backgroundColor: borderColor(context),
+            backgroundColor: controlFillColor(context),
             valueColor: AlwaysStoppedAnimation<Color>(accentColor(context)),
           ),
         ),
@@ -547,10 +543,6 @@ class WhatsNewDialog extends StatelessWidget {
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       backgroundColor: surfaceColor(context),
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.card,
-        side: BorderSide(color: borderColor(context), width: 1),
-      ),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: 440,

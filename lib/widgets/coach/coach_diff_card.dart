@@ -76,7 +76,7 @@ class CoachPlanReviewCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.card,
-        side: BorderSide(color: borderColor(context)),
+        side: BorderSide(color: hairlineColor(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -503,7 +503,7 @@ class _Hairline extends StatelessWidget {
     return Container(
       margin: EdgeInsets.only(left: indent ? 52 : 0),
       height: 1,
-      color: borderColor(context),
+      color: hairlineColor(context),
     );
   }
 }

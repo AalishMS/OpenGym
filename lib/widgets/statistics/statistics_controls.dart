@@ -42,9 +42,10 @@ class SegmentedPills<T> extends StatelessWidget {
       // stretching each one across a third of the page.
       // The border sits outside the segments' own 48px.
       constraints: const BoxConstraints(minHeight: height + 2, maxWidth: 480),
+      // A filled track, never an outline; the selected segment is filled in
+      // the accent. [quiet] keeps the same track: there is no louder one.
       decoration: BoxDecoration(
-        color: quiet ? surfaceColor(context) : backgroundColor(context),
-        border: quiet ? null : Border.all(color: borderColor(context)),
+        color: controlFillColor(context),
         // Concentric with the segments: their radius plus the inset.
         borderRadius: AppRadius.button,
       ),
@@ -238,12 +239,11 @@ class _Pill extends StatelessWidget {
               vertical: AppSpacing.xs + AppSpacing.xxs,
             ),
             decoration: BoxDecoration(
-              color: selected ? accentFillColor(context) : null,
-              border: Border.all(
-                color:
-                    selected ? accentFillColor(context) : borderColor(context),
-              ),
-              borderRadius: AppRadius.chip,
+              color:
+                  selected
+                      ? accentFillColor(context)
+                      : controlFillColor(context),
+              borderRadius: AppRadius.pill,
             ),
             child: Text(
               label,

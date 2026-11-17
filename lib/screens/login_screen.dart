@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 import '../auth/auth_error_message.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
-import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_wordmark.dart';
@@ -488,6 +487,5 @@ class _LoginScreenState extends State<LoginScreen> {
     errorText: error,
     errorMaxLines: 3,
     suffixIcon: suffixIcon,
-    border: const OutlineInputBorder(borderRadius: AppRadius.field),
   );
 }

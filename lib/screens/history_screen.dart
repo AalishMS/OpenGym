@@ -16,7 +16,6 @@ import '../services/hive_service.dart';
 import '../services/statistics_analytics_service.dart';
 import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
-import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/scroll_to_top.dart';
 import '../utils/set_history.dart';
@@ -30,6 +29,7 @@ import '../widgets/history/history_journal_widgets.dart';
 import '../widgets/history/workout_details_widgets.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../widgets/workout/workout_dialogs.dart';
+import '../widgets/raised_card.dart';
 
 class HistoryScreen extends StatefulWidget {
   /// Bumped when the History tab is tapped while showing.
@@ -714,7 +714,6 @@ class _EditSessionScreenState extends State<EditSessionScreen>
                   enabled: !_isSaving,
                   decoration: const InputDecoration(
                     labelText: 'Workout name',
-                    border: OutlineInputBorder(borderRadius: AppRadius.field),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
@@ -894,11 +893,7 @@ class _EditableExerciseCard extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border.all(color: borderColor(context)),
-        borderRadius: AppRadius.card,
-      ),
+      decoration: raisedDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

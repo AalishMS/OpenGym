@@ -137,7 +137,7 @@ class _StrengthTrendState extends State<StrengthTrend> {
                               ink: accentColor(context),
                               wash: accentMutedColor(context),
                               ground: backgroundColor(context),
-                              guide: borderColor(context),
+                              guide: hairlineColor(context),
                             ),
                           ),
                         ),

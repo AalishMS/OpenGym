@@ -25,27 +25,34 @@ class AppRadius {
   static const double xs = 4;
 
   /// Chips, tab pills, small controls.
-  static const double sm = 6;
+  static const double sm = 8;
 
   /// Buttons, text fields, list rows.
-  static const double md = 10;
+  static const double md = 12;
 
-  /// Cards, panels, dialogs.
-  static const double lg = 14;
+  /// Cards and panels.
+  static const double lg = 16;
 
-  /// Bottom sheets.
-  static const double xl = 20;
+  /// Overlays: bottom sheets and dialogs. The roundest thing on screen is the
+  /// thing on top.
+  static const double xl = 24;
 
   // --- semantic aliases: what call sites use ---
 
-  /// Cards, panels, dialogs, bordered content boxes.
+  /// Cards, panels, bordered content boxes.
   static const BorderRadius card = BorderRadius.all(Radius.circular(lg));
+
+  /// Dialogs, and anything else that floats over a scrim.
+  static const BorderRadius dialog = BorderRadius.all(Radius.circular(xl));
+
+  /// A pill: fully rounded ends at any height. Header actions and filter pills.
+  static const BorderRadius pill = BorderRadius.all(Radius.circular(999));
 
   /// Buttons and full-width tap targets.
   static const BorderRadius button = BorderRadius.all(Radius.circular(md));
 
   /// Large keypad keys and the wide actions that sit beside them.
-  static const BorderRadius keypadKey = BorderRadius.all(Radius.circular(xl));
+  static const BorderRadius keypadKey = BorderRadius.all(Radius.circular(lg));
 
   /// Text fields and other input decorations.
   static const BorderRadius field = button;

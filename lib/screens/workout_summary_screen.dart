@@ -423,7 +423,7 @@ class _SummaryContent extends StatelessWidget {
           ),
         ],
         const SizedBox(height: AppSpacing.lg),
-        Divider(height: 1, color: borderColor(context)),
+        Divider(height: 1, color: hairlineColor(context)),
         const SizedBox(height: AppSpacing.lg),
         LayoutBuilder(
           builder: (context, constraints) {
@@ -467,7 +467,7 @@ class _SummaryContent extends StatelessWidget {
         ),
         if (records.isNotEmpty || firstLogs > 0) ...[
           const SizedBox(height: AppSpacing.lg),
-          Divider(height: 1, color: borderColor(context)),
+          Divider(height: 1, color: hairlineColor(context)),
           const SizedBox(height: AppSpacing.lg),
         ],
         if (records.isNotEmpty) ...[

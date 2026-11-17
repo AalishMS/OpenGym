@@ -254,8 +254,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 width: 72,
                 height: 72,
                 decoration: BoxDecoration(
-                  color: surfaceColor(context),
-                  border: Border.all(color: borderColor(context), width: 1),
+                  color: accentMutedColor(context),
                   borderRadius: AppRadius.card,
                 ),
                 child: Icon(
@@ -445,7 +444,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onMove: (fromId, toId) => _movePlan(context, fromId, toId),
             ),
           ] else ...[
-            Divider(height: 1, color: borderColor(context)),
+            Divider(height: 1, color: hairlineColor(context)),
             for (var index = 0; index < plans.length; index++) ...[
               HomePlanRow(
                 workoutNumber: index + 1,
@@ -458,7 +457,7 @@ class _HomeScreenState extends State<HomeScreen> {
               if (index < plans.length - 1 &&
                   index != nextIndex &&
                   index + 1 != nextIndex)
-                Divider(height: 1, color: borderColor(context)),
+                Divider(height: 1, color: hairlineColor(context)),
             ],
           ],
           const SizedBox(height: AppSpacing.sm),
@@ -543,7 +542,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_mutatingPlan) return;
     final planColor = planColorOf(plan.planColor, context);
     final planCount = context.read<WorkoutPlanProvider>().plans.length;
-    final border = borderColor(context);
+    final border = hairlineColor(context);
     final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
 
@@ -779,7 +778,6 @@ class _HomeScreenState extends State<HomeScreen> {
     bool saved = false;
     String? saveError;
     final surface = surfaceColor(context);
-    final border = borderColor(context);
     final textSecondary = textSecondaryColor(context);
 
     showDialog(
@@ -792,10 +790,6 @@ class _HomeScreenState extends State<HomeScreen> {
               canPop: !saving,
               child: Dialog(
                 backgroundColor: surface,
-                shape: RoundedRectangleBorder(
-                  borderRadius: AppRadius.card,
-                  side: BorderSide(color: border, width: 1),
-                ),
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(

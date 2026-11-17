@@ -118,7 +118,7 @@ void main() {
     expect(material.surfaceTintColor, Colors.transparent, reason: reason);
     expect(
       material.shape,
-      Border(bottom: BorderSide(color: borderColor(context))),
+      Border(bottom: BorderSide(color: hairlineColor(context))),
       reason: '$reason: permanent hairline',
     );
   }

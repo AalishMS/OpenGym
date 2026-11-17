@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../action_progress.dart';
+import '../raised_card.dart';
 
 /// One way forward once a workout finishes its block's planned weeks.
 class TrainingBoundaryOption {
@@ -170,13 +171,16 @@ class _BoundaryOptionCard extends StatelessWidget {
       button: true,
       enabled: onTap != null,
       child: Material(
-        color: recommended ? accentMutedColor(context) : surfaceColor(context),
+        // Options are fills; the recommended one takes the accent wash and
+        // an accent edge.
+        color:
+            recommended ? accentMutedColor(context) : controlFillColor(context),
         shape: RoundedRectangleBorder(
           borderRadius: AppRadius.button,
-          side: BorderSide(
-            color: recommended ? accent : borderColor(context),
-            width: recommended ? 1.5 : 1,
-          ),
+          side:
+              recommended
+                  ? BorderSide(color: accent, width: 1.5)
+                  : BorderSide.none,
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
@@ -266,11 +270,7 @@ class TrainingProgressNotice extends StatelessWidget {
         0,
       ),
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: surfaceColor(context),
-          borderRadius: AppRadius.card,
-          border: Border.all(color: borderColor(context)),
-        ),
+        decoration: raisedDecoration(context),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.md,

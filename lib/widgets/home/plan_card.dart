@@ -11,6 +11,7 @@ import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import '../../utils/plan_stats.dart';
+import '../raised_card.dart';
 
 /// One plan in the Plans list.
 ///
@@ -55,11 +56,7 @@ class PlanCard extends StatelessWidget {
     return Container(
       // Clips the ink splash to the rounded corners.
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border.all(color: borderColor(context), width: 1),
-        borderRadius: AppRadius.card,
-      ),
+      decoration: raisedDecoration(context),
       // A transparent Material above the fill, so the splash is drawn over the
       // card instead of underneath its opaque colour.
       child: Material(

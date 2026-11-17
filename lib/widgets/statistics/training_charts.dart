@@ -287,7 +287,7 @@ class _ExerciseTrendChartState extends State<ExerciseTrendChart> {
                         selected: selected,
                         ink: accentColor(context),
                         ground: surfaceColor(context),
-                        guide: borderColor(context),
+                        guide: hairlineColor(context),
                       ),
                     ),
                   ),
@@ -640,7 +640,7 @@ class _ScrollablePlotState extends State<_ScrollablePlot> {
                               right: 0,
                               child: Container(
                                 height: 1,
-                                color: borderColor(context),
+                                color: hairlineColor(context),
                               ),
                             ),
                           Scrollbar(

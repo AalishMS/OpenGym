@@ -324,7 +324,7 @@ class _GuidedTourState extends State<GuidedTour>
                 color: surfaceColor(context),
                 shape: RoundedRectangleBorder(
                   borderRadius: AppRadius.card,
-                  side: BorderSide(color: borderColor(context)),
+                  side: BorderSide(color: hairlineColor(context)),
                 ),
                 clipBehavior: Clip.antiAlias,
                 elevation: 8,

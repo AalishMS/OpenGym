@@ -549,9 +549,10 @@ void main() {
         selector.style!.foregroundColor!.resolve({WidgetState.selected}),
         onAccentColor(context),
       );
+      // Unselected segments sit on the control fill: a track, not an outline.
       expect(
         selector.style!.backgroundColor!.resolve({}),
-        surfaceColor(context),
+        controlFillColor(context),
       );
       expect([
         for (final label in ['Dark', 'Light', 'System']) segmentSize(label),

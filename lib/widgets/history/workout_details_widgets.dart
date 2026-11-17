@@ -15,6 +15,7 @@ import '../../utils/weight_units.dart';
 import '../../utils/workout_context.dart';
 import '../read_only_value.dart';
 import '../readable_table_viewport.dart';
+import '../raised_card.dart';
 
 String _plural(int count, String noun) =>
     '$count $noun${count == 1 ? '' : 's'}';
@@ -93,11 +94,7 @@ class WorkoutDetailsSummary extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         DecoratedBox(
           key: const ValueKey('workout-details-readout'),
-          decoration: BoxDecoration(
-            color: surfaceColor(context),
-            border: Border.all(color: borderColor(context)),
-            borderRadius: AppRadius.card,
-          ),
+          decoration: raisedDecoration(context),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -145,7 +142,7 @@ class WorkoutDetailsSummary extends StatelessWidget {
                     ],
                   ),
                 ),
-              Divider(height: 1, thickness: 1, color: borderColor(context)),
+              Divider(height: 1, thickness: 1, color: hairlineColor(context)),
               _RuledRow(
                 children: [
                   _ReadoutFigure(
@@ -218,7 +215,7 @@ class _RuledRow extends StatelessWidget {
               VerticalDivider(
                 width: 1,
                 thickness: 1,
-                color: borderColor(context),
+                color: hairlineColor(context),
               ),
             Expanded(child: child),
           ],
@@ -338,11 +335,7 @@ class WorkoutExerciseDetails extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.md),
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: surfaceColor(context),
-          border: Border.all(color: borderColor(context)),
-          borderRadius: AppRadius.card,
-        ),
+        decoration: raisedDecoration(context),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(
             AppSpacing.md,
@@ -505,7 +498,7 @@ class WorkoutExerciseDetails extends StatelessWidget {
                           // the header and every set are separated by one rule.
                           decoration: BoxDecoration(
                             border: Border(
-                              top: BorderSide(color: borderColor(context)),
+                              top: BorderSide(color: hairlineColor(context)),
                             ),
                           ),
                           child: Column(
@@ -530,7 +523,7 @@ class WorkoutExerciseDetails extends StatelessWidget {
                                   child: _WorkoutNote(
                                     note: set.note!.trim(),
                                     label: 'Set ${index + 1} note',
-                                    rule: borderColor(context),
+                                    rule: hairlineColor(context),
                                   ),
                                 ),
                             ],

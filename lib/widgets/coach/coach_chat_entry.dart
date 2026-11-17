@@ -6,6 +6,7 @@ import '../../services/coach/coach_client.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../raised_card.dart';
 
 /// One chat line. The conversation reads like a training log rather than a
 /// messenger: each question is a line marked with the accent, and the Coach's
@@ -178,11 +179,7 @@ class CoachProposalCard extends StatelessWidget {
     };
 
     return Container(
-      decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border.all(color: borderColor(context)),
-        borderRadius: AppRadius.card,
-      ),
+      decoration: raisedDecoration(context),
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.lg,
         AppSpacing.md,

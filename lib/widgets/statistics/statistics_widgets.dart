@@ -78,7 +78,7 @@ class _RecordEventRowState extends State<RecordEventRow> {
       constraints: const BoxConstraints(minHeight: 64),
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: borderColor(context))),
+        border: Border(bottom: BorderSide(color: hairlineColor(context))),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
