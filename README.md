@@ -91,7 +91,7 @@ no personal account data is shown.
   <tr>
     <td align="center">
       <strong>Create a block</strong><br>
-      <img src="screenshots/block_create.png" width="300" alt="OpenGym create block dialog with name and week count">
+      <img src="screenshots/block_create.png" width="300" alt="OpenGym create block sheet with name and week count">
     </td>
     <td align="center">
       <strong>Personal records</strong><br>
@@ -111,30 +111,38 @@ no personal account data is shown.
       <img src="screenshots/home_dark.png" width="200" alt="OpenGym workout plans screen in dark mode">
     </td>
     <td align="center">
+      <strong>Workout</strong><br>
+      <img src="screenshots/workout_dark.png" width="200" alt="OpenGym active workout screen in dark mode">
+    </td>
+    <td align="center">
       <strong>Set entry</strong><br>
       <img src="screenshots/workout_keypad_dark.png" width="200" alt="OpenGym workout keypad in dark mode">
+    </td>
+    <td align="center">
+      <strong>History</strong><br>
+      <img src="screenshots/history_dark.png" width="200" alt="OpenGym workout history in dark mode">
     </td>
     <td align="center">
       <strong>Statistics</strong><br>
       <img src="screenshots/statistics_dark.png" width="200" alt="OpenGym statistics screen in dark mode">
     </td>
     <td align="center">
+      <strong>Personal records</strong><br>
+      <img src="screenshots/statistics_records_dark.png" width="200" alt="OpenGym personal records in dark mode">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
       <strong>Training blocks</strong><br>
       <img src="screenshots/block_menu_dark.png" width="200" alt="OpenGym training block menu in dark mode">
     </td>
     <td align="center">
       <strong>Create a block</strong><br>
-      <img src="screenshots/block_create_dark.png" width="200" alt="OpenGym create block dialog in dark mode">
+      <img src="screenshots/block_create_dark.png" width="200" alt="OpenGym create block sheet in dark mode">
     </td>
     <td align="center">
       <strong>Settings</strong><br>
       <img src="screenshots/settings_dark.png" width="200" alt="OpenGym settings screen in dark mode">
-    </td>
-  </tr>
-  <tr>
-    <td align="center">
-      <strong>Personal records</strong><br>
-      <img src="screenshots/statistics_records_dark.png" width="200" alt="OpenGym personal records in dark mode">
     </td>
   </tr>
 </table>
