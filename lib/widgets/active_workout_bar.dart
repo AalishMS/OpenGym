@@ -90,7 +90,7 @@ class _ActiveWorkoutBarState extends State<ActiveWorkoutBar> {
           child: Container(
             constraints: const BoxConstraints(minHeight: 56),
             decoration: BoxDecoration(
-              border: Border(top: BorderSide(color: borderColor(context))),
+              border: Border(top: BorderSide(color: hairlineColor(context))),
             ),
             padding: const EdgeInsets.symmetric(
               horizontal: AppSpacing.lg,

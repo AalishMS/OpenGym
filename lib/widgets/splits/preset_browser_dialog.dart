@@ -14,6 +14,7 @@ import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../app_button.dart';
 import '../app_header.dart';
+import '../raised_card.dart';
 import '../statistics/statistics_controls.dart';
 
 class PresetBrowserDialog extends StatefulWidget {
@@ -115,8 +116,11 @@ class _PresetBrowserDialogState extends State<PresetBrowserDialog> {
     return Dialog(
       backgroundColor: backgroundColor(context),
       shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.card,
-        side: BorderSide(color: borderColor(context)),
+        borderRadius: AppRadius.dialog,
+        side:
+            Theme.of(context).brightness == Brightness.dark
+                ? BorderSide(color: hairlineColor(context))
+                : BorderSide.none,
       ),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
@@ -341,97 +345,88 @@ class _PresetCard extends StatelessWidget {
           '${preset.name}, ${preset.days} days a week, ${preset.duration}, '
           'best for ${preset.bestFit}',
       excludeSemantics: true,
-      child: Material(
-        color: raisedSurfaceColor(context),
-        shape: RoundedRectangleBorder(
-          borderRadius: AppRadius.card,
-          side: BorderSide(color: _hairline(context)),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: AppRadius.card,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.lg,
-              AppSpacing.md,
-              AppSpacing.lg,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            preset.name,
-                            style: textTheme.titleMedium?.copyWith(
-                              color: textPrimary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
+      child: RaisedCard(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.lg,
+            AppSpacing.md,
+            AppSpacing.lg,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          preset.name,
+                          style: textTheme.titleMedium?.copyWith(
+                            color: textPrimary,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
                           ),
-                          const SizedBox(height: AppSpacing.xxs),
-                          Text(
-                            preset.bestFit,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: textSecondary,
-                              fontSize: 13,
-                            ),
+                        ),
+                        const SizedBox(height: AppSpacing.xxs),
+                        Text(
+                          preset.bestFit,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: textSecondary,
+                            fontSize: 13,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Padding(
-                      padding: const EdgeInsets.only(top: AppSpacing.xxs),
-                      child: Icon(
-                        LucideIcons.chevronRight,
-                        size: 18,
-                        color: textSecondary,
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.xxs),
+                    child: Icon(
+                      LucideIcons.chevronRight,
+                      size: 18,
+                      color: textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              const SizedBox(height: AppSpacing.lg),
+              Padding(
+                padding: const EdgeInsets.only(right: AppSpacing.xs),
+                child: Row(
+                  children: [
+                    _RhythmDots(preset: preset),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Text.rich(
+                        TextSpan(
+                          children: [
+                            TextSpan(
+                              text: '${preset.days} days',
+                              style: TextStyle(
+                                color: textPrimary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            TextSpan(text: '  ·  ${preset.duration}'),
+                          ],
+                        ),
+                        textAlign: TextAlign.end,
+                        style: AppTypography.figures(
+                          fontSize: 13,
+                          color: textSecondary,
+                        ),
                       ),
                     ),
                   ],
                 ),
-                const Spacer(),
-                const SizedBox(height: AppSpacing.lg),
-                Padding(
-                  padding: const EdgeInsets.only(right: AppSpacing.xs),
-                  child: Row(
-                    children: [
-                      _RhythmDots(preset: preset),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: '${preset.days} days',
-                                style: TextStyle(
-                                  color: textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              TextSpan(text: '  ·  ${preset.duration}'),
-                            ],
-                          ),
-                          textAlign: TextAlign.end,
-                          style: AppTypography.figures(
-                            fontSize: 13,
-                            color: textSecondary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -549,10 +544,25 @@ class _PresetDetails extends StatelessWidget {
             const SizedBox(height: AppSpacing.xxl),
             const _SectionTitle(title: 'Workout days'),
             const SizedBox(height: AppSpacing.md),
-            for (var index = 0; index < preset.plans.length; index++) ...[
-              if (index > 0) const SizedBox(height: AppSpacing.sm),
-              _DayCard(plan: preset.plans[index], number: index + 1),
-            ],
+            // One grouped panel, with the days as rows inside it.
+            Container(
+              clipBehavior: Clip.antiAlias,
+              decoration: raisedDecoration(context),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var index = 0; index < preset.plans.length; index++) ...[
+                    if (index > 0)
+                      Divider(
+                        height: 1,
+                        indent: AppSpacing.md + 40 + AppSpacing.md,
+                        color: hairlineColor(context),
+                      ),
+                    _DayCard(plan: preset.plans[index], number: index + 1),
+                  ],
+                ],
+              ),
+            ),
             const SizedBox(height: AppSpacing.xxl),
             const _SectionTitle(title: 'Before you start'),
             const SizedBox(height: AppSpacing.sm),
@@ -573,7 +583,7 @@ class _SpecSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final hairline = _hairline(context);
+    final hairline = hairlineColor(context);
     final exercises = preset.plans.fold<int>(
       0,
       (sum, plan) => sum + plan.exercises.length,
@@ -611,11 +621,7 @@ class _SpecSheet extends StatelessWidget {
       ),
     ];
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: raisedSurfaceColor(context),
-        border: Border.all(color: hairline),
-        borderRadius: AppRadius.card,
-      ),
+      decoration: raisedDecoration(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -857,7 +863,7 @@ class _ScheduleCell extends StatelessWidget {
           height: 44,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            border: Border.all(color: _hairline(context)),
+            color: controlFillColor(context),
             borderRadius: AppRadius.button,
           ),
           child: Container(
@@ -922,12 +928,7 @@ class _DayCardState extends State<_DayCard> {
       (sum, exercise) => sum + exercise.seedReps.length,
     );
     return Material(
-      color: raisedSurfaceColor(context),
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.card,
-        side: BorderSide(color: _hairline(context)),
-      ),
-      clipBehavior: Clip.antiAlias,
+      color: Colors.transparent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -936,7 +937,6 @@ class _DayCardState extends State<_DayCard> {
             expanded: _expanded,
             child: InkWell(
               onTap: () => setState(() => _expanded = !_expanded),
-              borderRadius: _expanded ? AppRadius.cardTop : AppRadius.card,
               child: Padding(
                 padding: const EdgeInsets.all(AppSpacing.md),
                 child: Row(
@@ -1036,7 +1036,7 @@ class _ExercisePrescription extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: _hairline(context))),
+          border: Border(top: BorderSide(color: hairlineColor(context))),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1110,7 +1110,7 @@ class _Guidance extends StatelessWidget {
                     ? null
                     : BoxDecoration(
                       border: Border(
-                        top: BorderSide(color: _hairline(context)),
+                        top: BorderSide(color: hairlineColor(context)),
                       ),
                     ),
             child: Row(
@@ -1166,7 +1166,7 @@ class _InstallBar extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: backgroundColor(context),
-        border: Border(top: BorderSide(color: borderColor(context))),
+        border: Border(top: BorderSide(color: hairlineColor(context))),
       ),
       child: Align(
         heightFactor: 1,
@@ -1236,14 +1236,10 @@ Color _planColor(WorkoutPresetPlan plan, BuildContext context) =>
 
 /// The same opaque plan tint Home uses behind its plan markers.
 Color _planWash(Color planColor, BuildContext context) =>
-    Color.alphaBlend(planColor.withAlpha(40), raisedSurfaceColor(context));
+    Color.alphaBlend(planColor.withAlpha(40), surfaceColor(context));
 
 /// Rules inside and around cards are a step quieter than the theme border,
 /// which is solved to stand out as a control edge.
-Color _hairline(BuildContext context) => borderColor(
-  context,
-).withAlpha(Theme.of(context).brightness == Brightness.dark ? 110 : 100);
-
 /// Numeric ranges read with an en dash: `6-10` becomes `6–10`.
 String _range(String text) => text.replaceAll('-', '–');
 

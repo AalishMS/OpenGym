@@ -30,6 +30,7 @@ import '../widgets/app_header.dart';
 import '../widgets/update_dialog.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/persistence_dialog.dart';
+import '../widgets/segment_track.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({
@@ -560,37 +561,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 12),
           Semantics(
             label: 'Theme',
-            child: SegmentedButton<ThemeMode>(
-              expandedInsets: EdgeInsets.zero,
+            child: SegmentTrack<ThemeMode>(
               segments: const [
-                ButtonSegment(value: ThemeMode.dark, label: Text('Dark')),
-                ButtonSegment(value: ThemeMode.light, label: Text('Light')),
-                ButtonSegment(value: ThemeMode.system, label: Text('System')),
+                TrackSegment(value: ThemeMode.dark, label: 'Dark'),
+                TrackSegment(value: ThemeMode.light, label: 'Light'),
+                TrackSegment(value: ThemeMode.system, label: 'System'),
               ],
-              selected: {settings.themeMode},
-              onSelectionChanged:
-                  (selection) => _runSettingsAction(
+              selected: settings.themeMode,
+              onChanged:
+                  (mode) => _runSettingsAction(
                     context,
-                    () => settings.setThemeMode(selection.first),
+                    () => settings.setThemeMode(mode),
                   ),
-              multiSelectionEnabled: false,
-              showSelectedIcon: false,
-              style: SegmentedButton.styleFrom(
-                backgroundColor: surfaceColor(context),
-                foregroundColor: textPrimaryColor(context),
-                selectedBackgroundColor: accentFillColor(context),
-                selectedForegroundColor: onAccentColor(context),
-                side: BorderSide(color: borderColor(context)),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: AppRadius.control,
-                ),
-                minimumSize: const Size(72, 48),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 12,
-                ),
-                textStyle: Theme.of(context).textTheme.labelLarge,
-              ),
             ),
           ),
         ],
@@ -619,37 +601,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 12),
           Semantics(
             label: 'Weight unit',
-            child: SegmentedButton<String>(
+            child: SegmentTrack<String>(
               key: const ValueKey('weight-unit-selector'),
-              expandedInsets: EdgeInsets.zero,
               segments: const [
-                ButtonSegment(value: kWeightUnitKg, label: Text('Kilograms')),
-                ButtonSegment(value: kWeightUnitLbs, label: Text('Pounds')),
+                TrackSegment(value: kWeightUnitKg, label: 'Kilograms'),
+                TrackSegment(value: kWeightUnitLbs, label: 'Pounds'),
               ],
-              selected: {normalizeWeightUnit(settings.weightUnit)},
-              onSelectionChanged:
-                  (selection) => _runSettingsAction(
+              selected: normalizeWeightUnit(settings.weightUnit),
+              onChanged:
+                  (unit) => _runSettingsAction(
                     context,
-                    () => settings.setWeightUnit(selection.first),
+                    () => settings.setWeightUnit(unit),
                   ),
-              multiSelectionEnabled: false,
-              showSelectedIcon: false,
-              style: SegmentedButton.styleFrom(
-                backgroundColor: surfaceColor(context),
-                foregroundColor: textPrimaryColor(context),
-                selectedBackgroundColor: accentFillColor(context),
-                selectedForegroundColor: onAccentColor(context),
-                side: BorderSide(color: borderColor(context)),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: AppRadius.control,
-                ),
-                minimumSize: const Size(72, 48),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 12,
-                ),
-                textStyle: Theme.of(context).textTheme.labelLarge,
-              ),
             ),
           ),
         ],
@@ -735,37 +698,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
               () => settings.setAccentColor(index),
             ),
         borderRadius: AppRadius.button,
-        child: Container(
-          height: 76,
-          decoration: BoxDecoration(
-            color:
-                isSelected ? accentMutedColor(context) : surfaceColor(context),
-            // Constant width so selecting never shifts the layout.
-            border: Border.all(
-              color: isSelected ? swatch : Colors.transparent,
-              width: 2,
-            ),
-            borderRadius: AppRadius.button,
-          ),
+        // Bare swatches: the colour itself is the control, and the choice is
+        // a ring round it rather than a tile behind it.
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 76),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 42,
+                height: 42,
+                padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
-                  color: swatch,
                   shape: BoxShape.circle,
+                  // Constant width so selecting never shifts the layout.
+                  border: Border.all(
+                    color: isSelected ? swatch : Colors.transparent,
+                    width: 2,
+                  ),
                 ),
-                child:
-                    isSelected
-                        ? Icon(
-                          LucideIcons.check,
-                          size: 18,
-                          color: onColor(swatch),
-                        )
-                        : null,
+                child: Container(
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: swatch,
+                    shape: BoxShape.circle,
+                  ),
+                  child:
+                      isSelected
+                          ? Icon(
+                            LucideIcons.check,
+                            size: 18,
+                            color: onColor(swatch),
+                          )
+                          : null,
+                ),
               ),
               const SizedBox(height: 6),
               Text(

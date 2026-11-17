@@ -169,9 +169,20 @@ Action labels should say what happens in familiar, concise language:
 
 ### Theme & Colors
 - Use theme-aware color functions from `app_theme.dart`:
-  - `backgroundColor(context)` - main background
-  - `surfaceColor(context)` - card/surface background
-  - `borderColor(context)` - borders
+  - `backgroundColor(context)` - the page
+  - `surfaceColor(context)` - a *raised* ground: sheets, dialogs, menus, and
+    the few cards that stand forward. Lighter than the page in both modes
+    (white in light mode). For a card on the page use `RaisedCard` /
+    `raisedDecoration` (`lib/widgets/raised_card.dart`), which add the edge
+  - `controlFillColor(context)` - the ground of a control: fields, steppers,
+    chips, segment tracks, secondary buttons, keypad keys
+  - `hairlineColor(context)` - dividers, ledger and header rules, card edges
+  - `selectedGroundColor(context)` - a chosen tile or row among filled ones,
+    paired with an accent edge (the accent wash in dark mode, white in light)
+  - `borderColor(context)` - 3:1, only for the edge of an *unfilled* control
+    (unselected radio, off switch, empty week bar). Never round a container
+  - `raisedShadow(context)` - the soft shadow a raised card casts in light
+    mode; empty in dark mode
   - `textPrimaryColor(context)` - main text
   - `textSecondaryColor(context)` - secondary text
   - `accentColor(context)` - the accent as **ink**: text, icons, hairlines
@@ -180,18 +191,28 @@ Action labels should say what happens in familiar, concise language:
   - `accentMutedColor(context)` / `accentDimColor(context)` - the two opaque
     washes between the background and the fill, for ramps like the heatmap
   - `onAccentColor(context)` - text/icons drawn *on* `accentFillColor`
+  - `accentOnMutedColor(context)` - accent ink on the `accentMuted` wash: the
+    label of a tonal button (`AppButton.tonal`, `tonalButtonStyle`)
   - `onColor(ground)` - text/icons drawn on any other coloured ground
 - Every one of these is *solved* against the real ground for a WCAG target, per
   accent and per mode - see `lib/theme/tones.dart`. Never reintroduce a
   hand-picked hex: a hex cannot be checked, only a relationship can
-- **One deliberate exception: `surface` is a perceptual step off `background`**
-  (OKLab lightness), not a contrast ratio. WCAG's `+0.05` term dominates near
-  black, so the same ratio buys dark mode ~2.4x the step light mode gets - which
-  is how a 1.45:1 "quiet" card came out at `#2F2F2F`, a grey box on a black page
-  with the whole workout screen tiled in it. Contrast ratios stay the metric for
-  anything that has to be **read**. Don't restate the card separation as a
-  ratio; the test asserts the step *and* keeps 1.15:1 as a floor, so the old
-  invisible-card bug can't come back either way
+- **Elevation reads as light.** A raised surface is lighter than the page in
+  both modes - never darker. Light mode once stepped cards *down* to `#E3E3E3`
+  with a 1.9:1 outline, which made every sheet, dialog, field and tile a grey
+  slab. The lift is a small perceptual step (OKLab lightness), not a contrast
+  ratio: WCAG's `+0.05` term dominates near black, so the same ratio buys dark
+  mode ~2.4x the step, which is how a "quiet" card once came out `#2F2F2F`.
+  Because the step is small, a raised card on the page always has an edge as
+  well: a shadow in light mode, a hairline in dark mode. Only a control's fill
+  sits darker than the page. Contrast ratios stay the metric for anything that
+  has to be **read** - ink is solved against the hardest of page, surface and
+  control fill (`hardestGroundFor`)
+- **Controls are fills, not outlines.** Text fields are filled and ring only for
+  focus or an error (`RingInputBorder`, from the theme - don't override
+  `border:` per field); secondary buttons are filled neutrals; selection in a
+  menu is a check and weight, not a wash. Don't draw `Border.all` round a
+  container to separate it: use a hairline rule, or raise it
 - Dark mode is meant to read as **black**, not as a tinted charcoal: the neutral
   seed is achromatic on purpose, so the accent is the only thing carrying a hue.
   Don't give the neutrals a cool or warm cast
@@ -219,7 +240,10 @@ Action labels should say what happens in familiar, concise language:
 
 ### Corner Radii
 - Use the tokens from `lib/theme/radii.dart`, never a literal `BorderRadius`:
-  - `AppRadius.card` - cards, panels, dialogs, bordered content boxes
+  - `AppRadius.dialog` - dialogs and anything else over a scrim (sheets use
+    `AppRadius.sheet`, the same radius on the top corners)
+  - `AppRadius.card` - cards, panels, bordered content boxes
+  - `AppRadius.pill` - fully round: header actions, filter and week pills
   - `AppRadius.button` / `.field` - buttons, full-width tap targets, inputs
   - `AppRadius.chip` / `.control` - pills, tabs, steppers, small selectables
   - `AppRadius.badge` - index pills, swatches, anything under ~24px

@@ -259,10 +259,10 @@ time, draft discard and another plan's completion never advance progress.
 
 New and duplicated plans and Coach additions visibly choose a starting slot,
 defaulting to Week 1 of the first block. The plan editor shows it as a
-*Starting week* field under the name, and Coach as a one-line *Starts at* row.
-Both open one bottom sheet: each block is a selectable row, and the chosen
-block expands to show its weeks as chips, so block and week read as one
-decision. Pickers include intended future week
+*Starting week* pill under the name, and Coach as a one-line *Starts at* row.
+Both open one bottom sheet: each block is a selectable row on the sheet (not a
+tile in it), and the chosen block expands to show its weeks as pills, so block
+and week read as one decision. Pickers include intended future week
 numbers without allocating them; saving the new plan allocates/reuses only its
 chosen slot. Existing plan edits retain progress. Create block accepts an
 intended length of 1–52 weeks (four by default, the same default presets use for
@@ -276,7 +276,7 @@ When every week has been reached the minus is disabled with an explanation.
 disabled, with the reason beneath it, for a split's last block, a block with
 logged workouts, or a block a plan is positioned in, and otherwise confirms
 (*Delete {name}?*, Cancel / Delete) before tombstoning the block and its weeks.
-Failures after confirming show in the dialog's error line and keep it open. For
+Failures after confirming show in the form's error line and keep it open. For
 a signed-in account both shortening and deleting appear only after the server
 accepts training schema 4 (`TrainingBlockRepository.lifecycleAvailable`);
 without it the old grow-only rule holds and Delete block is absent. Delete needs
@@ -289,9 +289,18 @@ plan, the starting-week sheet has *Create block* and a per-block *Edit block*
 button (Home's *Duplicate plan* sheet offers the same through
 `TrainingBlockActions`, shared by both screens); a block created there is selected at Week 1 so a later planned week can
 still be chosen before *Use this week*. Editing an existing plan shows a
-*Training block* field under the name (e.g. `Strength · Week 2 of 4`) that opens
+*Training block* pill under the name (e.g. `Strength · Week 2 of 4`) that opens
 the same sheet in a management mode: blocks with their lengths, the plan's
-current block marked, Edit block and Create block, and a Done button. It cannot
+current block marked with a check, Edit block and Create block, and a Done
+button. Nothing is picked there, so the other rows carry no empty radio ring,
+and tapping a row edits that block.
+Create block and Edit block open inside that sheet, replacing the block list
+until Cancel or Back returns to it, so only one layer is ever open; from the
+workout's block menu they, and Reorder blocks, open as a bottom sheet of their
+own. The form sets the length with one stepper (minus, the week count, plus)
+on a control fill; a key that can't be pressed sinks into the fill. A week
+track beneath it shows the weeks already reached, which can't be removed, in
+the accent and the planned ones in its quiet wash. It cannot
 move the plan to another block or week. Block changes save immediately and are
 shared by every workout in the split, so they are outside the editor's
 Save/Discard. Extending a block while a workout waits at its boundary needs no
@@ -580,8 +589,29 @@ signature:
 - Clear type hierarchy keeps workout names, values, units, and supporting text
   distinct at a glance.
 - Calm backgrounds and surfaces give dense training data room to breathe.
-- Rounded corners follow a size-graduated scale, with borders and elevation used
-  only when they clarify grouping.
+- Rounded corners follow a size-graduated scale: badges are the tightest,
+  controls and cards rounder, and sheets and dialogs — whatever floats over a
+  scrim — the roundest. Pills are fully round.
+- Elevation reads as light. Pages sit on the background; the few things that
+  stand forward (the workout launcher, the next plan on Home, preset cards,
+  the Workout details readout and exercises, dashboard panels) are *raised*:
+  white with a soft two-layer shadow in light mode, and in dark mode a lifted
+  fill with a hairline edge, since a shadow has nothing to fall on
+  (`RaisedCard`, `raisedDecoration`). Sheets, dialogs and menus are raised too,
+  and the scrim separates them. Nothing sits darker than the page except a
+  control's own fill, and a card is never nested in another ground.
+- Controls are fills, not outlines. Text fields, steppers, chips, segment
+  tracks, secondary buttons and keypad keys sit on the control fill. A segment
+  track (`SegmentTrack`, Settings' theme and weight unit) marks the choice with
+  a rounded accent thumb inset in the track, not a square-edged segment; a field
+  rings only for focus or an error (`RingInputBorder`). Secondary buttons are
+  filled neutrals, and frequent-but-not-primary actions such as Add exercise
+  use the tonal accent: the accent's quiet wash with accent ink.
+- Lines are hairlines: dividers, ledger rows, the header and tab rules, and
+  card edges in dark mode. The 3:1 border is kept for the edge of an unfilled
+  control — an unselected radio, an off switch, an empty week bar.
+- In menus and lists, the chosen row is marked by a check and a heavier
+  weight, not a coloured wash behind it.
 - Dark and light themes share the same semantic color helpers.
 - User-selectable accents, compact plan markers, and focused data highlights
   carry the app's character.
@@ -592,11 +622,14 @@ signature:
   share of the sRGB chroma available at that hue and lightness) under an
   absolute chroma cap. Darkened tones therefore don't turn dusty or brown. The wordmark uses a dedicated, more saturated `brandAccent`
   tone of the selected color; ordinary controls retain the softer accent.
+  Settings offers them as bare swatches; the chosen one gets a ring and a
+  check rather than a tile behind it.
 - The `> OpenGym` wordmark serves as the main brand signature. Keep it consistent
   and give it room instead of repeating the prompt symbol elsewhere.
 - Every screen except Home shares one header (`AppHeader`): flat on the page
   colour, with a permanent hairline underneath and no tint on scroll, so in
-  dark mode it reads as black. Home keeps its `> OpenGym` brand header, followed
+  dark mode it reads as black. Screen and dialog titles are set a size up from
+  section titles (20px, extra bold, tightly tracked). Home keeps its `> OpenGym` brand header, followed
   by a slash and a borderless active-split selector. An icon-only Coach action
   sits at the trailing edge on a quiet accent circle when available.
 - Back is always the same neutral arrow (`AppBackButton`) with a *Back*
@@ -671,7 +704,11 @@ signature:
   a set opens its delete action, as in the workout. The shared keypad validates
   RPE from 1 to 10 and supports clearing it. Wide editor tables scroll at large
   text sizes. The plan colour palette opens from Change color to leave more room
-  for training targets; Add exercise stays pinned at the bottom.
+  for training targets; Add exercise stays pinned at the bottom as a tonal
+  button. The plan name is the page's title: a large field led by the plan's
+  colour bar and underlined by a hairline, the accent while typing. The
+  starting week (or, when editing, the training block) and Change color are
+  pills beneath it, and Save in the header is a pill.
 - Timed exercises use *Seconds* in editable set tables and the shared keypad,
   including History and set dialogs. Counts remain integer seconds in the
   existing reps field. Ordinary and custom exercises retain *Reps*. RPE uses

@@ -78,9 +78,10 @@ void main() {
 
     expect(primary.backgroundColor?.resolve({}), colors.accentFill);
     expect(primary.foregroundColor?.resolve({}), colors.onAccent);
-    expect(secondary.backgroundColor?.resolve({}), isNull);
+    // Secondary is a filled neutral, not an outline: a ground means tappable.
+    expect(secondary.backgroundColor?.resolve({}), colors.controlFill);
     expect(secondary.foregroundColor?.resolve({}), colors.textPrimary);
-    expect(secondary.side?.resolve({})?.color, colors.border);
+    expect(secondary.side?.resolve({})?.style ?? BorderStyle.none, BorderStyle.none);
     expect(tertiary.backgroundColor?.resolve({}), isNull);
     expect(tertiary.foregroundColor?.resolve({}), colors.accent);
   });

@@ -604,7 +604,7 @@ class _StatisticsNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     decoration: BoxDecoration(
-      border: Border(bottom: BorderSide(color: borderColor(context))),
+      border: Border(bottom: BorderSide(color: hairlineColor(context))),
     ),
     child: Center(
       child: ConstrainedBox(

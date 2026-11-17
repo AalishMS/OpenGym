@@ -31,6 +31,14 @@ import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
 import 'support/test_fonts.dart';
 
+/// Block forms are bottom sheets that scroll on the 800×600 test screen, so a
+/// control near the bottom (Delete block) is scrolled into view before the tap.
+Future<void> tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+}
+
 void main() {
   setUpAll(() async {
     await loadTestFonts();
@@ -915,7 +923,7 @@ void main() {
 
         await openBlockMenuAction(tester, 'Strength', 'Edit block');
         expect(find.text('Delete block'), findsOneWidget);
-        await tester.tap(find.text('Delete block'));
+        await tapVisible(tester, find.text('Delete block'));
         await tester.pumpAndSettle();
         expect(find.text('Delete Strength?'), findsOneWidget);
         await tester.runAsync(() async {

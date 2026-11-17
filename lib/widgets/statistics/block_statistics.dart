@@ -382,7 +382,7 @@ class _WeekBarsState extends State<_WeekBars> {
                             ),
                   ),
                 ),
-                Container(height: 1, color: borderColor(context)),
+                Container(height: 1, color: hairlineColor(context)),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   'W${week.number}',

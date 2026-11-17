@@ -27,10 +27,6 @@ class HistorySearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const quiet = OutlineInputBorder(
-      borderRadius: AppRadius.field,
-      borderSide: BorderSide.none,
-    );
     return TextField(
       key: const ValueKey('history-search-field'),
       controller: controller,
@@ -40,8 +36,6 @@ class HistorySearchField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: 'Search workouts or exercises',
         isDense: true,
-        filled: true,
-        fillColor: surfaceColor(context),
         prefixIcon: Icon(
           LucideIcons.search,
           size: 18,
@@ -58,12 +52,6 @@ class HistorySearchField extends StatelessWidget {
         contentPadding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.lg,
           vertical: AppSpacing.md,
-        ),
-        border: quiet,
-        enabledBorder: quiet,
-        focusedBorder: OutlineInputBorder(
-          borderRadius: AppRadius.field,
-          borderSide: BorderSide(color: accentColor(context)),
         ),
       ),
     );
@@ -229,7 +217,7 @@ class HistoryWorkoutRow extends StatelessWidget {
                     child: Divider(
                       height: 1,
                       thickness: 1,
-                      color: borderColor(context),
+                      color: hairlineColor(context),
                     ),
                   ),
               ],

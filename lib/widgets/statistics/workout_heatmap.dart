@@ -318,7 +318,7 @@ class _HeatmapGrid extends StatelessWidget {
           worked
               ? accentFillColor(context)
               : compact
-              ? surfaceColor(context)
+              ? controlFillColor(context)
               : backgroundColor(context),
       borderRadius: AppRadius.micro,
       border:

@@ -22,7 +22,7 @@ class FrequencyHeatmap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final steps = heatmapSteps(context);
-    final border = borderColor(context);
+    final border = hairlineColor(context);
     final textSecondary = textSecondaryColor(context);
 
     // Bucket by calendar day (time-of-day stripped) so two sessions on the same
@@ -187,7 +187,7 @@ class HeatmapLegend extends StatelessWidget {
               height: 8,
               decoration: BoxDecoration(
                 color: c,
-                border: Border.all(color: borderColor(context)),
+                border: Border.all(color: hairlineColor(context)),
                 borderRadius: AppRadius.micro,
               ),
             ),

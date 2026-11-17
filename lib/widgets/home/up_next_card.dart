@@ -11,6 +11,7 @@ import '../../utils/format.dart';
 import '../../utils/plan_stats.dart';
 import '../app_button.dart';
 import '../plan_title_hero.dart';
+import '../raised_card.dart';
 
 /// A workout launcher; weekly activity lives outside this card.
 class UpNextCard extends StatelessWidget {
@@ -76,120 +77,114 @@ class UpNextCard extends StatelessWidget {
       if (durationMinutes != null) '~$durationMinutes min',
     ];
 
-    return Material(
-      color: raisedSurfaceColor(context),
-      shape: RoundedRectangleBorder(
-        side: BorderSide(color: borderColor(context).withAlpha(96)),
-        borderRadius: AppRadius.card,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onStart,
-        borderRadius: AppRadius.card,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Wrap(
-                alignment: WrapAlignment.spaceBetween,
-                spacing: AppSpacing.md,
-                runSpacing: AppSpacing.xs,
-                children: [
+    return RaisedCard(
+      onTap: onStart,
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.xs,
+              children: [
+                Text(
+                  inProgress ? 'In progress' : 'Next up',
+                  style: textTheme.labelLarge?.copyWith(color: nextColor),
+                ),
+                if (last != null)
                   Text(
-                    inProgress ? 'In progress' : 'Next up',
-                    style: textTheme.labelLarge?.copyWith(color: nextColor),
+                    'Last: ${formatDaysAgo(last).toLowerCase()}',
+                    style: textTheme.bodySmall?.copyWith(color: secondary),
                   ),
-                  if (last != null)
-                    Text(
-                      'Last: ${formatDaysAgo(last).toLowerCase()}',
-                      style: textTheme.bodySmall?.copyWith(color: secondary),
-                    ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                'Workout $day of $dayCount',
-                style: textTheme.bodySmall?.copyWith(color: secondary),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Semantics(
-                label:
-                    'Workout $day of $dayCount. ${trainedDays.length} plans trained this week',
-                child: ExcludeSemantics(
-                  child: Row(
-                    children: [
-                      for (var index = 0; index < dayCount; index++) ...[
-                        if (index > 0) const SizedBox(width: AppSpacing.xs),
-                        Expanded(
-                          child: Container(
-                            height: 6,
-                            decoration: BoxDecoration(
-                              color:
-                                  index == day - 1
-                                      ? nextColor
-                                      : trainedDays.contains(index)
-                                      ? accentFillColor(context)
-                                      : borderColor(context),
-                              borderRadius: AppRadius.micro,
-                            ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Workout $day of $dayCount',
+              style: textTheme.bodySmall?.copyWith(color: secondary),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Semantics(
+              label:
+                  'Workout $day of $dayCount. ${trainedDays.length} plans trained this week',
+              child: ExcludeSemantics(
+                child: Row(
+                  children: [
+                    for (var index = 0; index < dayCount; index++) ...[
+                      if (index > 0) const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: Container(
+                          height: 6,
+                          decoration: BoxDecoration(
+                            color:
+                                index == day - 1
+                                    ? nextColor
+                                    : trainedDays.contains(index)
+                                    ? accentFillColor(context)
+                                    : controlFillColor(context),
+                            borderRadius: AppRadius.micro,
                           ),
                         ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              PlanTitleHero(
-                tag: heroTagFor(plan),
-                text: titleCase(plan.name),
-                style: textTheme.headlineLarge?.copyWith(
-                  color: textPrimaryColor(context),
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (groups.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  groups.join(', '),
-                  style: textTheme.bodySmall?.copyWith(color: secondary),
-                ),
-              ],
-              const SizedBox(height: AppSpacing.sm),
-              Wrap(
-                spacing: AppSpacing.md,
-                runSpacing: AppSpacing.xs,
-                children: [
-                  for (final detail in meta)
-                    Text(
-                      detail,
-                      style: textTheme.bodySmall?.copyWith(color: secondary),
-                    ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.md),
-              AppButton.primary(
-                key: tutorialStartKey,
-                label: inProgress ? 'Resume workout' : 'Start workout',
-                onPressed: onStart,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(LucideIcons.play, size: 18),
-                    const SizedBox(width: AppSpacing.sm),
-                    Flexible(
-                      child: Text(
-                        inProgress ? 'Resume workout' : 'Start workout',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            PlanTitleHero(
+              tag: heroTagFor(plan),
+              text: titleCase(plan.name),
+              style: textTheme.headlineLarge?.copyWith(
+                color: textPrimaryColor(context),
+                fontSize: 26,
+                height: 1.1,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
+            ),
+            if (groups.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                groups.join(', '),
+                style: textTheme.bodySmall?.copyWith(color: secondary),
+              ),
             ],
-          ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.xs,
+              children: [
+                for (final detail in meta)
+                  Text(
+                    detail,
+                    style: textTheme.bodySmall?.copyWith(color: secondary),
+                  ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            AppButton.primary(
+              key: tutorialStartKey,
+              label: inProgress ? 'Resume workout' : 'Start workout',
+              onPressed: onStart,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(LucideIcons.play, size: 18),
+                  const SizedBox(width: AppSpacing.sm),
+                  Flexible(
+                    child: Text(
+                      inProgress ? 'Resume workout' : 'Start workout',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

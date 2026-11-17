@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../theme/app_theme.dart';
-import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
 import '../app_button.dart';
@@ -148,10 +147,7 @@ class _WorkoutTimeDialogState extends State<_WorkoutTimeDialog> {
     final label = Theme.of(
       context,
     ).textTheme.labelLarge?.copyWith(color: textSecondaryColor(context));
-    InputDecoration field(String text) => InputDecoration(
-      labelText: text,
-      border: const OutlineInputBorder(borderRadius: AppRadius.field),
-    );
+    InputDecoration field(String text) => InputDecoration(labelText: text);
     return AlertDialog(
       title: const Text('Date and duration'),
       content: SingleChildScrollView(

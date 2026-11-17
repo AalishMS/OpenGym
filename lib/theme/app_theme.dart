@@ -7,12 +7,38 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import 'app_typography.dart';
 import 'radii.dart';
+import 'ring_input_border.dart';
 import 'tones.dart';
 
 class AppColorScheme extends ThemeExtension<AppColorScheme> {
+  /// The page.
   final Color background;
+
+  /// A *raised* ground: sheets, dialogs, menus and the few cards that lift off
+  /// the page. Lighter than [background] in both modes, so elevation always
+  /// reads as light coming forward. In light mode that makes it white, and the
+  /// step is small, so a raised card also casts [shadow].
   final Color surface;
+
+  /// The ground of a control: text fields, steppers, chips, keypad keys,
+  /// segment tracks. A step *away* from both [background] and [surface], so it
+  /// reads on either: darker than the page in light mode, lighter than a sheet
+  /// in dark mode. That also makes it the hardest ground for ink in both
+  /// modes, which is why the ink roles are solved against it.
+  final Color controlFill;
+
+  /// A quiet line: dividers, ledger rules, the edge of a card. Visible, never
+  /// loud — it separates, it doesn't frame.
+  final Color hairline;
+
+  /// The edge of a control that has no fill of its own — an unselected radio,
+  /// a switch track, an outlined icon button. Solved to 3:1 against the page
+  /// and the surface (WCAG 1.4.11). Not for containers: use [hairline].
   final Color border;
+
+  /// Opaque near-black that [raisedShadow] fades out. Only light mode casts
+  /// shadows; in dark mode a raised surface is told apart by its lighter fill.
+  final Color shadow;
   final Color textPrimary;
   final Color textSecondary;
   final Color error;
@@ -46,7 +72,10 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
   const AppColorScheme({
     required this.background,
     required this.surface,
+    required this.controlFill,
+    required this.hairline,
     required this.border,
+    required this.shadow,
     required this.textPrimary,
     required this.textSecondary,
     required this.error,
@@ -63,7 +92,10 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
   ThemeExtension<AppColorScheme> copyWith({
     Color? background,
     Color? surface,
+    Color? controlFill,
+    Color? hairline,
     Color? border,
+    Color? shadow,
     Color? textPrimary,
     Color? textSecondary,
     Color? error,
@@ -78,7 +110,10 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
     return AppColorScheme(
       background: background ?? this.background,
       surface: surface ?? this.surface,
+      controlFill: controlFill ?? this.controlFill,
+      hairline: hairline ?? this.hairline,
       border: border ?? this.border,
+      shadow: shadow ?? this.shadow,
       textPrimary: textPrimary ?? this.textPrimary,
       textSecondary: textSecondary ?? this.textSecondary,
       error: error ?? this.error,
@@ -101,7 +136,10 @@ class AppColorScheme extends ThemeExtension<AppColorScheme> {
     return AppColorScheme(
       background: Color.lerp(background, other.background, t)!,
       surface: Color.lerp(surface, other.surface, t)!,
+      controlFill: Color.lerp(controlFill, other.controlFill, t)!,
+      hairline: Color.lerp(hairline, other.hairline, t)!,
       border: Color.lerp(border, other.border, t)!,
+      shadow: Color.lerp(shadow, other.shadow, t)!,
       textPrimary: Color.lerp(textPrimary, other.textPrimary, t)!,
       textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
       error: Color.lerp(error, other.error, t)!,
@@ -128,15 +166,63 @@ Color surfaceColor(BuildContext context) {
       const Color(0xFF1A1A1A);
 }
 
-/// A raised neutral surface for the home launcher and its selected plan.
-/// Light mode lifts off the page toward paper; dark mode keeps the existing
-/// perceptual surface step. Readable ink remains solved by the theme.
-Color raisedSurfaceColor(BuildContext context) {
-  if (Theme.of(context).brightness == Brightness.dark) {
-    return surfaceColor(context);
+/// The ground of a control — a text field, stepper, chip or key. See
+/// [AppColorScheme.controlFill].
+Color controlFillColor(BuildContext context) {
+  return Theme.of(context).extension<AppColorScheme>()?.controlFill ??
+      surfaceColor(context);
+}
+
+/// A quiet separating line — dividers, ledger rules, card edges. Use
+/// [borderColor] only for the edge of an unfilled control.
+Color hairlineColor(BuildContext context) {
+  return Theme.of(context).extension<AppColorScheme>()?.hairline ??
+      borderColor(context);
+}
+
+/// Whichever of the page, the raised surface and the control fill [ink] reads
+/// worst on. Tones that are drawn as text or marks anywhere — plan colours, the
+/// RPE ramp — solve against this so they hold on every ground.
+Color hardestGroundFor(Color ink, BuildContext context) {
+  final grounds = [
+    backgroundColor(context),
+    surfaceColor(context),
+    controlFillColor(context),
+  ];
+  return grounds.reduce(
+    (a, b) => contrastRatio(ink, a) <= contrastRatio(ink, b) ? a : b,
+  );
+}
+
+/// The ground of a chosen option among filled ones — a selected tile or row.
+/// Pair it with an accent edge. Dark mode takes the accent's wash; in light
+/// mode that wash reads as a heavy slab, so the choice rises to white instead,
+/// lifted out of the control fill around it.
+Color selectedGroundColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? accentMutedColor(context)
+        : surfaceColor(context);
+
+/// The soft two-layer shadow a raised surface casts on the page in light mode;
+/// empty in dark mode, where the lighter fill does that job. Put it on cards
+/// that sit on the page, not on sheets or dialogs, which the scrim separates.
+List<BoxShadow> raisedShadow(BuildContext context) {
+  final scheme = Theme.of(context).extension<AppColorScheme>();
+  if (scheme == null || Theme.of(context).brightness == Brightness.dark) {
+    return const [];
   }
-  final background = backgroundColor(context);
-  return toneOf(background, (oklchOf(background).l + 0.025).clamp(0.0, 1.0));
+  return [
+    BoxShadow(
+      color: scheme.shadow.withAlpha(13),
+      blurRadius: 2,
+      offset: const Offset(0, 1),
+    ),
+    BoxShadow(
+      color: scheme.shadow.withAlpha(16),
+      blurRadius: 20,
+      offset: const Offset(0, 6),
+    ),
+  ];
 }
 
 Color borderColor(BuildContext context) {
@@ -199,6 +285,21 @@ Color accentDimColor(BuildContext context) {
 Color accentMutedColor(BuildContext context) {
   return Theme.of(context).extension<AppColorScheme>()?.accentMuted ??
       accentColor(context);
+}
+
+/// The accent as ink on its own quiet wash ([accentMutedColor]) — the label of
+/// a tonal button. The plain accent is solved against the neutral grounds and
+/// can fall short on the wash, so this re-solves it there for 4.5:1, keeping
+/// the accent's hue.
+Color accentOnMutedColor(BuildContext context) {
+  final wash = accentMutedColor(context);
+  return solveForContrast(
+    seed: accentColor(context),
+    against: wash,
+    target: 4.5,
+    preferLighter: Theme.of(context).brightness == Brightness.dark,
+    anchor: ToneAnchor.seed,
+  );
 }
 
 /// Foreground for text and icons drawn on top of an arbitrary coloured
@@ -315,37 +416,45 @@ class _HeaderMeshPainter extends CustomPainter {
 
 /// The reviewed palette's fixed inputs are checked by the tone and contrast
 /// golden tests. Neutrals grow from one pure-grey seed so both modes share a
-/// temperature (the old light
-/// mode tinted its background 60° against a neutral surface, which read as
-/// dirty), and the seed stays achromatic on purpose: dark mode is meant to read
-/// as black, so the accent is the only thing in the app carrying a hue.
+/// temperature (the old light mode tinted its background 60° against a neutral
+/// surface, which read as dirty), and the seed stays achromatic on purpose: dark
+/// mode is meant to read as black, so the accent is the only thing in the app
+/// carrying a hue.
 const Color _neutralSeed = Color(0xFF8A8A8A);
 const Color _bgDark = Color(0xFF0D0D0D);
-const Color _bgLight = Color(0xFFF7F7F6);
+const Color _bgLight = Color(0xFFF2F2F1);
 
-/// How far a card's fill sits above (dark) or below (light) the page, as a step
-/// in OKLab lightness rather than a WCAG ratio — the one separation in this file
-/// that is deliberately *not* a contrast target.
+/// Elevation reads as light, in both modes: a raised surface is *lighter* than
+/// the page it sits on, never darker.
 ///
-/// WCAG's ratio is `(L + 0.05) / (L + 0.05)`, and against a near-black page the
-/// `+0.05` dominates: at `_bgDark`'s luminance of 0.004, a 1.45:1 card needs
-/// **seven times** the page's linear luminance — a lightness step of 0.146,
-/// where that same 1.45 costs only 0.061 in light mode. Asking both modes for
-/// the same *number* therefore hands dark mode a 2.4× bigger step, which is how
-/// a card meant to be quiet came out at `#2F2F2F`: a grey box on a black page,
-/// with the whole workout screen tiled in it.
+/// Light mode used to step its cards *down* from the page, to `#E3E3E3`, and
+/// draw a 1.9:1 outline round them. Every sheet, dialog, field and tile came out
+/// as a grey slab sunk into the page. Raised is now white, and the page sits a
+/// small step below it. That step alone is only ~1.12:1, so a raised card on the
+/// page also casts [raisedShadow]: the shadow, not a darker fill or a heavy
+/// outline, is what lifts it.
 ///
-/// So separation between two neutral *grounds* is stated perceptually, which is
-/// what the eye is judging. Contrast ratios stay the metric for everything that
-/// has to be **read** — text, borders, accents — because that is the question
-/// WCAG answers. The floor to respect is the bug this replaced: cards at 1.10:1
-/// were invisible, a step of 0.046. Both values below clear it with room, and
-/// `theme_contrast_test.dart` pins the floor so it cannot creep back.
-const double _surfLiftDark = 0.075;
-const double _surfLiftLight = 0.061;
+/// In dark mode a shadow has nothing to fall on, so the fill carries the
+/// separation alone, as a perceptual step in OKLab lightness. It is stated
+/// perceptually rather than as a WCAG ratio because near black the ratio's
+/// `+0.05` term dominates: the same 1.45:1 that is a quiet step in light mode is
+/// a 0.146 step in dark mode, which is how a card once landed on `#2F2F2F`, a
+/// grey box on a black page. The two steps below are within a few hundredths of
+/// each other, so the modes lift by the same amount to the eye.
+const double _raisedLiftDark = 0.045;
 
-const double _borderTargetDark = 3.00;
-const double _borderTargetLight = 1.90;
+/// How far a control's fill steps away from what it sits on: above the sheet in
+/// dark mode, below the page in light mode. See [AppColorScheme.controlFill].
+const double _controlStepDark = 0.045;
+const double _controlStepLight = 0.028;
+
+/// Hairlines are solved as a ratio against the raised surface: a line has to be
+/// *seen*, but this one only has to separate, so it stays far under the 3:1 of
+/// [AppColorScheme.border].
+const double _hairlineTarget = 1.25;
+
+/// A control edge, per WCAG 1.4.11.
+const double _borderTarget = 3.0;
 
 /// Seed lightness for `error` and `success`. Must match `_seedLightness` in
 /// `semantic_colors.dart` — they are steps of the same ramp.
@@ -377,37 +486,58 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
   final preferLighter = isDark;
   final background = isDark ? _bgDark : _bgLight;
 
-  // Neutrals. The card's fill is a perceptual step off the page — see
-  // `_surfLiftDark` for why this one is not a ratio. Everything solved *against*
-  // that fill is still a contrast target, so darkening the card pulls the
-  // hairline and the secondary text down with it automatically: the border holds
-  // at exactly 3:1, which is what keeps an unfilled text field findable.
-  //
-  // Those solves pass `ToneAnchor.ground` (the default), so each lands *at* its
-  // target rather than past it — a border that overshoots 3:1 is a bright rule
-  // around a dark card, not an edge.
-  final surface = toneOf(
+  // Neutrals. The raised surface and the control fill are perceptual steps
+  // (see `_raisedLiftDark`); everything that has to be *read* or *found* against
+  // them is still a contrast target, solved with `ToneAnchor.ground` so it lands
+  // at its target rather than past it — a hairline that overshoots is a frame.
+  final surface =
+      isDark
+          ? toneOf(_neutralSeed, oklchOf(background).l + _raisedLiftDark)
+          : toneOf(_neutralSeed, 1.0);
+  final controlFill = toneOf(
     _neutralSeed,
-    oklchOf(background).l + (isDark ? _surfLiftDark : -_surfLiftLight),
+    isDark
+        ? oklchOf(surface).l + _controlStepDark
+        : oklchOf(background).l - _controlStepLight,
+  );
+  // Ink is solved against the hardest of the three grounds, so it reads on all
+  // of them. The control fill is the extreme in both modes — the lightest ground
+  // in dark mode, the darkest in light mode — but the comparison is spelled out
+  // rather than assumed.
+  final grounds = [background, surface, controlFill];
+  Color hardestFor(Color ink) => grounds.reduce(
+    (a, b) => contrastRatio(ink, a) <= contrastRatio(ink, b) ? a : b,
+  );
+  final hairline = solveForContrast(
+    seed: _neutralSeed,
+    against: surface,
+    target: _hairlineTarget,
+    preferLighter: preferLighter,
   );
   final border = solveForContrast(
     seed: _neutralSeed,
-    against: surface,
-    target: isDark ? _borderTargetDark : _borderTargetLight,
+    // A control edge sits on the page or on a sheet, not on another control.
+    against:
+        contrastRatio(_neutralSeed, background) <
+                contrastRatio(_neutralSeed, surface)
+            ? background
+            : surface,
+    target: _borderTarget,
     preferLighter: preferLighter,
   );
   final textPrimary = solveForContrast(
     seed: _neutralSeed,
-    against: background,
+    against: hardestFor(_neutralSeed),
     target: 13.0,
     preferLighter: preferLighter,
   );
   final textSecondary = solveForContrast(
     seed: _neutralSeed,
-    against: surface,
+    against: hardestFor(_neutralSeed),
     target: 4.5,
     preferLighter: preferLighter,
   );
+  final shadow = toneOf(_neutralSeed, 0.12);
 
   // Accent roles. `ToneAnchor.seed`: the seed *is* the intended accent, so it is
   // kept whenever it already reads and moved only when it doesn't — that single
@@ -424,13 +554,9 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
   final chromaCap = isDark ? _accentChromaCapDark : _accentChromaCapLight;
   double accentChroma(double l) =>
       math.min(chromaCap, vividness * maxChroma(l, seedTone.h));
-  final worse =
-      contrastRatio(seed, background) < contrastRatio(seed, surface)
-          ? background
-          : surface;
   final accent = solveForContrast(
     seed: seed,
-    against: worse,
+    against: hardestFor(seed),
     target: 4.5,
     preferLighter: preferLighter,
     anchor: ToneAnchor.seed,
@@ -486,18 +612,28 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
   // badges use — same hue, same chroma, same lightness seed (see
   // `semantic_colors.dart`), so "bad" and "good" mean one colour each across the
   // whole app instead of a Material red here and a hand-picked red there. Both
-  // are solved on the surface, the harder ground, and both are used as grounds
-  // in places; `onColor` supplies their foreground.
+  // are solved on the hardest ground, and both are used as grounds in places;
+  // `onColor` supplies their foreground.
+  final errorSeed = colorFromOklch(
+    _semanticLightness,
+    0.17,
+    29 * math.pi / 180,
+  );
   final error = solveForContrast(
-    seed: colorFromOklch(_semanticLightness, 0.17, 29 * math.pi / 180),
-    against: surface,
+    seed: errorSeed,
+    against: hardestFor(errorSeed),
     target: 4.5,
     preferLighter: preferLighter,
     anchor: ToneAnchor.seed,
   );
+  final successSeed = colorFromOklch(
+    _semanticLightness,
+    0.15,
+    150 * math.pi / 180,
+  );
   final success = solveForContrast(
-    seed: colorFromOklch(_semanticLightness, 0.15, 150 * math.pi / 180),
-    against: surface,
+    seed: successSeed,
+    against: hardestFor(successSeed),
     target: 4.5,
     preferLighter: preferLighter,
     anchor: ToneAnchor.seed,
@@ -506,7 +642,10 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
   return AppColorScheme(
     background: background,
     surface: surface,
+    controlFill: controlFill,
+    hairline: hairline,
     border: border,
+    shadow: shadow,
     textPrimary: textPrimary,
     textSecondary: textSecondary,
     error: error,
@@ -534,6 +673,8 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
 
   final background = c.background;
   final surface = c.surface;
+  final controlFill = c.controlFill;
+  final hairline = c.hairline;
   final border = c.border;
   final textPrimary = c.textPrimary;
   final textSecondary = c.textSecondary;
@@ -567,6 +708,17 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
       onError: onColor(error),
       surface: surface,
       onSurface: textPrimary,
+      onSurfaceVariant: textSecondary,
+      // Material's container ladder, mapped onto the app's three grounds so
+      // menus, dropdowns and search bars pick the same fills as our own widgets.
+      surfaceContainerLowest: surface,
+      surfaceContainerLow: surface,
+      surfaceContainer: surface,
+      surfaceContainerHigh: controlFill,
+      surfaceContainerHighest: controlFill,
+      outline: border,
+      outlineVariant: hairline,
+      shadow: c.shadow,
     ),
     extensions: [c],
     fontFamily: GoogleFonts.manrope().fontFamily,
@@ -581,9 +733,15 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
       scrolledUnderElevation: 0,
       surfaceTintColor: Colors.transparent,
       shadowColor: Colors.transparent,
-      shape: Border(bottom: BorderSide(color: border)),
+      shape: Border(bottom: BorderSide(color: hairline)),
       centerTitle: false,
-      titleTextStyle: textTheme.titleLarge,
+      // Screen titles carry the page: a size up from section titles, heavy
+      // and tightly set.
+      titleTextStyle: textTheme.titleLarge?.copyWith(
+        fontSize: 20,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.3,
+      ),
       iconTheme: IconThemeData(color: textPrimary),
       actionsIconTheme: IconThemeData(color: accent),
     ),
@@ -595,16 +753,16 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.card,
-        side: BorderSide(color: border, width: 1),
+        side: BorderSide(color: hairline, width: 1),
       ),
       margin: EdgeInsets.zero,
     ),
-    dividerTheme: DividerThemeData(color: border, thickness: 1, space: 1),
+    dividerTheme: DividerThemeData(color: hairline, thickness: 1, space: 1),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
         backgroundColor: accentFill,
         foregroundColor: onAccent,
-        disabledBackgroundColor: surface,
+        disabledBackgroundColor: controlFill,
         disabledForegroundColor: textSecondary,
         minimumSize: const Size(48, 48),
         visualDensity: VisualDensity.standard,
@@ -614,13 +772,17 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
         textStyle: textTheme.labelLarge,
       ).copyWith(overlayColor: interactionOverlay(onAccent)),
     ),
+    // The secondary button is a filled neutral, not an outline: a ground means
+    // tappable, and a box drawn round nothing reads as a disabled field.
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
+        backgroundColor: controlFill,
         foregroundColor: textPrimary,
+        disabledBackgroundColor: controlFill,
         disabledForegroundColor: textSecondary,
         minimumSize: const Size(48, 48),
         visualDensity: VisualDensity.standard,
-        side: BorderSide(color: border, width: 1),
+        side: BorderSide.none,
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         textStyle: textTheme.labelLarge,
@@ -653,38 +815,45 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
         side: BorderSide(color: accent, width: 1),
       ),
     ),
+    // Filled fields: the fill is the field, so a ring only appears for focus or
+    // an error. The label floats inside the fill, never onto an edge.
     inputDecorationTheme: InputDecorationTheme(
-      filled: false,
-      border: OutlineInputBorder(
+      filled: true,
+      fillColor: controlFill,
+      border: const RingInputBorder(borderRadius: AppRadius.field),
+      enabledBorder: const RingInputBorder(borderRadius: AppRadius.field),
+      disabledBorder: const RingInputBorder(borderRadius: AppRadius.field),
+      focusedBorder: RingInputBorder(
         borderRadius: AppRadius.field,
-        borderSide: BorderSide(color: border, width: 1),
+        borderSide: BorderSide(color: accent, width: 1.5),
       ),
-      enabledBorder: OutlineInputBorder(
+      errorBorder: RingInputBorder(
         borderRadius: AppRadius.field,
-        borderSide: BorderSide(color: border, width: 1),
+        borderSide: BorderSide(color: error, width: 1.5),
       ),
-      focusedBorder: OutlineInputBorder(
+      focusedErrorBorder: RingInputBorder(
         borderRadius: AppRadius.field,
-        borderSide: BorderSide(color: accent, width: 1),
+        borderSide: BorderSide(color: error, width: 2),
       ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: AppRadius.field,
-        borderSide: BorderSide(color: error, width: 1),
+      floatingLabelStyle: textTheme.bodyMedium?.copyWith(
+        color: textSecondary,
+        fontWeight: FontWeight.w600,
       ),
       labelStyle: textTheme.bodyMedium?.copyWith(color: textSecondary),
       hintStyle: textTheme.bodyMedium?.copyWith(color: textSecondary),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     ),
     chipTheme: ChipThemeData(
-      backgroundColor: surface,
+      backgroundColor: controlFill,
       // A selected chip is a ground with a label on it, so it takes the fill
       // tone and the foreground solved against that fill.
       selectedColor: accentFill,
       labelStyle: textTheme.labelMedium?.copyWith(color: textPrimary),
       secondaryLabelStyle: textTheme.labelMedium?.copyWith(color: onAccent),
-      shape: RoundedRectangleBorder(
+      side: BorderSide.none,
+      shape: const RoundedRectangleBorder(
         borderRadius: AppRadius.chip,
-        side: BorderSide(color: border, width: 1),
+        side: BorderSide.none,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     ),
@@ -702,12 +871,17 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
           // the same "on" track was a different colour on a card than on a page.
           return c.accentDim;
         }
-        return border;
+        return controlFill;
       }),
-      trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
+      // An off switch is an unfilled control, so its edge is the 3:1 border.
+      trackOutlineColor: WidgetStateProperty.resolveWith(
+        (states) =>
+            states.contains(WidgetState.selected) ? Colors.transparent : border,
+      ),
     ),
+    // Rows sit on whatever ground holds them; a list is not a stack of tiles.
     listTileTheme: ListTileThemeData(
-      tileColor: surface,
+      tileColor: Colors.transparent,
       textColor: textPrimary,
       iconColor: accent,
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
@@ -715,19 +889,27 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: surface,
+      surfaceTintColor: Colors.transparent,
+      // The scrim separates a dialog from the page; an outline would only frame
+      // it. Dark mode keeps a hairline, since its lift off the scrim is small.
       shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.card,
-        side: BorderSide(color: border, width: 1),
+        borderRadius: AppRadius.dialog,
+        side: isDark ? BorderSide(color: hairline) : BorderSide.none,
       ),
-      titleTextStyle: textTheme.headlineSmall,
-      contentTextStyle: textTheme.bodyMedium,
+      titleTextStyle: textTheme.headlineSmall?.copyWith(
+        fontSize: 20,
+        fontWeight: FontWeight.w800,
+        letterSpacing: -0.3,
+      ),
+      contentTextStyle: textTheme.bodyMedium?.copyWith(height: 1.5),
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: surface,
       contentTextStyle: textTheme.bodyMedium?.copyWith(color: textPrimary),
+      elevation: isDark ? 0 : 6,
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.button,
-        side: BorderSide(color: border, width: 1),
+        side: isDark ? BorderSide(color: hairline) : BorderSide.none,
       ),
       behavior: SnackBarBehavior.floating,
     ),
@@ -742,18 +924,27 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
     ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: surface,
+      surfaceTintColor: Colors.transparent,
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: AppRadius.card,
+        side: isDark ? BorderSide(color: hairline) : BorderSide.none,
+      ),
     ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
       color: accent,
-      circularTrackColor: border,
-      linearTrackColor: border,
+      circularTrackColor: controlFill,
+      linearTrackColor: controlFill,
     ),
     iconTheme: IconThemeData(color: accent),
     tooltipTheme: TooltipThemeData(
       decoration: BoxDecoration(
         color: surface,
-        border: Border.all(color: border, width: 1),
+        border: Border.all(color: hairline, width: 1),
         borderRadius: AppRadius.chip,
       ),
       textStyle: textTheme.bodySmall?.copyWith(color: textPrimary),

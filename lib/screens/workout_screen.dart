@@ -2168,7 +2168,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                 decoration: BoxDecoration(
                                   border: Border(
                                     bottom: BorderSide(
-                                      color: borderColor(context),
+                                      color: hairlineColor(context),
                                     ),
                                   ),
                                 ),
@@ -2415,10 +2415,12 @@ class _TimerButton extends StatelessWidget {
     final filled = !running;
     final style = TextButton.styleFrom(
       foregroundColor: filled ? onAccentColor(context) : accentColor(context),
-      backgroundColor: filled ? accentFillColor(context) : null,
+      // The quiet header action is a neutral fill, not an outline.
+      backgroundColor:
+          filled ? accentFillColor(context) : controlFillColor(context),
       disabledForegroundColor: textSecondaryColor(context),
-      disabledBackgroundColor: filled ? surfaceColor(context) : null,
-      side: filled ? null : BorderSide(color: borderColor(context)),
+      disabledBackgroundColor: controlFillColor(context),
+      side: BorderSide.none,
       minimumSize: compact ? const Size.square(40) : const Size(64, 36),
       tapTargetSize: MaterialTapTargetSize.padded,
       visualDensity: VisualDensity.standard,

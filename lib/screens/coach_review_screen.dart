@@ -283,7 +283,7 @@ class _ReviewBar extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: backgroundColor(context),
-        border: Border(top: BorderSide(color: borderColor(context))),
+        border: Border(top: BorderSide(color: hairlineColor(context))),
       ),
       child: SafeArea(
         top: false,

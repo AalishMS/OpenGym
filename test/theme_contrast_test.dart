@@ -25,6 +25,7 @@ import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/semantic_colors.dart';
 import 'package:gymapp/theme/tones.dart';
 import 'package:gymapp/widgets/home/training_snapshot.dart';
+import 'package:gymapp/widgets/raised_card.dart';
 
 /// Solved tones quantise to 8 bits per channel, which can shave a hair off a
 /// ratio that is mathematically exact. Allow that much and no more — this is
@@ -56,6 +57,9 @@ Future<BuildContext> _contextFor(
   late BuildContext captured;
   await tester.pumpWidget(
     MaterialApp(
+      // A fresh app per call: reusing the element would animate the theme in
+      // from the previous call's, and the first frame would read that one.
+      key: UniqueKey(),
       theme: buildTheme(seed, brightness),
       home: Builder(
         builder: (context) {
@@ -68,6 +72,20 @@ Future<BuildContext> _contextFor(
   return captured;
 }
 
+/// The three grounds anything can be drawn on, by name, as widgets see them.
+Map<String, Color> _grounds(BuildContext context) => {
+  'page': backgroundColor(context),
+  'surface': surfaceColor(context),
+  'control fill': controlFillColor(context),
+};
+
+/// The same three grounds straight off a derived scheme.
+Map<String, Color> _schemeGrounds(AppColorScheme scheme) => {
+  'page': scheme.background,
+  'surface': scheme.surface,
+  'control fill': scheme.controlFill,
+};
+
 void main() {
   setUpAll(() {
     // `buildTheme` builds a TextTheme, which resolves JetBrains Mono through
@@ -79,31 +97,46 @@ void main() {
     GoogleFonts.config.allowRuntimeFetching = false;
   });
 
-  testWidgets('raised home surfaces keep text and accents legible', (
-    tester,
-  ) async {
+  testWidgets('ink reads on every ground, for every accent', (tester) async {
+    // Three grounds now carry text: the page, the raised surface and the control
+    // fill. The ink roles are solved against the hardest of them, so each must
+    // hold on all three — through the same accessors widgets use.
     for (final brightness in Brightness.values) {
       for (final accent in SettingsProvider.accents) {
         final context = await _contextFor(tester, accent.seed, brightness);
-        final surface = raisedSurfaceColor(context);
-        _expectContrast(
-          textPrimaryColor(context),
-          surface,
-          atLeast: 7,
-          what: '${accent.name} primary ink on raised surface',
-        );
-        _expectContrast(
-          textSecondaryColor(context),
-          surface,
-          atLeast: 4.5,
-          what: '${accent.name} secondary ink on raised surface',
-        );
-        _expectContrast(
-          accentColor(context),
-          surface,
-          atLeast: 4.5,
-          what: '${accent.name} accent ink on raised surface',
-        );
+        final label = '${accent.name} / ${brightness.name}';
+        for (final ground in _grounds(context).entries) {
+          _expectContrast(
+            textPrimaryColor(context),
+            ground.value,
+            atLeast: 12,
+            what: '$label primary ink on ${ground.key}',
+          );
+          _expectContrast(
+            textSecondaryColor(context),
+            ground.value,
+            atLeast: 4.5,
+            what: '$label secondary ink on ${ground.key}',
+          );
+          _expectContrast(
+            accentColor(context),
+            ground.value,
+            atLeast: 4.5,
+            what: '$label accent ink on ${ground.key}',
+          );
+          _expectContrast(
+            errorColor(context),
+            ground.value,
+            atLeast: 4.5,
+            what: '$label error on ${ground.key}',
+          );
+          _expectContrast(
+            successColor(context),
+            ground.value,
+            atLeast: 4.5,
+            what: '$label success on ${ground.key}',
+          );
+        }
       }
     }
   });
@@ -137,6 +170,7 @@ void main() {
       for (final accent in SettingsProvider.accents) {
         await tester.pumpWidget(
           MaterialApp(
+            key: UniqueKey(),
             theme: buildTheme(accent.seed, brightness),
             home: Scaffold(
               body: TrainingSnapshot(
@@ -198,21 +232,17 @@ void main() {
         test('${accent.name} / ${brightness.name}', () {
           final scheme = deriveColorScheme(accent.seed, brightness);
 
-          // The text accent is solved against the worse of the two grounds, so
-          // it has to clear 4.5:1 on *both*. This is the assertion light mode
-          // used to fail outright: it drew the dark hexes, CYAN at 1.79:1.
-          _expectContrast(
-            scheme.accent,
-            scheme.background,
-            atLeast: 4.5,
-            what: '${accent.name} accent on background',
-          );
-          _expectContrast(
-            scheme.accent,
-            scheme.surface,
-            atLeast: 4.5,
-            what: '${accent.name} accent on surface',
-          );
+          // The text accent is solved against the hardest ground, so it has to
+          // clear 4.5:1 on all three. This is the assertion light mode used to
+          // fail outright: it drew the dark hexes, CYAN at 1.79:1.
+          for (final ground in _schemeGrounds(scheme).entries) {
+            _expectContrast(
+              scheme.accent,
+              ground.value,
+              atLeast: 4.5,
+              what: '${accent.name} accent on ${ground.key}',
+            );
+          }
 
           // A fill only needs its edge to read, but it must read on both grounds
           // too — a filled button sits on the page and inside cards.
@@ -304,78 +334,63 @@ void main() {
     });
   });
 
-  group('neutrals separate', () {
-    // Neutral tones are accent-independent, but they are solved inside the same
-    // pass as the accent, so they are re-checked per accent to catch any future
-    // coupling. One representative accent is enough to state the targets.
+  group('elevation reads as light', () {
+    // The contract the neutrals keep. Light mode used to step its cards *down*
+    // from the page, to #E3E3E3 with a 1.9:1 outline, so every sheet, dialog,
+    // field and tile was a grey slab sunk into the page. A raised surface is now
+    // lighter than the page in both modes; light mode makes it white and lets a
+    // shadow lift it, dark mode lets the fill and a hairline do it.
+    //
+    // Neutral tones don't depend on the accent, but they are solved in the same
+    // pass, so they are checked for every accent to catch any future coupling.
     for (final brightness in Brightness.values) {
-      test('surface, border and text / ${brightness.name}', () {
-        final scheme = deriveColorScheme(
-          SettingsProvider.accents.first.seed,
-          brightness,
-        );
-        final isDark = brightness == Brightness.dark;
+      for (final accent in SettingsProvider.accents) {
+        test('${accent.name} / ${brightness.name}', () {
+          final scheme = deriveColorScheme(accent.seed, brightness);
+          final isDark = brightness == Brightness.dark;
+          final page = oklchOf(scheme.background).l;
+          final raised = oklchOf(scheme.surface).l;
+          final control = oklchOf(scheme.controlFill).l;
 
-        // A card's fill is a perceptual step off the page rather than a contrast
-        // target — see `_surfLiftDark` in app_theme.dart. Assert the step, since
-        // that is what the design actually specifies now.
-        final lift =
-            (oklchOf(scheme.surface).l - oklchOf(scheme.background).l).abs();
-        expect(
-          lift,
-          closeTo(isDark ? 0.075 : 0.061, 0.002),
-          reason:
-              'card fill sits ${lift.toStringAsFixed(3)} off the page in '
-              '${brightness.name} mode',
-        );
+          expect(
+            raised,
+            greaterThan(page),
+            reason: 'a raised surface must be lighter than the page',
+          );
+          if (!isDark) {
+            expect(
+              scheme.surface.toARGB32(),
+              0xFFFFFFFF,
+              reason: 'light mode raises onto white',
+            );
+          }
 
-        // …with a ratio floor underneath it regardless, because the bug this
-        // replaced was cards at 1.10:1 dark / 1.08:1 light — invisible. Keeping
-        // the old metric as a floor means no future change of metric can quietly
-        // land back there.
-        _expectContrast(
-          scheme.surface,
-          scheme.background,
-          atLeast: 1.15,
-          what: 'surface on background',
-        );
+          // The lift is a perceptual step, not a ratio: near black, WCAG's
+          // +0.05 term makes the same ratio cost dark mode ~2.4x the step,
+          // which is how a "quiet" card once came out #2F2F2F. Big enough to
+          // see, small enough that dark mode still reads as black.
+          expect(raised - page, inInclusiveRange(0.03, 0.06));
 
-        // The border is still solved as a ratio: it is a line to be *seen*, and
-        // at 3:1 it is also what makes an unfilled text field findable
-        // (WCAG 1.4.11), since `inputDecorationTheme` draws it.
-        _expectContrast(
-          scheme.border,
-          scheme.surface,
-          atLeast: isDark ? 3.0 : 1.90,
-          what: 'border on surface',
-        );
-        _expectContrast(
-          scheme.textPrimary,
-          scheme.background,
-          atLeast: 13.0,
-          what: 'textPrimary on background',
-        );
-        _expectContrast(
-          scheme.textSecondary,
-          scheme.surface,
-          atLeast: 4.5,
-          what: 'textSecondary on surface',
-        );
-      });
+          // The control fill steps away from *both* grounds, so a field or a
+          // stepper reads on the page and inside a sheet: below the page in
+          // light mode, above the sheet in dark mode.
+          if (isDark) {
+            expect(control - raised, greaterThanOrEqualTo(0.03));
+          } else {
+            expect(page - control, greaterThanOrEqualTo(0.02));
+            expect(raised - control, greaterThanOrEqualTo(0.05));
+          }
+        });
+      }
     }
 
-    test('neither mode separates its cards much harder than the other', () {
-      // The defect that made dark mode read grey: both modes were handed a
-      // contrast *number* (1.45 dark, 1.20 light), and near black a number buys
-      // ~2.4× the perceptual step, so dark cards landed on #2F2F2F — a grey box
-      // on a black page, tiled across the whole workout screen. Whatever the
-      // targets become, the two modes have to stay comparable to the eye.
+    test('both modes lift by about the same amount', () {
       double liftFor(Brightness brightness) {
         final scheme = deriveColorScheme(
           SettingsProvider.accents.first.seed,
           brightness,
         );
-        return (oklchOf(scheme.surface).l - oklchOf(scheme.background).l).abs();
+        return oklchOf(scheme.surface).l - oklchOf(scheme.background).l;
       }
 
       final dark = liftFor(Brightness.dark);
@@ -384,9 +399,142 @@ void main() {
         math.max(dark, light) / math.min(dark, light),
         lessThan(1.5),
         reason:
-            'card lift is ${dark.toStringAsFixed(3)} dark vs '
+            'lift is ${dark.toStringAsFixed(3)} dark vs '
             '${light.toStringAsFixed(3)} light',
       );
+    });
+
+    testWidgets('a raised card always has an edge as well as a fill', (
+      tester,
+    ) async {
+      // The fill step is small on purpose, so it never separates a card on its
+      // own: that was the invisible-card bug (1.10:1, no edge). Light mode
+      // casts a shadow; dark mode, where a shadow has nothing to fall on, draws
+      // a hairline.
+      for (final brightness in Brightness.values) {
+        late BuildContext context;
+        await tester.pumpWidget(
+          MaterialApp(
+            key: UniqueKey(),
+            theme: buildTheme(SettingsProvider.accents.first.seed, brightness),
+            home: Builder(
+              builder: (c) {
+                context = c;
+                return const RaisedCard(child: SizedBox(height: 40));
+              },
+            ),
+          ),
+        );
+        final decoration = raisedDecoration(context);
+        final box =
+            tester
+                    .widget<DecoratedBox>(
+                      find
+                          .descendant(
+                            of: find.byType(RaisedCard),
+                            matching: find.byType(DecoratedBox),
+                          )
+                          .first,
+                    )
+                    .decoration
+                as BoxDecoration;
+        final material = tester.widget<Material>(
+          find
+              .descendant(
+                of: find.byType(RaisedCard),
+                matching: find.byType(Material),
+              )
+              .first,
+        );
+        final side = (material.shape! as RoundedRectangleBorder).side;
+
+        if (brightness == Brightness.light) {
+          expect(raisedShadow(context), isNotEmpty);
+          expect(box.boxShadow, raisedShadow(context));
+          expect(decoration.boxShadow, raisedShadow(context));
+        } else {
+          expect(raisedShadow(context), isEmpty);
+          expect(side.color, hairlineColor(context));
+          expect(decoration.border, isNotNull);
+        }
+        expect(material.color, surfaceColor(context));
+      }
+    });
+  });
+
+  group('lines', () {
+    for (final brightness in Brightness.values) {
+      test('hairlines separate, borders find / ${brightness.name}', () {
+        final scheme = deriveColorScheme(
+          SettingsProvider.accents.first.seed,
+          brightness,
+        );
+
+        // A hairline separates; it must be seen, but it must never frame. The
+        // old single border was solved to 3:1 and drawn round every card, tile
+        // and chip, so the whole app was outlined.
+        final hairline = contrastRatio(scheme.hairline, scheme.surface);
+        expect(
+          hairline,
+          inInclusiveRange(1.2 - _quantisationSlack, 1.35),
+          reason: 'hairline on surface ${hairline.toStringAsFixed(2)}:1',
+        );
+        _expectContrast(
+          scheme.hairline,
+          scheme.background,
+          atLeast: 1.1,
+          what: 'hairline on page',
+        );
+
+        // The border is the edge of an *unfilled* control — an unselected
+        // radio, an off switch — so it holds WCAG 1.4.11's 3:1 wherever such
+        // a control can sit.
+        for (final ground in ['page', 'surface']) {
+          _expectContrast(
+            scheme.border,
+            _schemeGrounds(scheme)[ground]!,
+            atLeast: 3.0,
+            what: 'border on $ground',
+          );
+        }
+        expect(
+          contrastRatio(scheme.border, scheme.surface),
+          greaterThan(contrastRatio(scheme.hairline, scheme.surface)),
+          reason: 'a hairline must stay quieter than a control edge',
+        );
+      });
+    }
+
+    testWidgets('filled fields ring only for focus and errors', (tester) async {
+      for (final brightness in Brightness.values) {
+        for (final accent in SettingsProvider.accents) {
+          final context = await _contextFor(tester, accent.seed, brightness);
+          final input = Theme.of(context).inputDecorationTheme;
+          final label = '${accent.name} / ${brightness.name}';
+
+          expect(input.filled, isTrue, reason: '$label field is filled');
+          expect(input.fillColor, controlFillColor(context));
+          expect(
+            input.enabledBorder!.borderSide.style,
+            BorderStyle.none,
+            reason: '$label resting field draws no outline',
+          );
+          // The focus ring is the only thing marking focus, so it has to read
+          // against the fill it surrounds (WCAG 1.4.11).
+          _expectContrast(
+            input.focusedBorder!.borderSide.color,
+            controlFillColor(context),
+            atLeast: 3.0,
+            what: '$label focus ring on field',
+          );
+          _expectContrast(
+            input.errorBorder!.borderSide.color,
+            controlFillColor(context),
+            atLeast: 3.0,
+            what: '$label error ring on field',
+          );
+        }
+      }
     });
   });
 
@@ -400,13 +548,15 @@ void main() {
 
         for (final entry
             in {'error': scheme.error, 'success': scheme.success}.entries) {
-          // Read as text on a card…
-          _expectContrast(
-            entry.value,
-            scheme.surface,
-            atLeast: 4.5,
-            what: '${entry.key} on surface',
-          );
+          // Read as text on every ground…
+          for (final ground in _schemeGrounds(scheme).entries) {
+            _expectContrast(
+              entry.value,
+              ground.value,
+              atLeast: 4.5,
+              what: '${entry.key} on ${ground.key}',
+            );
+          }
           // …and carry a label when used as a ground, which both are (a filled
           // delete button, the [PR] badge).
           _expectContrast(
@@ -460,19 +610,19 @@ void main() {
           SettingsProvider.accents.first.seed,
           brightness,
         );
-        final surface = surfaceColor(context);
-
         for (var slot = 0; slot < kPlanColors.length; slot++) {
           final resolved = planSwatch(slot, context);
-          // Plan colours label cards and draw stripes on them. All ten used to
-          // score 1.53–3.44 on the light background because there were no light
-          // variants at all.
-          _expectContrast(
-            resolved,
-            surface,
-            atLeast: 4.5,
-            what: 'plan slot $slot on surface',
-          );
+          // Plan colours label rows and cards and draw stripes on them. All ten
+          // used to score 1.53–3.44 on the light background because there were
+          // no light variants at all.
+          for (final ground in _grounds(context).entries) {
+            _expectContrast(
+              resolved,
+              ground.value,
+              atLeast: 4.5,
+              what: 'plan slot $slot on ${ground.key}',
+            );
+          }
           _expectContrast(
             onColor(resolved),
             resolved,
@@ -517,17 +667,17 @@ void main() {
           SettingsProvider.accents.first.seed,
           brightness,
         );
-        final surface = surfaceColor(context);
-
         // All six RPE values, not just the six distinct steps: the thresholds
         // are part of the contract.
         for (var rpe = 1; rpe <= 10; rpe++) {
-          _expectContrast(
-            rpeColor(rpe, context),
-            surface,
-            atLeast: 4.5,
-            what: 'RPE $rpe on surface',
-          );
+          for (final ground in _grounds(context).entries) {
+            _expectContrast(
+              rpeColor(rpe, context),
+              ground.value,
+              atLeast: 4.5,
+              what: 'RPE $rpe on ${ground.key}',
+            );
+          }
         }
       });
 

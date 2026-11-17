@@ -220,8 +220,8 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
           // across the full width, and it stays square.
           border:
               widget.rule == StripRule.bottom
-                  ? Border(bottom: BorderSide(color: borderColor(context)))
-                  : Border(top: BorderSide(color: borderColor(context))),
+                  ? Border(bottom: BorderSide(color: hairlineColor(context)))
+                  : Border(top: BorderSide(color: hairlineColor(context))),
         ),
         child: SizedBox(height: height, child: strip),
       ),

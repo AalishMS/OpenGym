@@ -47,7 +47,7 @@ class AppNavRail extends StatelessWidget {
       width: 180,
       child: Container(
         decoration: BoxDecoration(
-          border: Border(right: BorderSide(color: borderColor(context))),
+          border: Border(right: BorderSide(color: hairlineColor(context))),
         ),
         child: NavigationRail(
           selectedIndex: currentIndex,

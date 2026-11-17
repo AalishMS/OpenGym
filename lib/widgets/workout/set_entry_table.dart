@@ -556,7 +556,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
                     backgroundColor: _keypadTrayColor(context),
                     shape: RoundedRectangleBorder(
                       borderRadius: AppRadius.sheet,
-                      side: BorderSide(color: borderColor(context)),
+                      side: BorderSide(color: hairlineColor(context)),
                     ),
                     clipBehavior: Clip.antiAlias,
                     enableDrag: false,
@@ -1200,7 +1200,7 @@ class _EntryRow extends StatelessWidget {
               constraints: const BoxConstraints(minHeight: 48),
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.xs),
               decoration: BoxDecoration(
-                border: Border.all(color: borderColor(context)),
+                border: Border.all(color: hairlineColor(context)),
                 borderRadius: AppRadius.control,
               ),
               child: Center(child: number),
@@ -1912,14 +1912,9 @@ class _SetKeyboardState extends State<_SetKeyboard> {
         accentMutedColor(context),
         textPrimaryColor(context),
       ),
-      _KeyTone.emphasized => (
-        raisedSurfaceColor(context),
-        accentColor(context),
-      ),
-      _KeyTone.digit || _KeyTone.action => (
-        raisedSurfaceColor(context),
-        textPrimaryColor(context),
-      ),
+      _KeyTone.emphasized => (_keyColor(context), accentColor(context)),
+      _KeyTone.digit ||
+      _KeyTone.action => (_keyColor(context), textPrimaryColor(context)),
     };
     return TextButton(
       onPressed: _withHaptic(onPressed),
@@ -1941,7 +1936,7 @@ class _SetKeyboardState extends State<_SetKeyboard> {
         disabledForegroundColor: textSecondaryColor(context),
         side:
             onPressed == null
-                ? BorderSide(color: borderColor(context))
+                ? BorderSide(color: hairlineColor(context))
                 : BorderSide.none,
         shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
         textStyle:
@@ -1960,11 +1955,16 @@ class _SetKeyboardState extends State<_SetKeyboard> {
 
 enum _KeyTone { digit, action, emphasized, selected, primary }
 
-/// The keys always sit one step above the tray: dark mode puts surface keys on
-/// the black page ground, light mode puts near-white keys on a grey surface.
+/// The keys always sit one step above the tray: dark mode puts lifted keys on
+/// the black page ground, light mode puts white keys on a control-grey tray.
 Color _keypadTrayColor(BuildContext context) =>
     Theme.of(context).brightness == Brightness.dark
         ? backgroundColor(context)
+        : controlFillColor(context);
+
+Color _keyColor(BuildContext context) =>
+    Theme.of(context).brightness == Brightness.dark
+        ? controlFillColor(context)
         : surfaceColor(context);
 
 /// Action labels stay on one line; at extreme text sizes they shrink to fit

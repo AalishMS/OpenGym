@@ -357,15 +357,18 @@ class _SplitMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final border = borderColor(context);
+    final border = hairlineColor(context);
     final textSecondary = textSecondaryColor(context);
     return Material(
       color: surfaceColor(context),
       elevation: 8,
-      shadowColor: backgroundColor(context).withAlpha(128),
+      shadowColor: Theme.of(context).colorScheme.shadow.withAlpha(90),
       shape: RoundedRectangleBorder(
         borderRadius: AppRadius.card,
-        side: BorderSide(color: border),
+        side:
+            Theme.of(context).brightness == Brightness.dark
+                ? BorderSide(color: border)
+                : BorderSide.none,
       ),
       clipBehavior: Clip.antiAlias,
       child: SizedBox(
@@ -468,10 +471,8 @@ class _SplitMenuRow extends StatelessWidget {
         child: Container(
           constraints: const BoxConstraints(minHeight: 48),
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-          decoration: BoxDecoration(
-            color: selected ? accentMutedColor(context) : Colors.transparent,
-            borderRadius: AppRadius.control,
-          ),
+          // The check and the weight mark the active split; no wash behind it.
+          decoration: const BoxDecoration(borderRadius: AppRadius.control),
           // Radio-style leading mark: the splits read as "pick one of these",
           // unlike the icon-led actions under the rule.
           child: Row(

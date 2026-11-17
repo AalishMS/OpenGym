@@ -20,6 +20,7 @@ import '../theme/breakpoints.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../widgets/action_progress.dart';
+import '../widgets/app_button.dart';
 import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/workout/set_entry_table.dart';
@@ -534,7 +535,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
             elevation: 0,
             clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
-              side: BorderSide(color: borderColor(context)),
+              side: BorderSide(color: hairlineColor(context)),
               borderRadius: AppRadius.card,
             ),
             child: Padding(
@@ -603,57 +604,42 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const _SectionHeading(title: 'Plan name'),
+                            // The name is the page's title; block and colour
+                            // are pills beneath it, so the exercises start
+                            // high on the screen.
                             _PlanNameField(
                               controller: _nameController,
                               marker: planColor,
                             ),
-                            if (_startingBlocks.isNotEmpty) ...[
-                              const SizedBox(height: AppSpacing.md),
-                              if (widget.isEdit)
-                                StartingWeekField(
-                                  label: 'Training block',
-                                  value: _currentBlockLabel,
-                                  onTap: _isSaving ? null : _manageBlocks,
-                                )
-                              else
-                                StartingWeekField(
-                                  value: _startingLabel,
-                                  onTap: _isSaving ? null : _chooseStart,
-                                ),
-                            ],
-                            const SizedBox(height: AppSpacing.xl),
+                            const SizedBox(height: AppSpacing.md),
                             Wrap(
-                              alignment: WrapAlignment.spaceBetween,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: AppSpacing.md,
-                              runSpacing: AppSpacing.xs,
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.sm,
                               children: [
-                                Text(
-                                  'Plan color',
-                                  style: Theme.of(context).textTheme.bodyMedium,
-                                ),
-                                TextButton.icon(
-                                  onPressed:
+                                if (_startingBlocks.isNotEmpty)
+                                  if (widget.isEdit)
+                                    StartingWeekField(
+                                      label: 'Training block',
+                                      value: _currentBlockLabel,
+                                      onTap: _isSaving ? null : _manageBlocks,
+                                    )
+                                  else
+                                    StartingWeekField(
+                                      value: _startingLabel,
+                                      onTap: _isSaving ? null : _chooseStart,
+                                    ),
+                                _ColorPill(
+                                  color: planColor,
+                                  open: _showColors,
+                                  onTap:
                                       () => setState(
                                         () => _showColors = !_showColors,
                                       ),
-                                  icon: Container(
-                                    width: 16,
-                                    height: 16,
-                                    decoration: BoxDecoration(
-                                      color: planColor,
-                                      borderRadius: AppRadius.badge,
-                                    ),
-                                  ),
-                                  label: Text(
-                                    _showColors ? 'Done' : 'Change color',
-                                  ),
                                 ),
                               ],
                             ),
                             if (_showColors) ...[
-                              const SizedBox(height: AppSpacing.sm),
+                              const SizedBox(height: AppSpacing.md),
                               _ColorPicker(
                                 selectedColor: _selectedColor,
                                 onChanged:
@@ -779,8 +765,11 @@ class _SaveButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: accentFillColor(context),
           foregroundColor: onAccentColor(context),
-          minimumSize: const Size(72, 48),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+          // A 40px pill; the padded tap target keeps it 48px to the finger.
+          minimumSize: const Size(72, 40),
+          tapTargetSize: MaterialTapTargetSize.padded,
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.pill),
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg + 2),
         ),
         child:
             isSaving ? const ActionProgress('Saving plan') : const Text('Save'),
@@ -853,38 +842,113 @@ class _PlanNameField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    return TextField(
-      controller: controller,
-      textCapitalization: TextCapitalization.sentences,
-      textInputAction: TextInputAction.done,
-      style: textTheme.bodyLarge?.copyWith(
-        fontWeight: FontWeight.w600,
-        color: textPrimaryColor(context),
-      ),
-      decoration: InputDecoration(
-        hintText: 'e.g. Push day',
-        hintStyle: textTheme.bodyLarge?.copyWith(
-          color: textSecondaryColor(context),
-        ),
-        filled: true,
-        fillColor: surfaceColor(context),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.md,
-          vertical: AppSpacing.md,
-        ),
-        prefixIconConstraints: const BoxConstraints(minWidth: 0),
-        prefixIcon: Padding(
-          padding: const EdgeInsets.only(
-            left: AppSpacing.md,
-            right: AppSpacing.sm,
+    final title = textTheme.headlineLarge?.copyWith(
+      fontSize: 28,
+      fontWeight: FontWeight.w800,
+      letterSpacing: -0.5,
+      height: 1.2,
+      color: textPrimaryColor(context),
+    );
+    // The name is set as the page title rather than inside a box: a hairline
+    // under it at rest, the accent under it while typing.
+    return Semantics(
+      label: 'Plan name',
+      child: TextField(
+        controller: controller,
+        textCapitalization: TextCapitalization.sentences,
+        textInputAction: TextInputAction.done,
+        style: title,
+        decoration: InputDecoration(
+          hintText: 'Plan name',
+          hintStyle: title?.copyWith(color: textSecondaryColor(context)),
+          filled: false,
+          isDense: true,
+          contentPadding: const EdgeInsets.only(
+            top: AppSpacing.xs,
+            bottom: AppSpacing.md,
           ),
-          child: ExcludeSemantics(
-            child: Container(
-              width: 3,
-              height: 20,
-              decoration: BoxDecoration(
-                color: marker,
-                borderRadius: AppRadius.micro,
+          border: UnderlineInputBorder(
+            borderSide: BorderSide(color: hairlineColor(context)),
+          ),
+          enabledBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: hairlineColor(context)),
+          ),
+          focusedBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: accentColor(context), width: 2),
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 0),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(
+              right: AppSpacing.md,
+              bottom: AppSpacing.sm,
+            ),
+            child: ExcludeSemantics(
+              child: Container(
+                width: 4,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: marker,
+                  borderRadius: AppRadius.micro,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The plan colour as a pill beside the block pill: its swatch, and the
+/// action that opens or closes the palette.
+class _ColorPill extends StatelessWidget {
+  final Color color;
+  final bool open;
+  final VoidCallback onTap;
+
+  const _ColorPill({
+    required this.color,
+    required this.open,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      expanded: open,
+      child: Material(
+        color: controlFillColor(context),
+        borderRadius: AppRadius.pill,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ExcludeSemantics(
+                    child: Container(
+                      width: 16,
+                      height: 16,
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(
+                    open ? 'Done' : 'Change color',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: textPrimaryColor(context),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -1096,7 +1160,6 @@ class _ExerciseEditorSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final border = borderColor(context);
     final expanded = exercise.expanded;
     final previous = previousExerciseSets(
       HiveService.getSessions(),
@@ -1106,7 +1169,7 @@ class _ExerciseEditorSection extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: border)),
+        border: Border(bottom: BorderSide(color: hairlineColor(context))),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1356,9 +1419,9 @@ class _EmptyExercises extends StatelessWidget {
         horizontal: AppSpacing.lg,
         vertical: AppSpacing.xl,
       ),
+      // An empty state is a quiet invitation, not a box to fill in.
       decoration: BoxDecoration(
-        color: surfaceColor(context),
-        border: Border.all(color: borderColor(context)),
+        color: controlFillColor(context),
         borderRadius: AppRadius.card,
       ),
       child: Column(
@@ -1391,11 +1454,10 @@ class _AddExerciseBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor(context);
     return Container(
       decoration: BoxDecoration(
         color: backgroundColor(context),
-        border: Border(top: BorderSide(color: borderColor(context))),
+        border: Border(top: BorderSide(color: hairlineColor(context))),
       ),
       child: SafeArea(
         top: false,
@@ -1408,14 +1470,12 @@ class _AddExerciseBar extends StatelessWidget {
             heightFactor: 1,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: Breakpoints.expanded),
-              child: OutlinedButton.icon(
+              child: ElevatedButton.icon(
                 onPressed: onTap,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: accent,
-                  minimumSize: const Size.fromHeight(48),
-                  side: BorderSide(color: accent),
-                ).copyWith(
-                  overlayColor: WidgetStatePropertyAll(accent.withAlpha(24)),
+                style: tonalButtonStyle(context).copyWith(
+                  minimumSize: const WidgetStatePropertyAll(
+                    Size.fromHeight(52),
+                  ),
                 ),
                 icon: const Icon(LucideIcons.plus, size: 18),
                 label: const Text('Add exercise'),

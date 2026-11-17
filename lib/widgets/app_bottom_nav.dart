@@ -91,7 +91,7 @@ class AppBottomNav extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: borderColor(context))),
+        border: Border(top: BorderSide(color: hairlineColor(context))),
       ),
       child: Stack(
         children: [

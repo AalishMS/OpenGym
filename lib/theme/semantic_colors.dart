@@ -40,8 +40,8 @@ const List<_RpeStep> _steps = [
 
 /// The colour for an RPE value, resolved for the current mode.
 ///
-/// Solved against the surface, which is the harder of the two grounds in either
-/// mode, so the badge stays legible on a card *and* on the page behind it.
+/// Solved against the hardest ground it can sit on ([hardestGroundFor]), so the
+/// badge stays legible on the page, a card or a control fill.
 Color rpeColor(int rpe, BuildContext context) {
   final step = _steps[_indexFor(rpe)];
   final seed = step.hue == null
@@ -50,7 +50,7 @@ Color rpeColor(int rpe, BuildContext context) {
           _seedLightness, step.chroma, step.hue! * math.pi / 180);
   return solveForContrast(
     seed: seed,
-    against: surfaceColor(context),
+    against: hardestGroundFor(seed, context),
     target: 4.5,
     preferLighter: Theme.of(context).brightness == Brightness.dark,
     anchor: ToneAnchor.seed,
