@@ -2123,10 +2123,14 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                       ),
                       slivers: [
                         // One gutter keeps the exercise tables aligned as a log.
+                        // No top inset, and the first exercise drops its own:
+                        // its title sits snug under the plan tabs' rule.
                         SliverPadding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.lg,
-                            vertical: AppSpacing.sm,
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.lg,
+                            0,
+                            AppSpacing.lg,
+                            AppSpacing.sm,
                           ),
                           sliver: SliverReorderableList(
                             itemCount: session.exercises.length + 1,
@@ -2175,6 +2179,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                                 child: ExerciseCard(
                                   exercise: exercise,
                                   exerciseIndex: index,
+                                  first: index == 0,
                                   reorderable: true,
                                   onMoveUp:
                                       index > 0

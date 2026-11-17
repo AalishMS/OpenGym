@@ -19,6 +19,10 @@ class ExerciseCard extends StatelessWidget {
   final int exerciseIndex;
   final bool reorderable;
   final bool readOnly;
+
+  /// Drops the top inset for the first exercise in a log, which sits straight
+  /// under a header rule rather than under the exercise above it.
+  final bool first;
   final Color accent;
   final List<gym.Set> previousSets;
   final VoidCallback? onEntryFinished;
@@ -51,6 +55,7 @@ class ExerciseCard extends StatelessWidget {
     required this.exerciseIndex,
     this.reorderable = false,
     this.readOnly = false,
+    this.first = false,
     required this.accent,
     this.previousSets = const [],
     this.onEntryFinished,
@@ -111,7 +116,10 @@ class ExerciseCard extends StatelessWidget {
       ),
     );
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      padding: EdgeInsets.only(
+        top: first ? 0 : AppSpacing.sm,
+        bottom: AppSpacing.sm,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
