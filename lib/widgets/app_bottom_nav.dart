@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import 'guided_tour.dart';
@@ -35,8 +36,8 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = accentColor(context);
     final textSecondary = textSecondaryColor(context);
+    final label = Theme.of(context).textTheme.labelSmall;
 
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final slots = _labels.length;
     final selected = currentIndex.clamp(0, slots - 1);
 
@@ -45,20 +46,10 @@ class AppBottomNav extends StatelessWidget {
         height: 68,
         backgroundColor: backgroundColor(context),
         indicatorColor: Colors.transparent,
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          final selected = states.contains(WidgetState.selected);
-          return Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: selected ? accent : textSecondary,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          );
-        }),
-        iconTheme: WidgetStateProperty.resolveWith((states) {
-          final selected = states.contains(WidgetState.selected);
-          return IconThemeData(
-            size: 22,
-            color: selected ? accent : textSecondary,
-          );
-        }),
+        // Colour and weight come from each destination's [_Selection], which
+        // eases them in step with the rule; the bar itself would snap them.
+        labelTextStyle: const WidgetStatePropertyAll(TextStyle()),
+        iconTheme: const WidgetStatePropertyAll(IconThemeData(size: 22)),
       ),
       child: NavigationBar(
         selectedIndex: currentIndex,
@@ -75,14 +66,25 @@ class AppBottomNav extends StatelessWidget {
                 vertical: -AppSpacing.xs,
               ),
               borderRadius: AppRadius.button,
-              child: NavigationDestination(
-                icon: Badge(
-                  isLabelVisible: badgedIndex == i,
-                  smallSize: 7,
-                  backgroundColor: accentFillColor(context),
-                  child: Icon(_icons[i]),
+              child: _Selection(
+                selected: i == selected,
+                selectedColor: accent,
+                unselectedColor: textSecondary,
+                selectedLabel: label?.copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w700,
                 ),
-                label: _labels[i],
+                unselectedLabel: label?.copyWith(
+                  color: textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+                child: NavigationDestination(
+                  icon: _Badge(
+                    visible: badgedIndex == i,
+                    child: Icon(_icons[i]),
+                  ),
+                  label: _labels[i],
+                ),
               ),
             ),
         ],
@@ -106,11 +108,8 @@ class AppBottomNav extends StatelessWidget {
             child: IgnorePointer(
               child: AnimatedAlign(
                 key: const ValueKey('bottom-nav-indicator'),
-                duration:
-                    reduceMotion
-                        ? Duration.zero
-                        : const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
+                duration: AppMotion.of(context, AppMotion.standard),
+                curve: AppMotion.curve,
                 alignment: AlignmentDirectional(
                   slots == 1 ? 0 : -1 + 2 * selected / (slots - 1),
                   0,
@@ -133,6 +132,76 @@ class AppBottomNav extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Eases one destination's icon and label colour and label weight between
+/// selected and not, over the same [AppMotion.standard] and curve as the rule
+/// sliding above it, so the whole selection moves as one. It starts at rest,
+/// so the bar never animates on arrival. The bar's own theme leaves colour
+/// and weight unset, so these inherited values are what paint.
+class _Selection extends StatelessWidget {
+  final bool selected;
+  final Color selectedColor;
+  final Color unselectedColor;
+  final TextStyle? selectedLabel;
+  final TextStyle? unselectedLabel;
+  final Widget child;
+
+  const _Selection({
+    required this.selected,
+    required this.selectedColor,
+    required this.unselectedColor,
+    required this.selectedLabel,
+    required this.unselectedLabel,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: selected ? 1 : 0),
+      duration: AppMotion.of(context, AppMotion.standard),
+      curve: AppMotion.curve,
+      child: child,
+      builder:
+          (context, t, child) => IconTheme.merge(
+            data: IconThemeData(
+              color: Color.lerp(unselectedColor, selectedColor, t),
+            ),
+            child: DefaultTextStyle.merge(
+              style: TextStyle.lerp(unselectedLabel, selectedLabel, t),
+              child: child!,
+            ),
+          ),
+    );
+  }
+}
+
+/// The attention dot fades in and out over [AppMotion.quick] rather than
+/// popping, keeping the badge's own size and place.
+class _Badge extends StatelessWidget {
+  final bool visible;
+  final Widget child;
+
+  const _Badge({required this.visible, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final ground = accentFillColor(context);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(end: visible ? 1 : 0),
+      duration: AppMotion.of(context, AppMotion.quick),
+      curve: AppMotion.curve,
+      child: child,
+      builder:
+          (context, t, child) => Badge(
+            isLabelVisible: t > 0,
+            smallSize: 7,
+            backgroundColor: ground.withValues(alpha: ground.a * t),
+            child: child,
+          ),
     );
   }
 }

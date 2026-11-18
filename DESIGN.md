@@ -60,6 +60,24 @@ discarded. `AdoptLocalData` adopts on-device data into an account the first
 time that user signs in, and keeps one account's cache hidden from the next
 user on a shared device.
 
+Each surface the gate puts in place of another (login, password recovery,
+the app once `AuthenticatedHome` has prepared its data, or the preparation
+failure) fades in on the page colour over `AppMotion.quick`. What it replaces
+is removed at once rather than kept beside it, so a sign-out never leaves the
+previous account's screens, routes or focus on show. The app is uncovered the
+same way when password recovery finishes. The sign-in check and data
+preparation usually finish within a frame or two, so their spinners stay
+unpainted for 400ms and fade in only for a wait that is real; screen readers
+hear the progress label from the start.
+
+The login screen has four modes (sign in, create account, reset email, new
+password). Switching between them crosses the heading and its line, the
+primary button's label and the mode link in place; fields and links that
+come and go fold open and closed, and one on its way out gives up focus at
+once. The error or confirmation line folds open beneath the fields and, when
+a new attempt clears it, folds away still reading what it said. While
+signing in, the button's label crosses to its progress indicator.
+
 The app is split into small layers:
 
 | Layer | Location | Responsibility |
@@ -490,9 +508,14 @@ on Android 13+; screens that guard unsaved work still intercept it through
 into the workout header (`PlanTitleHero`); other entry points open normally.
 
 The selected bottom tab is marked by a short accent rule on the top hairline as
-well as by colour and weight, so selection never rests on colour alone. Moving
-to another tab gives a selection haptic and a brief fade-in (none under reduced
-motion). Tapping the tab that is already showing scrolls it back to the top;
+well as by colour and weight, so selection never rests on colour alone. When the
+selection moves, the rule slides while both destinations' icon and label ease
+their colour and weight over the same time, and the update dot fades in and
+out rather than popping; the desktop rail settles its labels and icons the same
+way. Moving to another tab gives a selection haptic and a brief fade-in from
+partial opacity, so its first frame already shows the new tab rather than the
+bare page (none under reduced motion). The weekly-training shortcut's switch
+to Stats fades the same way. Tapping the tab that is already showing scrolls it back to the top;
 on Home it also closes the Coach and Manage.
 
 While a workout is in progress, a resume strip sits directly above the bottom
@@ -501,7 +524,12 @@ colour, the plan name, and the live session clock, and opens that workout in
 one tap, switching split if needed. It shows the running timer, or else a paused
 workout started within the last 12 hours (`HiveService.getLiveSession`). It
 listens to the sessions box directly, so finishing, deleting, or a sync pull
-removes it. Pushed routes such as the workout screen cover it.
+removes it. Pushed routes such as the workout screen cover it. When it appears
+or goes while the shell is in view, it folds open or closed above the
+navigation (`Collapsible`), and a strip on its way out takes no taps; a change
+made while a route covers the shell or the app is in the background lands at
+rest, so returning never replays it. Inside the strip, running and paused
+change together at once, and the clock ticks without animating.
 
 | Tab | Screen |
 | --- | --- |
@@ -513,6 +541,13 @@ removes it. Pushed routes such as the workout screen cover it.
 Workout plan creation, editing, and active workout logging are separate screens
 opened from the main flow. The Coach is the exception: it opens over Home
 inside the Home tab, so the tab bar or rail stays visible (see `docs/coach.md`).
+It arrives as a page one level deeper does in the exercise picker, fading in
+while it travels the last 24px from the end side, and leaves the same way back
+over `AppMotion.standard`. Home keeps its state beneath, stops taking taps the
+moment the Coach starts to arrive, and takes them again the moment it starts
+to leave; the leaving Coach gives up focus, closing the keyboard. A Coach
+closed out of view (behind another tab, for the tour, or on sign-out) simply
+goes.
 
 Back dismisses the nearest active layer before leaving its parent. Manage is a
 Home mode: Back restores normal Home, and leaving or reselecting Home clears

@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../widgets/app_wordmark.dart';
 import '../widgets/action_progress.dart';
+import '../widgets/motion/state_switcher.dart';
 import '../widgets/raised_card.dart';
 
 /// A short, optional introduction shown once on a new installation.
@@ -65,18 +67,14 @@ class _IntroScreenState extends State<IntroScreen> {
       return;
     }
     _controller.nextPage(
-      duration:
-          MediaQuery.disableAnimationsOf(context)
-              ? Duration.zero
-              : const Duration(milliseconds: 380),
-      curve: Curves.easeInOutCubic,
+      duration: AppMotion.of(context, AppMotion.long),
+      curve: AppMotion.curve,
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
 
     return PopScope(
       canPop: false,
@@ -125,12 +123,9 @@ class _IntroScreenState extends State<IntroScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               AnimatedScale(
-                                scale: _page == index ? 1 : .96,
-                                duration:
-                                    reduceMotion
-                                        ? Duration.zero
-                                        : const Duration(milliseconds: 420),
-                                curve: Curves.easeOutCubic,
+                                scale: _page == index ? 1 : AppMotion.scale,
+                                duration: AppMotion.of(context, AppMotion.long),
+                                curve: AppMotion.curve,
                                 child: _TrainingPreview(step: index),
                               ),
                               const SizedBox(height: AppSpacing.xxl),
@@ -181,11 +176,11 @@ class _IntroScreenState extends State<IntroScreen> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: List.generate(_pages.length, (index) {
                                 return AnimatedContainer(
-                                  duration:
-                                      reduceMotion
-                                          ? Duration.zero
-                                          : const Duration(milliseconds: 280),
-                                  curve: Curves.easeOutCubic,
+                                  duration: AppMotion.of(
+                                    context,
+                                    AppMotion.standard,
+                                  ),
+                                  curve: AppMotion.curve,
                                   width: index == _page ? 24 : 6,
                                   height: 6,
                                   margin: const EdgeInsets.symmetric(
@@ -208,14 +203,24 @@ class _IntroScreenState extends State<IntroScreen> {
                           width: double.infinity,
                           child: ElevatedButton(
                             onPressed: _finishing ? null : _next,
-                            child:
-                                _finishing
-                                    ? const ActionProgress('Saving your choice')
-                                    : Text(
-                                      _page == _pages.length - 1
-                                          ? 'Get started'
-                                          : 'Next',
-                                    ),
+                            // The label crosses to the next, or to progress.
+                            child: StateSwitcher(
+                              alignment: Alignment.center,
+                              child:
+                                  _finishing
+                                      ? const ActionProgress(
+                                        'Saving your choice',
+                                        key: ValueKey('finishing'),
+                                      )
+                                      : Text(
+                                        _page == _pages.length - 1
+                                            ? 'Get started'
+                                            : 'Next',
+                                        key: ValueKey(
+                                          _page == _pages.length - 1,
+                                        ),
+                                      ),
+                            ),
                           ),
                         ),
                       ],

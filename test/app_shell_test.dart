@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -729,7 +730,8 @@ void main() {
               .copyWith(isCompleted: true, timerStartedAt: null),
         );
       });
-      await tester.pump();
+      // The strip folds away rather than vanishing.
+      await tester.pumpAndSettle();
       expect(strip, findsNothing);
     });
 
@@ -863,8 +865,12 @@ void main() {
   ) async {
     await tester.pumpWidget(bottomNavHost());
     final context = tester.element(find.byType(AppBottomNav));
-    final selected = tester.widget<Text>(find.text('Home')).style!;
-    final unselected = tester.widget<Text>(find.text('History')).style!;
+    // The painted style: each destination eases its colour and weight
+    // through an inherited text style, so the label's own style is empty.
+    TextStyle painted(String label) =>
+        tester.renderObject<RenderParagraph>(find.text(label)).text.style!;
+    final selected = painted('Home');
+    final unselected = painted('History');
 
     expect(selected.color, accentColor(context));
     expect(selected.fontWeight, FontWeight.w700);
