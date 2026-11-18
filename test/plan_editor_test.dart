@@ -22,6 +22,7 @@ import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/utils/weight_units.dart';
+import 'package:gymapp/widgets/motion/entrance.dart';
 import 'package:gymapp/widgets/workout/set_entry_table.dart';
 
 import 'support/fixed_unit_settings.dart';
@@ -1392,6 +1393,98 @@ void main() {
     expect(last, lessThan(1));
     await tester.pumpAndSettle();
     expect(opacityOf(push.exercises.last.name), 1);
+  });
+
+  testWidgets(
+    'under reduced motion, what is missing and the hint just change',
+    (tester) async {
+      tester.platformDispatcher.accessibilityFeaturesTestValue =
+          const FakeAccessibilityFeatures(disableAnimations: true);
+      addTearDown(
+        tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+      );
+      await pumpEditor(tester);
+
+      // The name's error line takes its space at once.
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Name this plan to save it'), findsOneWidget);
+      await tester.enterText(find.byType(TextField).first, 'Push');
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Name this plan to save it'), findsNothing);
+
+      // The hint under the heading swaps lines, of different lengths, at once.
+      await tester.tap(find.bySemanticsLabel(RegExp('^Start from Push day')));
+      await tester.pump();
+      const folded =
+          'Open an exercise to set its targets. Drag the grip to reorder.';
+      expect(find.text(folded), findsOneWidget);
+      await tester.tap(find.text('Expand all'));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text(folded), findsNothing);
+      expect(
+        find.text(
+          'Tap a target to change it, or hold a set to delete it. Drag the '
+          'grip to reorder exercises.',
+        ),
+        findsOneWidget,
+      );
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('the hint arrives with the first exercises, not with a plan', (
+    tester,
+  ) async {
+    // The arrival's own fade: the first one under the hint's Entrance.
+    double hintOpacity(String hint) =>
+        tester
+            .widget<FadeTransition>(
+              find
+                  .descendant(
+                    of:
+                        find
+                            .ancestor(
+                              of: find.text(hint),
+                              matching: find.byType(Entrance),
+                            )
+                            .first,
+                    matching: find.byType(FadeTransition),
+                  )
+                  .first,
+            )
+            .opacity
+            .value;
+    const folded =
+        'Open an exercise to set its targets. Drag the grip to reorder.';
+
+    await pumpEditor(tester);
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Push day')));
+    await tester.pump();
+    // There from the first frame, on its way in.
+    expect(find.text(folded), findsOneWidget);
+    expect(hintOpacity(folded), lessThan(1));
+    await tester.pumpAndSettle();
+    expect(hintOpacity(folded), 1);
+
+    // A plan that opens with exercises simply has it, from its first frame.
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlanEditorScreen.edit(
+          WorkoutPlan(
+            name: 'Push',
+            exercises: [ExerciseTemplate(name: 'Bench Press', sets: 1)],
+          ),
+        ),
+      ),
+    );
+    const open = 'Tap a target to change it, or hold a set to delete it.';
+    expect(hintOpacity(open), 1);
+    await tester.pumpAndSettle();
   });
 
   testWidgets('folding right after the keypad leaves no space reserved', (

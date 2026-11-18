@@ -401,7 +401,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     // place, and Retry fades in or out.
                                     Expanded(
                                       child: StateSwitcher(
-                                        animateSize: true,
+                                        // AnimatedSize can't settle in zero time (it re-dirties its own
+                                        // layout), so under reduced motion the size simply changes.
+                                        animateSize:
+                                            !MediaQuery.disableAnimationsOf(
+                                              context,
+                                            ),
                                         child: Column(
                                           key: ValueKey(status),
                                           crossAxisAlignment:
@@ -426,7 +431,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       ),
                                     ),
                                     StateSwitcher(
-                                      animateSize: true,
+                                      animateSize:
+                                          !MediaQuery.disableAnimationsOf(
+                                            context,
+                                          ),
                                       alignment: AlignmentDirectional.centerEnd,
                                       child:
                                           status == SyncStatus.retryableError ||
@@ -814,7 +822,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // A subtitle that changes with the switch crosses to the new line, and
       // the row eases to its new height rather than shoving what's below.
       subtitle: StateSwitcher(
-        animateSize: true,
+        animateSize: !MediaQuery.disableAnimationsOf(context),
         child: Text(subtitle, key: ValueKey(subtitle)),
       ),
       value: value,
@@ -864,7 +872,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ).textTheme.titleSmall?.copyWith(color: textColor),
                       ),
                       StateSwitcher(
-                        animateSize: true,
+                        animateSize: !MediaQuery.disableAnimationsOf(context),
                         child: Text(
                           subtitle,
                           key: ValueKey(subtitleState ?? subtitle),

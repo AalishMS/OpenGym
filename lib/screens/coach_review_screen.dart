@@ -321,7 +321,9 @@ class _ReviewBarState extends State<_ReviewBar> {
                 child: ExcludeSemantics(
                   excluding: !showing,
                   child: StateSwitcher(
-                    animateSize: true,
+                    // AnimatedSize can't settle in zero time (it re-dirties its own
+                    // layout), so under reduced motion the size simply changes.
+                    animateSize: !MediaQuery.disableAnimationsOf(context),
                     child:
                         message == null
                             ? const SizedBox.shrink()

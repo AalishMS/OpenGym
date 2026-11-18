@@ -1244,68 +1244,72 @@ class _PlanNameField extends StatelessWidget {
     // The name is set as the page title rather than inside a box: a hairline
     // under it at rest, the accent under it while typing. The error line
     // fades in on its own; the size animation keeps it from shoving the page.
-    return AnimatedSize(
-      duration: quick,
-      curve: AppMotion.curve,
-      alignment: AlignmentDirectional.topStart,
-      child: Semantics(
-        label: 'Plan name',
-        child: TextField(
-          controller: controller,
-          focusNode: focusNode,
-          autofocus: autofocus,
-          textCapitalization: TextCapitalization.sentences,
-          textInputAction: TextInputAction.done,
-          style: title,
-          decoration: InputDecoration(
-            hintText: 'Plan name',
-            hintStyle: title?.copyWith(color: textSecondaryColor(context)),
-            errorText: errorText,
-            filled: false,
-            isDense: true,
-            contentPadding: const EdgeInsets.only(
-              top: AppSpacing.xs,
-              bottom: AppSpacing.md,
+    final field = Semantics(
+      label: 'Plan name',
+      child: TextField(
+        controller: controller,
+        focusNode: focusNode,
+        autofocus: autofocus,
+        textCapitalization: TextCapitalization.sentences,
+        textInputAction: TextInputAction.done,
+        style: title,
+        decoration: InputDecoration(
+          hintText: 'Plan name',
+          hintStyle: title?.copyWith(color: textSecondaryColor(context)),
+          errorText: errorText,
+          filled: false,
+          isDense: true,
+          contentPadding: const EdgeInsets.only(
+            top: AppSpacing.xs,
+            bottom: AppSpacing.md,
+          ),
+          border: UnderlineInputBorder(
+            borderSide: BorderSide(color: hairlineColor(context)),
+          ),
+          enabledBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: hairlineColor(context)),
+          ),
+          focusedBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: accentColor(context), width: 2),
+          ),
+          // The same rule in the error colour, never the theme's ring: the
+          // name stays a title, not a boxed field.
+          errorBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: errorColor(context)),
+          ),
+          focusedErrorBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: errorColor(context), width: 2),
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 0),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(
+              right: AppSpacing.md,
+              bottom: AppSpacing.sm,
             ),
-            border: UnderlineInputBorder(
-              borderSide: BorderSide(color: hairlineColor(context)),
-            ),
-            enabledBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: hairlineColor(context)),
-            ),
-            focusedBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: accentColor(context), width: 2),
-            ),
-            // The same rule in the error colour, never the theme's ring: the
-            // name stays a title, not a boxed field.
-            errorBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: errorColor(context)),
-            ),
-            focusedErrorBorder: UnderlineInputBorder(
-              borderSide: BorderSide(color: errorColor(context), width: 2),
-            ),
-            prefixIconConstraints: const BoxConstraints(minWidth: 0),
-            prefixIcon: Padding(
-              padding: const EdgeInsets.only(
-                right: AppSpacing.md,
-                bottom: AppSpacing.sm,
-              ),
-              child: ExcludeSemantics(
-                child: AnimatedContainer(
-                  duration: quick,
-                  curve: AppMotion.curve,
-                  width: 4,
-                  height: 28,
-                  decoration: BoxDecoration(
-                    color: marker,
-                    borderRadius: AppRadius.micro,
-                  ),
+            child: ExcludeSemantics(
+              child: AnimatedContainer(
+                duration: quick,
+                curve: AppMotion.curve,
+                width: 4,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: marker,
+                  borderRadius: AppRadius.micro,
                 ),
               ),
             ),
           ),
         ),
       ),
+    );
+    // AnimatedSize can't settle in zero time (it re-dirties its own layout),
+    // so under reduced motion the error line simply takes its space.
+    if (quick == Duration.zero) return field;
+    return AnimatedSize(
+      duration: quick,
+      curve: AppMotion.curve,
+      alignment: AlignmentDirectional.topStart,
+      child: field,
     );
   }
 }
@@ -2099,7 +2103,9 @@ class _EditorHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StateSwitcher(
-      animateSize: true,
+      // AnimatedSize can't settle in zero time (it re-dirties its own
+      // layout), so under reduced motion the size simply changes.
+      animateSize: !MediaQuery.disableAnimationsOf(context),
       child: Text(
         text,
         key: ValueKey(text),

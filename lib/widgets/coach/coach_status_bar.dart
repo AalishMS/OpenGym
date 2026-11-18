@@ -76,8 +76,12 @@ class CoachStatusBar extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: Breakpoints.expanded),
           // The first answer brings the model and the limit: the line
-          // crosses to them, and the bar eases to its new height.
-          child: StateSwitcher(animateSize: true, child: content),
+          // crosses to them, and the bar eases to its new height. (Not
+          // under reduced motion: AnimatedSize can't settle in zero time.)
+          child: StateSwitcher(
+            animateSize: !MediaQuery.disableAnimationsOf(context),
+            child: content,
+          ),
         ),
       ),
     );
