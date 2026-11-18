@@ -30,6 +30,7 @@ import '../widgets/history/workout_details_widgets.dart';
 import '../widgets/motion/app_modals.dart';
 import '../widgets/motion/collapsible.dart';
 import '../widgets/motion/state_switcher.dart';
+import '../widgets/own_scroll_controller.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../widgets/workout/workout_dialogs.dart';
 import '../widgets/raised_card.dart';
@@ -46,7 +47,12 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
+
+  /// The journal list on show. The list owns its controller
+  /// ([OwnScrollController]): results that come back while the last list is
+  /// still crossing out arrive as a second list, and one controller can't
+  /// hold both.
+  ScrollController? _listScroll;
   String _query = '';
   String? _splitId;
   bool _hasSeenSplit = false;
@@ -55,7 +61,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   void didUpdateWidget(covariant HistoryScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.scrollToTopRequest != oldWidget.scrollToTopRequest) {
-      scrollToTop(context, _scrollController);
+      scrollToTop(context, _listScroll);
     }
   }
 
@@ -67,7 +73,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
       _query = '';
       _searchController.clear();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) _scrollController.jumpTo(0);
+        final scroll = _listScroll;
+        if (scroll != null && scroll.hasClients) scroll.jumpTo(0);
       });
     }
     _splitId = splitId;
@@ -77,7 +84,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void dispose() {
     _searchController.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -179,52 +185,66 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             isSearching: searching,
                             onClearSearch: _clearSearch,
                           )
-                          : ListView.builder(
-                            key: const PageStorageKey('history-journal-list'),
-                            controller: _scrollController,
-                            padding: const EdgeInsets.fromLTRB(
-                              AppSpacing.lg,
-                              AppSpacing.md,
-                              AppSpacing.lg,
-                              AppSpacing.xxl,
-                            ),
-                            itemCount: entries.length,
-                            itemBuilder: (context, index) {
-                              final entry = entries[index];
-                              if (entry is HistoryMonthGroup) {
-                                return Padding(
-                                  padding: EdgeInsets.only(
-                                    top: index == 0 ? 0 : AppSpacing.xxl,
-                                  ),
-                                  child: HistoryMonthHeader(
-                                    group: entry,
-                                    weightUnit: weightUnit,
-                                  ),
-                                );
+                          : OwnScrollController(
+                            key: const ValueKey('history-journal'),
+                            onAttach: (scroll) => _listScroll = scroll,
+                            onDetach: (scroll) {
+                              if (identical(_listScroll, scroll)) {
+                                _listScroll = null;
                               }
-                              final row = entry as _JournalEntry;
-                              final session = row.summary.session;
-                              return HistoryWorkoutRow(
-                                key: ValueKey(
-                                  'history-row-${historySessionIdentity(session)}',
-                                ),
-                                summary: row.summary,
-                                weightUnit: weightUnit,
-                                showDate: row.showDate,
-                                rule: row.rule,
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder:
-                                          (_) => WorkoutDetailsScreen(
-                                            sessionIdentity:
-                                                historySessionIdentity(session),
-                                          ),
-                                    ),
-                                  );
-                                },
-                              );
                             },
+                            builder:
+                                (context, scroll) => ListView.builder(
+                                  key: const PageStorageKey(
+                                    'history-journal-list',
+                                  ),
+                                  controller: scroll,
+                                  padding: const EdgeInsets.fromLTRB(
+                                    AppSpacing.lg,
+                                    AppSpacing.md,
+                                    AppSpacing.lg,
+                                    AppSpacing.xxl,
+                                  ),
+                                  itemCount: entries.length,
+                                  itemBuilder: (context, index) {
+                                    final entry = entries[index];
+                                    if (entry is HistoryMonthGroup) {
+                                      return Padding(
+                                        padding: EdgeInsets.only(
+                                          top: index == 0 ? 0 : AppSpacing.xxl,
+                                        ),
+                                        child: HistoryMonthHeader(
+                                          group: entry,
+                                          weightUnit: weightUnit,
+                                        ),
+                                      );
+                                    }
+                                    final row = entry as _JournalEntry;
+                                    final session = row.summary.session;
+                                    return HistoryWorkoutRow(
+                                      key: ValueKey(
+                                        'history-row-${historySessionIdentity(session)}',
+                                      ),
+                                      summary: row.summary,
+                                      weightUnit: weightUnit,
+                                      showDate: row.showDate,
+                                      rule: row.rule,
+                                      onTap: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                            builder:
+                                                (_) => WorkoutDetailsScreen(
+                                                  sessionIdentity:
+                                                      historySessionIdentity(
+                                                        session,
+                                                      ),
+                                                ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
                           ),
                 ),
               ),

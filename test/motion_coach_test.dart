@@ -435,6 +435,36 @@ void main() {
       expect(find.text(_welcome), findsNothing);
     });
 
+    testWidgets('a conversation started again while the last leaves scrolls '
+        'on its own', (tester) async {
+      final fixture = await openCoach(tester);
+      await turn(tester, fixture, 'First question', 'First answer.');
+      await tester.enterText(
+        find.byKey(const ValueKey('coach-input')),
+        'Start again',
+      );
+      await tester.pump(AppMotion.quick);
+      // The conversation clears, and a question goes before the old chat
+      // has finished leaving.
+      fixture.coach.resetForAccount();
+      await tester.pump();
+      final held = fixture.client.hold();
+      await tester.tap(find.byKey(const ValueKey('coach-send')));
+      await tester.pump();
+      final lists = tester.widgetList<ListView>(find.byType(ListView)).toList();
+      expect(lists, hasLength(2));
+      // Each chat owns its controller: one holding both positions throws
+      // wherever its single position is read (the desktop scrollbar).
+      expect(lists.map((list) => list.controller!.positions.length), [1, 1]);
+      held.complete(
+        CoachAnswer(output: jsonEncode({'reply': 'Again.', 'proposal': null})),
+      );
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+      expect(find.byType(ListView), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('the connection notice folds open, and closed again', (
       tester,
     ) async {

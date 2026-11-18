@@ -17,6 +17,7 @@ import '../widgets/coach/coach_status_bar.dart';
 import '../widgets/motion/collapsible.dart';
 import '../widgets/motion/entrance.dart';
 import '../widgets/motion/state_switcher.dart';
+import '../widgets/own_scroll_controller.dart';
 import '../widgets/update_dialog.dart';
 import 'coach_review_screen.dart';
 
@@ -47,7 +48,12 @@ class CoachScreen extends StatefulWidget {
 
 class _CoachScreenState extends State<CoachScreen> {
   final TextEditingController _input = TextEditingController();
-  final ScrollController _scroll = ScrollController();
+
+  /// The conversation list on show. The list owns its controller
+  /// ([OwnScrollController]): a conversation that starts again while the
+  /// last is still crossing out arrives as a second list, and one controller
+  /// can't hold both.
+  ScrollController? _scroll;
   int _shownEntries = 0;
 
   /// How many chat rows were already on screen as of the last frame: the
@@ -70,7 +76,6 @@ class _CoachScreenState extends State<CoachScreen> {
   @override
   void dispose() {
     _input.dispose();
-    _scroll.dispose();
     super.dispose();
   }
 
@@ -154,15 +159,17 @@ class _CoachScreenState extends State<CoachScreen> {
     if (count == _shownEntries) return;
     _shownEntries = count;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // A single list: the chat crossing from or to the welcome holds none
-      // or, for a moment, the leaving one too.
-      if (!mounted || _scroll.positions.length != 1) return;
-      final end = _scroll.position.maxScrollExtent;
+      // Only the conversation on show: none while the welcome shows, and
+      // never one on its way out.
+      final scroll = _scroll;
+      if (!mounted || scroll == null || !scroll.hasClients) return;
+      if (context.read<CoachProvider>().isEmpty) return;
+      final end = scroll.position.maxScrollExtent;
       final duration = AppMotion.of(context, AppMotion.enter);
       if (duration == Duration.zero) {
-        _scroll.jumpTo(end);
+        scroll.jumpTo(end);
       } else {
-        _scroll.animateTo(end, duration: duration, curve: AppMotion.curve);
+        scroll.animateTo(end, duration: duration, curve: AppMotion.curve);
       }
     });
   }
@@ -290,27 +297,36 @@ class _CoachScreenState extends State<CoachScreen> {
                                     planCount: planCount,
                                     onSuggestion: busy ? null : _send,
                                   )
-                                  : ListView.builder(
+                                  : OwnScrollController(
                                     key: const ValueKey('coach-chat'),
-                                    controller: _scroll,
-                                    padding: const EdgeInsets.fromLTRB(
-                                      AppSpacing.lg,
-                                      AppSpacing.xl,
-                                      AppSpacing.lg,
-                                      AppSpacing.lg,
-                                    ),
-                                    itemCount: rows,
-                                    itemBuilder:
-                                        (context, index) => Padding(
-                                          padding: EdgeInsets.only(
-                                            top: _gapAbove(coach, index),
+                                    onAttach: (scroll) => _scroll = scroll,
+                                    onDetach: (scroll) {
+                                      if (identical(_scroll, scroll)) {
+                                        _scroll = null;
+                                      }
+                                    },
+                                    builder:
+                                        (context, scroll) => ListView.builder(
+                                          controller: scroll,
+                                          padding: const EdgeInsets.fromLTRB(
+                                            AppSpacing.lg,
+                                            AppSpacing.xl,
+                                            AppSpacing.lg,
+                                            AppSpacing.lg,
                                           ),
-                                          child: _buildRow(
-                                            coach,
-                                            index,
-                                            settledRows: settledRows,
-                                            busy: busy,
-                                          ),
+                                          itemCount: rows,
+                                          itemBuilder:
+                                              (context, index) => Padding(
+                                                padding: EdgeInsets.only(
+                                                  top: _gapAbove(coach, index),
+                                                ),
+                                                child: _buildRow(
+                                                  coach,
+                                                  index,
+                                                  settledRows: settledRows,
+                                                  busy: busy,
+                                                ),
+                                              ),
                                         ),
                                   ),
                         ),
