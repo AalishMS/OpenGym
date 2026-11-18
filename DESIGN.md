@@ -654,7 +654,10 @@ signature:
   and set count sit right-aligned in `figures` so a month compares down the
   page (they join the context line at large text), and the exercise names run
   full width beneath. A session with no performed sets says *No sets logged*
-  instead of zeros.
+  instead of zeros. The ledger appears with the tab, without an arrival.
+  Searching folds a match count open under the field, and the results and
+  *No matching workouts* cross in place; typing more only changes what is
+  shown, and replays nothing.
 - Workout details opens with the long date, the workout name, its block and
   week, and how many exercises set a record (accent ink). A bounded readout
   puts Volume load and Duration large, over Exercises / Sets / Reps. Each
@@ -836,7 +839,18 @@ signature:
   Sessions belong to blocks through their training week. Records keeps the
   chronological, expandable achievements and reveals older entries on demand.
   Headline figures roll to a new value (`RollingFigure`): up when it grew,
-  down when it fell, and plain under reduced motion. Signed changes use a true
+  down when it fell, and plain under reduced motion. A view chosen with its
+  tab or a swipe trades places with the last along the tabs' order, a fade
+  and a 24px shift in the direction of travel; entering Stats from another
+  tab or the Home shortcut shows the view without one. Charts appear with
+  their screen and never grow in. The weekly bars ease to new heights when
+  the exercise filter changes, and a week new to the plot grows from the
+  baseline; the Strength and Blocks lines cross to a new lift, period, measure
+  or basis rather than morphing between two different lines, while their
+  readouts and figures land at once. Picking a block or a point moves the
+  selection in place, and a selected week's bar eases its emphasis. Expanding
+  gains, lifts and record tags folds open, and records revealed on demand
+  arrive once. Signed changes use a true
   minus sign (`formatSignedChange`), and a change that rounds to zero has none.
   The four view controls remain visible while content scrolls; text can grow
   and scroll naturally on small screens. Returning to Stats resets its vertical
