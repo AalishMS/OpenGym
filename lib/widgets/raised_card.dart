@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
+import 'motion/press_scale.dart';
 
 /// A card that lifts off the page: the raised surface, a soft shadow in light
 /// mode and a hairline edge in dark mode, where a shadow has nothing to fall on.
@@ -9,6 +10,10 @@ import '../theme/radii.dart';
 /// Reserve it for the few things that should stand forward — the workout
 /// launcher, the next plan, a preset to pick. Lists are rows on the page, and
 /// a card is never nested in another ground.
+///
+/// A raised card with [onTap] or [onLongPress] gives slightly under the
+/// finger ([PressScale]) as well as taking the ink; a plain row ([raised]
+/// false) takes only the ink, as list rows do.
 class RaisedCard extends StatelessWidget {
   final Widget child;
   final VoidCallback? onTap;
@@ -31,7 +36,7 @@ class RaisedCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    return DecoratedBox(
+    Widget card(Widget content) => DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: borderRadius,
         boxShadow: raised ? raisedShadow(context) : null,
@@ -46,16 +51,25 @@ class RaisedCard extends StatelessWidget {
                   : BorderSide.none,
         ),
         clipBehavior: Clip.antiAlias,
-        child:
-            onTap == null && onLongPress == null
-                ? child
-                : InkWell(
-                  onTap: onTap,
-                  onLongPress: onLongPress,
-                  borderRadius: borderRadius,
-                  child: child,
-                ),
+        child: content,
       ),
+    );
+
+    if (onTap == null && onLongPress == null) return card(child);
+    // Off rather than absent for a plain row, so a row rising into a card
+    // (and settling back) keeps the same tree.
+    return PressScale(
+      enabled: raised,
+      builder:
+          (context, onHighlightChanged) => card(
+            InkWell(
+              onTap: onTap,
+              onLongPress: onLongPress,
+              onHighlightChanged: onHighlightChanged,
+              borderRadius: borderRadius,
+              child: child,
+            ),
+          ),
     );
   }
 }
