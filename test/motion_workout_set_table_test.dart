@@ -119,7 +119,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester.getSemantics(find.bySemanticsLabel('Set 2 Kg')),
-        containsSemantics(isSelected: true),
+        isSemantics(isSelected: true),
       );
       expect(find.textContaining('Set 2  ·', findRichText: true), findsOneWidget);
       semantics.dispose();
