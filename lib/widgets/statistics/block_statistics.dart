@@ -6,10 +6,12 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../models/statistics.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
+import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
 import '../motion/app_modals.dart';
+import '../motion/collapsible.dart';
 import 'block_trend.dart';
 import 'statistics_controls.dart';
 import 'statistics_widgets.dart';
@@ -361,8 +363,11 @@ class _WeekBarsState extends State<_WeekBars> {
                     alignment: Alignment.bottomCenter,
                     child:
                         week.reached
-                            ? Container(
+                            // The selection's emphasis eases across.
+                            ? AnimatedContainer(
                               key: ValueKey('block-week-bar-${week.number}'),
+                              duration: AppMotion.of(context, AppMotion.quick),
+                              curve: AppMotion.curve,
                               width: barWidth,
                               height: height,
                               decoration: BoxDecoration(
@@ -468,80 +473,93 @@ class _GainsState extends State<_Gains> {
         style: Theme.of(context).textTheme.bodySmall,
       );
     }
-    final gains = _showAll ? widget.gains : widget.gains.take(3);
+    final quick = AppMotion.of(context, AppMotion.quick);
+    Widget row(LiftGain gain) {
+      final id = gain.exerciseId ?? gain.exerciseName;
+      final expanded = _expanded.contains(id);
+      return Semantics(
+        button: true,
+        expanded: expanded,
+        label:
+            '${gain.exerciseName}, up ${gain.percent.round()}%, '
+            'from ${formatAnalyticsWeight(gain.start, widget.unit)} '
+            'to ${formatAnalyticsWeight(gain.end, widget.unit)}',
+        excludeSemantics: true,
+        child: InkWell(
+          key: ValueKey('block-gain-$id'),
+          borderRadius: AppRadius.control,
+          onTap:
+              () => setState(() {
+                if (!_expanded.add(id)) _expanded.remove(id);
+              }),
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 56),
+            padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        gain.exerciseName,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.lg),
+                    Text(
+                      '+${gain.percent.round()}%',
+                      style: AppTypography.figures(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: successColor(context),
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    AnimatedRotation(
+                      turns: expanded ? 0.5 : 0,
+                      duration: quick,
+                      curve: AppMotion.curve,
+                      child: Icon(
+                        LucideIcons.chevronDown,
+                        size: 14,
+                        color: textSecondaryColor(context),
+                      ),
+                    ),
+                  ],
+                ),
+                // The endpoints fold open under the lift.
+                Collapsible(
+                  open: expanded,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.sm),
+                    child: Text(
+                      '${formatAnalyticsWeight(gain.start, widget.unit)} to ${formatAnalyticsWeight(gain.end, widget.unit)}',
+                      style: AppTypography.figures(
+                        fontSize: 13,
+                        color: textSecondaryColor(context),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final gain in gains)
-          Semantics(
-            button: true,
-            expanded: _expanded.contains(gain.exerciseId ?? gain.exerciseName),
-            label:
-                '${gain.exerciseName}, up ${gain.percent.round()}%, '
-                'from ${formatAnalyticsWeight(gain.start, widget.unit)} '
-                'to ${formatAnalyticsWeight(gain.end, widget.unit)}',
-            excludeSemantics: true,
-            child: InkWell(
-              key: ValueKey(
-                'block-gain-${gain.exerciseId ?? gain.exerciseName}',
-              ),
-              borderRadius: AppRadius.control,
-              onTap:
-                  () => setState(() {
-                    if (!_expanded.add(gain.exerciseId ?? gain.exerciseName)) {
-                      _expanded.remove(gain.exerciseId ?? gain.exerciseName);
-                    }
-                  }),
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 56),
-                padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            gain.exerciseName,
-                            style: Theme.of(context).textTheme.bodyLarge,
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.lg),
-                        Text(
-                          '+${gain.percent.round()}%',
-                          style: AppTypography.figures(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                            color: successColor(context),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Icon(
-                          _expanded.contains(
-                                gain.exerciseId ?? gain.exerciseName,
-                              )
-                              ? LucideIcons.chevronUp
-                              : LucideIcons.chevronDown,
-                          size: 14,
-                          color: textSecondaryColor(context),
-                        ),
-                      ],
-                    ),
-                    if (_expanded.contains(
-                      gain.exerciseId ?? gain.exerciseName,
-                    )) ...[
-                      const SizedBox(height: AppSpacing.sm),
-                      Text(
-                        '${formatAnalyticsWeight(gain.start, widget.unit)} to ${formatAnalyticsWeight(gain.end, widget.unit)}',
-                        style: AppTypography.figures(
-                          fontSize: 13,
-                          color: textSecondaryColor(context),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
+        for (final gain in widget.gains.take(3)) row(gain),
+        // The rest of the lifts fold open below the first three.
+        if (widget.gains.length > 3)
+          Collapsible(
+            open: _showAll,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [for (final gain in widget.gains.skip(3)) row(gain)],
             ),
           ),
         if (widget.gains.length > 3)

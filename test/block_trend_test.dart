@@ -173,7 +173,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('176.25 lbs to 198.5 lbs'), findsOneWidget);
       await tester.tap(gain);
-      await tester.pump();
+      // The endpoints fold away before they leave the tree.
+      await tester.pumpAndSettle();
       expect(find.text('176.25 lbs to 198.5 lbs'), findsNothing);
       expect(tester.takeException(), isNull);
     },

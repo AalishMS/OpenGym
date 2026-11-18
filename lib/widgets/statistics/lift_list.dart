@@ -4,9 +4,11 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../models/statistics.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
+import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
+import '../motion/collapsible.dart';
 
 /// Every lift in the period on one line each: its latest value, the shape of
 /// its trend and how far it moved. Tapping a lift opens it in the chart below.
@@ -41,38 +43,58 @@ class _LiftListState extends State<LiftList> {
     final selectedIndex = lifts.indexWhere(
       (lift) => (lift.exerciseId ?? lift.exerciseName) == widget.selected,
     );
-    // A selection further down the list keeps itself visible when collapsed.
-    final visible =
-        _expanded || lifts.length <= LiftList.collapsedCount
-            ? lifts
-            : [
-              ...lifts.take(LiftList.collapsedCount),
-              if (selectedIndex >= LiftList.collapsedCount)
-                lifts[selectedIndex],
-            ];
+    Widget row(LiftSummary lift) => _LiftRow(
+      key: ValueKey('lift-${lift.exerciseId ?? lift.exerciseName}'),
+      lift: lift,
+      selected: (lift.exerciseId ?? lift.exerciseName) == widget.selected,
+      metric: widget.metric,
+      unit: widget.weightUnit,
+      onTap: () => widget.onSelect(lift.exerciseId ?? lift.exerciseName),
+    );
+    if (lifts.length <= LiftList.collapsedCount) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [for (final lift in lifts) row(lift)],
+      );
+    }
+    // The lifts past the first few fold open in place. A selection further
+    // down stays visible when folded, so the rows on either side of it fold
+    // separately and it keeps its place in the order.
+    final hidden = lifts.skip(LiftList.collapsedCount).toList();
+    final pinned =
+        selectedIndex < LiftList.collapsedCount
+            ? -1
+            : selectedIndex - LiftList.collapsedCount;
+    Widget fold(Iterable<LiftSummary> rows) => Collapsible(
+      open: _expanded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [for (final lift in rows) row(lift)],
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final lift in visible)
-          _LiftRow(
-            key: ValueKey('lift-${lift.exerciseId ?? lift.exerciseName}'),
-            lift: lift,
-            selected: (lift.exerciseId ?? lift.exerciseName) == widget.selected,
-            metric: widget.metric,
-            unit: widget.weightUnit,
-            onTap: () => widget.onSelect(lift.exerciseId ?? lift.exerciseName),
+        for (final lift in lifts.take(LiftList.collapsedCount)) row(lift),
+        if (pinned < 0)
+          fold(hidden)
+        else ...[
+          fold(hidden.take(pinned)),
+          row(hidden[pinned]),
+          fold(hidden.skip(pinned + 1)),
+        ],
+        TextButton.icon(
+          onPressed: () => setState(() => _expanded = !_expanded),
+          icon: AnimatedRotation(
+            turns: _expanded ? 0.5 : 0,
+            duration: AppMotion.of(context, AppMotion.quick),
+            curve: AppMotion.curve,
+            child: const Icon(LucideIcons.chevronDown, size: 18),
           ),
-        if (lifts.length > LiftList.collapsedCount)
-          TextButton.icon(
-            onPressed: () => setState(() => _expanded = !_expanded),
-            icon: Icon(
-              _expanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
-              size: 18,
-            ),
-            label: Text(
-              _expanded ? 'Show fewer' : 'Show all ${lifts.length} lifts',
-            ),
+          label: Text(
+            _expanded ? 'Show fewer' : 'Show all ${lifts.length} lifts',
           ),
+        ),
       ],
     );
   }
