@@ -2665,8 +2665,10 @@ class _PlanSwitchRoute extends MaterialPageRoute<void> {
   /// from the right; -1 when it comes before.
   final double direction;
 
-  /// The workout being switched away from, which holds still.
-  final Route<dynamic>? replacing;
+  /// The workout being switched away from, until the switch has landed.
+  /// Only the push needs it; held any longer, each switch would keep the
+  /// disposed workout before it alive, and that one the one before it.
+  Route<dynamic>? _replacing;
   final bool reduceMotion;
 
   /// True until the switch has landed.
@@ -2675,9 +2677,9 @@ class _PlanSwitchRoute extends MaterialPageRoute<void> {
   _PlanSwitchRoute({
     required super.builder,
     required this.direction,
-    required this.replacing,
+    required Route<dynamic>? replacing,
     required this.reduceMotion,
-  });
+  }) : _replacing = replacing;
 
   @override
   Duration get transitionDuration =>
@@ -2692,12 +2694,15 @@ class _PlanSwitchRoute extends MaterialPageRoute<void> {
   // page under this one (Home) still takes part as usual.
   @override
   bool canTransitionFrom(TransitionRoute<dynamic> previousRoute) =>
-      previousRoute != replacing && super.canTransitionFrom(previousRoute);
+      previousRoute != _replacing && super.canTransitionFrom(previousRoute);
 
   @override
   TickerFuture didPush() {
     final pushed = super.didPush();
-    pushed.whenCompleteOrCancel(() => _switching = false);
+    pushed.whenCompleteOrCancel(() {
+      _switching = false;
+      _replacing = null;
+    });
     return pushed;
   }
 
@@ -2762,4 +2767,3 @@ class _PlanSwitchEntry extends StatelessWidget {
     );
   }
 }
-

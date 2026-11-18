@@ -249,6 +249,30 @@ void main() {
       expect(tester.getTopLeft(title('Legs')).dx, closeTo(rest, 0.5));
     });
 
+    testWidgets('once it has landed, it lets go of the workout it replaced', (
+      tester,
+    ) async {
+      await open(tester, fromHome: true);
+      final replaced =
+          ModalRoute.of(tester.element(title('Pull')))!
+              as TransitionRoute<dynamic>;
+      await switchTo(tester, 'Legs');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      final route =
+          ModalRoute.of(tester.element(title('Legs')))!
+              as TransitionRoute<dynamic>;
+      // While it arrives, the workout it replaces is singled out to hold
+      // still under it.
+      expect(route.canTransitionFrom(replaced), isFalse);
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+      expect(replaced.isActive, isFalse);
+      // Landed, it no longer refers to the disposed route; held, every
+      // switch would keep the whole chain of workouts before it alive.
+      expect(route.canTransitionFrom(replaced), isTrue);
+    });
+
     testWidgets('once it has landed, Back plays the page transition', (
       tester,
     ) async {
