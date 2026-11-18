@@ -1,12 +1,31 @@
+import 'exercise_library.dart';
 import 'workout_presets.dart';
 
 /// One common workout a new plan can start from instead of a blank list.
 class PlanStarter {
-  /// The chip label, and the plan's name when the name is still blank.
+  /// The row's title, and the plan's name when the name is still blank.
   final String name;
   final List<WorkoutPresetExercise> exercises;
 
   const PlanStarter({required this.name, required this.exercises});
+
+  /// The muscle groups this workout trains most, busiest first and at most
+  /// three, so a starter can say what it is for before it is tapped: *Chest,
+  /// shoulders, arms* for a push day.
+  List<String> get focus {
+    final counts = <String, int>{};
+    for (final exercise in exercises) {
+      final group = ExerciseLibrary.categoryOf(exercise.name);
+      if (group != null) counts[group] = (counts[group] ?? 0) + 1;
+    }
+    // Ties keep the workout's own order: the map remembers first appearance.
+    final order = counts.keys.toList();
+    final groups = [...order]..sort((a, b) {
+      final byCount = counts[b]!.compareTo(counts[a]!);
+      return byCount != 0 ? byCount : order.indexOf(a) - order.indexOf(b);
+    });
+    return groups.take(3).toList();
+  }
 }
 
 /// Which preset day each starter borrows. Starters are single workouts taken

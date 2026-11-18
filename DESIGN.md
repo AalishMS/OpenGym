@@ -706,24 +706,43 @@ signature:
   in the error role. Holding a set opens its delete action, as in the workout.
   The shared keypad validates RPE from 1 to 10 and supports clearing it. Wide
   editor tables scroll at large text sizes. The plan colour palette opens from
-  Change color to leave more room for training targets; Add exercise stays
-  pinned at the bottom as a tonal button. The plan name is the page's title: a
-  large field led by the plan's colour bar and underlined by a hairline, the
-  accent while typing. The starting week (or, when editing, the training block)
-  and Change color are pills beneath it, and Save in the header is a pill.
+  a compact colour pill (the swatch and a chevron, labelled *Change color* for
+  screen readers and as its tooltip) to leave more room for training targets;
+  Add exercise stays pinned at the bottom as a tonal button. The plan name is
+  the page's title: a large field led by the plan's colour bar and underlined
+  by a hairline, the accent while typing. The starting week (or, when editing,
+  the training block) and the colour pill share one row beneath it at phone
+  width, and Save in the header is a pill. The line under the Exercises heading
+  follows the cards: how to change targets while any card is open, and how to
+  open one while all are folded.
+- The editor moves with the app's motion tokens (`lib/theme/motion.dart`):
+  exercise cards fold and unfold by growing and fading from the top while the
+  folded summary gives way, chevrons turn, the palette and the missing-exercise
+  message open the same way, the exercise count rolls, and the colour bar and
+  swatch ease to a new colour. Exercises that arrive (from a starter or the
+  picker) fade and lift into place, a starter's in quick sequence; exercises
+  loaded with a plan don't. Under reduced motion every change is immediate.
 - Creating a plan starts at its name: the field takes focus on a new plan (not
   on an edit), and the plan's colour defaults to the first palette colour no
   other plan in the split wears, repeating in order once all ten are taken.
   Until the first exercise is added, the list's place holds one line of
-  guidance and *Start from* pills (*Push day*, *Pull day*, *Leg day*, *Upper
-  body*, *Lower body*, *Full body*; `lib/data/plan_starters.dart`). Each copies
-  one day of a bundled hypertrophy preset (exercises, set and rep targets, and
-  the preset's note) into the draft, folded so the whole workout shows at once,
-  and names the plan only when the name is still blank. A snackbar offers
-  *Undo* for six seconds; opening the exercise picker withdraws it. The empty
-  state has no ground of its own, because only the pills are tappable.
-- Save is a quiet pill on the control fill until the plan has a name and an
-  exercise, and the accent once it has both. It never disables (except while
+  guidance and a *Start from* card of rows (*Push day*, *Pull day*, *Leg day*,
+  *Upper body*, *Lower body*, *Full body*; `lib/data/plan_starters.dart`). Each
+  row names what it holds and trains (*6 exercises · Chest, shoulders, arms*,
+  the busiest three muscle groups) beside a tonal plus. Each copies one day of
+  a bundled hypertrophy preset (exercises, set and rep targets, and the
+  preset's note) into the draft, folded so the whole workout shows at once,
+  names the plan only when the name is still blank, and puts the keyboard
+  away. A snackbar offers *Undo* for six seconds; it is withdrawn by any edit
+  to the exercises (Undo would discard the edit too), by opening the exercise
+  picker, by Save, and by leaving the editor, and it ignores a tap while it
+  fades. It clears any snackbars queued before it, so it is always the one a
+  withdrawal hides. The guidance has no ground of its own;
+  only the tappable starters are raised.
+- Save is a quiet pill until the plan has a name and an exercise, and the
+  accent once it has both. Quiet, it is the app's secondary button (the
+  control fill with primary ink, so it still reads as pressable), and it stays
+  flat in every state. It never disables (except while
   saving): a tap on an incomplete plan names each gap where it is, *Name this
   plan to save it* under the name (which takes focus) and *Add at least one
   exercise to save* in the empty list, and each message clears as soon as its

@@ -22,6 +22,7 @@ import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/utils/weight_units.dart';
+import 'package:gymapp/widgets/workout/set_entry_table.dart';
 
 import 'support/fixed_unit_settings.dart';
 import 'support/hive_test_harness.dart';
@@ -202,7 +203,7 @@ void main() {
     tester,
   ) async {
     await pumpEditor(tester);
-    await tester.tap(find.text('Change color'));
+    await tester.tap(find.byTooltip('Change color'));
     await tester.pumpAndSettle();
     final swatch = find.bySemanticsLabel('Plan color 1');
     expect(swatch, findsOneWidget);
@@ -431,7 +432,7 @@ void main() {
     );
     expect(name.focusNode.hasFocus, isTrue);
 
-    await tester.tap(find.text('Change color'));
+    await tester.tap(find.byTooltip('Change color'));
     await tester.pumpAndSettle();
     expect(
       tester.getSemantics(find.bySemanticsLabel('Plan color 3')),
@@ -1176,4 +1177,330 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Discard changes?'), findsOneWidget);
   });
+
+  testWidgets('a starter\'s Undo leaves with the editor', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(400, 880);
+    addTearDown(tester.view.reset);
+    // A host screen with its own Scaffold, so a snackbar left behind by the
+    // editor would show on it.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder:
+                (context) => Center(
+                  child: TextButton(
+                    onPressed:
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => const PlanEditorScreen.create(),
+                          ),
+                        ),
+                    child: const Text('Open editor'),
+                  ),
+                ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open editor'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Push day')));
+    await tester.pumpAndSettle();
+    expect(find.text('Undo'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Discard'));
+    await tester.pumpAndSettle();
+    expect(find.text('Open editor'), findsOneWidget);
+    expect(find.text('Undo'), findsNothing);
+  });
+
+  testWidgets('editing a starter\'s exercises withdraws its Undo', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Push day')));
+    await tester.pumpAndSettle();
+    expect(find.text('Undo'), findsOneWidget);
+
+    // Opening a card is not an edit; adding a set to it is.
+    await tester.tap(find.text('Bench Press'));
+    await tester.pumpAndSettle();
+    expect(find.text('Undo'), findsOneWidget);
+    await tester.tap(find.bySemanticsLabel('Add set').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Undo'), findsNothing);
+    expect(find.text('Bench Press'), findsOneWidget);
+  });
+
+  testWidgets('a starter\'s Undo jumps any queued snackbars', (tester) async {
+    await pumpEditor(tester);
+    final messenger = ScaffoldMessenger.of(
+      tester.element(find.byType(PlanEditorScreen)),
+    );
+    messenger.showSnackBar(const SnackBar(content: Text('First')));
+    messenger.showSnackBar(const SnackBar(content: Text('Second')));
+    await tester.pumpAndSettle();
+    expect(find.text('First'), findsOneWidget);
+
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Push day')));
+    await tester.pumpAndSettle();
+    expect(find.text('Undo'), findsOneWidget);
+
+    // Withdrawn by an edit, it stays gone: nothing it was queued behind
+    // hands the stage back to it.
+    await tester.tap(find.text('Bench Press'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Add set').first);
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 8; i++) {
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Undo'), findsNothing);
+      expect(find.text('Second'), findsNothing);
+    }
+  });
+
+  testWidgets('a withdrawn Undo ignores a tap while it fades', (tester) async {
+    await pumpEditor(tester);
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Push day')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bench Press'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('Add set').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('Undo'), findsOneWidget);
+    await tester.tap(find.text('Undo'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(find.text('Bench Press'), findsOneWidget);
+    expect(find.bySemanticsLabel('Set 4 Kg'), findsOneWidget);
+  });
+
+  testWidgets('a starter puts the keyboard away', (tester) async {
+    await pumpEditor(tester);
+    EditableText name() => tester.widget<EditableText>(
+      find.descendant(
+        of: find.byType(TextField).first,
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(name().focusNode.hasFocus, isTrue);
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Leg day')));
+    await tester.pumpAndSettle();
+    expect(name().focusNode.hasFocus, isFalse);
+  });
+
+  testWidgets('starters say what they hold and train', (tester) async {
+    final push = planStarters.firstWhere((s) => s.name == 'Push day');
+    expect(push.focus, ['Chest', 'Shoulders', 'Arms']);
+    for (final starter in planStarters) {
+      expect(starter.focus, isNotEmpty, reason: starter.name);
+      expect(starter.focus.length, lessThanOrEqualTo(3));
+    }
+
+    await pumpEditor(tester);
+    expect(
+      find.text(
+        '${push.exercises.length} exercises  ·  Chest, shoulders, arms',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(
+        'Start from Push day, ${push.exercises.length} exercises, '
+        'chest, shoulders, arms',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the hint under Exercises follows whether cards are open', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Push day')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Open an exercise to set its targets. Drag the grip to reorder.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Bench Press'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Tap a target to change it'), findsOneWidget);
+  });
+
+  testWidgets('cards fold with motion, and at once under reduced motion', (
+    tester,
+  ) async {
+    final plan = WorkoutPlan(
+      name: 'Push',
+      exercises: [
+        ExerciseTemplate(
+          name: 'Bench Press',
+          sets: 1,
+          setTargets: [SetTemplate(reps: 5, weight: 80)],
+        ),
+      ],
+    );
+    await pumpEditorWithPlan(tester, plan);
+    await tester.tap(find.text('Bench Press'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+    // Mid-fold the table is still there, closing.
+    expect(find.bySemanticsLabel('Set 1 Kg'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('Set 1 Kg'), findsNothing);
+
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
+    await tester.pump();
+    await tester.tap(find.text('Bench Press'));
+    await tester.pump();
+    expect(find.bySemanticsLabel('Set 1 Kg'), findsOneWidget);
+    await tester.tap(find.text('Bench Press'));
+    await tester.pump();
+    expect(find.bySemanticsLabel('Set 1 Kg'), findsNothing);
+  });
+
+  testWidgets('a starter\'s cards arrive in sequence', (tester) async {
+    await pumpEditor(tester);
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Push day')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 120));
+    final push = planStarters.firstWhere((s) => s.name == 'Push day');
+    double opacityOf(String name) =>
+        tester
+            .widget<FadeTransition>(
+              find
+                  .ancestor(
+                    of: find.text(name),
+                    matching: find.byType(FadeTransition),
+                  )
+                  .first,
+            )
+            .opacity
+            .value;
+    final first = opacityOf(push.exercises.first.name);
+    final last = opacityOf(push.exercises.last.name);
+    expect(first, greaterThan(last));
+    expect(last, lessThan(1));
+    await tester.pumpAndSettle();
+    expect(opacityOf(push.exercises.last.name), 1);
+  });
+
+  testWidgets('folding right after the keypad leaves no space reserved', (
+    tester,
+  ) async {
+    await pumpEditorWithPlan(
+      tester,
+      WorkoutPlan(
+        name: 'Push',
+        exercises: [
+          ExerciseTemplate(
+            name: 'Bench Press',
+            sets: 1,
+            setTargets: [SetTemplate(reps: 5, weight: 80)],
+          ),
+          ExerciseTemplate(
+            name: 'Barbell Row',
+            sets: 1,
+            setTargets: [SetTemplate(reps: 8, weight: 60)],
+          ),
+        ],
+      ),
+    );
+    await tester.tap(find.bySemanticsLabel('Set 1 Kg').first);
+    await tester.pumpAndSettle();
+    expect(SetEntryTable.keyboardHeight.value, greaterThan(0));
+
+    // A tap outside a value closes the keypad first; whether that tap or the
+    // next one folds the cards, nothing may be left reserved or broken.
+    await tester.tap(find.text('Collapse all'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    if (find.text('Collapse all').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Collapse all'));
+      await tester.pumpAndSettle();
+    }
+    expect(find.bySemanticsLabel('Set 1 Kg'), findsNothing);
+    expect(SetEntryTable.keyboardHeight.value, 0);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('saving right after a starter still says the plan saved', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(400, 880);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ChangeNotifierProvider<WorkoutPlanProvider>(
+        // Persistence is covered elsewhere; this is about what the reader
+        // sees as the editor closes.
+        create: (_) => _InstantPlanProvider(),
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder:
+                  (context) => Center(
+                    child: TextButton(
+                      onPressed:
+                          () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const PlanEditorScreen.create(),
+                            ),
+                          ),
+                      child: const Text('Open editor'),
+                    ),
+                  ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open editor'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Push day')));
+    await tester.pumpAndSettle();
+    expect(find.text('Undo'), findsOneWidget);
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Open editor'), findsOneWidget);
+    expect(find.text('Plan saved'), findsOneWidget);
+    expect(find.text('Undo'), findsNothing);
+  });
+
+  testWidgets('starter cards can be reordered once they have arrived', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Pull day')));
+    await tester.pumpAndSettle();
+    final grips = find.byType(ReorderableDragStartListener);
+    await tester.timedDrag(
+      grips.at(1),
+      const Offset(0, -120),
+      const Duration(seconds: 1),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final pull = planStarters.firstWhere((s) => s.name == 'Pull day');
+    expect(
+      tester.getTopLeft(find.text(pull.exercises[1].name)).dy,
+      lessThan(tester.getTopLeft(find.text(pull.exercises[0].name)).dy),
+    );
+    // A reorder is an edit, so the starter's Undo is gone.
+    expect(find.text('Undo'), findsNothing);
+  });
+}
+
+/// Takes a new plan without touching storage.
+class _InstantPlanProvider extends WorkoutPlanProvider {
+  @override
+  Future<void> addPlan(WorkoutPlan plan, {String? startingWeekId}) async {}
 }

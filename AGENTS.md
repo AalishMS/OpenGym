@@ -238,6 +238,15 @@ Action labels should say what happens in familiar, concise language:
   both modes, including a source scan for the ink/ground swap. If it fails, the
   colour is wrong - don't relax the target
 
+### Motion
+- New motion uses the tokens in `lib/theme/motion.dart`: `AppMotion.quick`
+  (150ms state flips), `.standard` (220ms reveals), `.enter` (280ms arrivals),
+  `AppMotion.curve` in and `AppMotion.exit` out. Wrap durations in
+  `AppMotion.of(context, …)` so reduced motion makes them immediate
+- A region that folds away should leave the tree once closed (see the plan
+  editor's `_Collapsible`), so tests and screen readers don't find hidden
+  controls
+
 ### Corner Radii
 - Use the tokens from `lib/theme/radii.dart`, never a literal `BorderRadius`:
   - `AppRadius.dialog` - dialogs and anything else over a scrim (sheets use
