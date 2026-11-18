@@ -9,9 +9,9 @@ import '../../theme/motion.dart';
 /// Give each state its own key (`ValueKey('loading')`, `ValueKey(text)`); a
 /// new key is a new state, and the same key just rebuilds in place. The
 /// arriving content fades in over [AppMotion.quick] on [AppMotion.curve]; the
-/// leaving content gives way on [AppMotion.exit] and stops taking taps and
-/// leaves the semantics tree the moment it starts to go, so a fading button
-/// can't be pressed twice. Both are stacked at [alignment] while they cross,
+/// leaving content gives way on [AppMotion.exit] and stops taking taps, gives
+/// up keyboard focus and leaves the semantics tree the moment it starts to
+/// go, so a fading button can't be pressed twice. Both are stacked at [alignment] while they cross,
 /// so the layout doesn't jump. With [animateSize] the space they take eases
 /// to the new size over [AppMotion.standard] instead of snapping. Under
 /// reduced motion the content simply changes.
@@ -82,14 +82,19 @@ class _Crossing extends StatusTransitionWidget {
     final leaving = !animation.isForwardOrCompleted;
     return IgnorePointer(
       ignoring: leaving,
-      child: ExcludeSemantics(
+      // A leaving control can't keep keyboard focus either, or Enter would
+      // still press a button that is fading away.
+      child: ExcludeFocus(
         excluding: leaving,
-        // The arriving state is announced from its first frame, before it
-        // can be seen, as it is findable and tappable.
-        child: FadeTransition(
-          opacity: animation,
-          alwaysIncludeSemantics: !leaving,
-          child: child,
+        child: ExcludeSemantics(
+          excluding: leaving,
+          // The arriving state is announced from its first frame, before it
+          // can be seen, as it is findable and tappable.
+          child: FadeTransition(
+            opacity: animation,
+            alwaysIncludeSemantics: !leaving,
+            child: child,
+          ),
         ),
       ),
     );

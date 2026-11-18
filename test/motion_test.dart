@@ -500,6 +500,32 @@ void main() {
       await _settle(tester);
     });
 
+    testWidgets('the leaving state gives up keyboard focus', (tester) async {
+      final focus = FocusNode();
+      addTearDown(focus.dispose);
+      Widget button(String label) => _host(
+        Align(
+          alignment: Alignment.topLeft,
+          child: StateSwitcher(
+            child: TextButton(
+              key: ValueKey(label),
+              focusNode: label == 'Clear' ? focus : null,
+              onPressed: () {},
+              child: Text(label),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpWidget(button('Clear'));
+      focus.requestFocus();
+      await tester.pump();
+      expect(focus.hasFocus, isTrue);
+      await tester.pumpWidget(button('Done'));
+      await tester.pump();
+      expect(focus.hasFocus, isFalse);
+      await _settle(tester);
+    });
+
     testWidgets('the same state rebuilds in place', (tester) async {
       await tester.pumpWidget(showing('Ready'));
       await tester.pumpWidget(showing('Ready'));
