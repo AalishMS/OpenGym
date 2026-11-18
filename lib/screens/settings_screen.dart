@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../widgets/motion/app_modals.dart';
+import '../widgets/motion/state_switcher.dart';
 import 'exercise_management_screen.dart';
 import '../services/exercise_catalog.dart';
 import '../providers/settings_provider.dart';
@@ -24,6 +25,7 @@ import '../services/update_service.dart';
 import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../utils/scroll_to_top.dart';
 import '../utils/weight_units.dart';
@@ -395,42 +397,58 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       size: 20,
                                     ),
                                     const SizedBox(width: 14),
+                                    // One status crosses to the next in
+                                    // place, and Retry fades in or out.
                                     Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            label,
-                                            style:
-                                                Theme.of(
-                                                  context,
-                                                ).textTheme.titleSmall,
-                                          ),
-                                          Text(
-                                            detail,
-                                            style:
-                                                Theme.of(
-                                                  context,
-                                                ).textTheme.bodySmall,
-                                          ),
-                                        ],
+                                      child: StateSwitcher(
+                                        animateSize: true,
+                                        child: Column(
+                                          key: ValueKey(status),
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              label,
+                                              style:
+                                                  Theme.of(
+                                                    context,
+                                                  ).textTheme.titleSmall,
+                                            ),
+                                            Text(
+                                              detail,
+                                              style:
+                                                  Theme.of(
+                                                    context,
+                                                  ).textTheme.bodySmall,
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                    if (status == SyncStatus.retryableError ||
-                                        status == SyncStatus.pending)
-                                      TextButton(
-                                        onPressed:
-                                            () => _runSettingsAction(
-                                              context,
-                                              () =>
-                                                  SyncService.instance.syncNow(
-                                                    fullReconciliation: true,
-                                                  ),
-                                              progressLabel: 'Syncing',
-                                            ),
-                                        child: const Text('Retry'),
-                                      ),
+                                    StateSwitcher(
+                                      animateSize: true,
+                                      alignment: AlignmentDirectional.centerEnd,
+                                      child:
+                                          status == SyncStatus.retryableError ||
+                                                  status == SyncStatus.pending
+                                              ? TextButton(
+                                                key: const ValueKey('retry'),
+                                                onPressed:
+                                                    () => _runSettingsAction(
+                                                      context,
+                                                      () => SyncService.instance
+                                                          .syncNow(
+                                                            fullReconciliation:
+                                                                true,
+                                                          ),
+                                                      progressLabel: 'Syncing',
+                                                    ),
+                                                child: const Text('Retry'),
+                                              )
+                                              : const SizedBox.shrink(
+                                                key: ValueKey('no-retry'),
+                                              ),
+                                    ),
                                   ],
                                 ),
                               );
@@ -458,6 +476,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           icon: LucideIcons.download,
                           title: 'Check for updates',
                           subtitle: _updateSubtitle(updates),
+                          // A new state crosses in; a download's percentage
+                          // just counts in place. A fixed line never crosses.
+                          subtitleState:
+                              updates.isPreview ||
+                                      !UpdateService.isSupportedPlatform
+                                  ? null
+                                  : (
+                                    updates.status,
+                                    updates.isWaitingForNetwork,
+                                  ),
                           onTap: () => _handleUpdateCheck(context, updates),
                         ),
                         if (UpdateService.isSupportedPlatform)
@@ -528,20 +556,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-          // Saving must not resize the viewport or move the controls being used.
-          if (_busyAction != null)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: Material(
-                color: surface,
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: ActionProgress(_busyAction!),
-                ),
-              ),
+          // Saving must not resize the viewport or move the controls being
+          // used. The banner fades in over the page and out again, so work
+          // that finishes at once never flashes a full banner.
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: StateSwitcher(
+              child:
+                  _busyAction == null
+                      ? const SizedBox.shrink(key: ValueKey('idle'))
+                      : SizedBox(
+                        key: const ValueKey('busy'),
+                        width: double.infinity,
+                        child: Material(
+                          color: surface,
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: ActionProgress(_busyAction!),
+                          ),
+                        ),
+                      ),
             ),
+          ),
         ],
       ),
     );
@@ -707,8 +745,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
+              // The ring and the check settle together.
               AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
+                duration: AppMotion.of(context, AppMotion.quick),
+                curve: AppMotion.curve,
                 width: 42,
                 height: 42,
                 padding: const EdgeInsets.all(3),
@@ -716,7 +756,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   shape: BoxShape.circle,
                   // Constant width so selecting never shifts the layout.
                   border: Border.all(
-                    color: isSelected ? swatch : Colors.transparent,
+                    // Fades from the swatch's own hue, not from black.
+                    color: isSelected ? swatch : swatch.withAlpha(0),
                     width: 2,
                   ),
                 ),
@@ -726,14 +767,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: swatch,
                     shape: BoxShape.circle,
                   ),
-                  child:
-                      isSelected
-                          ? Icon(
-                            LucideIcons.check,
-                            size: 18,
-                            color: onColor(swatch),
-                          )
-                          : null,
+                  child: StateSwitcher(
+                    alignment: Alignment.center,
+                    child:
+                        isSelected
+                            ? Icon(
+                              LucideIcons.check,
+                              key: const ValueKey('check'),
+                              size: 18,
+                              color: onColor(swatch),
+                            )
+                            : const SizedBox.shrink(key: ValueKey('none')),
+                  ),
                 ),
               ),
               const SizedBox(height: 6),
@@ -766,7 +811,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       tileColor: backgroundColor(context),
       secondary: Icon(icon, color: accentColor(context), size: 20),
       title: Text(title, style: Theme.of(context).textTheme.titleSmall),
-      subtitle: Text(subtitle),
+      // A subtitle that changes with the switch crosses to the new line, and
+      // the row eases to its new height rather than shoving what's below.
+      subtitle: StateSwitcher(
+        animateSize: true,
+        child: Text(subtitle, key: ValueKey(subtitle)),
+      ),
       value: value,
       onChanged: onChanged,
     );
@@ -778,6 +828,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String subtitle,
     required VoidCallback onTap,
     bool isDestructive = false,
+
+    /// What the subtitle reports. When it changes, the subtitle crosses to
+    /// the new one; while it holds, the text just updates in place.
+    Object? subtitleState,
   }) {
     final textColor =
         isDestructive ? errorColor(context) : textPrimaryColor(context);
@@ -809,12 +863,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           context,
                         ).textTheme.titleSmall?.copyWith(color: textColor),
                       ),
-                      Text(
-                        subtitle,
-                        // Tabular figures keep version numbers and dates in
-                        // the update status from shifting width.
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontFeatures: const [FontFeature.tabularFigures()],
+                      StateSwitcher(
+                        animateSize: true,
+                        child: Text(
+                          subtitle,
+                          key: ValueKey(subtitleState ?? subtitle),
+                          // Tabular figures keep version numbers and dates in
+                          // the update status from shifting width.
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                          ),
                         ),
                       ),
                     ],
