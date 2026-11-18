@@ -1465,7 +1465,9 @@ class _StartingWeekState extends State<_StartingWeek> {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: StateSwitcher(
-        animateSize: true,
+        // AnimatedSize asserts when given no time, so under reduced motion
+        // the sheet simply takes the new height.
+        animateSize: !MediaQuery.disableAnimationsOf(context),
         alignment: Alignment.bottomCenter,
         child:
             _form ??
