@@ -9,6 +9,7 @@ import '../../models/workout_session.dart';
 import '../../services/statistics_analytics_service.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
+import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
@@ -45,9 +46,29 @@ class TrainingOverview extends StatefulWidget {
 class _TrainingOverviewState extends State<TrainingOverview> {
   DateTime? _selected;
 
+  /// The weeks drawn last time, so a week that joins the plot (another
+  /// exercise reaching further back, a new week starting) grows from the
+  /// baseline while the rest ease to their new heights. Null until the
+  /// first build: bars loaded with the screen are simply there.
+  Set<DateTime>? _drawnWeeks;
+
+  /// Each week's bar, by week, so its animation follows the week wherever
+  /// it sits in the row.
+  final Map<DateTime, GlobalKey> _barKeys = {};
+
+  @override
+  void didUpdateWidget(TrainingOverview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Another exercise starts again from the default week.
+    if (oldWidget.exercise != widget.exercise) _selected = null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final weeks = widget.weeks;
+    final drawn = _drawnWeeks;
+    _drawnWeeks = {for (final week in weeks) week.weekStart};
+    _barKeys.removeWhere((week, _) => !_drawnWeeks!.contains(week));
     final found = weeks.indexWhere((week) => week.weekStart == _selected);
     final index =
         found < 0
@@ -259,38 +280,28 @@ class _TrainingOverviewState extends State<TrainingOverview> {
                                           height: 112,
                                           child: Align(
                                             alignment: Alignment.bottomCenter,
-                                            child: Container(
-                                              width: 26,
+                                            child: _WeekBar(
+                                              // A week keeps its bar when
+                                              // the weeks around it change,
+                                              // so the bar eases rather
+                                              // than being redrawn.
+                                              key: _barKeys.putIfAbsent(
+                                                weeks[i].weekStart,
+                                                GlobalKey.new,
+                                              ),
                                               height: math.max(
                                                 3,
                                                 weeks[i].volumeLoad /
                                                     maximum *
                                                     112,
                                               ),
-                                              decoration: BoxDecoration(
-                                                color:
-                                                    i == index
-                                                        ? accentFillColor(
-                                                          context,
-                                                        )
-                                                        : accentDimColor(
-                                                          context,
-                                                        ),
-                                                borderRadius: AppRadius.barCap,
-                                              ),
-                                              child:
-                                                  i == weeks.length - 1
-                                                      ? Align(
-                                                        alignment:
-                                                            Alignment.topCenter,
-                                                        child: Container(
-                                                          height: 2,
-                                                          color: accentColor(
-                                                            context,
-                                                          ),
-                                                        ),
-                                                      )
-                                                      : null,
+                                              grow:
+                                                  drawn != null &&
+                                                  !drawn.contains(
+                                                    weeks[i].weekStart,
+                                                  ),
+                                              selected: i == index,
+                                              current: i == weeks.length - 1,
                                             ),
                                           ),
                                         ),
@@ -349,6 +360,54 @@ class _TrainingOverviewState extends State<TrainingOverview> {
       ],
     );
   }
+}
+
+/// One week's volume bar. Its height eases over [AppMotion.long] when the
+/// filter or the data changes, so the eye can follow each week to its new
+/// value; a week new to the plot grows from the baseline ([grow]). The
+/// selected week's emphasis eases across over [AppMotion.quick]. The readout
+/// and the semantics label carry the exact value from the first frame, so
+/// nothing reads the bar mid-flight. Under reduced motion it changes at once.
+class _WeekBar extends StatelessWidget {
+  final double height;
+  final bool grow;
+  final bool selected;
+  final bool current;
+
+  const _WeekBar({
+    super.key,
+    required this.height,
+    required this.grow,
+    required this.selected,
+    required this.current,
+  });
+
+  @override
+  Widget build(BuildContext context) => TweenAnimationBuilder<double>(
+    // Only the first build reads `begin`; afterwards each new height eases
+    // from wherever the bar is now.
+    tween: Tween(begin: grow ? 0 : height, end: height),
+    duration: AppMotion.of(context, AppMotion.long),
+    curve: AppMotion.curve,
+    builder:
+        (context, value, child) =>
+            SizedBox(width: 26, height: value, child: child),
+    child: AnimatedContainer(
+      duration: AppMotion.of(context, AppMotion.quick),
+      curve: AppMotion.curve,
+      decoration: BoxDecoration(
+        color: selected ? accentFillColor(context) : accentDimColor(context),
+        borderRadius: AppRadius.barCap,
+      ),
+      child:
+          current
+              ? Align(
+                alignment: Alignment.topCenter,
+                child: Container(height: 2, color: accentColor(context)),
+              )
+              : null,
+    ),
+  );
 }
 
 /// Quiet, aligned figures that share the page rather than becoming tiles.

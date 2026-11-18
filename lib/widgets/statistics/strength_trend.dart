@@ -8,6 +8,7 @@ import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
+import '../motion/state_switcher.dart';
 import 'trend_line.dart';
 import 'training_overview.dart';
 import '../rolling_figure.dart';
@@ -18,11 +19,18 @@ class StrengthTrend extends StatefulWidget {
   final ExerciseMetric metric;
   final String weightUnit;
 
+  /// What the plot shows: the lift, period and measure. A new dataset starts
+  /// at the latest workout, lands its figures at once and crosses the plot
+  /// to the new line; the same dataset with new workouts updates in place.
+  /// Defaults to [metric].
+  final Object? dataset;
+
   const StrengthTrend({
     super.key,
     required this.progress,
     required this.metric,
     required this.weightUnit,
+    this.dataset,
   });
 
   @override
@@ -31,6 +39,14 @@ class StrengthTrend extends StatefulWidget {
 
 class _StrengthTrendState extends State<StrengthTrend> {
   String? _sessionId;
+
+  Object get _dataset => widget.dataset ?? widget.metric;
+
+  @override
+  void didUpdateWidget(StrengthTrend oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((oldWidget.dataset ?? oldWidget.metric) != _dataset) _sessionId = null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,10 +71,15 @@ class _StrengthTrendState extends State<StrengthTrend> {
       widget.weightUnit,
     );
     final scale = MediaQuery.textScalerOf(context).scale(1);
+    final dataset = _dataset;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Keyed by the dataset, so a figure from another lift, period or
+        // measure lands at once instead of rolling from a value it isn't
+        // comparable with.
         Semantics(
+          key: ValueKey(('readout', dataset)),
           liveRegion: true,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,78 +139,88 @@ class _StrengthTrendState extends State<StrengthTrend> {
                   ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                SingleChildScrollView(
-                  key: const ValueKey('strength-timeline'),
-                  scrollDirection: Axis.horizontal,
-                  reverse: true,
-                  child: SizedBox(
-                    width: width,
-                    height: height + 36 * scale,
-                    child: Stack(
-                      children: [
-                        SizedBox(
-                          width: width,
-                          height: height,
-                          child: CustomPaint(
-                            painter: TrendLinePainter(
-                              points: offsets,
-                              selected: selected,
-                              ink: accentColor(context),
-                              wash: accentMutedColor(context),
-                              ground: backgroundColor(context),
-                              guide: hairlineColor(context),
-                            ),
-                          ),
-                        ),
-                        for (var i = 0; i < points.length; i++)
-                          Positioned(
-                            left: i * pitch,
-                            width: pitch,
-                            top: 0,
-                            bottom: 0,
-                            child: Semantics(
-                              button: true,
-                              selected: i == selected,
-                              label:
-                                  '${formatStatisticsDate(points[i].session.date)}, ${value(points[i].value)}, ${points[i].session.planName}',
-                              excludeSemantics: true,
-                              child: InkWell(
-                                key: ValueKey('strength-point-$i'),
-                                borderRadius: AppRadius.control,
-                                onTap:
-                                    () => setState(
-                                      () => _sessionId = points[i].session.id,
-                                    ),
-                                child: Align(
-                                  alignment: Alignment.bottomCenter,
-                                  child: Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: AppSpacing.sm,
-                                    ),
-                                    child:
-                                        i > 0 &&
-                                                DateUtils.isSameDay(
-                                                  points[i - 1].session.date,
-                                                  points[i].session.date,
-                                                )
-                                            ? null
-                                            : Text(
-                                              formatDayMonth(
-                                                points[i].session.date,
-                                              ),
-                                              style: AppTypography.figures(
-                                                fontSize: 10,
-                                                color: textSecondaryColor(
-                                                  context,
-                                                ),
-                                              ),
-                                            ),
-                                  ),
+                // Another lift, period or measure is a different line, so
+                // the plot crosses to it rather than morphing.
+                StateSwitcher(
+                  child: KeyedSubtree(
+                    key: ValueKey(('plot', dataset)),
+                    child: SingleChildScrollView(
+                      key: const ValueKey('strength-timeline'),
+                      scrollDirection: Axis.horizontal,
+                      reverse: true,
+                      child: SizedBox(
+                        width: width,
+                        height: height + 36 * scale,
+                        child: Stack(
+                          children: [
+                            SizedBox(
+                              width: width,
+                              height: height,
+                              child: CustomPaint(
+                                painter: TrendLinePainter(
+                                  points: offsets,
+                                  selected: selected,
+                                  ink: accentColor(context),
+                                  wash: accentMutedColor(context),
+                                  ground: backgroundColor(context),
+                                  guide: hairlineColor(context),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
+                            for (var i = 0; i < points.length; i++)
+                              Positioned(
+                                left: i * pitch,
+                                width: pitch,
+                                top: 0,
+                                bottom: 0,
+                                child: Semantics(
+                                  button: true,
+                                  selected: i == selected,
+                                  label:
+                                      '${formatStatisticsDate(points[i].session.date)}, ${value(points[i].value)}, ${points[i].session.planName}',
+                                  excludeSemantics: true,
+                                  child: InkWell(
+                                    key: ValueKey('strength-point-$i'),
+                                    borderRadius: AppRadius.control,
+                                    onTap:
+                                        () => setState(
+                                          () =>
+                                              _sessionId = points[i].session.id,
+                                        ),
+                                    child: Align(
+                                      alignment: Alignment.bottomCenter,
+                                      child: Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: AppSpacing.sm,
+                                        ),
+                                        child:
+                                            i > 0 &&
+                                                    DateUtils.isSameDay(
+                                                      points[i - 1]
+                                                          .session
+                                                          .date,
+                                                      points[i].session.date,
+                                                    )
+                                                ? null
+                                                : Text(
+                                                  formatDayMonth(
+                                                    points[i].session.date,
+                                                  ),
+                                                  style: AppTypography.figures(
+                                                    fontSize: 10,
+                                                    color: textSecondaryColor(
+                                                      context,
+                                                    ),
+                                                  ),
+                                                ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -199,6 +230,7 @@ class _StrengthTrendState extends State<StrengthTrend> {
         ),
         const SizedBox(height: AppSpacing.lg),
         StatisticsFigures(
+          key: ValueKey(('figures', dataset)),
           values: [
             (
               'Change',
