@@ -65,6 +65,10 @@ class _CollapsibleState extends State<Collapsible>
   );
   bool _started = false;
 
+  /// Whether this close has been reported, so a close given no time, which
+  /// may finish without reporting its status, is still told once.
+  bool _closeReported = false;
+
   void _onStatus(AnimationStatus status) {
     if (status.isAnimating || !mounted) return;
     // Settling changes the clip, and closing drops the child.
@@ -77,7 +81,8 @@ class _CollapsibleState extends State<Collapsible>
   /// one waits for the frame.
   void _reportClosed() {
     final onClosed = widget.onClosed;
-    if (onClosed == null) return;
+    if (onClosed == null || _closeReported) return;
+    _closeReported = true;
     if (SchedulerBinding.instance.schedulerPhase ==
         SchedulerPhase.persistentCallbacks) {
       SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -107,11 +112,13 @@ class _CollapsibleState extends State<Collapsible>
   }
 
   void _moveTo(bool open) {
+    _closeReported = false;
     _controller.duration = AppMotion.of(context, AppMotion.standard);
     if (open) {
       _controller.forward();
     } else {
       _controller.reverse();
+      if (_controller.isDismissed) _reportClosed();
     }
   }
 

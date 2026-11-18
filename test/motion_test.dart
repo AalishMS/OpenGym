@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/services.dart';
@@ -10,8 +11,11 @@ import 'package:gymapp/utils/haptics.dart';
 import 'package:gymapp/widgets/motion/app_modals.dart';
 import 'package:gymapp/widgets/motion/collapsible.dart';
 import 'package:gymapp/widgets/motion/entrance.dart';
+import 'package:gymapp/widgets/motion/page_switcher.dart';
+import 'package:gymapp/widgets/motion/patient_progress.dart';
 import 'package:gymapp/widgets/motion/press_scale.dart';
 import 'package:gymapp/widgets/motion/state_switcher.dart';
+import 'package:gymapp/widgets/motion/surface_fade.dart';
 import 'package:gymapp/widgets/plan_title_hero.dart';
 import 'package:gymapp/widgets/raised_card.dart';
 
@@ -426,6 +430,85 @@ void main() {
       handle.dispose();
     });
 
+    testWidgets('closing, it takes no taps, focus or semantics at once', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      final focus = FocusNode();
+      addTearDown(focus.dispose);
+      var taps = 0;
+      Widget form(bool open) => _host(
+        Align(
+          alignment: Alignment.topLeft,
+          child: Collapsible(
+            open: open,
+            child: TextButton(
+              focusNode: focus,
+              onPressed: () => taps++,
+              child: const Text('Send'),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpWidget(form(true));
+      focus.requestFocus();
+      await tester.pump();
+      expect(focus.hasFocus, isTrue);
+
+      await tester.pumpWidget(form(false));
+      await tester.pump();
+      // Still painted on its way out, but already inert.
+      expect(find.text('Send'), findsOneWidget);
+      expect(focus.hasFocus, isFalse);
+      expect(find.semantics.byLabel('Send'), findsNothing);
+      await tester.tap(find.text('Send'), warnIfMissed: false);
+      expect(taps, 0);
+
+      // Opening again midway, it takes all three back.
+      await tester.pumpWidget(form(true));
+      await tester.pump();
+      expect(find.semantics.byLabel('Send'), findsOneWidget);
+      await tester.tap(find.text('Send'));
+      expect(taps, 1);
+      await _settle(tester);
+      handle.dispose();
+    });
+
+    testWidgets('started open and told to close, it folds away and reports '
+        'it has gone', (tester) async {
+      var closed = 0;
+      Widget row({bool reduceMotion = false}) => _host(
+        Align(
+          alignment: Alignment.topLeft,
+          child: Collapsible(
+            initiallyOpen: true,
+            open: false,
+            onClosed: () => closed++,
+            child: const SizedBox(key: bodyKey, width: 100, height: 100),
+          ),
+        ),
+        reduceMotion: reduceMotion,
+      );
+      await tester.pumpWidget(row());
+      // Holding its place on its first frame, then giving way at once.
+      expect(shownHeight(tester), 100);
+      await tester.pump(AppMotion.standard ~/ 2);
+      expect(shownHeight(tester), inExclusiveRange(0, 50));
+      expect(closed, 0);
+      await _settle(tester);
+      expect(find.byKey(bodyKey), findsNothing);
+      expect(closed, 1);
+
+      // Under reduced motion it is gone at once, and still says so, once the
+      // frame is done.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpWidget(row(reduceMotion: true));
+      expect(find.byKey(bodyKey), findsNothing);
+      await tester.pump();
+      expect(closed, 2);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('opens and closes at once under reduced motion', (
       tester,
     ) async {
@@ -571,6 +654,480 @@ void main() {
       await tester.pump();
       expect(tester.takeException(), isNull);
       expect(tester.getSize(find.byType(StateSwitcher)).height, 40);
+    });
+  });
+
+  group('PageSwitcher', () {
+    Widget pages(
+      String page, {
+      bool forward = true,
+      bool reduceMotion = false,
+      TextDirection direction = TextDirection.ltr,
+      VoidCallback? onTap,
+      FocusNode? focus,
+    }) => _host(
+      Directionality(
+        textDirection: direction,
+        child: SizedBox(
+          width: 300,
+          height: 200,
+          child: PageSwitcher(
+            forward: forward,
+            child: Align(
+              key: ValueKey(page),
+              alignment: Alignment.topLeft,
+              child: TextButton(
+                key: ValueKey('$page-button'),
+                focusNode: focus,
+                onPressed: onTap ?? () {},
+                child: Text(page),
+              ),
+            ),
+          ),
+        ),
+      ),
+      reduceMotion: reduceMotion,
+    );
+
+    double left(WidgetTester tester, String page) =>
+        tester.getTopLeft(find.byKey(ValueKey('$page-button'))).dx;
+
+    testWidgets('the arriving page is there, tappable and announced from its '
+        'first frame', (tester) async {
+      final handle = tester.ensureSemantics();
+      var taps = 0;
+      await tester.pumpWidget(pages('Groups'));
+      await tester.pumpWidget(pages('Chest', onTap: () => taps++));
+      expect(find.text('Chest'), findsOneWidget);
+      expect(find.semantics.byLabel('Chest'), findsOneWidget);
+      await tester.tap(find.text('Chest'));
+      expect(taps, 1, reason: 'a trade never blocks input');
+      await _settle(tester);
+      expect(find.text('Groups'), findsNothing);
+      handle.dispose();
+    });
+
+    testWidgets('the leaving page takes no taps, focus or semantics', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      final focus = FocusNode();
+      addTearDown(focus.dispose);
+      var oldTaps = 0;
+      await tester.pumpWidget(
+        pages('Groups', focus: focus, onTap: () => oldTaps++),
+      );
+      focus.requestFocus();
+      await tester.pump();
+      await tester.pumpWidget(pages('Chest'));
+      await tester.pump();
+      expect(find.text('Groups'), findsOneWidget);
+      expect(focus.hasFocus, isFalse);
+      expect(find.semantics.byLabel('Groups'), findsNothing);
+      await tester.tap(find.text('Groups'), warnIfMissed: false);
+      expect(oldTaps, 0);
+      await _settle(tester);
+      handle.dispose();
+    });
+
+    testWidgets('trades places in the direction of travel and settles', (
+      tester,
+    ) async {
+      await tester.pumpWidget(pages('Groups'));
+      final rest = left(tester, 'Groups');
+
+      // Deeper: the new page comes from the end side, the old goes toward
+      // the start.
+      await tester.pumpWidget(pages('Chest'));
+      await tester.pump(AppMotion.standard ~/ 4);
+      expect(left(tester, 'Chest'), greaterThan(rest));
+      expect(left(tester, 'Chest'), lessThanOrEqualTo(rest + AppMotion.shift));
+      expect(left(tester, 'Groups'), lessThan(rest));
+      await _settle(tester);
+      expect(left(tester, 'Chest'), rest);
+
+      // Back: from the start side.
+      await tester.pumpWidget(pages('Groups', forward: false));
+      await tester.pump(AppMotion.standard ~/ 4);
+      expect(left(tester, 'Groups'), lessThan(rest));
+      expect(left(tester, 'Chest'), greaterThan(rest));
+      await _settle(tester);
+      expect(left(tester, 'Groups'), rest);
+    });
+
+    testWidgets('the leaving page clears out before the arriving one is in', (
+      tester,
+    ) async {
+      double opacity(String page) =>
+          tester
+              .widget<Opacity>(
+                find
+                    .ancestor(
+                      of: find.byKey(ValueKey('$page-button')),
+                      matching: find.byType(Opacity),
+                    )
+                    .first,
+              )
+              .opacity;
+      await tester.pumpWidget(pages('Groups'));
+      await tester.pumpWidget(pages('Chest'));
+      await tester.pump(AppMotion.standard * 3 ~/ 10);
+      expect(opacity('Chest'), 0);
+      expect(opacity('Groups'), inExclusiveRange(0, 0.2));
+      await tester.pump(AppMotion.standard ~/ 10);
+      expect(opacity('Groups'), 0);
+      expect(opacity('Chest'), greaterThan(0));
+      await _settle(tester);
+    });
+
+    testWidgets('mirrors under right-to-left', (tester) async {
+      await tester.pumpWidget(pages('Groups', direction: TextDirection.rtl));
+      final rest = left(tester, 'Groups');
+      await tester.pumpWidget(pages('Chest', direction: TextDirection.rtl));
+      await tester.pump(AppMotion.standard ~/ 4);
+      // Deeper arrives from the end side, which is the left.
+      expect(left(tester, 'Chest'), lessThan(rest));
+      expect(left(tester, 'Groups'), greaterThan(rest));
+      await _settle(tester);
+    });
+
+    testWidgets('the same key rebuilds in place', (tester) async {
+      await tester.pumpWidget(pages('Search'));
+      await tester.pumpWidget(pages('Search'));
+      expect(find.byType(PageSwitchTransition), findsOneWidget);
+      expect(tester.binding.hasScheduledFrame, isFalse);
+    });
+
+    testWidgets('changes at once under reduced motion', (tester) async {
+      await tester.pumpWidget(pages('Groups', reduceMotion: true));
+      await tester.pumpWidget(pages('Chest', reduceMotion: true));
+      await tester.pump();
+      expect(find.text('Groups'), findsNothing);
+      expect(find.text('Chest'), findsOneWidget);
+    });
+
+    testWidgets('pages never share the route\'s primary scroll controller', (
+      tester,
+    ) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      try {
+        Widget list(String page) => _host(
+          PageSwitcher(
+            forward: true,
+            child: ListView(
+              key: ValueKey(page),
+              children: [for (var i = 0; i < 40; i++) Text('$page $i')],
+            ),
+          ),
+        );
+        await tester.pumpWidget(list('Groups'));
+        await tester.pumpWidget(list('Chest'));
+        await tester.pump();
+        final controllers = [
+          for (final element in find.byType(Scrollable).evaluate())
+            (element as StatefulElement).state as ScrollableState,
+        ].map((scrollable) => scrollable.position);
+        expect(controllers.toSet(), hasLength(2));
+        final primary = PrimaryScrollController.maybeOf(
+          tester.element(find.byType(Scaffold)),
+        );
+        expect(primary?.hasClients ?? false, isFalse);
+        await _settle(tester);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('driven by an animation of its own, a page that has gone is '
+        'offstage but alive', (tester) async {
+      final controller = AnimationController(
+        vsync: const TestVSync(),
+        duration: AppMotion.standard,
+      );
+      addTearDown(controller.dispose);
+      final field = GlobalKey<EditableTextState>();
+      final text = TextEditingController(text: 'kept');
+      addTearDown(text.dispose);
+      final focus = FocusNode();
+      addTearDown(focus.dispose);
+      await tester.pumpWidget(
+        _host(
+          Stack(
+            children: [
+              PageSwitchTransition(
+                animation: ReverseAnimation(controller),
+                forward: true,
+                child: EditableText(
+                  key: field,
+                  controller: text,
+                  focusNode: focus,
+                  style: const TextStyle(fontSize: 14),
+                  cursorColor: const Color(0xFF3D7BF7),
+                  backgroundCursorColor: const Color(0xFF000000),
+                ),
+              ),
+              PageSwitchTransition(
+                animation: controller,
+                forward: true,
+                child: const Text('Details'),
+              ),
+            ],
+          ),
+        ),
+      );
+      final state = field.currentState;
+      expect(find.text('Details'), findsNothing);
+      controller.forward();
+      await tester.pump();
+      expect(find.text('Details'), findsOneWidget);
+      await _settle(tester);
+      // The catalog is offstage, its state kept for the way back.
+      expect(find.byKey(field), findsNothing);
+      expect(find.byKey(field, skipOffstage: false), findsOneWidget);
+      controller.reverse();
+      await _settle(tester);
+      expect(field.currentState, same(state));
+      expect(find.text('Details'), findsNothing);
+    });
+  });
+
+  group('SurfaceFade', () {
+    const contentKey = ValueKey('content');
+
+    Widget surface(
+      Object? identity, {
+      bool enabled = true,
+      bool reduceMotion = false,
+      bool tickers = true,
+    }) => _host(
+      TickerMode(
+        enabled: tickers,
+        child: SurfaceFade(
+          identity: identity,
+          enabled: enabled,
+          child: TextButton(
+            key: contentKey,
+            onPressed: () {},
+            child: Text('$identity'),
+          ),
+        ),
+      ),
+      reduceMotion: reduceMotion,
+    );
+
+    double opacity(WidgetTester tester) =>
+        tester
+            .widget<FadeTransition>(
+              find
+                  .ancestor(
+                    of: find.byKey(contentKey),
+                    matching: find.byType(FadeTransition),
+                  )
+                  .first,
+            )
+            .opacity
+            .value;
+
+    testWidgets('a new surface starts at the floor, never at nothing', (
+      tester,
+    ) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(surface('Home'));
+      expect(opacity(tester), 1);
+      await tester.pumpWidget(surface('History'));
+      // The first frame already shows what replaced it, and the old one is
+      // gone rather than crossing beneath.
+      expect(opacity(tester), SurfaceFade.floor);
+      expect(find.text('Home'), findsNothing);
+      expect(find.semantics.byLabel('History'), findsOneWidget);
+      expect(find.byKey(contentKey).hitTestable(), findsOneWidget);
+      await tester.pump(AppMotion.quick ~/ 2);
+      expect(opacity(tester), inExclusiveRange(SurfaceFade.floor, 1));
+      await tester.pump(AppMotion.quick ~/ 2);
+      expect(opacity(tester), 1);
+      await _settle(tester);
+      handle.dispose();
+    });
+
+    testWidgets('a rebuild with the same identity replays nothing', (
+      tester,
+    ) async {
+      await tester.pumpWidget(surface('Home'));
+      await tester.pumpWidget(surface('Home'));
+      expect(opacity(tester), 1);
+      expect(tester.binding.hasScheduledFrame, isFalse);
+    });
+
+    testWidgets('lands at rest when disabled, out of view, under reduced '
+        'motion, or on the first load', (tester) async {
+      for (final (from, to, enabled, tickers, reduceMotion) in [
+        ('Home', 'History', false, true, false),
+        ('Home', 'History', true, false, false),
+        ('Home', 'History', true, true, true),
+        (null, 'Home', true, true, false),
+        ('Home', null, true, true, false),
+      ]) {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pumpWidget(
+          surface(
+            from,
+            enabled: enabled,
+            tickers: tickers,
+            reduceMotion: reduceMotion,
+          ),
+        );
+        await tester.pumpWidget(
+          surface(
+            to,
+            enabled: enabled,
+            tickers: tickers,
+            reduceMotion: reduceMotion,
+          ),
+        );
+        expect(opacity(tester), 1, reason: '$from to $to');
+        expect(tester.binding.hasScheduledFrame, isFalse);
+      }
+    });
+  });
+
+  group('PatientProgress', () {
+    const progressKey = ValueKey('progress');
+
+    Widget waiting(
+      String? label, {
+      bool fold = false,
+      bool reduceMotion = false,
+    }) => _host(
+      Column(
+        children: [
+          PatientProgress(
+            fold: fold,
+            child:
+                label == null
+                    ? null
+                    : Semantics(
+                      label: label,
+                      child: const SizedBox(
+                        key: progressKey,
+                        width: 100,
+                        height: 40,
+                        child: ColoredBox(color: Color(0xFF3D7BF7)),
+                      ),
+                    ),
+          ),
+          const SizedBox(key: ValueKey('below'), height: 10),
+        ],
+      ),
+      reduceMotion: reduceMotion,
+    );
+
+    double opacity(WidgetTester tester) =>
+        tester
+            .widget<FadeTransition>(
+              find
+                  .ancestor(
+                    of: find.byKey(progressKey),
+                    matching: find.byType(FadeTransition),
+                  )
+                  .first,
+            )
+            .opacity
+            .value;
+
+    double below(WidgetTester tester) =>
+        tester.getTopLeft(find.byKey(const ValueKey('below'))).dy;
+
+    testWidgets('work done within patience leaves no trace', (tester) async {
+      await tester.pumpWidget(waiting(null));
+      await tester.pumpWidget(waiting('Saving'));
+      expect(find.byKey(progressKey), findsOneWidget);
+      expect(opacity(tester), 0);
+      await tester.pump(AppMotion.patience - const Duration(milliseconds: 20));
+      expect(opacity(tester), 0);
+      await tester.pumpWidget(waiting(null));
+      expect(find.byKey(progressKey), findsNothing);
+      await tester.pump(AppMotion.patience);
+      expect(find.byKey(progressKey), findsNothing);
+      expect(tester.binding.hasScheduledFrame, isFalse);
+    });
+
+    testWidgets('in place, it is announced at once and painted after '
+        'patience', (tester) async {
+      final handle = tester.ensureSemantics();
+      await tester.pumpWidget(waiting(null));
+      await tester.pumpWidget(waiting('Saving'));
+      expect(find.semantics.byLabel('Saving'), findsOneWidget);
+      // Unpainted, it takes no taps either.
+      expect(find.byKey(progressKey).hitTestable(), findsNothing);
+      await tester.pump(AppMotion.patience);
+      await tester.pump(AppMotion.quick ~/ 2);
+      expect(opacity(tester), inExclusiveRange(0, 1));
+      await tester.pump(AppMotion.quick ~/ 2);
+      expect(opacity(tester), 1);
+      expect(find.byKey(progressKey).hitTestable(), findsOneWidget);
+
+      // Done: it fades out on its way, already inert and silent, keeping the
+      // last progress it had.
+      await tester.pumpWidget(waiting(null));
+      await tester.pump(AppMotion.quick ~/ 3);
+      expect(find.byKey(progressKey), findsOneWidget);
+      expect(opacity(tester), inExclusiveRange(0, 1));
+      expect(find.semantics.byLabel('Saving'), findsNothing);
+      expect(find.byKey(progressKey).hitTestable(), findsNothing);
+      await _settle(tester);
+      expect(find.byKey(progressKey), findsNothing);
+      handle.dispose();
+    });
+
+    testWidgets('folded, it takes no room until it opens, then folds away', (
+      tester,
+    ) async {
+      await tester.pumpWidget(waiting(null, fold: true));
+      final rest = below(tester);
+      await tester.pumpWidget(waiting('Saving', fold: true));
+      expect(find.byKey(progressKey, skipOffstage: false), findsOneWidget);
+      expect(below(tester), rest);
+      await tester.pump(AppMotion.patience);
+      await tester.pump(AppMotion.standard ~/ 2);
+      expect(below(tester), inExclusiveRange(rest, rest + 40));
+      await tester.pump(AppMotion.standard ~/ 2);
+      expect(below(tester), rest + 40);
+
+      await tester.pumpWidget(waiting(null, fold: true));
+      await tester.pump(AppMotion.standard ~/ 2);
+      expect(below(tester), inExclusiveRange(rest, rest + 40));
+      await _settle(tester);
+      expect(below(tester), rest);
+      expect(find.byKey(progressKey, skipOffstage: false), findsNothing);
+    });
+
+    testWidgets('work resumed while it leaves brings it straight back', (
+      tester,
+    ) async {
+      await tester.pumpWidget(waiting(null));
+      await tester.pumpWidget(waiting('Saving'));
+      await tester.pump(AppMotion.patience);
+      await _settle(tester);
+      await tester.pumpWidget(waiting(null));
+      await tester.pump(AppMotion.quick ~/ 3);
+      await tester.pumpWidget(waiting('Saving again'));
+      await _settle(tester);
+      expect(opacity(tester), 1);
+      expect(find.bySemanticsLabel('Saving again'), findsOneWidget);
+    });
+
+    testWidgets('under reduced motion it still waits, then simply appears', (
+      tester,
+    ) async {
+      await tester.pumpWidget(waiting(null, reduceMotion: true));
+      await tester.pumpWidget(waiting('Saving', reduceMotion: true));
+      await tester.pump(AppMotion.patience - const Duration(milliseconds: 1));
+      expect(opacity(tester), 0);
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(opacity(tester), 1);
+      await tester.pumpWidget(waiting(null, reduceMotion: true));
+      await tester.pump();
+      expect(find.byKey(progressKey), findsNothing);
     });
   });
 

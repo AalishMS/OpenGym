@@ -22,6 +22,7 @@ import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/motion.dart';
 import 'package:gymapp/widgets/home/home_plan_row.dart';
 import 'package:gymapp/widgets/home/plan_card.dart';
+import 'package:gymapp/widgets/motion/surface_fade.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/test_fonts.dart';
@@ -111,6 +112,24 @@ void main() {
       await tester.pump();
       expect(homeOpacity(tester, find.text('Ul Plan').first), 1);
       expect(tester.binding.hasScheduledFrame, isFalse);
+    });
+
+    testWidgets('its first frame paints the new workspace at the floor, not '
+        'at nothing', (tester) async {
+      final harness = (await tester.runAsync(_createHarness))!;
+      addTearDown(harness.dispose);
+      await tester.pumpWidget(harness.host(const HomeScreen()));
+
+      await chooseSplit(tester, 'UL');
+      await tester.pump();
+      // A fade from zero would spend this frame on the bare page.
+      expect(
+        homeOpacity(tester, find.text('Ul Plan').first),
+        closeTo(SurfaceFade.floor, 1e-6),
+      );
+      await tester.pump(AppMotion.quick);
+      expect(homeOpacity(tester, find.text('Ul Plan').first), 1);
+      await tester.pumpAndSettle();
     });
 
     testWidgets('lands at once under reduced motion', (tester) async {
@@ -298,18 +317,42 @@ void main() {
       );
     });
 
-    testWidgets('the chevron turns on the quick token', (tester) async {
+    testWidgets('the chevron turns as the menu opens and closes', (
+      tester,
+    ) async {
       final harness = (await tester.runAsync(_createHarness))!;
       addTearDown(harness.dispose);
       await tester.pumpWidget(harness.host(const HomeScreen()));
-      final rotation = tester.widget<AnimatedRotation>(
-        find.descendant(
-          of: find.byKey(switcher),
-          matching: find.byType(AnimatedRotation),
-        ),
-      );
-      expect(rotation.duration, AppMotion.quick);
-      expect(rotation.curve, AppMotion.curve);
+      double turns() =>
+          tester
+              .widget<RotationTransition>(
+                find.descendant(
+                  of: find.byKey(switcher),
+                  matching: find.byType(RotationTransition),
+                ),
+              )
+              .turns
+              .value;
+      final closed = turns();
+
+      await tester.tap(find.byKey(switcher));
+      await tester.pump();
+      await tester.pump(AppMotion.quick ~/ 2);
+      final midway = turns();
+      expect(midway, isNot(closed));
+      await tester.pump(AppMotion.quick ~/ 2);
+      final open = turns();
+      expect((open - closed).abs(), greaterThan((midway - closed).abs()));
+      await tester.pumpAndSettle();
+      expect(turns(), open);
+
+      await tester.tap(find.byKey(switcher));
+      await tester.pump();
+      await tester.pump(AppMotion.quick ~/ 2);
+      expect(turns(), isNot(open));
+      expect(turns(), isNot(closed));
+      await tester.pumpAndSettle();
+      expect(turns(), closed);
     });
 
     testWidgets('the menu settles out of the name once per opening', (
@@ -513,19 +556,26 @@ void main() {
         of: find.text('Full body A'),
         matching: find.byType(InkWell),
       );
-      final chevron = find.descendant(
-        of: day.first,
-        matching: find.byType(AnimatedRotation),
-      );
-      expect(
-        tester.widget<AnimatedRotation>(chevron).duration,
-        AppMotion.quick,
-      );
-      expect(tester.widget<AnimatedRotation>(chevron).curve, AppMotion.curve);
+      double turns() =>
+          tester
+              .widget<RotationTransition>(
+                find.descendant(
+                  of: day.first,
+                  matching: find.byType(RotationTransition),
+                ),
+              )
+              .turns
+              .value;
+      expect(turns(), 0);
 
       await tester.tap(find.text('Full body A'));
       await tester.pump();
       expect(find.text('3 × 6–10', skipOffstage: false), findsOneWidget);
+      // The chevron turns with the fold, within the quick time.
+      await tester.pump(AppMotion.quick ~/ 2);
+      expect(turns(), inExclusiveRange(0, 0.5));
+      await tester.pump(AppMotion.quick ~/ 2);
+      expect(turns(), 0.5);
       await tester.pumpAndSettle();
       expect(find.text('3 × 6–10'), findsOneWidget);
 
