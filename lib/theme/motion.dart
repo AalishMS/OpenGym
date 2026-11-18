@@ -51,7 +51,8 @@ abstract final class AppMotion {
   static const double lift = 8;
 
   /// How far a page or panel travels sideways when it trades places with
-  /// another, as the exercise picker's pages do.
+  /// another (`PageSwitcher`: the exercise picker, Stats' views, the preset
+  /// browser).
   static const double shift = 24;
 
   /// How small an object gets when it moves in scale: a card giving under the

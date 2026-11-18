@@ -16,6 +16,7 @@ import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../theme/semantic_colors.dart';
 import '../../utils/weight_units.dart';
+import '../motion/collapsible.dart';
 import '../readable_table_viewport.dart';
 
 /// A display snapshot. Editing it never mutates a session or a plan implicitly.
@@ -815,9 +816,14 @@ class _SetEntryTableState extends State<SetEntryTable> {
           sets[index].record &&
           !shownRecords.contains(index);
       final removed = _removed;
-      Widget folding(_RemovedSet removed) => _FoldAway(
+      // A row that has just gone folds out of its place, closing from the
+      // bottom up and fading, so the rows under it rise into its place. It
+      // takes no taps and says nothing from its first frame.
+      Widget folding(_RemovedSet removed) => Collapsible(
         key: ObjectKey(removed),
-        onGone: () {
+        initiallyOpen: true,
+        open: false,
+        onClosed: () {
           if (mounted && identical(_removed, removed)) {
             setState(() => _removed = null);
           }
@@ -1018,62 +1024,6 @@ class _RemovedSet {
   final SetEntry entry;
 
   const _RemovedSet(this.index, this.entry);
-}
-
-/// Folds a row that has just gone out of the table: it gives way at once and
-/// closes from the bottom up, fading as it goes, so the rows under it rise
-/// into its place over [AppMotion.standard]. It takes no taps and says
-/// nothing to screen readers from its first frame, then reports [onGone].
-class _FoldAway extends StatefulWidget {
-  final VoidCallback onGone;
-  final Widget child;
-
-  const _FoldAway({super.key, required this.onGone, required this.child});
-
-  @override
-  State<_FoldAway> createState() => _FoldAwayState();
-}
-
-class _FoldAwayState extends State<_FoldAway>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: AppMotion.standard,
-    value: 1,
-  );
-  late final CurvedAnimation _size = CurvedAnimation(
-    parent: _controller,
-    curve: AppMotion.curve,
-    reverseCurve: AppMotion.exit,
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    _controller.reverse().whenComplete(() {
-      if (mounted) widget.onGone();
-    });
-  }
-
-  @override
-  void dispose() {
-    _size.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => IgnorePointer(
-    child: ExcludeSemantics(
-      child: ClipRect(
-        child: SizeTransition(
-          sizeFactor: _size,
-          alignment: AlignmentDirectional.topStart,
-          child: FadeTransition(opacity: _size, child: widget.child),
-        ),
-      ),
-    ),
-  );
 }
 
 TextStyle _quiet(BuildContext context) =>

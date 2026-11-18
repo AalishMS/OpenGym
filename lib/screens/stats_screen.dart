@@ -12,7 +12,6 @@ import '../providers/workout_session_provider.dart';
 import '../services/exercise_catalog.dart';
 import '../services/statistics_analytics_service.dart';
 import '../theme/app_theme.dart';
-import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/scroll_to_top.dart';
@@ -20,6 +19,8 @@ import '../utils/statistics_format.dart';
 import '../widgets/app_header.dart';
 import '../widgets/motion/app_modals.dart';
 import '../widgets/motion/entrance.dart';
+import '../widgets/motion/page_switcher.dart';
+import '../widgets/own_scroll_controller.dart';
 import '../widgets/statistics/block_statistics.dart';
 import '../widgets/statistics/lift_list.dart';
 import '../widgets/statistics/statistics_controls.dart';
@@ -76,12 +77,11 @@ class StatsScreenState extends State<StatsScreen> {
   final _lifts = _Memo<List<LiftSummary>>();
   final _blocks = _Memo<List<BlockStatistics>>();
 
-  /// Scrolls the view on screen. Each view arrives as a new page that starts
-  /// at the top, so the controller keeps no offset to restore. While two pages
-  /// trade places both are attached, and the one leaving keeps its place.
-  final ScrollController _scrollController = ScrollController(
-    keepScrollOffset: false,
-  );
+  /// Scrolls the page on screen. Each view arrives as a new page that owns
+  /// its controller and starts at the top ([OwnScrollController]): while two
+  /// pages trade places both are attached, the one leaving keeps its place,
+  /// and no controller ever holds both.
+  ScrollController? _pageScroll;
   _StatisticsView _view = _StatisticsView.overview;
 
   /// The page on screen. A new page for a view chosen here trades places with
@@ -111,7 +111,7 @@ class StatsScreenState extends State<StatsScreen> {
   void didUpdateWidget(covariant StatsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.scrollToTopRequest != oldWidget.scrollToTopRequest) {
-      scrollToTop(context, _scrollController);
+      scrollToTop(context, _pageScroll);
     }
     final weekly =
         widget.weeklyTrainingRequest != oldWidget.weeklyTrainingRequest;
@@ -126,7 +126,8 @@ class StatsScreenState extends State<StatsScreen> {
 
   void _resetScroll() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _scrollController.hasClients) _scrollController.jumpTo(0);
+      final scroll = _pageScroll;
+      if (mounted && scroll != null && scroll.hasClients) scroll.jumpTo(0);
     });
   }
 
@@ -179,7 +180,6 @@ class StatsScreenState extends State<StatsScreen> {
   @override
   void dispose() {
     ExerciseCatalog.changes.removeListener(_catalogChanged);
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -628,31 +628,39 @@ class StatsScreenState extends State<StatsScreen> {
                   Expanded(
                     child: KeyedSubtree(
                       key: ValueKey('statistics-cut-$_cut'),
-                      child: _PageSwitcher(
+                      child: PageSwitcher(
                         forward: _pageForward,
-                        child: KeyedSubtree(
+                        child: OwnScrollController(
                           key: ValueKey('statistics-page-$_page'),
-                          child: SingleChildScrollView(
-                            key: const ValueKey('statistics-scroll'),
-                            controller: _scrollController,
-                            padding: const EdgeInsets.fromLTRB(
-                              AppSpacing.xl,
-                              AppSpacing.lg,
-                              AppSpacing.xl,
-                              AppSpacing.xl,
-                            ),
-                            child: Center(
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 832,
+                          keepScrollOffset: false,
+                          onAttach: (scroll) => _pageScroll = scroll,
+                          onDetach: (scroll) {
+                            if (identical(_pageScroll, scroll)) {
+                              _pageScroll = null;
+                            }
+                          },
+                          builder:
+                              (context, scroll) => SingleChildScrollView(
+                                key: const ValueKey('statistics-scroll'),
+                                controller: scroll,
+                                padding: const EdgeInsets.fromLTRB(
+                                  AppSpacing.xl,
+                                  AppSpacing.lg,
+                                  AppSpacing.xl,
+                                  AppSpacing.xl,
                                 ),
-                                child: SizedBox(
-                                  width: double.infinity,
-                                  child: content,
+                                child: Center(
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 832,
+                                    ),
+                                    child: SizedBox(
+                                      width: double.infinity,
+                                      child: content,
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
                         ),
                       ),
                     ),
@@ -803,100 +811,6 @@ class _EmptyStatistics extends StatelessWidget {
           ),
         ),
   );
-}
-
-/// The views trade places along the order of the tabs, as the exercise
-/// picker's pages do: the arriving page fades in as it slides the last
-/// [AppMotion.shift] pixels into place from the end side going forward (from
-/// the start side going back), while the leaving one clears out the other way
-/// in the first third of [AppMotion.standard]. The arriving page is laid out,
-/// tappable and announced from its first frame; the leaving one takes no taps
-/// or focus and says nothing. Under reduced motion the page simply changes.
-class _PageSwitcher extends StatelessWidget {
-  final bool forward;
-
-  /// A keyed page; a new key is a new page.
-  final Widget child;
-
-  const _PageSwitcher({required this.forward, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    if (MediaQuery.disableAnimationsOf(context)) return child;
-    final rtl = Directionality.of(context) == TextDirection.rtl;
-    final direction = (forward ? 1.0 : -1.0) * (rtl ? -1.0 : 1.0);
-    return AnimatedSwitcher(
-      duration: AppMotion.standard,
-      layoutBuilder:
-          (current, previous) => Stack(
-            fit: StackFit.expand,
-            children: [...previous, if (current != null) current],
-          ),
-      // A new closure each build, so a page already leaving picks up the
-      // latest direction too.
-      transitionBuilder:
-          (page, animation) => _PageTransition(
-            animation: animation,
-            direction: direction,
-            child: page,
-          ),
-      child: child,
-    );
-  }
-}
-
-class _PageTransition extends AnimatedWidget {
-  /// +1 when pages move toward the start (arriving from the right in LTR),
-  /// -1 when they move toward the end.
-  final double direction;
-  final Widget child;
-
-  const _PageTransition({
-    required Animation<double> animation,
-    required this.direction,
-    required this.child,
-  }) : super(listenable: animation);
-
-  // The leaving page clears out early and the arriving one fades in after
-  // it, so two pages never read as one.
-  static const Interval _fadeOut = Interval(0, 0.35);
-  static const Interval _fadeIn = Interval(0.3, 1, curve: AppMotion.curve);
-
-  @override
-  Widget build(BuildContext context) {
-    final animation = listenable as Animation<double>;
-    final t = animation.value;
-    // Arriving or leaving by the animation's own direction: a view chosen
-    // again before its old page has gone arrives as a new page, while the
-    // old one keeps leaving.
-    final incoming = animation.isForwardOrCompleted;
-    final double dx;
-    final double opacity;
-    if (incoming) {
-      dx = (1 - AppMotion.curve.transform(t)) * AppMotion.shift * direction;
-      opacity = _fadeIn.transform(t);
-    } else {
-      final progress = 1 - t;
-      dx = -AppMotion.curve.transform(progress) * AppMotion.shift * direction;
-      opacity = 1 - _fadeOut.transform(progress);
-    }
-    return IgnorePointer(
-      ignoring: !incoming,
-      child: ExcludeSemantics(
-        excluding: !incoming,
-        child: ExcludeFocus(
-          excluding: !incoming,
-          // The arriving page is announced before it can be seen, as it is
-          // findable and tappable.
-          child: Opacity(
-            opacity: opacity,
-            alwaysIncludeSemantics: incoming,
-            child: Transform.translate(offset: Offset(dx, 0), child: child),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// One derived value, kept until its inputs change. Inputs compare with

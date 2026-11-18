@@ -304,7 +304,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: AppSpacing.xxl),
                     // Fields that come and go with the mode fold open and
                     // closed; one that is leaving gives up focus at once.
-                    _Region(
+                    Collapsible(
                       open: !savedPassword && !_newPassword,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -339,7 +339,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                     ),
-                    _Region(
+                    Collapsible(
                       open: !savedPassword && !_resetEmail,
                       child: TextField(
                         controller: _passwordController,
@@ -392,7 +392,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     ),
-                    _Region(
+                    Collapsible(
                       open: !savedPassword && _newPassword,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -422,7 +422,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                     ),
-                    _Region(
+                    Collapsible(
                       open: notice != null,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -479,7 +479,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    _Region(
+                    Collapsible(
                       open: _mode == _LoginMode.signIn,
                       child: AppButton.text(
                         label: 'Forgot password?',
@@ -505,7 +505,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                     if (_newPassword)
-                      _Region(
+                      Collapsible(
                         open: !savedPassword,
                         child: AppButton.text(
                           label: 'Cancel password reset',
@@ -552,29 +552,4 @@ class _LoginScreenState extends State<LoginScreen> {
     errorMaxLines: 3,
     suffixIcon: suffixIcon,
   );
-}
-
-/// A part of the form that comes and goes with the mode: it folds open and
-/// closed ([Collapsible]), and while it folds away it takes no taps, says
-/// nothing to screen readers and gives up focus, so a leaving field can't
-/// keep the keyboard or be typed into.
-class _Region extends StatelessWidget {
-  final bool open;
-  final Widget child;
-
-  const _Region({required this.open, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return Collapsible(
-      open: open,
-      child: IgnorePointer(
-        ignoring: !open,
-        child: ExcludeSemantics(
-          excluding: !open,
-          child: ExcludeFocus(excluding: !open, child: child),
-        ),
-      ),
-    );
-  }
 }
