@@ -133,26 +133,56 @@ class _CollapsibleState extends State<Collapsible>
   Widget build(BuildContext context) {
     final closing = !widget.open;
     if (closing && _controller.isDismissed) return const SizedBox.shrink();
-    return ClipRect(
-      // Clip only while moving, so a settled region can paint past its edge
-      // (focus rings, shadows).
-      clipBehavior: _controller.isAnimating ? Clip.hardEdge : Clip.none,
-      child: SizeTransition(
-        sizeFactor: _progress,
-        alignment: AlignmentDirectional.topStart,
-        child: FadeTransition(
-          opacity: _progress,
-          // One shape open or closing, so what it holds keeps its state if
-          // it opens again midway.
-          child: IgnorePointer(
-            ignoring: closing,
-            child: ExcludeFocus(
-              excluding: closing,
-              child: ExcludeSemantics(excluding: closing, child: widget.child),
-            ),
+    return FoldTransition(
+      sizeFactor: _progress,
+      // Clip only while moving, so a settled region can paint past its edge:
+      // a raised card's shadow, a focus ring.
+      clip: _controller.isAnimating,
+      child: FadeTransition(
+        opacity: _progress,
+        // One shape open or closing, so what it holds keeps its state if it
+        // opens again midway.
+        child: IgnorePointer(
+          ignoring: closing,
+          child: ExcludeFocus(
+            excluding: closing,
+            child: ExcludeSemantics(excluding: closing, child: widget.child),
           ),
         ),
       ),
     );
   }
+}
+
+/// Shows the top [sizeFactor] of [child]'s height, as a vertical
+/// [SizeTransition] does, but clips only when [clip] is set.
+///
+/// [SizeTransition] always clips to its own box, so a card inside one loses
+/// the part of its shadow that falls outside, even while nothing is moving:
+/// the shadow is cut square at the box's edges and reads as a grey band.
+/// [Collapsible] clips while it folds, when the child really is taller than
+/// the space it has, and not once it has settled.
+class FoldTransition extends AnimatedWidget {
+  /// How much of the child's height shows, from 0 to 1.
+  Animation<double> get sizeFactor => listenable as Animation<double>;
+
+  final bool clip;
+  final Widget child;
+
+  const FoldTransition({
+    super.key,
+    required Animation<double> sizeFactor,
+    required this.clip,
+    required this.child,
+  }) : super(listenable: sizeFactor);
+
+  @override
+  Widget build(BuildContext context) => ClipRect(
+    clipBehavior: clip ? Clip.hardEdge : Clip.none,
+    child: Align(
+      alignment: AlignmentDirectional.topStart,
+      heightFactor: sizeFactor.value.clamp(0.0, 1.0),
+      child: child,
+    ),
+  );
 }

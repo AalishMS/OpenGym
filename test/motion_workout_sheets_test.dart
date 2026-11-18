@@ -9,6 +9,7 @@ import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/screens/workout_summary_screen.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/utils/training_block_identity.dart';
+import 'package:gymapp/widgets/motion/collapsible.dart';
 import 'package:gymapp/widgets/motion/state_switcher.dart';
 import 'package:gymapp/widgets/workout/training_block_dialogs.dart';
 
@@ -139,11 +140,11 @@ void main() {
           find
               .ancestor(
                 of: find.text(week),
-                matching: find.byType(SizeTransition),
+                matching: find.byType(FoldTransition),
               )
               .first;
       expect(
-        tester.widget<SizeTransition>(fold('Week 4')).sizeFactor.value,
+        tester.widget<FoldTransition>(fold('Week 4')).sizeFactor.value,
         lessThan(1),
       );
       await tester.pumpAndSettle();

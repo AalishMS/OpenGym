@@ -509,6 +509,41 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('clips while it folds, and not once it has settled', (
+      tester,
+    ) async {
+      // A settled region must let what it holds paint past its edge, or a
+      // raised card's shadow is cut square and reads as a grey band.
+      Iterable<Clip> clips() => tester
+          .widgetList<ClipRect>(
+            find.ancestor(
+              of: find.byKey(bodyKey),
+              matching: find.descendant(
+                of: find.byType(Collapsible),
+                matching: find.byType(ClipRect),
+              ),
+            ),
+          )
+          .map((clip) => clip.clipBehavior);
+
+      await tester.pumpWidget(region(true));
+      expect(clips(), isNotEmpty);
+      expect(clips(), everyElement(Clip.none));
+
+      await tester.pumpWidget(region(false));
+      await tester.pump();
+      await tester.pump(AppMotion.standard ~/ 2);
+      expect(clips(), contains(Clip.hardEdge));
+      await _settle(tester);
+
+      await tester.pumpWidget(region(true));
+      await tester.pump();
+      await tester.pump(AppMotion.standard ~/ 2);
+      expect(clips(), contains(Clip.hardEdge));
+      await _settle(tester);
+      expect(clips(), everyElement(Clip.none));
+    });
+
     testWidgets('opens and closes at once under reduced motion', (
       tester,
     ) async {

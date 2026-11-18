@@ -1107,7 +1107,10 @@ handles reduced motion itself.
   semantics. From the moment it starts to close it takes no taps, gives up
   keyboard focus and leaves the semantics tree, so a folding button can't be
   pressed and a folding field lets go of the keyboard; callers don't wrap it
-  by hand. It starts at rest, so a region open on arrival is simply there.
+  by hand. It starts at rest, so a region open on arrival is simply there,
+  and it clips only while it moves (`FoldTransition`): a settled region lets a
+  raised card's shadow fall outside it, where a `SizeTransition` would cut the
+  shadow square.
   For expandable details, inline palettes and messages. Started open with
   `initiallyOpen` and closed, it folds a thing that has just gone out of its
   place and reports `onClosed` (a deleted set row).

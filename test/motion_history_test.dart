@@ -11,6 +11,7 @@ import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/history_screen.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/history/history_journal_widgets.dart';
+import 'package:gymapp/widgets/motion/collapsible.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/test_fonts.dart';
@@ -75,8 +76,8 @@ void main() {
 
   final field = find.byKey(const ValueKey('history-search-field'));
   final count = find.textContaining(RegExp(r'^\d+ matching workout'));
-  SizeTransition fold(WidgetTester tester) => tester.widget<SizeTransition>(
-    find.ancestor(of: count, matching: find.byType(SizeTransition)),
+  FoldTransition fold(WidgetTester tester) => tester.widget<FoldTransition>(
+    find.ancestor(of: count, matching: find.byType(FoldTransition)),
   );
 
   void phone(WidgetTester tester) {
