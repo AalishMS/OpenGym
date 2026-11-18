@@ -145,9 +145,6 @@ class UpdateDialog extends StatelessWidget {
 
     final failed = status == UpdateStatus.failed;
     final media = MediaQuery.of(context);
-    // AnimatedSize asserts at zero duration, so under reduced motion the
-    // dialog's height simply changes.
-    final animateSize = !media.disableAnimations;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -172,7 +169,7 @@ class UpdateDialog extends StatelessWidget {
               // Each phase crosses to the next in place, and the dialog eases
               // to its new height rather than jumping.
               StateSwitcher(
-                animateSize: animateSize,
+                animateSize: true,
                 child:
                     failed
                         ? Padding(
@@ -207,7 +204,7 @@ class UpdateDialog extends StatelessWidget {
                     status == UpdateStatus.downloading ||
                     status == UpdateStatus.installing,
                 child: StateSwitcher(
-                  animateSize: animateSize,
+                  animateSize: true,
                   child: Padding(
                     key: ValueKey(status == UpdateStatus.installing),
                     padding: const EdgeInsets.only(top: 20),
@@ -221,7 +218,7 @@ class UpdateDialog extends StatelessWidget {
                 ),
               ),
               StateSwitcher(
-                animateSize: animateSize,
+                animateSize: true,
                 child: KeyedSubtree(
                   key: ValueKey(_Actions.phaseOf(status)),
                   child: Padding(
@@ -256,7 +253,6 @@ class _ReleaseHeader extends StatelessWidget {
     final accent = accentColor(context);
     final error = errorColor(context);
     final size = formatBytes(release.apkSize);
-    final animateSize = !MediaQuery.disableAnimationsOf(context);
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,7 +274,7 @@ class _ReleaseHeader extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               StateSwitcher(
-                animateSize: animateSize,
+                animateSize: true,
                 child: Column(
                   key: ValueKey(
                     failed

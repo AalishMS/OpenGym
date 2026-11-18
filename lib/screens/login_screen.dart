@@ -276,9 +276,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: AppSpacing.sm),
                     // The heading and its line change together with the mode.
                     StateSwitcher(
-                      // AnimatedSize asserts at zero duration, so under
-                      // reduced motion the size simply changes.
-                      animateSize: !MediaQuery.disableAnimationsOf(context),
+                      animateSize: true,
                       child: Column(
                         key: ValueKey(_mode),
                         crossAxisAlignment: CrossAxisAlignment.start,

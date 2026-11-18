@@ -401,12 +401,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                     // place, and Retry fades in or out.
                                     Expanded(
                                       child: StateSwitcher(
-                                        // AnimatedSize can't settle in zero time (it re-dirties its own
-                                        // layout), so under reduced motion the size simply changes.
-                                        animateSize:
-                                            !MediaQuery.disableAnimationsOf(
-                                              context,
-                                            ),
+                                        animateSize: true,
                                         child: Column(
                                           key: ValueKey(status),
                                           crossAxisAlignment:
@@ -431,10 +426,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                                       ),
                                     ),
                                     StateSwitcher(
-                                      animateSize:
-                                          !MediaQuery.disableAnimationsOf(
-                                            context,
-                                          ),
+                                      animateSize: true,
                                       alignment: AlignmentDirectional.centerEnd,
                                       child:
                                           status == SyncStatus.retryableError ||
