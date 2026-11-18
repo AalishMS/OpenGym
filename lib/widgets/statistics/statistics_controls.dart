@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 
@@ -37,6 +38,7 @@ class SegmentedPills<T> extends StatelessWidget {
     final style = Theme.of(
       context,
     ).textTheme.labelLarge?.copyWith(fontSize: 13);
+    final settle = AppMotion.of(context, AppMotion.quick);
     return Container(
       // Wide layouts keep the segments a comfortable size rather than
       // stretching each one across a third of the page.
@@ -66,8 +68,10 @@ class SegmentedPills<T> extends StatelessWidget {
                     borderRadius: AppRadius.button,
                     child: Padding(
                       padding: const EdgeInsets.all(_inset - 1),
+                      // The ground and its label settle together.
                       child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 150),
+                        duration: settle,
+                        curve: AppMotion.curve,
                         alignment: Alignment.center,
                         padding: const EdgeInsets.symmetric(
                           horizontal: AppSpacing.xxs,
@@ -82,12 +86,10 @@ class SegmentedPills<T> extends StatelessWidget {
                                   : null,
                           borderRadius: AppRadius.chip,
                         ),
-                        child: Text(
-                          labelFor(value),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.center,
-                          style: style?.copyWith(
+                        child: AnimatedDefaultTextStyle(
+                          duration: settle,
+                          curve: AppMotion.curve,
+                          style: (style ?? const TextStyle()).copyWith(
                             fontWeight: FontWeight.w600,
                             color:
                                 value == selected
@@ -95,6 +97,12 @@ class SegmentedPills<T> extends StatelessWidget {
                                         ? textPrimaryColor(context)
                                         : onAccentColor(context)
                                     : textSecondaryColor(context),
+                          ),
+                          child: Text(
+                            labelFor(value),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
                           ),
                         ),
                       ),
@@ -219,46 +227,52 @@ class _Pill extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) => Semantics(
-    button: true,
-    selected: selected,
-    label: label,
-    excludeSemantics: true,
-    // The visible pill is compact; the tap target keeps the full 48px.
-    child: InkWell(
-      onTap: selected ? null : onTap,
-      borderRadius: AppRadius.chip,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
-        child: Center(
-          widthFactor: 1,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.md,
-              vertical: AppSpacing.xs + AppSpacing.xxs,
-            ),
-            decoration: BoxDecoration(
-              color:
-                  selected
-                      ? accentFillColor(context)
-                      : controlFillColor(context),
-              borderRadius: AppRadius.pill,
-            ),
-            child: Text(
-              label,
-              textAlign: TextAlign.center,
-              style: style?.copyWith(
-                fontWeight: FontWeight.w600,
+  Widget build(BuildContext context) {
+    final settle = AppMotion.of(context, AppMotion.quick);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      excludeSemantics: true,
+      // The visible pill is compact; the tap target keeps the full 48px.
+      child: InkWell(
+        onTap: selected ? null : onTap,
+        borderRadius: AppRadius.chip,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: Center(
+            widthFactor: 1,
+            // The ground and its label settle together.
+            child: AnimatedContainer(
+              duration: settle,
+              curve: AppMotion.curve,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.xs + AppSpacing.xxs,
+              ),
+              decoration: BoxDecoration(
                 color:
                     selected
-                        ? onAccentColor(context)
-                        : textPrimaryColor(context),
+                        ? accentFillColor(context)
+                        : controlFillColor(context),
+                borderRadius: AppRadius.pill,
+              ),
+              child: AnimatedDefaultTextStyle(
+                duration: settle,
+                curve: AppMotion.curve,
+                style: (style ?? const TextStyle()).copyWith(
+                  fontWeight: FontWeight.w600,
+                  color:
+                      selected
+                          ? onAccentColor(context)
+                          : textPrimaryColor(context),
+                ),
+                child: Text(label, textAlign: TextAlign.center),
               ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
