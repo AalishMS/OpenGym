@@ -212,8 +212,23 @@ class SyncService {
     }
   }
 
+  /// Sends [level] as the training schema on every request [client] makes
+  /// from now on: the activation that follows, and each push and pull after
+  /// it, which the server's guard refuses below the account's level.
+  ///
+  /// The level is set on the client, not on `client.rest`. The SDK copies the
+  /// client's own headers over the REST client's on every `rpc()` and
+  /// `from()`, so a level written to `rest.headers` is replaced by the one
+  /// the client was created with (3) before the request leaves the device:
+  /// asking for 4 then sends 3, the server answers 3, and the activation is
+  /// never acknowledged.
+  @visibleForTesting
+  static void applySchemaHeader(SupabaseClient client, int level) {
+    client.headers = {...client.headers, _schemaHeader: '$level'};
+  }
+
   Future<int> _activateSchema(_SyncAccount account, int level) async {
-    _db.rest.headers[_schemaHeader] = '$level';
+    applySchemaHeader(_db, level);
     final capability = await _checked(
       _db.rpc('activate_training_schema'),
       account,
