@@ -623,7 +623,7 @@ signature:
   absolute chroma cap. Darkened tones therefore don't turn dusty or brown. The wordmark uses a dedicated, more saturated `brandAccent`
   tone of the selected color; ordinary controls retain the softer accent.
   Settings offers them as bare swatches; the chosen one gets a ring and a
-  check rather than a tile behind it.
+  check, which settle in together, rather than a tile behind it.
 - The `> OpenGym` wordmark serves as the main brand signature. Keep it consistent
   and give it room instead of repeating the prompt symbol elsewhere.
 - Every screen except Home shares one header (`AppHeader`): flat on the page
@@ -721,7 +721,8 @@ signature:
   folded summary gives way, chevrons turn, the palette and the missing-exercise
   message open the same way, the exercise count rolls, and the colour bar and
   swatch ease to a new colour. Exercises that arrive (from a starter or the
-  picker) fade and lift into place, a starter's in quick sequence; exercises
+  picker) fade and lift into place, a starter's in quick sequence, and the
+  line under the Exercises heading arrives with the first of them; exercises
   loaded with a plan don't. Under reduced motion every change is immediate.
 - Creating a plan starts at its name: the field takes focus on a new plan (not
   on an edit), and the plan's colour defaults to the first palette colour no
@@ -789,6 +790,12 @@ signature:
   in. Danger zone is always last. *Load sample data* replaces the active
   split's workouts, so it is a development tool. It only appears in debug
   builds (`SettingsScreen.showSampleData`, which defaults to `kDebugMode`).
+- Settings stays still while it saves: the progress banner fades in over the
+  top of the page and out again, so work that finishes at once never flashes
+  it, and nothing under it moves. A switch whose description changes with it
+  (the Coach's) crosses to the new line and eases the row to its new height,
+  and the sync status, its *Retry*, and the update check's line cross to
+  their next state. Under reduced motion each simply changes.
 - Settings → Workout → *Weight unit* (Kilograms / Pounds, styled like the theme
   selector) sets `SettingsProvider.weightUnit` (`kg` or `lbs`, stored as
   `weight_unit`, backed up as `weightUnit`). **Storage is always kilograms**:

@@ -615,6 +615,21 @@ makes it pass; `contract` sends the real v1 prompt and a fixture context.
   changes, and a new conversation starts when the active split changes,
   because refs and proposals belong to one split.
 
+- **Motion** (DESIGN.md's Motion section has the rules). A question the user
+  sends, and the "Reading your plans" line under it, fade and lift into place;
+  the reply then crosses in where that line was, without lifting again, and a
+  failure line crosses to the progress line when it is tried again. Only rows
+  new since the Coach opened arrive: the conversation it opens with, and rows
+  rebuilt as they scroll back into view, are simply there. The welcome gives
+  way to the conversation with a cross. The connection notice and the reason
+  over the review screen's buttons fold open and closed instead of pushing
+  the screen. The send button's ground eases between quiet and the accent as
+  the message empties and fills, and its arrow crosses to the progress ring
+  while sending. The status strip crosses from its placeholder to the model
+  and count after the first answer, and the meter's segments settle to their
+  new tone. The chat follows a new message with a scroll on `enter`. Under
+  reduced motion each of these simply changes.
+
 All of this uses the theme helpers, radius tokens, and sentence-case copy from
 `AGENTS.md`.
 
