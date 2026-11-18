@@ -532,6 +532,20 @@ void main() {
       expect(find.text('Loading'), findsNothing);
       expect(find.text('Ready'), findsOneWidget);
     });
+
+    testWidgets('takes its new size at once under reduced motion', (
+      tester,
+    ) async {
+      await tester.pumpWidget(showing('Small', reduceMotion: true, size: 40));
+      await tester.pumpWidget(showing('Large', reduceMotion: true, size: 120));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(find.byType(StateSwitcher)).height, 120);
+      await tester.pumpWidget(showing('Small', reduceMotion: true, size: 40));
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(tester.getSize(find.byType(StateSwitcher)).height, 40);
+    });
   });
 
   group('showAppDialog', () {

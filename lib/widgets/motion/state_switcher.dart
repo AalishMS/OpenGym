@@ -50,7 +50,11 @@ class StateSwitcher extends StatelessWidget {
       transitionBuilder: _crossing,
       child: child,
     );
-    if (!animateSize) return switcher;
+    // AnimatedSize asserts when a size change is given no time, and under
+    // reduced motion there is nothing to ease.
+    if (!animateSize || MediaQuery.disableAnimationsOf(context)) {
+      return switcher;
+    }
     return AnimatedSize(
       duration: AppMotion.of(context, AppMotion.standard),
       curve: AppMotion.curve,
