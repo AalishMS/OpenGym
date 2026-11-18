@@ -282,7 +282,8 @@ void main() {
     await tester.pump();
     expect(find.text('No matching workouts'), findsOneWidget);
     await tester.tap(find.text('Clear search'));
-    await tester.pump();
+    // The ledger crosses back in place of the empty state.
+    await tester.pumpAndSettle();
     expect(find.text('Push Day'), findsOneWidget);
 
     await tester.enterText(
