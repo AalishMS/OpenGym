@@ -78,7 +78,7 @@ class _GuidedTourState extends State<GuidedTour>
   BorderRadius _targetRadius = AppRadius.card;
   BorderRadius _fromRadius = AppRadius.card;
 
-  double get _progress => AppMotion.curve.transform(_transition.value);
+  double get _progress => AppMotion.move.transform(_transition.value);
   Rect? get _displayedRect =>
       Rect.lerp(_fromRect ?? _targetRect, _targetRect, _progress);
   BorderRadius get _displayedRadius =>

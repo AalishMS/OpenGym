@@ -335,7 +335,7 @@ class _RenderPlanGrid extends RenderBox
     final cardWidth = (width - _gap * (columns - 1)) / columns;
     final animate = _lastWidth == width;
     _lastWidth = width;
-    final progress = AppMotion.curve.transform(motion.value);
+    final progress = AppMotion.move.transform(motion.value);
     final restarted = progress < _lastProgress;
     _lastProgress = progress;
     double top = 0;

@@ -66,10 +66,13 @@ class _IntroScreenState extends State<IntroScreen> {
       _finish();
       return;
     }
-    _controller.nextPage(
-      duration: AppMotion.of(context, AppMotion.long),
-      curve: AppMotion.curve,
-    );
+    // A page turn travels from one place on screen to the next. Under
+    // reduced motion it jumps: a page animation given no time asserts.
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.jumpToPage(_page + 1);
+      return;
+    }
+    _controller.nextPage(duration: AppMotion.long, curve: AppMotion.move);
   }
 
   @override
