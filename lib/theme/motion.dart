@@ -31,6 +31,12 @@ abstract final class AppMotion {
   /// (`Entrance.index`), so the last item is never kept waiting.
   static const Duration stagger = Duration(milliseconds: 40);
 
+  /// How long work may run before a progress indicator shows. A save or a
+  /// sign-in check that finishes sooner shows none: a spinner or a progress
+  /// line that appears and vanishes at once only flickers, and shoves the
+  /// page if it takes room.
+  static const Duration patience = Duration(milliseconds: 300);
+
   /// Motion into place: arrivals, and anything settling at a new value.
   static const Curve curve = Curves.easeOutCubic;
 

@@ -305,17 +305,13 @@ class _AuthenticatedHomeState extends State<AuthenticatedHome> {
   }
 }
 
-/// How long a spinner waits before it shows. Signing in is checked from the
-/// device and account data is prepared locally, so both usually finish within
-/// a frame or two; a spinner that appears and vanishes at once only flickers.
-/// Past this, the wait is real and the spinner fades in to say so.
-const Duration _kProgressGrace = Duration(milliseconds: 400);
-
-/// A progress indicator for a wait that is usually too short to see: the page
-/// stays bare for [_kProgressGrace], then the spinner fades in over
-/// [AppMotion.quick]. Screen readers hear [label] from the first frame, and
-/// finders find it, as before; only what is painted waits. Under reduced
-/// motion it still waits, then appears without the fade.
+/// A progress indicator for a wait that is usually too short to see. Signing
+/// in is checked from the device and account data is prepared locally, so
+/// both usually finish within a frame or two: the page stays bare for
+/// [AppMotion.patience], then the spinner fades in over [AppMotion.quick].
+/// Screen readers hear [label] from the first frame, and finders find it, as
+/// before; only what is painted waits. Under reduced motion it still waits,
+/// then appears without the fade.
 class _PatientProgress extends StatefulWidget {
   final String label;
   final String? value;
@@ -328,9 +324,9 @@ class _PatientProgress extends StatefulWidget {
 
 class _PatientProgressState extends State<_PatientProgress>
     with SingleTickerProviderStateMixin {
-  static final Duration _total = _kProgressGrace + AppMotion.quick;
+  static final Duration _total = AppMotion.patience + AppMotion.quick;
   static final double _start =
-      _kProgressGrace.inMicroseconds / _total.inMicroseconds;
+      AppMotion.patience.inMicroseconds / _total.inMicroseconds;
 
   late final AnimationController _controller = AnimationController(
     vsync: this,

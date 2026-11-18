@@ -2753,8 +2753,9 @@ class _PlanSwitchEntry extends StatelessWidget {
 ///
 /// Most of that work is done within a frame or two, and a line that appeared
 /// and went that fast would shove the whole log down and straight back under
-/// the reader's thumb. So the line waits [_grace] and opens only if the work
-/// is still going, folding open and closed as a [Collapsible] region does.
+/// the reader's thumb. So the line waits [AppMotion.patience] and opens only
+/// if the work is still going, folding open and closed as a [Collapsible]
+/// region does.
 /// Its label is in the tree from the moment the work starts, so it can be
 /// found at once; it is shown, and announced, only once it opens. Leaving, it
 /// keeps the label it had. Under reduced motion it opens and closes at once,
@@ -2771,10 +2772,6 @@ class _ProgressBand extends StatefulWidget {
 
 class _ProgressBandState extends State<_ProgressBand>
     with SingleTickerProviderStateMixin {
-  /// How long work runs before it is worth a line of its own: past a quick
-  /// save or a timer change, short of a wait anyone would wonder about.
-  static const Duration _grace = Duration(milliseconds: 300);
-
   late final AnimationController _controller = AnimationController(
     vsync: this,
     duration: AppMotion.standard,
@@ -2794,7 +2791,7 @@ class _ProgressBandState extends State<_ProgressBand>
   @override
   void initState() {
     super.initState();
-    if (widget.busy) _wait = Timer(_grace, _open);
+    if (widget.busy) _wait = Timer(AppMotion.patience, _open);
   }
 
   void _open() {
@@ -2820,7 +2817,7 @@ class _ProgressBandState extends State<_ProgressBand>
       _present = true;
       if (_controller.isDismissed) {
         _wait?.cancel();
-        _wait = Timer(_grace, _open);
+        _wait = Timer(AppMotion.patience, _open);
       } else {
         // Work resumed while the line was folding away: it stays.
         _controller.forward();

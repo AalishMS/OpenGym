@@ -1465,16 +1465,11 @@ class _StartingWeekState extends State<_StartingWeek> {
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
       child: StateSwitcher(
-        // AnimatedSize asserts when given no time, so under reduced motion
-        // the sheet simply takes the new height.
-        animateSize: !MediaQuery.disableAnimationsOf(context),
+        animateSize: true,
         alignment: Alignment.bottomCenter,
         child:
             _form ??
-            KeyedSubtree(
-              key: const ValueKey('blocks'),
-              child: _list(context),
-            ),
+            KeyedSubtree(key: const ValueKey('blocks'), child: _list(context)),
       ),
     );
   }
