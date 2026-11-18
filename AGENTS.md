@@ -239,13 +239,46 @@ Action labels should say what happens in familiar, concise language:
   colour is wrong - don't relax the target
 
 ### Motion
-- New motion uses the tokens in `lib/theme/motion.dart`: `AppMotion.quick`
-  (150ms state flips), `.standard` (220ms reveals), `.enter` (280ms arrivals),
-  `AppMotion.curve` in and `AppMotion.exit` out. Wrap durations in
+- Motion has four jobs: continuity, feedback, change and first arrival. If you
+  can't say in one sentence which one a motion does, leave it out. DESIGN.md's
+  Motion section has the rules and the list of what does not animate
+- Build from the primitives in `lib/widgets/motion/` before writing motion by
+  hand. Each one handles reduced motion itself:
+  - `PressScale` - a tappable card or tile gives under the finger. Pass its
+    `onHighlightChanged` to the object's own `InkWell`. `RaisedCard` already
+    applies it. Not for rows, text buttons or icon buttons; ink is their
+    response
+  - `Entrance` - content new to the screen fades and lifts in once, with
+    `index` to stagger a small batch. It never replays; pass `animate: false`
+    for content that was already there
+  - `Collapsible` - a region that folds open and closed, and leaves the tree
+    once closed so tests and screen readers don't find hidden controls
+  - `StateSwitcher` - one keyed state crosses to the next in place (loading to
+    content, one label for another), optionally easing its size
+  - `RollingFigure` (`lib/widgets/rolling_figure.dart`) - a headline number
+    that changed
+- Open every dialog with `showAppDialog` and every modal sheet with
+  `showAppSheet` (`lib/widgets/motion/app_modals.dart`); a sheet pushed as its
+  own route passes `appSheetAnimationStyle(context)`. Same arguments as
+  `showDialog`/`showModalBottomSheet`. `test/motion_test.dart` fails on a direct
+  call
+- Push pages with `MaterialPageRoute`. `buildTheme` sets each platform's
+  transition, which carries Android's predictive back and iOS's edge swipe;
+  don't write a `PageRouteBuilder` for an ordinary push
+- Motion written by hand uses the tokens in `lib/theme/motion.dart`:
+  `AppMotion.quick` (150ms flips), `.standard` (220ms regions), `.enter`
+  (280ms arrivals), `.long` (400ms large moves), `.stagger` (40ms), distances
+  `.lift` (8), `.shift` (24) and `.scale` (0.97), and the `.settle` spring for
+  gesture-driven settles. Arrive on `AppMotion.curve`; leave by passing
+  `AppMotion.exit` as the reverse curve. Wrap durations in
   `AppMotion.of(context, …)` so reduced motion makes them immediate
-- A region that folds away should leave the tree once closed (see the plan
-  editor's `_Collapsible`), so tests and screen readers don't find hidden
-  controls
+- Animate opacity and transforms, not the layout of large subtrees. Content
+  is in the tree, tappable and announced from its first frame, and nothing
+  waits for an animation. Nothing loops (it hangs `pumpAndSettle`); dispose
+  controllers
+- Haptics go through `lib/utils/haptics.dart` (`selection`, `confirm`,
+  `celebrate`), never `HapticFeedback` directly; the keypad keeps its own key
+  clicks
 
 ### Corner Radii
 - Use the tokens from `lib/theme/radii.dart`, never a literal `BorderRadius`:
@@ -286,6 +319,7 @@ lib/
 ├── services/                   # Business logic (HiveService, SyncService, BackupService, ...)
 ├── screens/                    # UI screens
 ├── widgets/                    # Reusable widgets, one subdirectory per screen
+│   ├── motion/                 # Motion primitives, showAppDialog / showAppSheet
 │   └── workout/                # Workout screen sub-widgets
 ├── theme/                      # Tones, typography, spacing, radii, breakpoints
 ├── data/                       # Static data (exercise library, workout presets, plan colours)

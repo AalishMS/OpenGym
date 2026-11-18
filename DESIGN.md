@@ -694,9 +694,10 @@ signature:
   values immediately, so Share always exports accurate totals. The header's
   Share action captures the complete summary as an opaque PNG after pending
   paint finishes; Done returns to the log.
-- Haptics are named for the moment (`lib/utils/haptics.dart`): a medium impact
-  when the workout clock starts, a heavy one for a new record or a logged
-  workout. Keypad keys keep their own selection clicks.
+- Haptics are named for the moment (`lib/utils/haptics.dart`): a selection
+  tick when the main tab changes or a plan is dropped into a new place, a
+  medium impact when the workout clock starts, a heavy one for a new record or
+  a logged workout. Keypad keys keep their own selection clicks.
 - Create and Edit plan share the workout log's open exercise sections, hairline
   dividers, filled weight/rep cells, and optional RPE controls. Exercises start
   expanded and can be collapsed or reordered using the trailing grip; with two
@@ -877,6 +878,154 @@ instead of literal `BorderRadius` values. Radii are graduated by element size:
 cards and dialogs are the roundest, while badges use a smaller radius, so the
 same roundness reads correctly on a 148px card and a 20px badge. Retuning the
 whole app means editing the six scale constants in that one file.
+
+## Motion
+
+Motion in OpenGym has four jobs, and nothing moves for any other reason:
+
+- **Continuity**: where something came from or went. A page pushed or popped,
+  a sheet rising, a region folding open, a card reordered.
+- **Feedback**: a touch acknowledged. Ink on rows and buttons, a raised card
+  giving under the finger.
+- **Change**: a value that changed in place. A figure rolling, a segment thumb
+  sliding, a loading state crossing to its content.
+- **Arrival**: content appearing for the first time, once.
+
+A motion that can't be justified in one sentence by one of these does not
+exist. The rules that follow from that:
+
+- Nothing waits on an animation. Content the user came for is laid out,
+  tappable, findable and announced to screen readers from its first frame;
+  only its opacity and transform move, and every animation can be
+  interrupted. Leaving content stops taking taps as soon as it starts to go,
+  and a dialog or sheet on its way out lets taps through to the page. Logging
+  a set is the extreme case: it must feel instant.
+- Arrivals decelerate on `AppMotion.curve`. Departures pass `AppMotion.exit`
+  as the reverse curve of the animation that brought the thing in. Flutter
+  evaluates a reverse curve against the same 0–1 value, so the leaving thing
+  gives way at once and is mostly gone in the first half of its time: a
+  departure reads shorter than its arrival, and leaves the way it came.
+- Distances are small: lifts and shifts of 8 to 24px, and scale stays within
+  about 0.96 to 1 (a press and a dialog use 0.97). A record badge earned just
+  now is the one mark that pops in from nothing. Staggering is rare: first
+  appearance only, a handful of items at most, 40ms apart, and never replayed
+  on a rebuild, on returning to a tab, or on coming back from a pushed route.
+- Reduced motion (`MediaQuery.disableAnimationsOf`) makes every change
+  immediate, page pushes included. Each primitive applies it itself; motion
+  written directly wraps its duration in `AppMotion.of`.
+- Large subtrees move by opacity and transform through the `*Transition`
+  widgets; layout animates only for a region's own size (`Collapsible`,
+  `StateSwitcher(animateSize: true)`). Nothing loops: no pulsing, breathing or
+  shimmering, which would hang `pumpAndSettle` in tests and cost battery
+  mid-workout. A progress indicator, while work is actually in flight, is the
+  one thing that spins. Controllers are disposed.
+- Platform conventions win over novelty. Android keeps its predictive back
+  preview, iOS its edge swipe, and Material ink stays the touch response for
+  rows, buttons and icon buttons.
+
+### Tokens
+
+`lib/theme/motion.dart` holds the whole vocabulary:
+
+| Token | Value | For |
+| --- | --- | --- |
+| `AppMotion.quick` | 150ms | A state flip, a press, one state crossing to another |
+| `AppMotion.standard` | 220ms | A region opening or closing, a track moving, a dialog arriving, a sheet leaving |
+| `AppMotion.enter` | 280ms | An arrival, a sheet rising, a scroll the reader should follow |
+| `AppMotion.long` | 400ms | A large move across much of the screen: chart bars growing to a new week, intro pages |
+| `AppMotion.stagger` | 40ms | The gap between arrivals in one batch |
+| `AppMotion.curve` | ease out cubic | Arriving, settling at a new value |
+| `AppMotion.exit` | ease in cubic | The reverse curve for leaving |
+| `AppMotion.lift` | 8px | How far an arrival rises into place |
+| `AppMotion.shift` | 24px | How far a page travels sideways when it trades places with another |
+| `AppMotion.scale` | 0.97 | A card giving under the finger, a dialog arriving |
+| `AppMotion.settle` | critically damped spring | Content that tracked a gesture springing back to rest |
+
+`AppMotion.of(context, duration)` returns the duration, or zero under reduced
+motion.
+
+### Primitives
+
+`lib/widgets/motion/` holds the few widgets screens build motion from. Each one
+handles reduced motion itself.
+
+- `PressScale` (feedback) eases a tappable *object* to 0.97 while it is
+  pressed. It follows the object's own `InkWell` through `onHighlightChanged`,
+  so it waits out a scroll's touch slop as the ink does, adds no gesture
+  recognizer, and can't swallow a tap, long press or drag. For raised cards and
+  large tiles; `RaisedCard` applies it to every raised card with an action.
+  Not for list rows, text buttons or icon buttons, whose response is ink.
+- `Entrance` (arrival) fades a child in and lifts it 8px into place on its
+  first build, with an optional `index` to stagger a batch (at most six steps).
+  It plays once per `State`, so a rebuild, a tab return or a popped route never
+  replays it. For content new to the screen, such as exercises added to a plan.
+  Not for content that was already there, and not for items of a lazily built
+  list, which are rebuilt when they scroll back.
+- `Collapsible` (continuity) grows and fades a region open from the top, and
+  folds it away and out of the tree when closed, so hidden controls hold no
+  semantics. It starts at rest, so a region open on arrival is simply there.
+  For expandable details, inline palettes and messages.
+- `StateSwitcher` (change) crosses one keyed state to the next in the same
+  place over `quick`, stacking both so nothing jumps, and optionally easing
+  the space they take to its new size. The leaving state stops taking taps and
+  leaves the semantics tree at once. For loading to content, empty to list,
+  one label for another. Not for figures (use `RollingFigure`) or regions that
+  open and close.
+- `RollingFigure` (`lib/widgets/rolling_figure.dart`, change) rolls a
+  headline figure up when it grew and down when it fell.
+- `showAppDialog` and `showAppSheet` (`app_modals.dart`) open every dialog
+  and modal sheet; see below. `test/motion_test.dart` fails if `lib/` calls
+  `showDialog` or `showModalBottomSheet` directly.
+
+### Pages, dialogs and sheets
+
+- Every push is a `MaterialPageRoute`, and `buildTheme` names each platform's
+  transition rather than inheriting Material's defaults. Android uses the
+  predictive back transition: a back swipe on Android 13+ previews the page
+  underneath and can be cancelled, while a push or a tapped Back plays
+  Android's fade-forwards slide. iOS and macOS use the Cupertino slide with
+  edge-swipe back. Windows and Linux use Material's zoom, which suits a wide
+  window better than a long slide. These transitions carry the back gestures,
+  which is why the app keeps them instead of drawing its own; `PopScope`
+  guards and the `PlanTitleHero` flight work under all three. Material paints
+  the gap between two fading pages in the raised surface colour, which flashes
+  grey in dark mode, so the app passes the page colour. Under reduced motion a
+  push or pop lands at once, and a back swipe still follows the finger.
+- There is no second route style for task flows. On iOS a full-screen-dialog
+  route would lose edge-swipe back. The workout's plan switch is the one
+  bespoke route: a sideways replacement that enters from the side of the plan
+  chosen.
+- A dialog fades in while it settles from 0.97 to full size over `standard`,
+  and leaves with a plain fade on `exit`. `showDialog` takes one duration for
+  both directions, so the exit is shorter in effect rather than in time. The
+  date and time pickers open Material's own dialogs and keep its 150ms fade.
+- A modal sheet keeps the platform's slide from the bottom edge: it rises over
+  `enter` and drops away over `standard`, and dragging it follows the finger.
+  The exercise picker, pushed as its own sheet route, takes the same timing
+  through `appSheetAnimationStyle`.
+- Popup menus keep Material's reveal from their anchor, which is continuity
+  already and can't be retimed from the theme. Snackbars and the floating
+  notice keep their own motion.
+
+### What does not animate
+
+- The workout's set entry. Values land as they are typed and a logged set is
+  simply there. The keypad slides in once when entry starts, the active cell's
+  wash eases across, and the table keeps the active row in view, but nothing
+  moves between keystrokes except the record badge's pop, which never delays
+  the next entry. Ink and haptics carry the feedback.
+- Content that was already there. A plan's own exercises when its editor
+  opens, a list loaded with its screen and the History ledger appear without
+  an arrival: staggering a screen's content on every visit is decoration.
+- Returning to anything. Coming back to a tab or from a pushed route replays
+  no arrival, roll or chart growth.
+- Main tabs. They change with a brief fade and no slide: they are peers, not a
+  stack, and swiping between them is navigation, not a carousel.
+- Rows, text buttons and icon buttons do not scale; ink is their response.
+- Figures below the headline. Only headline figures roll; the rest change in
+  place, and the workout summary shows final values at once so Share always
+  exports the right totals.
+- Scroll jumps under reduced motion, and everything else in this section.
 
 ## Backup And Import
 
