@@ -4,8 +4,10 @@ import '../../services/coach/coach_client.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/breakpoints.dart';
+import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../motion/state_switcher.dart';
 
 /// The time the quota resets, in the device's time zone ("1:45 PM").
 String coachResetTime(BuildContext context, DateTime resetsAt) =>
@@ -29,11 +31,13 @@ class CoachStatusBar extends StatelessWidget {
     final Widget content;
     if (model == null && quota == null) {
       content = Text(
+        key: const ValueKey('coach-status-waiting'),
         'The model and your daily limit show after your first message.',
         style: textTheme.bodySmall?.copyWith(color: secondary),
       );
     } else {
       content = Column(
+        key: const ValueKey('coach-status-known'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
@@ -71,7 +75,9 @@ class CoachStatusBar extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: Breakpoints.expanded),
-          child: content,
+          // The first answer brings the model and the limit: the line
+          // crosses to them, and the bar eases to its new height.
+          child: StateSwitcher(animateSize: true, child: content),
         ),
       ),
     );
@@ -173,10 +179,17 @@ class _UsageMeter extends StatelessWidget {
         borderRadius: AppRadius.micro,
         child: SizedBox(
           height: height,
-          child: LinearProgressIndicator(
-            value: quota.remaining / quota.limit,
-            color: fill,
-            backgroundColor: track,
+          // A spent request eases the fill down rather than snapping it.
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(end: quota.remaining / quota.limit),
+            duration: AppMotion.of(context, AppMotion.standard),
+            curve: AppMotion.curve,
+            builder:
+                (context, value, _) => LinearProgressIndicator(
+                  value: value,
+                  color: fill,
+                  backgroundColor: track,
+                ),
           ),
         ),
       );
@@ -187,7 +200,10 @@ class _UsageMeter extends StatelessWidget {
           for (var index = 0; index < quota.limit; index++) ...[
             if (index > 0) const SizedBox(width: AppSpacing.xxs),
             Expanded(
-              child: Container(
+              // A segment spent or restored settles to its new tone.
+              child: AnimatedContainer(
+                duration: AppMotion.of(context, AppMotion.quick),
+                curve: AppMotion.curve,
                 height: height,
                 decoration: BoxDecoration(
                   color: index < quota.remaining ? fill : track,
