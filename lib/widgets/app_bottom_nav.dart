@@ -6,6 +6,7 @@ import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import 'guided_tour.dart';
+import 'nav_selection.dart';
 
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
@@ -40,14 +41,23 @@ class AppBottomNav extends StatelessWidget {
 
     final slots = _labels.length;
     final selected = currentIndex.clamp(0, slots - 1);
+    // Built once here, so the selection's frames don't rebuild them.
+    final destinations = [
+      for (var i = 0; i < slots; i++)
+        NavigationDestination(
+          icon: NavBadge(visible: badgedIndex == i, child: Icon(_icons[i])),
+          label: _labels[i],
+        ),
+    ];
 
     final bar = NavigationBarTheme(
       data: NavigationBarThemeData(
         height: 68,
         backgroundColor: backgroundColor(context),
         indicatorColor: Colors.transparent,
-        // Colour and weight come from each destination's [_Selection], which
-        // eases them in step with the rule; the bar itself would snap them.
+        // Colour and weight come from each destination's [NavSelection],
+        // which eases the colour in step with the rule; the bar itself would
+        // snap it.
         labelTextStyle: const WidgetStatePropertyAll(TextStyle()),
         iconTheme: const WidgetStatePropertyAll(IconThemeData(size: 22)),
       ),
@@ -66,25 +76,22 @@ class AppBottomNav extends StatelessWidget {
                 vertical: -AppSpacing.xs,
               ),
               borderRadius: AppRadius.button,
-              child: _Selection(
+              child: NavSelection(
                 selected: i == selected,
-                selectedColor: accent,
-                unselectedColor: textSecondary,
-                selectedLabel: label?.copyWith(
-                  color: accent,
-                  fontWeight: FontWeight.w700,
-                ),
-                unselectedLabel: label?.copyWith(
-                  color: textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-                child: NavigationDestination(
-                  icon: _Badge(
-                    visible: badgedIndex == i,
-                    child: Icon(_icons[i]),
-                  ),
-                  label: _labels[i],
-                ),
+                builder: (context, t) {
+                  final color = Color.lerp(textSecondary, accent, t);
+                  return IconTheme.merge(
+                    data: IconThemeData(color: color),
+                    child: DefaultTextStyle.merge(
+                      style: label?.copyWith(
+                        color: color,
+                        fontWeight:
+                            i == selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                      child: destinations[i],
+                    ),
+                  );
+                },
               ),
             ),
         ],
@@ -132,76 +139,6 @@ class AppBottomNav extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Eases one destination's icon and label colour and label weight between
-/// selected and not, over the same [AppMotion.standard] and curve as the rule
-/// sliding above it, so the whole selection moves as one. It starts at rest,
-/// so the bar never animates on arrival. The bar's own theme leaves colour
-/// and weight unset, so these inherited values are what paint.
-class _Selection extends StatelessWidget {
-  final bool selected;
-  final Color selectedColor;
-  final Color unselectedColor;
-  final TextStyle? selectedLabel;
-  final TextStyle? unselectedLabel;
-  final Widget child;
-
-  const _Selection({
-    required this.selected,
-    required this.selectedColor,
-    required this.unselectedColor,
-    required this.selectedLabel,
-    required this.unselectedLabel,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(end: selected ? 1 : 0),
-      duration: AppMotion.of(context, AppMotion.standard),
-      curve: AppMotion.curve,
-      child: child,
-      builder:
-          (context, t, child) => IconTheme.merge(
-            data: IconThemeData(
-              color: Color.lerp(unselectedColor, selectedColor, t),
-            ),
-            child: DefaultTextStyle.merge(
-              style: TextStyle.lerp(unselectedLabel, selectedLabel, t),
-              child: child!,
-            ),
-          ),
-    );
-  }
-}
-
-/// The attention dot fades in and out over [AppMotion.quick] rather than
-/// popping, keeping the badge's own size and place.
-class _Badge extends StatelessWidget {
-  final bool visible;
-  final Widget child;
-
-  const _Badge({required this.visible, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final ground = accentFillColor(context);
-    return TweenAnimationBuilder<double>(
-      tween: Tween(end: visible ? 1 : 0),
-      duration: AppMotion.of(context, AppMotion.quick),
-      curve: AppMotion.curve,
-      child: child,
-      builder:
-          (context, t, child) => Badge(
-            isLabelVisible: t > 0,
-            smallSize: 7,
-            backgroundColor: ground.withValues(alpha: ground.a * t),
-            child: child,
-          ),
     );
   }
 }

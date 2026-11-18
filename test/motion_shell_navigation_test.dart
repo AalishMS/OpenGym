@@ -160,6 +160,18 @@ void main() {
             .style!
             .color!;
 
+    FontWeight labelWeight(WidgetTester tester, String label) =>
+        tester
+            .renderObject<RenderParagraph>(
+              find.descendant(
+                of: find.byType(AppBottomNav),
+                matching: find.text(label),
+              ),
+            )
+            .text
+            .style!
+            .fontWeight!;
+
     Color iconColor(WidgetTester tester, String label) {
       final destination = find.ancestor(
         of: find.descendant(
@@ -197,6 +209,10 @@ void main() {
         expect(iconColor(tester, label), isNot(accent));
         expect(iconColor(tester, label), isNot(secondary));
       }
+      // The weight changes at once: the fonts are static weights, and one
+      // eased through them would step and shift the centred label.
+      expect(labelWeight(tester, 'Settings'), FontWeight.w700);
+      expect(labelWeight(tester, 'Home'), FontWeight.w500);
       final rule = tester.widget<AnimatedAlign>(
         find.byKey(const ValueKey('bottom-nav-indicator')),
       );
@@ -299,6 +315,19 @@ void main() {
       await tester.pump(AppMotion.standard ~/ 2);
       expect(label('History'), isNot(accent));
       expect(label('History'), isNot(secondary));
+      // Colour eases; weight changes at once.
+      FontWeight? weight(String text) =>
+          tester
+              .renderObject<RenderParagraph>(
+                find.descendant(of: rail, matching: find.text(text)),
+              )
+              .text
+              .style!
+              .fontWeight;
+      final rest =
+          Theme.of(tester.element(rail)).textTheme.labelMedium?.fontWeight;
+      expect(weight('History'), FontWeight.bold);
+      expect(weight('Dashboard'), rest);
       await tester.pumpAndSettle();
       expect(label('History'), accent);
       expect(label('Dashboard'), secondary);

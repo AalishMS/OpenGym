@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme/app_theme.dart';
-import '../theme/motion.dart';
 import 'app_wordmark.dart';
 import 'guided_tour.dart';
+import 'nav_selection.dart';
 
 /// Desktop sidebar navigation with the same destinations as [AppBottomNav].
 class AppNavRail extends StatelessWidget {
@@ -50,6 +50,14 @@ class AppNavRail extends StatelessWidget {
       for (final entry in destinationKeys.entries)
         entry.key: GlobalObjectKey(entry.value),
     };
+    // Built once here, so the selection's frames don't rebuild them.
+    final icons = [
+      for (var i = 0; i < _labels.length; i++)
+        NavBadge(
+          visible: badgedIndex == i,
+          child: Icon(_icons[i], key: iconKeys[i]),
+        ),
+    ];
 
     return SizedBox(
       width: 180,
@@ -75,32 +83,30 @@ class AppNavRail extends StatelessWidget {
           destinations: [
             for (var i = 0; i < _labels.length; i++)
               NavigationRailDestination(
-                icon: _Selection(
+                icon: NavSelection(
                   selected: i == currentIndex,
                   builder:
                       (context, t) => IconTheme.merge(
                         data: IconThemeData(
                           color: Color.lerp(textSecondary, accent, t),
                         ),
-                        child: _Badge(
-                          visible: badgedIndex == i,
-                          child: Icon(_icons[i], key: iconKeys[i]),
-                        ),
+                        child: icons[i],
                       ),
                 ),
                 label: GuidedTourTarget(
                   key: destinationKeys[i],
                   additionalTarget: iconKeys[i],
-                  child: _Selection(
+                  child: NavSelection(
                     selected: i == currentIndex,
                     builder:
                         (context, t) => Text(
                           _labels[i],
-                          style: TextStyle.lerp(
-                            unselectedLabel,
-                            selectedLabel,
-                            t,
-                          ),
+                          style: (i == currentIndex
+                                  ? selectedLabel
+                                  : unselectedLabel)
+                              ?.copyWith(
+                                color: Color.lerp(textSecondary, accent, t),
+                              ),
                         ),
                   ),
                 ),
@@ -108,55 +114,6 @@ class AppNavRail extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Eases a destination's icon colour, or its label's colour and weight,
-/// between selected and not over [AppMotion.standard], in step with the
-/// rail's indicator, rather than snapping as the rail would. It starts at
-/// rest, so the rail never animates on arrival. The values it paints at rest
-/// are the rail's own selected and unselected styles.
-class _Selection extends StatelessWidget {
-  final bool selected;
-  final Widget Function(BuildContext context, double t) builder;
-
-  const _Selection({required this.selected, required this.builder});
-
-  @override
-  Widget build(BuildContext context) {
-    return TweenAnimationBuilder<double>(
-      tween: Tween(end: selected ? 1 : 0),
-      duration: AppMotion.of(context, AppMotion.standard),
-      curve: AppMotion.curve,
-      builder: (context, t, _) => builder(context, t),
-    );
-  }
-}
-
-/// The attention dot fades in and out over [AppMotion.quick] rather than
-/// popping, keeping the badge's own size and place.
-class _Badge extends StatelessWidget {
-  final bool visible;
-  final Widget child;
-
-  const _Badge({required this.visible, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    final ground = accentFillColor(context);
-    return TweenAnimationBuilder<double>(
-      tween: Tween(end: visible ? 1 : 0),
-      duration: AppMotion.of(context, AppMotion.quick),
-      curve: AppMotion.curve,
-      child: child,
-      builder:
-          (context, t, child) => Badge(
-            isLabelVisible: t > 0,
-            smallSize: 7,
-            backgroundColor: ground.withValues(alpha: ground.a * t),
-            child: child,
-          ),
     );
   }
 }
