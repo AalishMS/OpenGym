@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -1525,6 +1526,11 @@ class _ExerciseEditorSection extends StatelessWidget {
     );
   }
 
+  /// How far the header's tap ground reaches past its text: inside the ground
+  /// as padding, and out into the page gutter by the same amount, so a press
+  /// lights a padded box while the name keeps the column's left edge.
+  static const double _headerInset = AppSpacing.sm;
+
   Widget _buildHeader(
     BuildContext context,
     bool expanded,
@@ -1536,40 +1542,46 @@ class _ExerciseEditorSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Semantics(
-              button: true,
-              expanded: expanded,
-              child: InkWell(
-                onTap: onToggle,
-                borderRadius: AppRadius.button,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              exercise.name,
-                              style: Theme.of(context).textTheme.titleLarge,
+            child: _GutterBleed(
+              bleed: _headerInset,
+              child: Semantics(
+                button: true,
+                expanded: expanded,
+                child: InkWell(
+                  onTap: onToggle,
+                  borderRadius: AppRadius.button,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.md,
+                      horizontal: _headerInset,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                exercise.name,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Icon(
-                            expanded
-                                ? LucideIcons.chevronUp
-                                : LucideIcons.chevronDown,
-                            size: 16,
-                            color: textSecondaryColor(context),
-                          ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Icon(
+                              expanded
+                                  ? LucideIcons.chevronUp
+                                  : LucideIcons.chevronDown,
+                              size: 16,
+                              color: textSecondaryColor(context),
+                            ),
+                          ],
+                        ),
+                        if (!expanded) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          _prescriptionSummary(context, previous),
                         ],
-                      ),
-                      if (!expanded) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        _prescriptionSummary(context, previous),
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1620,6 +1632,33 @@ class _ExerciseEditorSection extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Lays [child] out [bleed] wider than its slot and lets the extra reach into
+/// the page gutter on the start side.
+///
+/// For a tap ground that needs padding round its text without moving the text
+/// off the column's edge. Only the painted ground bleeds: a tap in the gutter
+/// strip itself still falls outside the row, which is fine for an 8px margin.
+class _GutterBleed extends StatelessWidget {
+  final double bleed;
+  final Widget child;
+
+  const _GutterBleed({required this.bleed, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder:
+          (context, constraints) => OverflowBox(
+            alignment: AlignmentDirectional.centerEnd,
+            minWidth: constraints.maxWidth + bleed,
+            maxWidth: constraints.maxWidth + bleed,
+            fit: OverflowBoxFit.deferToChild,
+            child: child,
+          ),
     );
   }
 }
