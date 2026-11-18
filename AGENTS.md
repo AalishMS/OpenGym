@@ -252,9 +252,29 @@ Action labels should say what happens in familiar, concise language:
     `index` to stagger a small batch. It never replays; pass `animate: false`
     for content that was already there
   - `Collapsible` - a region that folds open and closed, and leaves the tree
-    once closed so tests and screen readers don't find hidden controls
+    once closed so tests and screen readers don't find hidden controls. It is
+    inert from the moment it starts to close (no taps, focus or semantics), so
+    don't wrap it in `IgnorePointer`/`ExcludeFocus`/`ExcludeSemantics`.
+    `initiallyOpen: true, open: false` folds something that has just gone out
+    of its place and reports `onClosed`
   - `StateSwitcher` - one keyed state crosses to the next in place (loading to
     content, one label for another), optionally easing its size
+  - `PageSwitcher` - one keyed page trades places with the next along a
+    horizontal axis, `forward` going deeper. `PageSwitchTransition` is the
+    same trade on your own animation, for two pages that both stay alive.
+    Never give both pages one `ScrollController`: both are attached while
+    they cross, and a controller with two positions throws (the desktop
+    scrollbar reads it). Give each copy its own with `OwnScrollController`
+    (`lib/widgets/own_scroll_controller.dart`), which hands the screen the
+    newest; the same goes for a list that crosses with itself in a
+    `StateSwitcher`. Build pages outside anything that rebuilds per frame
+  - `SurfaceFade` - a whole surface replaced by another fades in from
+    `SurfaceFade.floor` when its `identity` changes: main tabs, Home's
+    content, the auth gate. It skips muted tickers, reduced motion and a
+    first load from a null identity
+  - `PatientProgress` - a progress indicator that shows only after
+    `AppMotion.patience`, faded in place or with `fold` opened as a region.
+    Pass the progress while work runs and null when it is done
   - `RollingFigure` (`lib/widgets/rolling_figure.dart`) - a headline number
     that changed
 - Open every dialog with `showAppDialog` and every modal sheet with
@@ -271,7 +291,10 @@ Action labels should say what happens in familiar, concise language:
   `.patience` (300ms before a progress indicator shows), distances `.lift`
   (8), `.shift` (24) and `.scale` (0.97), and the `.settle` spring for
   gesture-driven settles. Arrive on `AppMotion.curve`; leave by passing
-  `AppMotion.exit` as the reverse curve. Wrap durations in
+  `AppMotion.exit` as the reverse curve; something already on screen
+  travelling to another place on screen moves on `AppMotion.move`. Under
+  reduced motion, jump a `PageController` or scroll position rather than
+  animating it over zero time, which asserts. Wrap durations in
   `AppMotion.of(context, …)` so reduced motion makes them immediate, except
   on `AnimatedSize`, which asserts at zero duration: leave it out of the tree
   under reduced motion
@@ -280,7 +303,8 @@ Action labels should say what happens in familiar, concise language:
   animating it
 - Animate opacity and transforms, not the layout of large subtrees. Content
   is in the tree, tappable and announced from its first frame, and nothing
-  waits for an animation. Nothing loops (it hangs `pumpAndSettle`); dispose
+  waits for an animation. Nothing loops (it hangs `pumpAndSettle`) except a
+  progress indicator during real work and the keypad's caret; dispose
   controllers
 - Haptics go through `lib/utils/haptics.dart` (`selection`, `lift`,
   `confirm`, `celebrate`), never `HapticFeedback` directly; the keypad keeps

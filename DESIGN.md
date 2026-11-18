@@ -62,13 +62,16 @@ user on a shared device.
 
 Each surface the gate puts in place of another (login, password recovery,
 the app once `AuthenticatedHome` has prepared its data, or the preparation
-failure) fades in on the page colour over `AppMotion.quick`. What it replaces
-is removed at once rather than kept beside it, so a sign-out never leaves the
-previous account's screens, routes or focus on show. The app is uncovered the
-same way when password recovery finishes. The sign-in check and data
-preparation usually finish within a frame or two, so their spinners stay
-unpainted for 400ms and fade in only for a wait that is real; screen readers
-hear the progress label from the start.
+failure) fades in on the page colour from partial opacity over
+`AppMotion.quick` (`SurfaceFade`). What it replaces is removed at once rather
+than kept beside it, so a sign-out never leaves the previous account's
+screens, routes or focus on show. The app is uncovered the same way when
+password recovery finishes; arriving from login or the sign-in check, it fades
+in once, through `AuthenticatedHome`. The sign-in check and data preparation
+usually finish within a frame or two, so their spinners stay unpainted for
+`AppMotion.patience` (300ms) and then fade in over `quick`, only for a wait
+that is real (`PatientProgress`); screen readers hear the progress label from
+the start.
 
 The login screen has four modes (sign in, create account, reset email, new
 password). Switching between them crosses the heading and its line, the
@@ -513,11 +516,14 @@ into the workout header (`PlanTitleHero`); other entry points open normally.
 The selected bottom tab is marked by a short accent rule on the top hairline as
 well as by colour and weight, so selection never rests on colour alone. When the
 selection moves, the rule slides while both destinations' icon and label ease
-their colour and weight over the same time, and the update dot fades in and
-out rather than popping; the desktop rail settles its labels and icons the same
-way. Moving to another tab gives a selection haptic and a brief fade-in from
-partial opacity, so its first frame already shows the new tab rather than the
-bare page (none under reduced motion). The weekly-training shortcut's switch
+their colour over the same time (`NavSelection`), and the update dot fades in
+and out rather than popping (`NavBadge`); the desktop rail settles its labels
+and icons the same way. The label's weight changes at once: the bundled
+Manrope files are static weights, so a weight eased through them would re-lay
+the label out in steps and shift it. Moving to another tab gives a selection
+haptic and a brief fade-in from partial opacity (`SurfaceFade`), so its first
+frame already shows the new tab rather than the bare page (none under reduced
+motion). The weekly-training shortcut's switch
 to Stats fades the same way. Tapping the tab that is already showing scrolls it back to the top;
 on Home it also closes the Coach and Manage.
 
@@ -529,7 +535,8 @@ workout started within the last 12 hours (`HiveService.getLiveSession`). It
 listens to the sessions box directly, so finishing, deleting, or a sync pull
 removes it. Pushed routes such as the workout screen cover it. When it appears
 or goes while the shell is in view, it folds open or closed above the
-navigation (`Collapsible`), and a strip on its way out takes no taps; a change
+navigation (`Collapsible`), and a strip on its way out takes no taps or
+semantics; a change
 made while a route covers the shell or the app is in the background lands at
 rest, so returning never replays it. Inside the strip, running and paused
 change together at once, and the clock ticks without animating.
@@ -619,10 +626,11 @@ tints and numbers as the foldable workout-day list and Home's plan markers.
 Folded days expose complete prescriptions, RIR, rest and substitutions; shared
 guidance closes the page before the user creates a copy. The catalog and a
 program's details trade places along a horizontal axis, as the exercise
-picker's pages do; the install bar belongs to the details and travels with
-them. Both pages stay alive throughout, so the catalog keeps its goal and
-scroll position, and the page that isn't showing is offstage. Workout days
-fold open and away (`Collapsible`).
+picker's pages do (`PageSwitchTransition`); the install bar belongs to the
+details and travels with them. Both pages stay alive throughout, each on its
+own scroll position, so the catalog keeps its goal and place, and the page
+that isn't showing is offstage. Each page is built once per change, not on
+every frame of it. Workout days fold open and away (`Collapsible`).
 
 ## UI Design
 
@@ -677,9 +685,9 @@ signature:
   sits at the trailing edge on a quiet accent circle when available. The
   split menu settles out of the selector as it opens and closes at once.
   Choosing another split crosses the selector's name to the new one while its
-  width eases, and fades Home's content in. The last split's plans go at once
-  rather than crossing, so nothing from them is read or tapped on its way
-  out. The same fade marks plans arriving on an empty Home, or the last
+  width eases, and fades Home's content in from partial opacity over `quick`
+  (`SurfaceFade`). The last split's plans go at once rather than crossing, so
+  nothing from them is read or tapped on its way out. The same fade marks plans arriving on an empty Home, or the last
   one deleted, while Home is in view; a change made under a page or on
   another tab is simply there on the way back.
 - Back is always the same neutral arrow (`AppBackButton`) with a *Back*
@@ -870,8 +878,9 @@ signature:
   in. Danger zone is always last. *Load sample data* replaces the active
   split's workouts, so it is a development tool. It only appears in debug
   builds (`SettingsScreen.showSampleData`, which defaults to `kDebugMode`).
-- Settings stays still while it saves: the progress banner fades in over the
-  top of the page and out again, so work that finishes at once never flashes
+- Settings stays still while it saves: the progress banner waits
+  `AppMotion.patience` and only then fades in over the top of the page, and
+  out again (`PatientProgress`), so work that finishes at once never flashes
   it, and nothing under it moves. A switch whose description changes with it
   (the Coach's) crosses to the new line and eases the row to its new height,
   and the sync status, its *Retry*, and the update check's line cross to
@@ -1020,10 +1029,14 @@ exist. The rules that follow from that:
   reduced motion leave it out of the tree, as `StateSwitcher` does, rather
   than passing it a zero duration.
 - Work that finishes within `AppMotion.patience` shows no progress
-  indicator. The sign-in check, loading local data and the workout's saves
-  usually take a frame or two, and a spinner or progress line that appeared
-  and vanished that fast would only flicker, or shove the page. Its label is
-  in the tree from the start; what is painted, and announced, waits.
+  indicator (`PatientProgress`). The sign-in check, loading local data,
+  Settings' saves and the workout's saves usually take a frame or two, and a
+  spinner, banner or progress line that appeared and vanished that fast
+  would only flicker, or shove the page. Its label is in the tree from the
+  start. Shown in place, it is in the semantics tree from the start too, so
+  only the painting waits; folded open as a region, it takes no room until it
+  opens, and is announced as it does. Under reduced motion it still waits,
+  then appears without motion.
 - A change made while the screen is covered lands at rest. A covered
   screen's tickers are muted but its animations' clocks keep running, so a
   change made under a pushed page or on another tab would otherwise jump, or
@@ -1031,10 +1044,12 @@ exist. The rules that follow from that:
   `TickerMode.valuesOf(context).enabled` and skip the animation.
 - Large subtrees move by opacity and transform through the `*Transition`
   widgets; layout animates only for a region's own size (`Collapsible`,
-  `StateSwitcher(animateSize: true)`). Nothing loops: no pulsing, breathing or
-  shimmering, which would hang `pumpAndSettle` in tests and cost battery
-  mid-workout. A progress indicator, while work is actually in flight, is the
-  one thing that spins. Controllers are disposed.
+  `StateSwitcher(animateSize: true)`, `PatientProgress(fold: true)`). Nothing
+  loops: no pulsing, breathing or shimmering, which would hang
+  `pumpAndSettle` in tests and cost battery mid-workout. The two things that
+  repeat do so only while they mean something: a progress indicator spins
+  while work is actually in flight, and the keypad's caret blinks in the
+  empty cell being typed into. Controllers are disposed.
 - Platform conventions win over novelty. Android keeps its predictive back
   preview, iOS its edge swipe, and Material ink stays the touch response for
   rows, buttons and icon buttons.
@@ -1052,14 +1067,23 @@ exist. The rules that follow from that:
 | `AppMotion.stagger` | 40ms | The gap between arrivals in one batch |
 | `AppMotion.patience` | 300ms | How long work may run before a progress indicator shows |
 | `AppMotion.curve` | ease out cubic | Arriving, settling at a new value |
+| `AppMotion.move` | ease in-out cubic | Something already on screen travelling to another place on screen: an intro page turning, the tour spotlight, a plan card sliding to a new slot, a plan title flying into the workout header |
 | `AppMotion.exit` | ease in cubic | The reverse curve for leaving |
 | `AppMotion.lift` | 8px | How far an arrival rises into place |
-| `AppMotion.shift` | 24px | How far a page travels sideways when it trades places with another |
+| `AppMotion.shift` | 24px | How far a page travels sideways when it trades places with another (`PageSwitcher`) |
 | `AppMotion.scale` | 0.97 | A card giving under the finger, a dialog arriving |
 | `AppMotion.settle` | critically damped spring | Content that tracked a gesture springing back to rest |
 
 `AppMotion.of(context, duration)` returns the duration, or zero under reduced
 motion.
+
+`long` is the longest any one of the app's own motions runs; a staggered
+batch only delays its later items, by a few `stagger` steps at most. The
+platform's page transitions are exempt (Android's fade-forwards slide runs
+450ms): they carry the back gestures, so the app keeps them as the platform
+has them. An arrival on `curve` comes from nowhere and settles; a move on
+`move` starts from rest as well, because what moves was already being looked
+at.
 
 ### Primitives
 
@@ -1080,8 +1104,13 @@ handles reduced motion itself.
   list, which are rebuilt when they scroll back.
 - `Collapsible` (continuity) grows and fades a region open from the top, and
   folds it away and out of the tree when closed, so hidden controls hold no
-  semantics. It starts at rest, so a region open on arrival is simply there.
-  For expandable details, inline palettes and messages.
+  semantics. From the moment it starts to close it takes no taps, gives up
+  keyboard focus and leaves the semantics tree, so a folding button can't be
+  pressed and a folding field lets go of the keyboard; callers don't wrap it
+  by hand. It starts at rest, so a region open on arrival is simply there.
+  For expandable details, inline palettes and messages. Started open with
+  `initiallyOpen` and closed, it folds a thing that has just gone out of its
+  place and reports `onClosed` (a deleted set row).
 - `StateSwitcher` (change) crosses one keyed state to the next in the same
   place over `quick`, stacking both so nothing jumps, and optionally easing
   the space they take to its new size (the size simply changes under reduced
@@ -1090,7 +1119,39 @@ handles reduced motion itself.
   one label for another. Not for figures (use `RollingFigure`) or regions that
   open and close.
 - `RollingFigure` (`lib/widgets/rolling_figure.dart`, change) rolls a
-  headline figure up when it grew and down when it fell.
+  headline figure up when it grew and down when it fell. It crosses over
+  `enter`, not `quick` as `StateSwitcher` does, on purpose: the roll travels
+  a line's height, and the eye has to follow it.
+- `PageSwitcher` (continuity) trades one keyed page for another along a
+  horizontal axis over `standard`: the arriving page slides the last `shift`
+  into place from the end side going deeper and from the start side going
+  back (mirrored under right-to-left), fading in from 30% of the way, while
+  the leaving page clears out the other way in the first 35%. The arriving
+  page is tappable and announced from its first frame; the leaving one takes
+  no taps, focus or semantics. For the exercise picker's pages and Stats'
+  views. `PageSwitchTransition` is the same trade driven by an animation of
+  the caller's, for two pages that must both stay alive (the preset
+  browser's catalog and details). Each page owns its scroll position: pages
+  don't inherit the route's primary scroll controller, and a caller never
+  hands both pages one controller; `OwnScrollController`
+  (`lib/widgets/own_scroll_controller.dart`) gives each copy its own and
+  hands the screen the newest, which History and the Coach use for lists
+  that cross in a `StateSwitcher` too. Each page is built once per change.
+- `SurfaceFade` (change) fades a whole surface in where it has replaced
+  another, when its identity changes: from `SurfaceFade.floor` (0.4) to full
+  over `quick`. What it replaced is gone at once, and the first frame already
+  shows the new surface rather than the bare page, which a fade from zero
+  would blink to (black, in dark mode). It plays only for a change the
+  reader sees: not when disabled, under muted tickers (another tab, a pushed
+  page), under reduced motion, or from or to a null identity (a first load).
+  For the main tabs, Home's content changing split, and the auth gate's
+  surfaces.
+- `PatientProgress` (feedback) shows a progress indicator only for work
+  still going after `patience`: fading it in place over `quick`, or with
+  `fold` opening it as a region over `standard`. Done sooner, it leaves no
+  trace; leaving, it keeps its last label and takes no taps or semantics.
+  For the auth gate's spinners, Settings' banner and the workout's progress
+  line.
 - `showAppDialog` and `showAppSheet` (`app_modals.dart`) open every dialog
   and modal sheet; see below. `test/motion_test.dart` fails if `lib/` calls
   `showDialog` or `showModalBottomSheet` directly.
@@ -1111,10 +1172,13 @@ handles reduced motion itself.
   push or pop lands at once, and a back swipe still follows the finger.
 - There is no second route style for task flows. On iOS a full-screen-dialog
   route would lose edge-swipe back. The workout's plan switch is the one
-  bespoke route: the chosen plan's workout comes in over the current one from
-  its side, travelling `shift` over `standard` while it fades up from mostly
-  there, and the workout it replaces holds still. Once it has landed it is an
-  ordinary page, so its pop transition and back gestures are the platform's.
+  bespoke page route: the workout being replaced first gives way by `shift`
+  over `quick` toward the side it leaves by, and the chosen plan's workout
+  comes in over it from the other side, travelling `shift` over `standard`
+  while it fades up from mostly there (0.78, so a frequent switch never
+  blanks the log). The platform's own transition doesn't carry the old page
+  off. Once it has landed it is an ordinary page, so its pop transition and
+  back gestures are the platform's, and it lets go of the route it replaced.
 - A dialog fades in while it settles from 0.97 to full size over `standard`,
   and leaves with a plain fade on `exit`. `showDialog` takes one duration for
   both directions, so the exit is shorter in effect rather than in time. The
@@ -1124,8 +1188,15 @@ handles reduced motion itself.
   The exercise picker, pushed as its own sheet route, takes the same timing
   through `appSheetAnimationStyle`.
 - Popup menus keep Material's reveal from their anchor, which is continuity
-  already and can't be retimed from the theme. Snackbars and the floating
-  notice keep their own motion.
+  already and can't be retimed from the theme. Snackbars keep Material's
+  motion. The floating notice keeps its own shape, a short drop from above
+  while it settles from 0.97, on the app's timing: in over `enter` and out
+  over `standard` on `exit`, and a notice on its way out takes no taps.
+- The workout's block menu is a small popup route anchored above the block
+  button, so Back and an outside tap close it like any menu. It moves as a
+  dialog does: it fades in while it settles from 0.97 to full size out of the
+  button's start edge over `standard`, and leaves with a plain fade at full
+  size on `exit`.
 - The split menu is a `MenuAnchor` overlay with no transition that can be put
   on the tokens. It settles out of the split name like a dialog (a fade and
   0.97 to full size over `standard`) and closes at once.
