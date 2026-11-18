@@ -64,6 +64,19 @@ class UnderlineTabStrip extends StatefulWidget {
 
   final double height;
 
+  /// Scrolls the strip; it makes its own when this is null. A caller that
+  /// owns one can read where the strip stood, and start a strip that takes
+  /// its place there (`ScrollController(initialScrollOffset:)`).
+  final ScrollController? controller;
+
+  /// The tab that was marked when this strip took the place of another
+  /// showing the same tabs, as a workout switched to another plan builds a
+  /// new strip where the old one stood. The mark starts under that tab and
+  /// slides to [selectedIndex], and the selection is scrolled into view
+  /// rather than jumped to, so the strip reads as one whose selection moved.
+  /// Read when the strip is first built; null starts it at rest.
+  final int? previousIndex;
+
   const UnderlineTabStrip({
     super.key,
     required this.tabs,
@@ -72,18 +85,36 @@ class UnderlineTabStrip extends StatefulWidget {
     required this.rule,
     this.trailing,
     this.height = 48,
+    this.controller,
+    this.previousIndex,
   });
 
   @override
   State<UnderlineTabStrip> createState() => _UnderlineTabStripState();
 }
 
-class _UnderlineTabStripState extends State<UnderlineTabStrip> {
+class _UnderlineTabStripState extends State<UnderlineTabStrip>
+    with SingleTickerProviderStateMixin {
   /// Anchors the selected tab so [Scrollable.ensureVisible] can centre it
   /// without knowing how wide it is.
   final GlobalKey _selectedTabKey = GlobalKey();
 
-  final ScrollController _controller = ScrollController();
+  ScrollController? _ownController;
+  ScrollController get _controller =>
+      widget.controller ?? (_ownController ??= ScrollController());
+
+  /// The tab the mark slides from, until it has arrived under the selection.
+  int? _markFrom;
+
+  /// The mark's slide, once both ends have been measured.
+  AnimationController? _markSlide;
+  Rect _markStart = Rect.zero;
+  Rect _markEnd = Rect.zero;
+
+  /// The tabs' row, and the underlines at either end of the mark's slide.
+  final GlobalKey _contentKey = GlobalKey();
+  final GlobalKey _fromMarkKey = GlobalKey();
+  final GlobalKey _toMarkKey = GlobalKey();
 
   /// Whether there are tabs past each end. Only a scrollable edge is faded:
   /// fading an edge with nothing beyond it just dims the outermost label.
@@ -93,9 +124,21 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
   @override
   void initState() {
     super.initState();
+    final from = widget.previousIndex;
+    if (from != null &&
+        from != widget.selectedIndex &&
+        from >= 0 &&
+        from < widget.tabs.length) {
+      _markFrom = from;
+    }
     _controller.addListener(_syncFades);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _revealSelected(Duration.zero);
+      if (!mounted) return;
+      final continuing = _markFrom != null;
+      if (continuing) _slideMark();
+      _revealSelected(
+        continuing ? AppMotion.of(context, AppMotion.standard) : Duration.zero,
+      );
       _syncFades();
     });
   }
@@ -103,9 +146,17 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
   @override
   void didUpdateWidget(UnderlineTabStrip oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      (oldWidget.controller ?? _ownController)?.removeListener(_syncFades);
+      _controller.addListener(_syncFades);
+    }
     // Switching plans or adding a week can select a tab off the end of the strip.
     if (oldWidget.selectedIndex != widget.selectedIndex ||
         oldWidget.tabs.length != widget.tabs.length) {
+      // A mark still sliding lands: the selection it was going to is gone.
+      _markSlide?.dispose();
+      _markSlide = null;
+      _markFrom = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _revealSelected(AppMotion.of(context, AppMotion.standard));
@@ -116,8 +167,57 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
 
   @override
   void dispose() {
-    _controller.dispose();
+    _controller.removeListener(_syncFades);
+    _ownController?.dispose();
+    _markSlide?.dispose();
     super.dispose();
+  }
+
+  /// Slides the mark from the tab marked before to the selection: a mark on
+  /// screen travelling to another place on screen, so it moves on
+  /// [AppMotion.move]. It lands at once under reduced motion, or when the
+  /// strip is covered.
+  void _slideMark() {
+    final start = _underline(_fromMarkKey);
+    final end = _underline(_toMarkKey);
+    if (start == null ||
+        end == null ||
+        MediaQuery.disableAnimationsOf(context) ||
+        !TickerMode.valuesOf(context).enabled) {
+      setState(() => _markFrom = null);
+      return;
+    }
+    final slide =
+        _markSlide = AnimationController(
+          vsync: this,
+          duration: AppMotion.standard,
+        );
+    setState(() {
+      _markStart = start;
+      _markEnd = end;
+    });
+    slide.forward().whenComplete(() {
+      if (!mounted || _markSlide != slide) return;
+      slide.dispose();
+      setState(() {
+        _markSlide = null;
+        _markFrom = null;
+      });
+    });
+  }
+
+  /// The underline of the tab under [key], in the row's coordinates.
+  Rect? _underline(GlobalKey key) {
+    final label = key.currentContext?.findRenderObject() as RenderBox?;
+    final row = _contentKey.currentContext?.findRenderObject() as RenderBox?;
+    if (label == null || row == null || !label.hasSize) return null;
+    final origin = label.localToGlobal(Offset.zero, ancestor: row);
+    return Rect.fromLTWH(
+      origin.dx,
+      origin.dy + label.size.height - _UnderlineTab.markWidth,
+      label.size.width,
+      _UnderlineTab.markWidth,
+    );
   }
 
   void _revealSelected(Duration duration) {
@@ -185,24 +285,63 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
               ),
               child: ConstrainedBox(
                 constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                child: Row(
-                  // Every tap target fills the strip's full height, so a 22px
-                  // label does not mean a 22px hit box in a 44px bar.
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                // Passes the constraints through, so the row lays out exactly
+                // as it would on its own; the stack only carries the mark
+                // while it slides.
+                child: Stack(
+                  key: _contentKey,
+                  fit: StackFit.passthrough,
                   children: [
-                    for (var i = 0; i < widget.tabs.length; i++)
-                      _UnderlineTab(
-                        key: i == widget.selectedIndex ? _selectedTabKey : null,
-                        data: widget.tabs[i],
-                        selected: i == widget.selectedIndex,
-                        color: widget.color,
-                      ),
-                    if (widget.trailing != null)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                        ),
-                        child: Center(child: widget.trailing!),
+                    Row(
+                      // Every tap target fills the strip's full height, so a
+                      // 22px label does not mean a 22px hit box in a 44px bar.
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (var i = 0; i < widget.tabs.length; i++)
+                          _UnderlineTab(
+                            key:
+                                i == widget.selectedIndex
+                                    ? _selectedTabKey
+                                    : null,
+                            markKey:
+                                _markFrom == null
+                                    ? null
+                                    : i == _markFrom
+                                    ? _fromMarkKey
+                                    : i == widget.selectedIndex
+                                    ? _toMarkKey
+                                    : null,
+                            data: widget.tabs[i],
+                            selected: i == widget.selectedIndex,
+                            // While the mark slides, no tab draws its own.
+                            marked:
+                                _markFrom == null
+                                    ? i == widget.selectedIndex
+                                    : _markSlide == null && i == _markFrom,
+                            color: widget.color,
+                          ),
+                        if (widget.trailing != null)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                            ),
+                            child: Center(child: widget.trailing!),
+                          ),
+                      ],
+                    ),
+                    if (_markSlide case final slide?)
+                      AnimatedBuilder(
+                        animation: slide,
+                        builder:
+                            (context, _) => Positioned.fromRect(
+                              rect:
+                                  Rect.lerp(
+                                    _markStart,
+                                    _markEnd,
+                                    AppMotion.move.transform(slide.value),
+                                  )!,
+                              child: ColoredBox(color: widget.color),
+                            ),
                       ),
                   ],
                 ),
@@ -232,14 +371,26 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
 }
 
 class _UnderlineTab extends StatelessWidget {
+  /// The underline's thickness.
+  static const double markWidth = 2;
+
   final UnderlineTabData data;
   final bool selected;
+
+  /// Whether this tab draws the underline. The selected tab does, except
+  /// while the strip's mark slides to it.
+  final bool marked;
+
+  /// Finds this tab's underline, for the strip to measure.
+  final Key? markKey;
   final Color color;
   const _UnderlineTab({
     super.key,
     required this.data,
     required this.selected,
+    required this.marked,
     required this.color,
+    this.markKey,
   });
 
   @override
@@ -260,12 +411,13 @@ class _UnderlineTab extends StatelessWidget {
             // The underline borders the label, not the full-height cell, so it
             // spans exactly the text without any intrinsic-width work.
             child: Container(
+              key: markKey,
               padding: const EdgeInsets.only(bottom: 6),
               decoration: BoxDecoration(
                 border: Border(
                   bottom: BorderSide(
-                    color: selected ? color : Colors.transparent,
-                    width: 2,
+                    color: marked ? color : Colors.transparent,
+                    width: markWidth,
                   ),
                 ),
               ),

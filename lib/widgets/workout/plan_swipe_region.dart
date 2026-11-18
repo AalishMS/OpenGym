@@ -5,8 +5,20 @@ import 'package:flutter/material.dart';
 /// nested horizontal controls to their own gesture recognizers.
 class PlanSwipeRegion extends StatefulWidget {
   final Widget child;
-  final VoidCallback? onNextPlan;
-  final VoidCallback? onPreviousPlan;
+
+  /// The drag committed to the next plan. Called with the finger's release
+  /// velocity in logical pixels per second, so content that followed the
+  /// finger can carry on out at the speed the hand left it.
+  final ValueChanged<double>? onNextPlan;
+
+  /// The drag committed to the previous plan, with the release velocity.
+  final ValueChanged<double>? onPreviousPlan;
+
+  /// How far the finger has dragged since the drag was recognised, in
+  /// logical pixels. The movement it took to tell a swipe from a scroll is
+  /// left out, so content that follows the finger starts from where it is
+  /// instead of jumping to catch up, as a page view does. Whether the drag
+  /// switches plans is judged on the whole movement.
   final ValueChanged<double>? onDragProgress;
 
   /// The drag ended without changing plans. Called with the finger's release
@@ -28,7 +40,11 @@ class PlanSwipeRegion extends StatefulWidget {
 }
 
 class _PlanSwipeRegionState extends State<PlanSwipeRegion> {
+  /// How far the finger has moved since it touched down.
   double _dragDistance = 0;
+
+  /// [_dragDistance] when the drag was recognised.
+  double? _recognisedAt;
 
   void _onDragEnd(DragEndDetails details) {
     final velocity = details.primaryVelocity ?? 0;
@@ -38,13 +54,13 @@ class _PlanSwipeRegionState extends State<PlanSwipeRegion> {
     if (isSwipe) {
       if (_dragDistance < 0) {
         if (widget.onNextPlan != null) {
-          widget.onNextPlan!();
+          widget.onNextPlan!(velocity);
         } else {
           widget.onDragCancel?.call(velocity);
         }
       } else {
         if (widget.onPreviousPlan != null) {
-          widget.onPreviousPlan!();
+          widget.onPreviousPlan!(velocity);
         } else {
           widget.onDragCancel?.call(velocity);
         }
@@ -70,10 +86,14 @@ class _PlanSwipeRegionState extends State<PlanSwipeRegion> {
                     ..onlyAcceptDragOnThreshold = true
                     ..onStart = (_) {
                       _dragDistance = 0;
+                      _recognisedAt = null;
                     }
                     ..onUpdate = (details) {
                       _dragDistance += details.delta.dx;
-                      widget.onDragProgress?.call(_dragDistance);
+                      // The first update carries the movement since touch
+                      // down (DragStartBehavior.down), the slop included.
+                      final recognisedAt = _recognisedAt ??= _dragDistance;
+                      widget.onDragProgress?.call(_dragDistance - recognisedAt);
                     }
                     ..onEnd = _onDragEnd
                     ..onCancel = () {

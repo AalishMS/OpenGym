@@ -765,12 +765,18 @@ signature:
   Share action captures the complete summary as an opaque PNG after pending
   paint finishes, crossing to its progress in place while it works; that
   cross sits in the header, outside the image. Done returns to the log.
-- The workout moves sparingly, because it is used mid-set in glances. A swipe
-  between plans moves the log a little with the finger (up to 24px, less at
-  the first and last plan) and springs it back on release, carrying the
-  flick, without overshoot. The chosen plan's workout then comes in over the
-  current one from its side; once it has landed it leaves like any page, so
-  Back, Android's predictive back and iOS's edge swipe work after a switch. A
+- The workout moves sparingly, because it is used mid-set in glances. The
+  exception is changing plan, which is swiping between pages and should feel
+  like it. During a swipe the log follows the finger one to one and fades as
+  it goes, to half by 40% of the width; at the first and last plan, with
+  nothing to go to, it gives only a twentieth of the travel and doesn't fade,
+  so the edge reads as an edge. Let go short of a switch, it springs back
+  with its opacity, carrying the flick, without overshoot. A switch, by swipe
+  or tab, trades the logs: the old one carries on out and the chosen plan's
+  comes in over it from the other side (see Pages, dialogs and sheets), while
+  the header, the plan tabs and the week bar hold still and change in place.
+  Once the new workout has landed it leaves like any page, so Back,
+  Android's predictive back and iOS's edge swipe work after a switch. A
   set deleted from its hold menu folds away so the rows below rise into its
   place, in the workout and the plan editor. Work in flight (saving, starting
   or pausing the clock, logging, changing blocks) shows its progress line
@@ -780,7 +786,8 @@ signature:
   fold open the same way. A held exercise rises from the page onto the
   raised ground as it lifts and sinks back as it drops. Changing week, the
   header's timer controls and the clock change in place without motion.
-  Under reduced motion every change is immediate.
+  Under reduced motion every change is immediate: the log doesn't follow a
+  swipe, and a switch lands at once.
 - Haptics are named for the moment (`lib/utils/haptics.dart`): a selection
   tick when the main tab changes or a plan is dropped into a new place, a
   light impact when a plan card is picked up to drag, a medium impact when
@@ -1015,7 +1022,10 @@ exist. The rules that follow from that:
   gives way at once and is mostly gone in the first half of its time: a
   departure reads shorter than its arrival, and leaves the way it came.
 - Distances are small: lifts and shifts of 8 to 24px, and scale stays within
-  about 0.96 to 1 (a press and a dialog use 0.97). A plan card picked up to
+  about 0.96 to 1 (a press and a dialog use 0.97). The one longer travel
+  follows a swipe: the workout's log is carried by the finger one to one, so
+  when it switches plan the logs trade over a quarter of the width
+  (`AppMotion.swipeShift`), the distance the hand began. A plan card picked up to
   drag lifts to 1.025 under a deepening shadow, the one scale above full
   size. A record badge earned just now is the one mark that pops in from
   nothing: it pops only as it is earned, never when the log opens with it or
@@ -1071,8 +1081,9 @@ exist. The rules that follow from that:
 | `AppMotion.exit` | ease in cubic | The reverse curve for leaving |
 | `AppMotion.lift` | 8px | How far an arrival rises into place |
 | `AppMotion.shift` | 24px | How far a page travels sideways when it trades places with another (`PageSwitcher`) |
+| `AppMotion.swipeShift(width)` | a quarter of the width, 72 to 144px | How far a page travels when a swipe trades it for another: the workout's plan switch |
 | `AppMotion.scale` | 0.97 | A card giving under the finger, a dialog arriving |
-| `AppMotion.settle` | critically damped spring | Content that tracked a gesture springing back to rest |
+| `AppMotion.settle` | critically damped spring | Content that tracked a gesture springing back to rest, or carrying on out at the hand's speed |
 
 `AppMotion.of(context, duration)` returns the duration, or zero under reduced
 motion.
@@ -1134,7 +1145,9 @@ handles reduced motion itself.
   no taps, focus or semantics. For the exercise picker's pages and Stats'
   views. `PageSwitchTransition` is the same trade driven by an animation of
   the caller's, for two pages that must both stay alive (the preset
-  browser's catalog and details). Each page owns its scroll position: pages
+  browser's catalog and details); its fade intervals are public, so the
+  workout's plan switch, which trades two routes' logs and starts the leaving
+  one from a swipe, keeps the same shape. Each page owns its scroll position: pages
   don't inherit the route's primary scroll controller, and a caller never
   hands both pages one controller; `OwnScrollController`
   (`lib/widgets/own_scroll_controller.dart`) gives each copy its own and
@@ -1175,13 +1188,25 @@ handles reduced motion itself.
   push or pop lands at once, and a back swipe still follows the finger.
 - There is no second route style for task flows. On iOS a full-screen-dialog
   route would lose edge-swipe back. The workout's plan switch is the one
-  bespoke page route: the workout being replaced first gives way by `shift`
-  over `quick` toward the side it leaves by, and the chosen plan's workout
-  comes in over it from the other side, travelling `shift` over `standard`
-  while it fades up from mostly there (0.78, so a frequent switch never
-  blanks the log). The platform's own transition doesn't carry the old page
-  off. Once it has landed it is an ordinary page, so its pop transition and
-  back gestures are the platform's, and it lets go of the route it replaced.
+  bespoke page route, and it trades only the log, as two pages of one book:
+  the header, the plan tabs and the week bar hold still. The moment a plan
+  is chosen (a swipe or a tab), the current log carries on out the way it
+  was going, from wherever the finger left it and at the hand's speed (the
+  `settle` spring, a `swipeShift` further), and clears out in the first 35%
+  of the trade, before the save that must come first has finished. The
+  chosen plan's workout is then pushed over it: opaque where it holds still,
+  with a body that lets the replaced page show through until it has landed,
+  so its log comes in over the old one from the other side, travelling
+  `swipeShift` over `enter` on `curve` and fading in from 30% of the way,
+  the shape of `PageSwitchTransition`. The two logs are never joined, so a
+  save that takes a fifth of a second only delays the new log; work still
+  going after `patience` shows the progress line, which stays in place. The
+  title, plan marker and timer controls change in place on the new page, and
+  the plan tabs' underline slides from the tab left to the one chosen over
+  `standard` on `move`, the strip starting where the old one stood. A
+  failed save pushes nothing, and the log springs back. Once the switch has
+  landed it is an ordinary page, so its pop transition and back gestures are
+  the platform's, and it lets go of the route it replaced.
 - A dialog fades in while it settles from 0.97 to full size over `standard`,
   and leaves with a plain fade on `exit`. `showDialog` takes one duration for
   both directions, so the exit is shorter in effect rather than in time. The

@@ -2,13 +2,6 @@ import 'package:flutter/widgets.dart';
 
 import '../../theme/motion.dart';
 
-/// How a leaving page fades: it clears out in the first 35% of the trade.
-const Interval _leavingFade = Interval(0, 0.35);
-
-/// How an arriving page fades: from 30% of the trade on, so the two pages
-/// never read as one.
-const Interval _arrivingFade = Interval(0.3, 1, curve: AppMotion.curve);
-
 /// Trades one page for another along a shared horizontal axis: the
 /// *continuity* of going one step deeper into a set of pages, or back out.
 ///
@@ -88,6 +81,15 @@ class PageSwitcher extends StatelessWidget {
 /// reduced motion, jump the animation rather than running it. Build both
 /// pages outside anything that rebuilds per frame and pass them in.
 class PageSwitchTransition extends StatusTransitionWidget {
+  /// How a leaving page fades over the trade: it clears out in the first 35%.
+  /// Public so a trade driven differently (the workout's plan switch, whose
+  /// leaving page carries a swipe's speed) keeps the same shape.
+  static const Interval leavingFade = Interval(0, 0.35);
+
+  /// How an arriving page fades over the trade: from 30% on, so the two pages
+  /// never read as one.
+  static const Interval arrivingFade = Interval(0.3, 1, curve: AppMotion.curve);
+
   /// Whether the trade goes deeper: the arriving page comes from the end
   /// side and the leaving one goes toward the start.
   final bool forward;
@@ -130,11 +132,11 @@ class PageSwitchTransition extends StatusTransitionWidget {
                 final double opacity;
                 if (arriving) {
                   dx = 1 - AppMotion.curve.transform(t);
-                  opacity = _arrivingFade.transform(t);
+                  opacity = arrivingFade.transform(t);
                 } else {
                   final progress = 1 - t;
                   dx = -AppMotion.curve.transform(progress);
-                  opacity = 1 - _leavingFade.transform(progress);
+                  opacity = 1 - leavingFade.transform(progress);
                 }
                 // The arriving page is announced from its first frame,
                 // before it can be seen, as it is findable and tappable.

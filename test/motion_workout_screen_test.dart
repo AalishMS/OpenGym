@@ -22,14 +22,16 @@ import 'package:gymapp/widgets/motion/collapsible.dart';
 import 'package:gymapp/widgets/plan_title_hero.dart';
 import 'package:gymapp/widgets/underline_tab_strip.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
+import 'package:gymapp/widgets/workout/training_block_strip.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
 import 'support/test_fonts.dart';
 
-/// Motion on the workout screen itself: the plan swipe settling, the plan
-/// switch arriving and then leaving like any page, the progress line that
-/// waits a beat before it moves the log, and the drag lift.
+/// Motion on the workout screen itself: the log following a plan swipe and
+/// settling, the plan switch trading one log for the next while the header
+/// holds still and then leaving like any page, the progress line that waits
+/// a beat before it moves the log, and the drag lift.
 void main() {
   final harness = HiveTestHarness();
   final plans = [
@@ -138,7 +140,43 @@ void main() {
   String currentPlan(WidgetTester tester) =>
       tester.widget<WorkoutScreen>(find.byType(WorkoutScreen).last).plan.name;
 
-  /// How far the log has followed a plan swipe.
+  /// [plan]'s log: the scroll view holding its exercises.
+  Finder log(String plan) => find.ancestor(
+    of: find.text('$plan exercise 0'),
+    matching: find.byType(CustomScrollView),
+  );
+
+  /// How far [plan]'s log has moved sideways.
+  double offsetOf(WidgetTester tester, String plan) =>
+      tester
+          .widget<Transform>(
+            find
+                .ancestor(of: log(plan), matching: find.byType(Transform))
+                .first,
+          )
+          .transform
+          .storage[12];
+
+  /// How visible [plan]'s log is through every fade above it.
+  double opacityOf(WidgetTester tester, String plan) => tester
+      .widgetList(
+        find.ancestor(
+          of: log(plan),
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Opacity || widget is FadeTransition,
+          ),
+        ),
+      )
+      .fold(
+        1.0,
+        (opacity, widget) =>
+            opacity *
+            (widget is Opacity
+                ? widget.opacity
+                : (widget as FadeTransition).opacity.value),
+      );
+
+  /// How far the only log on screen has followed a plan swipe.
   double bodyOffset(WidgetTester tester) =>
       tester
           .widget<Transform>(
@@ -157,19 +195,84 @@ void main() {
     matching: find.text(plan),
   );
 
+  final planStrip = find.byWidgetPredicate(
+    (widget) => widget is UnderlineTabStrip && widget.rule == StripRule.bottom,
+  );
+
   Future<void> switchTo(WidgetTester tester, String plan) async {
-    final strip = find.byWidgetPredicate(
-      (widget) =>
-          widget is UnderlineTabStrip && widget.rule == StripRule.bottom,
+    await tester.tap(
+      find.descendant(of: planStrip.last, matching: find.text(plan)),
     );
-    await tester.tap(find.descendant(of: strip, matching: find.text(plan)));
   }
 
+  /// Where the parts that hold still through a switch stand: the title, the
+  /// plan tabs, the week bar. The page on top is the last in the tree.
+  List<Rect> frame(WidgetTester tester, String plan) => [
+    tester.getRect(title(plan).last),
+    tester.getRect(planStrip.last),
+    tester.getRect(
+      find.descendant(of: planStrip.last, matching: find.text('Legs')),
+    ),
+    tester.getRect(find.byType(TrainingBlockStrip).last),
+  ];
+
+  /// Pumps past the frame a switch is pushed in. A page route's first frame
+  /// is built offstage while the hero controller measures it, so the chosen
+  /// plan's workout is first seen, and first takes taps, on the frame after.
+  Future<void> pushed(WidgetTester tester) async {
+    await tester.pump();
+    await tester.pump();
+  }
+
+  /// The plan tabs' underline while it slides between two tabs.
+  Finder slidingMark() =>
+      find.descendant(of: planStrip.last, matching: find.byType(Positioned));
+
   group('plan swipe', () {
-    testWidgets('a flick past the last plan springs back without overshoot', (
-      tester,
-    ) async {
+    testWidgets('the log follows the finger one to one and fades as it goes, '
+        'while the header holds still', (tester) async {
+      await open(tester);
+      final rest = frame(tester, 'Pull');
+      final gesture = await tester.startGesture(const Offset(300, 450));
+      // Recognised as a swipe: the log starts from where it is, rather than
+      // jumping by the slop to catch the finger up.
+      await gesture.moveBy(const Offset(-20, 0));
+      await tester.pump();
+      expect(offsetOf(tester, 'Pull'), 0);
+      await gesture.moveBy(const Offset(-80, 0));
+      await tester.pump();
+      expect(offsetOf(tester, 'Pull'), -80);
+      final early = opacityOf(tester, 'Pull');
+      expect(early, inExclusiveRange(0.5, 1));
+      await gesture.moveBy(const Offset(-80, 0));
+      await tester.pump();
+      expect(offsetOf(tester, 'Pull'), -160);
+      expect(opacityOf(tester, 'Pull'), inExclusiveRange(0.5, early));
+      // Past 40% of the width it holds at half, still legible.
+      await gesture.moveBy(const Offset(-120, 0));
+      await tester.pump();
+      expect(offsetOf(tester, 'Pull'), -280);
+      expect(opacityOf(tester, 'Pull'), closeTo(0.5, 1e-9));
+      expect(frame(tester, 'Pull'), rest);
+      expect(currentPlan(tester), 'Pull');
+      await gesture.up();
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+      expect(currentPlan(tester), 'Legs');
+    });
+
+    testWidgets('past the last plan it rubber-bands without fading, and a '
+        'flick springs back without overshoot', (tester) async {
       await open(tester, index: 2);
+      final gesture = await tester.startGesture(const Offset(300, 450));
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-160, 0));
+      await tester.pump();
+      // A small fraction of the travel: the edge reads as an edge.
+      expect(bodyOffset(tester), inInclusiveRange(-AppMotion.shift, -1));
+      expect(opacityOf(tester, 'Legs'), 1);
+      await gesture.up();
+      await tester.pumpAndSettle();
       await tester.fling(
         find.byType(CustomScrollView),
         const Offset(-160, 0),
@@ -179,6 +282,7 @@ void main() {
       for (var frame = 0; frame < 40; frame++) {
         await tester.pump(const Duration(milliseconds: 16));
         offsets.add(bodyOffset(tester));
+        expect(opacityOf(tester, 'Legs'), 1);
       }
       expect(currentPlan(tester), 'Legs');
       // It moved with the flick, and only ever on the side it was pulled.
@@ -192,22 +296,30 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('a short drag settles back within the standard time', (
-      tester,
-    ) async {
+    testWidgets('a drag let go short of a switch springs back to full '
+        'opacity', (tester) async {
       await open(tester);
       final gesture = await tester.startGesture(const Offset(300, 450));
-      await gesture.moveBy(const Offset(-30, 0));
+      // 38px in all: short of the 40 a switch takes.
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-18, 0));
       await tester.pump();
-      final pulled = bodyOffset(tester);
-      expect(pulled, inInclusiveRange(-AppMotion.shift, -1));
+      expect(offsetOf(tester, 'Pull'), -18);
+      final pulled = opacityOf(tester, 'Pull');
+      expect(pulled, lessThan(1));
       await gesture.up();
       await tester.pump();
+      await tester.pump(const Duration(milliseconds: 40));
+      // On its way back, and its opacity coming back with it.
+      expect(offsetOf(tester, 'Pull'), inExclusiveRange(-18, 0));
+      expect(opacityOf(tester, 'Pull'), inExclusiveRange(pulled, 1));
       await tester.pump(AppMotion.standard);
-      expect(bodyOffset(tester).abs(), lessThan(1));
+      expect(offsetOf(tester, 'Pull').abs(), lessThan(1));
       await tester.pumpAndSettle();
-      expect(bodyOffset(tester), 0);
+      expect(offsetOf(tester, 'Pull'), 0);
+      expect(opacityOf(tester, 'Pull'), 1);
       expect(currentPlan(tester), 'Pull');
+      expect(find.byType(WorkoutScreen), findsOneWidget);
     });
 
     testWidgets('under reduced motion the log does not follow the finger', (
@@ -218,6 +330,7 @@ void main() {
       await gesture.moveBy(const Offset(-30, 0));
       await tester.pump();
       expect(bodyOffset(tester), 0);
+      expect(opacityOf(tester, 'Pull'), 1);
       await gesture.up();
       await tester.pumpAndSettle();
       expect(bodyOffset(tester), 0);
@@ -225,29 +338,223 @@ void main() {
   });
 
   group('plan switch', () {
-    testWidgets('the chosen plan comes in from its side as the old page '
-        'gives way by the nudge', (tester) async {
+    testWidgets('a swipe carries the log out as the next one comes in over '
+        'it from the other side, and only the log moves', (tester) async {
       await open(tester);
-      final rest = tester.getTopLeft(title('Pull')).dx;
-      await switchTo(tester, 'Legs');
+      final rest = frame(tester, 'Pull');
+      final handle = tester.ensureSemantics();
+      final gesture = await tester.startGesture(const Offset(300, 450));
+      await gesture.moveBy(const Offset(-20, 0));
+      await gesture.moveBy(const Offset(-100, 0));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 60));
+      final released = offsetOf(tester, 'Pull');
+      expect(released, -100);
+      await gesture.up();
+      await pushed(tester);
+
+      // The switch has been pushed: both logs are here, the new one over
+      // the old, and only one header shows, standing where it stood.
       final route = ModalRoute.of(tester.element(title('Legs')))!;
+      expect(route.animation!.value, 0);
+      expect(find.text('Pull exercise 0'), findsOneWidget);
+      // The old log carries on from where the finger left it.
+      expect(offsetOf(tester, 'Pull'), lessThanOrEqualTo(released));
+      // The new one starts a quarter of the width out on the right, unseen
+      // but laid out, announced and tappable already.
+      final from = AppMotion.swipeShift(600);
+      expect(offsetOf(tester, 'Legs'), closeTo(from, 0.01));
+      expect(opacityOf(tester, 'Legs'), 0);
+      expect(
+        tester.getSemantics(find.text('Legs exercise 0')).label,
+        contains('Legs exercise 0'),
+      );
+      expect(frame(tester, 'Legs'), rest);
+
+      await tester.pump(const Duration(milliseconds: 40));
+      final leaving = offsetOf(tester, 'Pull');
+      expect(leaving, lessThan(released));
+      expect(opacityOf(tester, 'Pull'), inExclusiveRange(0, 1));
+      await tester.pump(const Duration(milliseconds: 100));
+      // The old log has gone on further and cleared out; the new one is
+      // fading in and closing on its place.
+      expect(offsetOf(tester, 'Pull'), lessThan(leaving));
+      expect(opacityOf(tester, 'Pull'), 0);
+      final arriving = offsetOf(tester, 'Legs');
+      expect(arriving, inExclusiveRange(0, from));
+      expect(opacityOf(tester, 'Legs'), inExclusiveRange(0, 1));
       expect(route.animation!.value, inExclusiveRange(0, 1));
-      // The page being replaced only gives way by the nudge; the platform's
-      // own transition doesn't carry it off.
-      final outgoing = tester.getTopLeft(title('Pull')).dx;
-      expect(outgoing, lessThanOrEqualTo(rest));
-      expect(outgoing, greaterThanOrEqualTo(rest - AppMotion.shift - 0.5));
-      // The arriving page is still short of its place, to the right.
-      expect(tester.getTopLeft(title('Legs')).dx, greaterThan(rest));
-      // It lands within the standard time.
-      await tester.pump(AppMotion.standard - const Duration(milliseconds: 60));
+      expect(frame(tester, 'Legs'), rest);
+      // The underline slides from the tab it left to the chosen one.
+      final mark = tester.getRect(slidingMark());
+      final pullTab = tester.getRect(
+        find.descendant(of: planStrip.last, matching: find.text('Pull')),
+      );
+      final legsTab = tester.getRect(
+        find.descendant(of: planStrip.last, matching: find.text('Legs')),
+      );
+      expect(mark.left, inExclusiveRange(pullTab.left - 1, legsTab.left));
+
+      await tester.pump(const Duration(milliseconds: 80));
+      expect(offsetOf(tester, 'Legs'), inExclusiveRange(0, arriving));
+
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
       expect(route.animation!.value, 1);
-      expect(tester.getTopLeft(title('Legs')).dx, closeTo(rest, 0.5));
+      expect(currentPlan(tester), 'Legs');
+      expect(find.text('Pull exercise 0'), findsNothing);
+      expect(find.byType(WorkoutScreen), findsOneWidget);
+      expect(offsetOf(tester, 'Legs'), 0);
+      expect(opacityOf(tester, 'Legs'), 1);
+      expect(slidingMark(), findsNothing);
+      expect(frame(tester, 'Legs'), rest);
+      // Landed, the page is opaque again.
+      final scaffold = tester.widget<Scaffold>(
+        find.ancestor(of: log('Legs'), matching: find.byType(Scaffold)).first,
+      );
+      expect(
+        scaffold.backgroundColor,
+        backgroundColor(tester.element(log('Legs'))),
+      );
+      handle.dispose();
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('the arriving log takes a tap on its first frame', (
+      tester,
+    ) async {
+      await open(tester);
+      await tester.drag(find.byType(CustomScrollView), const Offset(-160, 0));
+      await pushed(tester);
+      expect(opacityOf(tester, 'Legs'), 0);
+      final card = find.descendant(
+        of: log('Legs'),
+        matching: find.byType(ExerciseCard),
+      );
+      await tester.tap(
+        find.descendant(of: card.first, matching: find.text('Add set')),
+      );
+      await tester.pump();
+      expect(
+        tester.widget<ExerciseCard>(card.first).exercise.sets,
+        hasLength(1),
+      );
+      await pumpWithStorage(tester);
       await tester.pumpAndSettle();
       expect(currentPlan(tester), 'Legs');
-      expect(tester.getTopLeft(title('Legs')).dx, closeTo(rest, 0.5));
+      expect(
+        tester.widget<ExerciseCard>(card.first).exercise.sets,
+        hasLength(1),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a tab tap plays the same trade, the old log leaving from '
+        'rest', (tester) async {
+      await open(tester);
+      final rest = frame(tester, 'Pull');
+      await switchTo(tester, 'Push');
+      await pushed(tester);
+      // Toward an earlier plan: the old log leaves to the right, from rest,
+      // and the new one comes in from the left.
+      expect(offsetOf(tester, 'Pull'), 0);
+      expect(opacityOf(tester, 'Pull'), 1);
+      expect(
+        offsetOf(tester, 'Push'),
+        closeTo(-AppMotion.swipeShift(600), 0.01),
+      );
+      await tester.pump(const Duration(milliseconds: 40));
+      expect(offsetOf(tester, 'Pull'), greaterThan(0));
+      expect(opacityOf(tester, 'Pull'), inExclusiveRange(0, 1));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(opacityOf(tester, 'Pull'), 0);
+      expect(
+        offsetOf(tester, 'Push'),
+        inExclusiveRange(-AppMotion.swipeShift(600), 0),
+      );
+      expect(opacityOf(tester, 'Push'), inExclusiveRange(0, 1));
+      expect(frame(tester, 'Push'), rest);
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+      expect(currentPlan(tester), 'Push');
+      expect(offsetOf(tester, 'Push'), 0);
+      expect(opacityOf(tester, 'Push'), 1);
+      expect(frame(tester, 'Push'), rest);
+    });
+
+    testWidgets('a slow save keeps the new log waiting, not half arrived', (
+      tester,
+    ) async {
+      final sessions = await open(tester);
+      sessions.pending = Completer<void>();
+      tester.widget<ExerciseCard>(find.byType(ExerciseCard).first).onAddSet(0);
+      await tester.pump();
+      await tester.drag(find.byType(CustomScrollView), const Offset(-160, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+      // The old log has gone at once, without waiting for the save.
+      expect(opacityOf(tester, 'Pull'), 0);
+      expect(find.text('Legs exercise 0'), findsNothing);
+      sessions.pending!.complete();
+      await tester.pump();
+      await tester.pump();
+      // The new one starts its arrival only now it is here.
+      expect(
+        offsetOf(tester, 'Legs'),
+        closeTo(AppMotion.swipeShift(600), 0.01),
+      );
+      expect(opacityOf(tester, 'Legs'), 0);
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+      expect(currentPlan(tester), 'Legs');
+      expect(offsetOf(tester, 'Legs'), 0);
+      expect(opacityOf(tester, 'Legs'), 1);
+    });
+
+    testWidgets('a failed save pushes nothing and the log comes back', (
+      tester,
+    ) async {
+      final sessions = await open(tester);
+      sessions.pending = Completer<void>();
+      tester.widget<ExerciseCard>(find.byType(ExerciseCard).first).onAddSet(0);
+      await tester.pump();
+      await tester.drag(find.byType(CustomScrollView), const Offset(-160, 0));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 150));
+      expect(offsetOf(tester, 'Pull'), lessThan(-160));
+      expect(opacityOf(tester, 'Pull'), 0);
+      sessions.pending!.completeError(StateError('disk full'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      expect(offsetOf(tester, 'Pull'), lessThan(0));
+      await tester.pumpAndSettle();
+      expect(currentPlan(tester), 'Pull');
+      expect(find.byType(WorkoutScreen), findsOneWidget);
+      expect(offsetOf(tester, 'Pull'), 0);
+      expect(opacityOf(tester, 'Pull'), 1);
+      expect(find.text('Retry'), findsOneWidget);
+      // Back in the semantics tree, and taking taps again.
+      expect(
+        tester.getSemantics(find.text('Pull exercise 0')).label,
+        contains('Pull exercise 0'),
+      );
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('under reduced motion the switch lands at once', (
+      tester,
+    ) async {
+      await open(tester, reduceMotion: true);
+      await tester.drag(find.byType(CustomScrollView), const Offset(-160, 0));
+      await tester.pump();
+      final route = ModalRoute.of(tester.element(title('Legs')))!;
+      expect(route.animation!.isCompleted, isTrue);
+      expect(find.text('Pull exercise 0'), findsNothing);
+      expect(offsetOf(tester, 'Legs'), 0);
+      expect(opacityOf(tester, 'Legs'), 1);
+      expect(slidingMark(), findsNothing);
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+      expect(currentPlan(tester), 'Legs');
     });
 
     testWidgets('once it has landed, it lets go of the workout it replaced', (
@@ -287,19 +594,15 @@ void main() {
       await tester.pump(const Duration(milliseconds: 60));
       final route = ModalRoute.of(tester.element(title('Legs')))!;
       expect(route.animation!.value, inExclusiveRange(0, 1));
-      // The sideways entry stays put; it doesn't play backwards.
-      final slide = tester.widget<SlideTransition>(
-        find
-            .ancestor(of: title('Legs'), matching: find.byType(SlideTransition))
-            .first,
+      // The page leaves as a page; its log's arrival doesn't play backwards.
+      final logTransform = tester.widget<Transform>(
+        find.ancestor(of: log('Legs'), matching: find.byType(Transform)).first,
       );
-      expect(slide.position.value, Offset.zero);
-      final fade = tester.widget<FadeTransition>(
-        find
-            .ancestor(of: title('Legs'), matching: find.byType(FadeTransition))
-            .first,
+      expect(logTransform.transform.storage[12], 0);
+      final logFade = tester.widget<Opacity>(
+        find.ancestor(of: log('Legs'), matching: find.byType(Opacity)).first,
       );
-      expect(fade.opacity.value, 1);
+      expect(logFade.opacity, 1);
       await tester.pumpAndSettle();
       expect(find.byType(WorkoutScreen), findsNothing);
       expect(find.text('Open workout'), findsOneWidget);
