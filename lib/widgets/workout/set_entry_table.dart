@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import '../../providers/settings_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
+import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../theme/semantic_colors.dart';
@@ -330,6 +331,20 @@ class _SetEntryTableState extends State<SetEntryTable> {
   bool _disposing = false;
   String _weightUnit = kWeightUnitKg;
   final Map<int, GlobalKey> _rowKeys = {};
+
+  /// Rows that carried a live record mark when the table was last laid out.
+  /// A mark pops in only when it is earned with the table on screen; one the
+  /// table is built with (opening the workout, a card scrolled back into
+  /// view) is simply there. Null until the first layout.
+  Set<int>? _markedRecords;
+
+  /// The set this table's menu has just asked its host to delete. The host's
+  /// next build answers it, or the request lapses after that frame.
+  int? _deleting;
+
+  /// A set the host has just deleted at this table's request, folding away
+  /// where it was so the rows below rise into its place instead of jumping.
+  _RemovedSet? _removed;
   List<SetEntry> get sets => widget.sets;
   void Function(int, double, int) get onChanged => widget.onChanged;
   void Function(int, int?)? get onRpeChanged => widget.onRpeChanged;
@@ -347,6 +362,23 @@ class _SetEntryTableState extends State<SetEntryTable> {
   @override
   void didUpdateWidget(SetEntryTable oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final deleting = _deleting;
+    if (deleting != null &&
+        deleting < oldWidget.sets.length &&
+        sets.length == oldWidget.sets.length - 1) {
+      _deleting = null;
+      // The rows below moved up one place; the marks they carry aren't new.
+      _markedRecords =
+          _markedRecords
+              ?.expand<int>(
+                (i) => i == deleting ? const [] : [i > deleting ? i - 1 : i],
+              )
+              .toSet();
+      _removed =
+          MediaQuery.disableAnimationsOf(context)
+              ? null
+              : _RemovedSet(deleting, oldWidget.sets[deleting]);
+    }
     final keyboard = _keyboardKey.currentState;
     if (keyboard == null) return;
     if (keyboard.widget.sets.length != sets.length) {
@@ -525,16 +557,9 @@ class _SetEntryTableState extends State<SetEntryTable> {
               builder:
                   (context, target, child) => TweenAnimationBuilder<double>(
                     tween: Tween(begin: 1, end: target),
-                    duration:
-                        MediaQuery.disableAnimationsOf(context)
-                            ? Duration.zero
-                            : Duration(
-                              milliseconds: session.closing ? 144 : 176,
-                            ),
-                    curve:
-                        session.closing
-                            ? Curves.easeInCubic
-                            : Curves.easeOutCubic,
+                    // Quick both ways: entry starts the moment it is open.
+                    duration: AppMotion.of(context, AppMotion.quick),
+                    curve: session.closing ? AppMotion.exit : AppMotion.curve,
                     onEnd: () {
                       if (session.closing && session.slide.value == 1) {
                         session.owner._finishExit(session);
@@ -655,11 +680,18 @@ class _SetEntryTableState extends State<SetEntryTable> {
           position.maxScrollExtent,
         );
         if ((target - position.pixels).abs() > .5) {
-          position.animateTo(
-            target,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-          );
+          // A scroll the reader follows to the row the keys now edit; under
+          // reduced motion the row is simply there.
+          final duration = AppMotion.of(context, AppMotion.enter);
+          if (duration == Duration.zero) {
+            position.jumpTo(target);
+          } else {
+            position.animateTo(
+              target,
+              duration: duration,
+              curve: AppMotion.curve,
+            );
+          }
         }
         return false;
       });
@@ -699,7 +731,11 @@ class _SetEntryTableState extends State<SetEntryTable> {
         ),
       ],
     );
-    if (delete == true && context.mounted) onDelete?.call(index);
+    if (delete == true && context.mounted && onDelete != null) {
+      _deleting = index;
+      onDelete!(index);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _deleting = null);
+    }
   }
 
   @override
@@ -712,6 +748,53 @@ class _SetEntryTableState extends State<SetEntryTable> {
     return _buildTable(context, _weightUnit);
   }
 
+  /// [removed] drawn as its row was, laid out like the rows around it. It is
+  /// only ever seen folding away, so it holds no keys and no actions.
+  Widget _removedRow(
+    BuildContext context,
+    _RemovedSet removed, {
+    required String weightUnit,
+    required bool showPrevious,
+    required bool numberIsAction,
+    required bool showTrailing,
+  }) {
+    final entry = removed.entry;
+    void inert() {}
+    return Padding(
+      padding: EdgeInsets.only(bottom: continuousLog ? 4 : 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _EntryRow(
+            isTimed: widget.isTimed,
+            showHistoryColumns: showHistoryColumns,
+            showPrevious: showPrevious,
+            continuousLog: continuousLog,
+            index: removed.index,
+            previous: entry.previous,
+            weightUnit: weightUnit,
+            weight: formatEntryWeight(entry.weight, weightUnit),
+            reps: '${entry.reps}',
+            rpe: entry.rpe,
+            isPrMarker: entry.isPrMarker,
+            beatsPrevious: entry.beatsPrevious,
+            onDetails: numberIsAction ? inert : null,
+            onWeight: inert,
+            onReps: inert,
+            onRpe: onRpeChanged == null ? null : inert,
+            trailing: showTrailing ? const SizedBox() : null,
+          ),
+          if ((entry.annotation?.trim().isNotEmpty ?? false) &&
+              !entry.isPrMarker)
+            Padding(
+              padding: const EdgeInsets.only(left: 40, top: 6),
+              child: Text(entry.annotation!, style: _quiet(context)),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTable(BuildContext context, String weightUnit) => LayoutBuilder(
     builder: (context, constraints) {
       final numberIsAction = onDetails != null && onDelete != null;
@@ -722,6 +805,32 @@ class _SetEntryTableState extends State<SetEntryTable> {
           (!numberIsAction ||
               constraints.maxWidth >=
                   400 * MediaQuery.textScalerOf(context).scale(1));
+      final shownRecords = _markedRecords;
+      _markedRecords = {
+        for (var index = 0; index < sets.length; index++)
+          if (sets[index].record) index,
+      };
+      bool earnedNow(int index) =>
+          shownRecords != null &&
+          sets[index].record &&
+          !shownRecords.contains(index);
+      final removed = _removed;
+      Widget folding(_RemovedSet removed) => _FoldAway(
+        key: ObjectKey(removed),
+        onGone: () {
+          if (mounted && identical(_removed, removed)) {
+            setState(() => _removed = null);
+          }
+        },
+        child: _removedRow(
+          context,
+          removed,
+          weightUnit: weightUnit,
+          showPrevious: showPrevious,
+          numberIsAction: numberIsAction,
+          showTrailing: showTrailing,
+        ),
+      );
       final table = Column(
         children: [
           _EntryHeader(
@@ -734,7 +843,8 @@ class _SetEntryTableState extends State<SetEntryTable> {
             showPrevious: showPrevious,
             continuousLog: continuousLog,
           ),
-          for (var index = 0; index < sets.length; index++)
+          for (var index = 0; index < sets.length; index++) ...[
+            if (removed != null && removed.index == index) folding(removed),
             Padding(
               padding: EdgeInsets.only(bottom: continuousLog ? 4 : 8),
               child: Column(
@@ -791,7 +901,7 @@ class _SetEntryTableState extends State<SetEntryTable> {
                               reps: '${sets[index].reps}',
                               rpe: sets[index].rpe,
                               isPrMarker: sets[index].isPrMarker,
-                              liveRecord: sets[index].record,
+                              liveRecord: earnedNow(index),
                               beatsPrevious: sets[index].beatsPrevious,
                               onDetails:
                                   onDetails != null && onDelete != null
@@ -872,6 +982,8 @@ class _SetEntryTableState extends State<SetEntryTable> {
                 ],
               ),
             ),
+          ],
+          if (removed != null && removed.index >= sets.length) folding(removed),
         ],
       );
       // Workout rows use the card's existing column geometry. A horizontal
@@ -897,6 +1009,70 @@ class _SetEntryTableState extends State<SetEntryTable> {
         ),
       );
     },
+  );
+}
+
+/// A set the host deleted, with the values it had and the place it held.
+class _RemovedSet {
+  final int index;
+  final SetEntry entry;
+
+  const _RemovedSet(this.index, this.entry);
+}
+
+/// Folds a row that has just gone out of the table: it gives way at once and
+/// closes from the bottom up, fading as it goes, so the rows under it rise
+/// into its place over [AppMotion.standard]. It takes no taps and says
+/// nothing to screen readers from its first frame, then reports [onGone].
+class _FoldAway extends StatefulWidget {
+  final VoidCallback onGone;
+  final Widget child;
+
+  const _FoldAway({super.key, required this.onGone, required this.child});
+
+  @override
+  State<_FoldAway> createState() => _FoldAwayState();
+}
+
+class _FoldAwayState extends State<_FoldAway>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.standard,
+    value: 1,
+  );
+  late final CurvedAnimation _size = CurvedAnimation(
+    parent: _controller,
+    curve: AppMotion.curve,
+    reverseCurve: AppMotion.exit,
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.reverse().whenComplete(() {
+      if (mounted) widget.onGone();
+    });
+  }
+
+  @override
+  void dispose() {
+    _size.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: ExcludeSemantics(
+      child: ClipRect(
+        child: SizeTransition(
+          sizeFactor: _size,
+          alignment: AlignmentDirectional.topStart,
+          child: FadeTransition(opacity: _size, child: widget.child),
+        ),
+      ),
+    ),
   );
 }
 
@@ -1294,10 +1470,8 @@ class _EntryRow extends StatelessWidget {
           // lifts into an accent wash; the keypad header carries the value
           // and replace mode.
           child: AnimatedContainer(
-            duration:
-                MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : const Duration(milliseconds: 120),
+            duration: AppMotion.of(context, AppMotion.quick),
+            curve: AppMotion.curve,
             constraints: const BoxConstraints(minHeight: 44),
             padding: const EdgeInsets.all(AppSpacing.xs),
             alignment: Alignment.center,
@@ -1323,27 +1497,55 @@ class _EntryRow extends StatelessWidget {
   );
 }
 
-/// Scales its child in once when it first appears, for a mark earned just
-/// now. Disabled, or under reduced motion, the child simply shows.
-class _PopIn extends StatelessWidget {
+/// Pops its child in from nothing, past full size and back, for a mark earned
+/// just now: the one mark in the app that appears that way.
+///
+/// It decides once, on its first build: [enabled] is read then and never
+/// again, so a rebuild can't replay the pop or cut it short. Disabled, or
+/// under reduced motion, the child simply shows.
+class _PopIn extends StatefulWidget {
   final bool enabled;
   final Widget child;
 
   const _PopIn({super.key, required this.enabled, required this.child});
 
   @override
-  Widget build(BuildContext context) {
-    if (!enabled || MediaQuery.disableAnimationsOf(context)) return child;
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 360),
-      curve: Curves.easeOutBack,
-      builder:
-          (context, scale, child) =>
-              Transform.scale(scale: scale, child: child),
-      child: child,
+  State<_PopIn> createState() => _PopInState();
+}
+
+class _PopInState extends State<_PopIn> with SingleTickerProviderStateMixin {
+  AnimationController? _controller;
+  CurvedAnimation? _curve;
+  Animation<double> _scale = kAlwaysCompleteAnimation;
+  bool _decided = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_decided) return;
+    _decided = true;
+    if (!widget.enabled || MediaQuery.disableAnimationsOf(context)) return;
+    final controller = AnimationController(
+      vsync: this,
+      duration: AppMotion.enter,
     );
+    _controller = controller;
+    // The overshoot is the pop's character, and this mark's alone.
+    _scale =
+        _curve = CurvedAnimation(parent: controller, curve: Curves.easeOutBack);
+    controller.forward();
   }
+
+  @override
+  void dispose() {
+    _curve?.dispose();
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      ScaleTransition(scale: _scale, child: widget.child);
 }
 
 class _SetKeyboard extends StatefulWidget {

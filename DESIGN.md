@@ -313,7 +313,10 @@ current block marked with a check, Edit block and Create block, and a Done
 button. Nothing is picked there, so the other rows carry no empty radio ring,
 and tapping a row edits that block.
 Create block and Edit block open inside that sheet, replacing the block list
-until Cancel or Back returns to it, so only one layer is ever open; from the
+until Cancel or Back returns to it, so only one layer is ever open: the two
+trade places in a quick cross while the sheet eases to the new height, and
+while picking, the chosen block's weeks fold open beneath it as the last
+block's fold away. From the
 workout's block menu they, and Reorder blocks, open as a bottom sheet of their
 own. The form sets the length with one stepper (minus, the week count, plus)
 on a control fill; a key that can't be pressed sinks into the fill. A week
@@ -731,8 +734,11 @@ signature:
 - The workout marks records while you lift. The set that would be the
   workout's heaviest-weight record if logged as entered (see Personal
   records: one set per lift, judged against earlier logs, never on a lift's
-  first workout or for a hold) gets the PR badge, which pops in, and a heavy
-  haptic when the entry closes. A set that goes past its Previous set (more weight, or
+  first workout or for a hold) gets the PR badge, which pops in as it is
+  earned, and a heavy haptic when the entry closes. A badge the log opens
+  with, or one on a card scrolled back into view, is simply there, and so is
+  one that moves up a row when a set above it is deleted. A set that goes
+  past its Previous set (more weight, or
   more reps at the same weight) shows an accent arrow beside Previous.
   Exercises with no history are never marked.
 - Finish in the workout header is labelled, not a bare check; large text on a
@@ -749,7 +755,24 @@ signature:
   separately. The wordmark signs the summary at the bottom. Figures show final
   values immediately, so Share always exports accurate totals. The header's
   Share action captures the complete summary as an opaque PNG after pending
-  paint finishes; Done returns to the log.
+  paint finishes, crossing to its progress in place while it works; that
+  cross sits in the header, outside the image. Done returns to the log.
+- The workout moves sparingly, because it is used mid-set in glances. A swipe
+  between plans moves the log a little with the finger (up to 24px, less at
+  the first and last plan) and springs it back on release, carrying the
+  flick, without overshoot. The chosen plan's workout then comes in over the
+  current one from its side; once it has landed it leaves like any page, so
+  Back, Android's predictive back and iOS's edge swipe work after a switch. A
+  set deleted from its hold menu folds away so the rows below rise into its
+  place, in the workout and the plan editor. Work in flight (saving, starting
+  or pausing the clock, logging, changing blocks) shows its progress line
+  only once it has lasted 300ms, and the line folds open and away rather
+  than shoving the log down and back; its label is in the tree from the
+  start but is announced only once shown. A failed save's message and Retry
+  fold open the same way. A held exercise rises from the page onto the
+  raised ground as it lifts and sinks back as it drops. Changing week, the
+  header's timer controls and the clock change in place without motion.
+  Under reduced motion every change is immediate.
 - Haptics are named for the moment (`lib/utils/haptics.dart`): a selection
   tick when the main tab changes or a plan is picked up or dropped into a new
   place, a

@@ -8,6 +8,7 @@ import '../../models/training_block.dart';
 import '../../models/training_week.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
+import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 
@@ -141,10 +142,8 @@ class _TrainingBlockStripState extends State<TrainingBlockStrip> {
         Scrollable.ensureVisible(
           selected,
           alignment: .65,
-          duration:
-              MediaQuery.disableAnimationsOf(context)
-                  ? Duration.zero
-                  : const Duration(milliseconds: 180),
+          duration: AppMotion.of(context, AppMotion.standard),
+          curve: AppMotion.curve,
         );
       }
     });
@@ -419,10 +418,8 @@ class _BlockButton extends StatelessWidget {
                     // Points the way the menu opens, then flips to close it.
                     AnimatedRotation(
                       turns: open ? 0.5 : 0,
-                      duration:
-                          MediaQuery.disableAnimationsOf(context)
-                              ? Duration.zero
-                              : const Duration(milliseconds: 150),
+                      duration: AppMotion.of(context, AppMotion.quick),
+                      curve: AppMotion.curve,
                       child: Icon(
                         LucideIcons.chevronUp,
                         size: 14,
@@ -489,10 +486,8 @@ class _WeekTab extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
             child: Center(
               child: AnimatedContainer(
-                duration:
-                    MediaQuery.disableAnimationsOf(context)
-                        ? Duration.zero
-                        : const Duration(milliseconds: 150),
+                duration: AppMotion.of(context, AppMotion.quick),
+                curve: AppMotion.curve,
                 // Top padding matches the underline's depth, so the label
                 // shares a centre line with the block button beside it.
                 padding: const EdgeInsets.only(top: 8, bottom: 6),
@@ -557,17 +552,19 @@ class _BlockMenuRoute extends PopupRoute<VoidCallback> {
   @override
   String? get barrierLabel => 'Close block menu';
 
+  // Like a dialog: one duration, and the leaving menu gives way at once on
+  // the exit curve, so it reads shorter than its arrival.
   @override
   Duration get transitionDuration =>
-      media.disableAnimations
-          ? Duration.zero
-          : const Duration(milliseconds: 180);
+      media.disableAnimations ? Duration.zero : AppMotion.standard;
+
+  CurvedAnimation? _curved;
 
   @override
-  Duration get reverseTransitionDuration =>
-      media.disableAnimations
-          ? Duration.zero
-          : const Duration(milliseconds: 120);
+  void dispose() {
+    _curved?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget buildPage(
@@ -591,17 +588,18 @@ class _BlockMenuRoute extends PopupRoute<VoidCallback> {
     Animation<double> secondaryAnimation,
     Widget child,
   ) {
-    final curved = CurvedAnimation(
+    // Made once: this runs on every frame of the transition.
+    final curved = _curved ??= CurvedAnimation(
       parent: animation,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeIn,
+      curve: AppMotion.curve,
+      reverseCurve: AppMotion.exit,
     );
     return FadeTransition(
       opacity: curved,
       child: ScaleTransition(
         // Grows out of the block button, which sits under its left edge.
         alignment: Alignment.bottomLeft,
-        scale: Tween<double>(begin: .94, end: 1).animate(curved),
+        scale: Tween<double>(begin: AppMotion.scale, end: 1).animate(curved),
         child: child,
       ),
     );

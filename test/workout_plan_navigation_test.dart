@@ -15,6 +15,7 @@ import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/theme/motion.dart';
 import 'package:gymapp/widgets/underline_tab_strip.dart';
 import 'package:gymapp/widgets/workout/training_block_strip.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
@@ -285,7 +286,7 @@ void main() {
               )
               .last;
       final route = ModalRoute.of(tester.element(title))!;
-      expect(route.transitionDuration, const Duration(milliseconds: 190));
+      expect(route.transitionDuration, AppMotion.standard);
       expect(route.animation!.value, inExclusiveRange(0, 1));
       final slide = tester.widget<SlideTransition>(
         find.ancestor(of: title, matching: find.byType(SlideTransition)).first,
