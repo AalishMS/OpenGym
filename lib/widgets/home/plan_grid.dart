@@ -3,13 +3,14 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../models/workout_plan.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../utils/format.dart';
+import '../../utils/haptics.dart';
 import '../../utils/plan_stats.dart';
 import 'plan_card.dart';
 
@@ -39,7 +40,7 @@ class _PlanGridState extends State<PlanGrid>
     with SingleTickerProviderStateMixin {
   late final AnimationController _motion = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 280),
+    duration: AppMotion.standard,
     value: 1,
   );
 
@@ -54,8 +55,10 @@ class _PlanGridState extends State<PlanGrid>
     super.didUpdateWidget(oldWidget);
     final before = oldWidget.plans.map((plan) => plan.id).toList();
     final after = widget.plans.map((plan) => plan.id).toList();
-    if (!listEquals(before, after) &&
-        setEquals(before.toSet(), after.toSet())) {
+    // A move, or a plan deleted: the cards that stay slide to their new
+    // places, so a deleted plan's gap closes instead of jumping shut. A
+    // plan that arrives simply appears in its place.
+    if (!listEquals(before, after) && before.toSet().containsAll(after)) {
       if (MediaQuery.disableAnimationsOf(context)) {
         _motion.value = 1;
       } else {
@@ -122,8 +125,7 @@ class _DraggablePlanCardState extends State<_DraggablePlanCard> {
   @override
   Widget build(BuildContext context) {
     final reducedMotion = MediaQuery.disableAnimationsOf(context);
-    final duration =
-        reducedMotion ? Duration.zero : const Duration(milliseconds: 160);
+    final duration = reducedMotion ? Duration.zero : AppMotion.quick;
     final grip = Tooltip(
       message: 'Drag to reorder ${titleCase(widget.plan.name)}',
       child: MouseRegion(
@@ -155,7 +157,7 @@ class _DraggablePlanCardState extends State<_DraggablePlanCard> {
             onWillAcceptWithDetails:
                 (details) => details.data != widget.plan.id && !_dragging,
             onAcceptWithDetails: (details) {
-              HapticFeedback.selectionClick();
+              Haptics.selection();
               widget.onMove(details.data, widget.plan.id!);
             },
             builder:
@@ -184,7 +186,7 @@ class _DraggablePlanCardState extends State<_DraggablePlanCard> {
                                 return cardBox.globalToLocal(position);
                               },
                               onDragStarted: () {
-                                HapticFeedback.lightImpact();
+                                Haptics.selection();
                                 setState(() => _dragging = true);
                               },
                               onDragEnd: (_) {
@@ -201,7 +203,7 @@ class _DraggablePlanCardState extends State<_DraggablePlanCard> {
                                   child: TweenAnimationBuilder<double>(
                                     tween: Tween(begin: 0, end: 1),
                                     duration: duration,
-                                    curve: Curves.easeOutCubic,
+                                    curve: AppMotion.curve,
                                     builder:
                                         (context, lift, child) =>
                                             Transform.scale(
@@ -240,7 +242,7 @@ class _DraggablePlanCardState extends State<_DraggablePlanCard> {
                       child: IgnorePointer(
                         child: AnimatedContainer(
                           duration: duration,
-                          curve: Curves.easeOutCubic,
+                          curve: AppMotion.curve,
                           decoration: BoxDecoration(
                             borderRadius: AppRadius.card,
                             border: Border.all(
@@ -333,7 +335,7 @@ class _RenderPlanGrid extends RenderBox
     final cardWidth = (width - _gap * (columns - 1)) / columns;
     final animate = _lastWidth == width;
     _lastWidth = width;
-    final progress = Curves.easeInOutCubic.transform(motion.value);
+    final progress = AppMotion.curve.transform(motion.value);
     final restarted = progress < _lastProgress;
     _lastProgress = progress;
     double top = 0;

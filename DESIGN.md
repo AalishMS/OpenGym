@@ -579,7 +579,12 @@ program's name, a figure sheet (days, minutes per session, exercises, who it
 suits) and a labelled schedule whose training cells use the same solved plan
 tints and numbers as the foldable workout-day list and Home's plan markers.
 Folded days expose complete prescriptions, RIR, rest and substitutions; shared
-guidance closes the page before the user creates a copy.
+guidance closes the page before the user creates a copy. The catalog and a
+program's details trade places along a horizontal axis, as the exercise
+picker's pages do; the install bar belongs to the details and travels with
+them. Both pages stay alive throughout, so the catalog keeps its goal and
+scroll position, and the page that isn't showing is offstage. Workout days
+fold open and away (`Collapsible`).
 
 ## UI Design
 
@@ -631,7 +636,14 @@ signature:
   dark mode it reads as black. Screen and dialog titles are set a size up from
   section titles (20px, extra bold, tightly tracked). Home keeps its `> OpenGym` brand header, followed
   by a slash and a borderless active-split selector. An icon-only Coach action
-  sits at the trailing edge on a quiet accent circle when available.
+  sits at the trailing edge on a quiet accent circle when available. The
+  split menu settles out of the selector as it opens and closes at once.
+  Choosing another split crosses the selector's name to the new one while its
+  width eases, and fades Home's content in. The last split's plans go at once
+  rather than crossing, so nothing from them is read or tapped on its way
+  out. The same fade marks plans arriving on an empty Home, or the last
+  one deleted, while Home is in view; a change made under a page or on
+  another tab is simply there on the way back.
 - Back is always the same neutral arrow (`AppBackButton`) with a *Back*
   tooltip, including the steps back inside the exercise picker and preset
   browser. Header actions keep the accent. Plan colours stay on Home, so the
@@ -671,7 +683,13 @@ signature:
   sheet with a drag handle, not a dialog. *Delete plan* is always the last
   row, set apart by a rule and the error colour. In Manage, the drag grip
   leads each card and *Plan actions* trails it, so the two targets sit at
-  opposite ends.
+  opposite ends. Entering Manage folds the next workout and the week away so
+  the plans rise to the top, while the rows cross to cards and *Manage* to
+  *Done*; leaving unfolds them. Manage cleared by the app (another tab,
+  reselecting Home, the tour) settles at once. Grid cards slide to their new
+  places when one is dropped, moved from its menu, or deleted. They take ink
+  but don't give under the finger: each carries a grip, and a give would pull
+  against the card being lifted.
 - The workout marks records while you lift. The set that would be the
   workout's heaviest-weight record if logged as entered (see Personal
   records: one set per lift, judged against earlier logs, never on a lift's
@@ -695,7 +713,8 @@ signature:
   Share action captures the complete summary as an opaque PNG after pending
   paint finishes; Done returns to the log.
 - Haptics are named for the moment (`lib/utils/haptics.dart`): a selection
-  tick when the main tab changes or a plan is dropped into a new place, a
+  tick when the main tab changes or a plan is picked up or dropped into a new
+  place, a
   medium impact when the workout clock starts, a heavy one for a new record or
   a logged workout. Keypad keys keep their own selection clicks.
 - Create and Edit plan share the workout log's open exercise sections, hairline
@@ -850,8 +869,10 @@ signature:
   `blockStatistics`. See [statistics design](docs/statistics-design.md) for
   references.
 - Home's weekly strip gives each day a full 48dp target without gaps, so all
-  seven fit a 390dp phone; bars are inset inside their targets and grow in
-  when the week changes. Today is marked by its bold letter and a small accent
+  seven fit a 390dp phone; bars are inset inside their targets. A bar first
+  appears at its height and grows or shrinks over `long` only when its day
+  changes while Home is in view: a workout finished on the workout page, or
+  another split's week, is simply there. Today is marked by its bold letter and a small accent
   dot under it, the same dot the workout uses for the week being trained now.
 - Home labels the rotation bar with “Workout N of M”. The same workout
   numbers appear in the plan list's coloured markers. Muscle groups sit on

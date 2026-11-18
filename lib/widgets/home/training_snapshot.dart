@@ -6,6 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../models/workout_plan.dart';
 import '../../models/workout_session.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
@@ -182,6 +183,12 @@ class TrainingSnapshot extends StatelessWidget {
 /// One day: a bar that grows with the day's sets, then its letter. Today
 /// reads apart through its letter and a small accent dot under it, the same
 /// mark the workout uses for the week being trained now.
+///
+/// A bar first appears at its height. It grows or shrinks over
+/// [AppMotion.long] only when its day changes while Home can be seen, such
+/// as a workout synced in. A change made while a page covers Home, such as
+/// the workout just finished, has no tickers to run on and would play as
+/// that page leaves, so it lands at once: coming back replays no growth.
 class _DayColumn extends StatelessWidget {
   final String letter;
   final bool trained;
@@ -198,7 +205,8 @@ class _DayColumn extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final reduceMotion = MediaQuery.of(context).disableAnimations;
+    // Read here so the bar also rebuilds as Home is covered and uncovered.
+    final seen = TickerMode.valuesOf(context).enabled;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
       child: Column(
@@ -210,10 +218,10 @@ class _DayColumn extends StatelessWidget {
               child: TweenAnimationBuilder<double>(
                 tween: Tween(end: trained ? 14 + 38 * share : 5),
                 duration:
-                    reduceMotion
-                        ? Duration.zero
-                        : const Duration(milliseconds: 420),
-                curve: Curves.easeOutCubic,
+                    seen
+                        ? AppMotion.of(context, AppMotion.long)
+                        : Duration.zero,
+                curve: AppMotion.curve,
                 builder:
                     (context, height, _) => Container(
                       width: double.infinity,

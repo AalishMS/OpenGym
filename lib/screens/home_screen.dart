@@ -16,6 +16,7 @@ import '../services/hive_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
 import '../theme/radii.dart';
+import '../theme/motion.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../utils/plan_stats.dart';
@@ -28,6 +29,8 @@ import '../widgets/home/plan_grid.dart';
 import '../widgets/home/training_snapshot.dart';
 import '../widgets/home/up_next_card.dart';
 import '../widgets/motion/app_modals.dart';
+import '../widgets/motion/collapsible.dart';
+import '../widgets/motion/state_switcher.dart';
 import '../widgets/persistence_dialog.dart';
 import '../widgets/splits/preset_browser_dialog.dart';
 import '../widgets/splits/split_switcher.dart';
@@ -63,6 +66,12 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   bool _managing = false;
+
+  /// Bumped when Manage is cleared for the app rather than by the user (the
+  /// tab left, Home reselected, the tour starting). It rekeys the regions
+  /// Manage moves, so they settle at once instead of folding open on a page
+  /// nobody is looking at, or under a tour that is measuring them.
+  int _manageReset = 0;
   bool _splitMenuOpen = false;
   bool _splitMenuBackGesture = false;
   bool _mutatingPlan = false;
@@ -112,6 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!widget.active ||
         widget.resetRequest != oldWidget.resetRequest ||
         (widget.tutorialActive && !oldWidget.tutorialActive)) {
+      if (_managing) _manageReset++;
       _managing = false;
       _splitMenuBackGesture = false;
     }
@@ -124,6 +134,7 @@ class _HomeScreenState extends State<HomeScreen> {
     // Capture the layer for this pop: closing the menu synchronously must not
     // let another callback from the same Back also leave Manage.
     final splitMenuInView = _splitMenuOpen;
+    final splitId = context.watch<SplitProvider?>()?.activeSplitId;
 
     return PopScope(
       canPop: !widget.active || (!_managing && !_splitMenuBackGesture),
@@ -159,12 +170,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 _buildHeader(context),
                 Expanded(
                   child: Consumer<WorkoutPlanProvider>(
-                    builder: (context, provider, child) {
-                      if (provider.plans.isEmpty) {
-                        return _buildEmptyState(context, provider);
-                      }
-                      return _buildPlanSection(context, provider, accent);
-                    },
+                    builder:
+                        (context, provider, child) => _ContentChange(
+                          split: splitId,
+                          empty: provider.plans.isEmpty,
+                          enabled: widget.active,
+                          child:
+                              provider.plans.isEmpty
+                                  ? _buildEmptyState(context, provider)
+                                  : _buildPlanSection(
+                                    context,
+                                    provider,
+                                    accent,
+                                    splitId,
+                                  ),
+                        ),
                   ),
                 ),
               ],
@@ -315,6 +335,7 @@ class _HomeScreenState extends State<HomeScreen> {
     BuildContext context,
     WorkoutPlanProvider provider,
     Color accent,
+    String? splitId,
   ) {
     final plans = provider.plans;
     final sessions = context.watch<WorkoutSessionProvider>().sessions;
@@ -372,54 +393,82 @@ class _HomeScreenState extends State<HomeScreen> {
           AppSpacing.xl,
         ),
         children: [
-          if (!_managing) ...[
-            // Session writes do not all pass through the provider (finishing
-            // a workout, sync), so follow the box for the in-progress state.
-            ValueListenableBuilder(
-              valueListenable: HiveService.sessionsListenable(),
-              builder: (context, _, _) {
-                final live = HiveService.getLiveSession();
-                final liveIndex =
-                    live?.planId == null
-                        ? -1
-                        : plans.indexWhere((plan) => plan.id == live!.planId);
-                final inProgress = liveIndex >= 0;
-                final index = inProgress ? liveIndex : nextIndex;
-                return UpNextCard(
-                  tutorialStartKey: widget.tutorialStartKey,
-                  plan: plans[index],
-                  day: index + 1,
-                  dayCount: plans.length,
-                  stat: statsByIndex[index],
-                  trainedDays: trainedDays,
-                  durationMinutes: inProgress ? null : durationMinutes,
-                  inProgress: inProgress,
-                  onStart:
-                      inProgress
-                          ? () => openWorkoutDestination(
-                            context,
-                            WorkoutDestination.session(live!.id!),
-                            requireIncomplete: true,
-                            heroTag: UpNextCard.heroTagFor(plans[index]),
-                          )
-                          : () => _openWorkout(
-                            context,
-                            plans[nextIndex],
-                            nextIndex,
-                            heroTag: UpNextCard.heroTagFor(plans[nextIndex]),
-                          ),
-                );
-              },
+          // Manage folds the week's summary away so the plans rise to the
+          // top, and unfolds it on Done. Folding, it takes no taps and says
+          // nothing, as content on its way out.
+          Collapsible(
+            key: ValueKey('summary-$_manageReset'),
+            open: !_managing,
+            child: IgnorePointer(
+              ignoring: _managing,
+              child: ExcludeSemantics(
+                excluding: _managing,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Session writes do not all pass through the provider
+                    // (finishing a workout, sync), so follow the box for the
+                    // in-progress state.
+                    ValueListenableBuilder(
+                      valueListenable: HiveService.sessionsListenable(),
+                      builder: (context, _, _) {
+                        final live = HiveService.getLiveSession();
+                        final liveIndex =
+                            live?.planId == null
+                                ? -1
+                                : plans.indexWhere(
+                                  (plan) => plan.id == live!.planId,
+                                );
+                        final inProgress = liveIndex >= 0;
+                        final index = inProgress ? liveIndex : nextIndex;
+                        return UpNextCard(
+                          tutorialStartKey: widget.tutorialStartKey,
+                          plan: plans[index],
+                          day: index + 1,
+                          dayCount: plans.length,
+                          stat: statsByIndex[index],
+                          trainedDays: trainedDays,
+                          durationMinutes: inProgress ? null : durationMinutes,
+                          inProgress: inProgress,
+                          onStart:
+                              inProgress
+                                  ? () => openWorkoutDestination(
+                                    context,
+                                    WorkoutDestination.session(live!.id!),
+                                    requireIncomplete: true,
+                                    heroTag: UpNextCard.heroTagFor(
+                                      plans[index],
+                                    ),
+                                  )
+                                  : () => _openWorkout(
+                                    context,
+                                    plans[nextIndex],
+                                    nextIndex,
+                                    heroTag: UpNextCard.heroTagFor(
+                                      plans[nextIndex],
+                                    ),
+                                  ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    TrainingSnapshot(
+                      // Another split's week is not this week changing, so
+                      // its bars are simply there instead of growing out of
+                      // the last split's.
+                      key: ValueKey(splitId),
+                      plans: plans,
+                      sessions: sessions,
+                      onOpenWeeklyTraining: widget.onOpenWeeklyTraining,
+                      onOpenLastWorkout: widget.onOpenLastWorkout,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
+                ),
+              ),
             ),
-            const SizedBox(height: AppSpacing.sm),
-            TrainingSnapshot(
-              plans: plans,
-              sessions: sessions,
-              onOpenWeeklyTraining: widget.onOpenWeeklyTraining,
-              onOpenLastWorkout: widget.onOpenLastWorkout,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-          ],
+          ),
           Row(
             children: [
               Expanded(
@@ -431,36 +480,73 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: AppSpacing.sm),
               TextButton(
                 onPressed: () => setState(() => _managing = !_managing),
-                child: Text(_managing ? 'Done' : 'Manage'),
+                child: StateSwitcher(
+                  key: ValueKey('manage-label-$_manageReset'),
+                  // Off under reduced motion: StateSwitcher's AnimatedSize
+                  // asserts when a size change gets no time.
+                  animateSize: !MediaQuery.disableAnimationsOf(context),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _managing ? 'Done' : 'Manage',
+                    key: ValueKey(_managing),
+                  ),
+                ),
               ),
             ],
           ),
-          if (_managing) ...[
-            const SizedBox(height: AppSpacing.sm),
-            PlanGrid(
-              plans: plans,
-              stats: statsByIndex,
-              onOpen: (index) => _openWorkout(context, plans[index], index),
-              onShowActions: actions,
-              onMove: (fromId, toId) => _movePlan(context, fromId, toId),
-            ),
-          ] else ...[
-            Divider(height: 1, color: hairlineColor(context)),
-            for (var index = 0; index < plans.length; index++) ...[
-              HomePlanRow(
-                workoutNumber: index + 1,
-                key: ValueKey(plans[index].id),
-                plan: plans[index],
-                isNext: index == nextIndex,
-                onOpen: () => _openWorkout(context, plans[index], index),
-                onShowActions: () => actions(index),
-              ),
-              if (index < plans.length - 1 &&
-                  index != nextIndex &&
-                  index + 1 != nextIndex)
-                Divider(height: 1, color: hairlineColor(context)),
-            ],
-          ],
+          // The quiet rows and Manage's cards with their grips cross in
+          // place, in step with the summary folding above them.
+          StateSwitcher(
+            key: ValueKey('plans-$_manageReset'),
+            // Off under reduced motion: StateSwitcher's AnimatedSize
+            // asserts when a size change gets no time.
+            animateSize: !MediaQuery.disableAnimationsOf(context),
+            child:
+                _managing
+                    ? Column(
+                      key: const ValueKey('plan-grid'),
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: AppSpacing.sm),
+                        PlanGrid(
+                          plans: plans,
+                          stats: statsByIndex,
+                          onOpen:
+                              (index) =>
+                                  _openWorkout(context, plans[index], index),
+                          onShowActions: actions,
+                          onMove:
+                              (fromId, toId) =>
+                                  _movePlan(context, fromId, toId),
+                        ),
+                      ],
+                    )
+                    : Column(
+                      key: const ValueKey('plan-rows'),
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Divider(height: 1, color: hairlineColor(context)),
+                        for (var index = 0; index < plans.length; index++) ...[
+                          HomePlanRow(
+                            workoutNumber: index + 1,
+                            key: ValueKey(plans[index].id),
+                            plan: plans[index],
+                            isNext: index == nextIndex,
+                            onOpen:
+                                () =>
+                                    _openWorkout(context, plans[index], index),
+                            onShowActions: () => actions(index),
+                          ),
+                          if (index < plans.length - 1 &&
+                              index != nextIndex &&
+                              index + 1 != nextIndex)
+                            Divider(height: 1, color: hairlineColor(context)),
+                        ],
+                      ],
+                    ),
+          ),
           const SizedBox(height: AppSpacing.sm),
           Align(
             alignment: AlignmentDirectional.centerStart,
@@ -954,6 +1040,91 @@ class _HomeScreenState extends State<HomeScreen> {
       },
     );
   }
+}
+
+/// Fades Home's content in when it becomes a different thing: another split's
+/// plans, or plans where there were none (and none where there were some).
+///
+/// Changing split swaps every plan, the next workout and the week on Home at
+/// once; without this it is a cut that reads like a glitch. The old content
+/// goes at once and the new fades in over [AppMotion.standard], rather than
+/// the two crossing: the leaving tree would hold the tour's keys and scroll
+/// controller a second time, and show the last split's plans as if they could
+/// still be opened. The new content is laid out, tappable and announced from
+/// its first frame; only its opacity moves.
+///
+/// It plays only for a change made while Home can be seen: switching split
+/// from the header, a program installed or a split deleted from a dialog over
+/// Home, sync bringing plans into an empty Home, or the last plan deleted.
+/// A change made while a page covers Home (its tickers are off) or while
+/// another tab shows ([enabled] false), and the split first loading, simply
+/// land, so nothing replays on the way back. Under reduced motion it never
+/// plays.
+class _ContentChange extends StatefulWidget {
+  final String? split;
+  final bool empty;
+  final bool enabled;
+  final Widget child;
+
+  const _ContentChange({
+    required this.split,
+    required this.empty,
+    required this.enabled,
+    required this.child,
+  });
+
+  @override
+  State<_ContentChange> createState() => _ContentChangeState();
+}
+
+class _ContentChangeState extends State<_ContentChange>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.standard,
+    value: 1,
+  );
+  late final CurvedAnimation _opacity = CurvedAnimation(
+    parent: _controller,
+    curve: AppMotion.curve,
+  );
+
+  @override
+  void didUpdateWidget(_ContentChange oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final changed =
+        widget.split == oldWidget.split
+            ? widget.empty != oldWidget.empty
+            // The first split loading is not a change of workspace.
+            : widget.split != null && oldWidget.split != null;
+    if (!changed) {
+      if (widget.split != oldWidget.split) _controller.value = 1;
+      return;
+    }
+    final seen =
+        widget.enabled &&
+        TickerMode.valuesOf(context).enabled &&
+        !MediaQuery.disableAnimationsOf(context);
+    if (seen) {
+      _controller.forward(from: 0);
+    } else {
+      _controller.value = 1;
+    }
+  }
+
+  @override
+  void dispose() {
+    _opacity.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FadeTransition(
+    opacity: _opacity,
+    alwaysIncludeSemantics: true,
+    child: widget.child,
+  );
 }
 
 /// Centres its child and caps it at [Breakpoints.expanded].
