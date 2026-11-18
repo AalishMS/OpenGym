@@ -12,6 +12,7 @@ import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/stats_screen.dart';
 import 'package:gymapp/services/statistics_analytics_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/theme/motion.dart';
 import 'package:gymapp/widgets/motion/entrance.dart';
 import 'package:gymapp/widgets/statistics/block_statistics.dart';
 import 'package:gymapp/widgets/statistics/block_trend.dart';
@@ -786,6 +787,11 @@ void main() {
       expect(opacity(0), 1);
       expect(opacity(11), 1);
       expect(opacity(12), lessThan(1));
+      // The whole batch, eight rows, has landed within the long time.
+      await tester.pump(AppMotion.long);
+      for (var i = 12; i < 20; i++) {
+        expect(opacity(i), 1, reason: 'row $i still arriving');
+      }
       await tester.pumpAndSettle();
       expect(opacity(19), 1);
 

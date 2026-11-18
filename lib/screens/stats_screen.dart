@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -12,6 +14,7 @@ import '../providers/workout_session_provider.dart';
 import '../services/exercise_catalog.dart';
 import '../services/statistics_analytics_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/scroll_to_top.dart';
@@ -97,6 +100,12 @@ class StatsScreenState extends State<StatsScreen> {
   String? _progressExercise;
   String? _lastSplit;
   int _recordLimit = 12;
+
+  /// The most stagger steps the rows revealed by *Show earlier records* wait:
+  /// three steps and an arrival fill [AppMotion.long].
+  static final int _recordStaggerSteps =
+      (AppMotion.long - AppMotion.enter).inMicroseconds ~/
+      AppMotion.stagger.inMicroseconds;
 
   /// The first record row revealed by the last *Show earlier records*, for
   /// the one frame those rows are built; they arrive, the rest were there.
@@ -591,7 +600,12 @@ class StatsScreenState extends State<StatsScreen> {
                   animate:
                       _recordsArrivingFrom != null &&
                       index >= _recordsArrivingFrom!,
-                  index: index - (_recordsArrivingFrom ?? 0),
+                  // Capped so the whole batch has landed within
+                  // AppMotion.long; rows past the cap arrive with the last.
+                  index: math.min(
+                    index - (_recordsArrivingFrom ?? 0),
+                    _recordStaggerSteps,
+                  ),
                   child: RecordEventRow(
                     key: ValueKey(
                       'record-${event.session.id}-${event.exerciseId ?? event.exerciseName}',
