@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
 import '../services/exercise_catalog.dart';
 import '../data/plan_colors.dart';
+import '../data/plan_starters.dart';
 import '../models/exercise_set_data.dart';
 import '../models/exercise_template.dart';
 import '../models/set.dart' as gym;
@@ -17,12 +19,15 @@ import '../services/hive_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../theme/breakpoints.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
+import '../widgets/raised_card.dart';
+import '../widgets/rolling_figure.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../utils/set_history.dart';
 import '../utils/weight_units.dart';
@@ -33,6 +38,9 @@ import '../models/training_block.dart';
 import '../models/training_week.dart';
 import '../providers/training_block_provider.dart';
 import '../widgets/workout/training_block_strip.dart';
+
+/// How many sets an exercise added to a plan starts with.
+const int kNewExerciseSets = 3;
 
 class PlanEditorScreen extends StatefulWidget {
   final WorkoutPlan? plan;
@@ -53,7 +61,20 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   Future<void> leaveRoute() => _handleBack();
 
   final _nameController = TextEditingController();
+  final _nameFocus = FocusNode();
+  final _scrollController = ScrollController();
   final List<_EditorExercise> _exercises = [];
+
+  /// Each exercise's card, so the editor can scroll to what was just added.
+  final Map<int, GlobalKey> _exerciseKeys = {};
+
+  /// Exercises added since the last frame, in the order they arrived. Their
+  /// cards play an entrance once; exercises loaded with the plan don't.
+  final List<int> _arriving = [];
+
+  /// Whether the plan has held an exercise, so an empty list that comes back
+  /// (an Undo, the last exercise deleted) fades in instead of snapping.
+  bool _hadExercises = false;
   int _nextExerciseId = 0;
   int? _selectedColor = kPlanColors[0];
   late String _initialSignature;
@@ -61,13 +82,35 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   bool _isSaving = false;
   bool _saved = false;
   bool _showColors = false;
+
+  /// The Undo offered after a starter fills the plan, while it is showing.
+  ///
+  /// While set, it is the current snackbar: whatever showed before it is
+  /// removed outright, so Undo never waits in the queue, and snackbars shown
+  /// after it queue behind it.
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _starterUndo;
+
+  /// Set by a Save that found the plan incomplete: from then on, whatever is
+  /// still missing is named inline, and clears as soon as it is supplied.
+  bool _showMissing = false;
   String? _draftId;
   String? _startingWeekId;
   // The block the starting week is in, kept so a week removed by shortening
   // can fall back to that block's last remaining week.
   String? _startingBlockId;
 
-  bool get _canSave => _nameController.text.trim().isNotEmpty;
+  bool get _hasName => _nameController.text.trim().isNotEmpty;
+
+  /// A plan needs a name and at least one exercise. Save stays tappable
+  /// either way, so it can say what is missing instead of greying out.
+  bool get _isReady => _hasName && _exercises.isNotEmpty;
+
+  String? get _missingHint => switch ((_hasName, _exercises.isNotEmpty)) {
+    (false, false) => 'Needs a name and an exercise',
+    (false, true) => 'Needs a name',
+    (true, false) => 'Needs an exercise',
+    (true, true) => null,
+  };
 
   bool get _isDirty => _signature() != _initialSignature;
 
@@ -106,6 +149,9 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
         );
       }
     }
+    _hadExercises = _exercises.isNotEmpty;
+
+    if (!widget.isEdit) _selectedColor = _firstFreeColor();
 
     if (!widget.isEdit && _splitId != null) {
       final blocks = HiveService.blocksForSplit(_splitId!);
@@ -125,7 +171,24 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   @override
   void dispose() {
     _nameController.dispose();
+    _nameFocus.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  /// The first palette colour no other plan in this split wears, so a new
+  /// plan is told apart on Home without a trip to the palette. Once all ten
+  /// are taken, the palette repeats in order.
+  int _firstFreeColor() {
+    final plans = HiveService.getPlans(splitId: _splitId);
+    final used = {
+      for (final plan in plans)
+        if (plan.planColor != null) planSlotOf(plan.planColor!),
+    };
+    for (var slot = 0; slot < kPlanColors.length; slot++) {
+      if (!used.contains(slot)) return kPlanColors[slot];
+    }
+    return kPlanColors[plans.length % kPlanColors.length];
   }
 
   String _signature() {
@@ -294,14 +357,15 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   );
 
   Future<void> _savePlan() async {
-    if (_isSaving || _saved || !_canSave) return;
+    if (_isSaving || _saved) return;
 
-    if (_exercises.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one exercise to save')),
-      );
+    if (!_isReady) {
+      _explainMissing();
       return;
     }
+    // Before the write: an Undo tapped mid-save would empty the editor while
+    // the stored plan kept the starter's exercises.
+    _dismissStarterUndo();
 
     final templates =
         _exercises
@@ -377,6 +441,26 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     }
   }
 
+  /// Names what Save is waiting for, beside the thing that needs it, and puts
+  /// the cursor in the name when that is the gap.
+  void _explainMissing() {
+    setState(() => _showMissing = true);
+    if (!_hasName) {
+      _nameFocus.requestFocus();
+    } else if (_scrollController.hasClients) {
+      final duration = AppMotion.of(context, AppMotion.standard);
+      if (duration == Duration.zero) {
+        _scrollController.jumpTo(0);
+      } else {
+        _scrollController.animateTo(
+          0,
+          duration: duration,
+          curve: AppMotion.curve,
+        );
+      }
+    }
+  }
+
   int? _nextPlanPosition(List<WorkoutPlan> plans) {
     if (widget.isEdit || plans.isEmpty) return null;
     if (plans.any((plan) => plan.position == null)) return null;
@@ -385,6 +469,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   }
 
   void _updateSet(int exerciseIndex, int setIndex, int reps, double weight) {
+    _dismissStarterUndo();
     setState(() {
       _exercises[exerciseIndex].sets[setIndex] = ExerciseSetData(
         reps: reps,
@@ -395,6 +480,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   }
 
   void _updateRpe(int exerciseIndex, int setIndex, int? rpe) {
+    _dismissStarterUndo();
     setState(() {
       final current = _exercises[exerciseIndex].sets[setIndex];
       _exercises[exerciseIndex].sets[setIndex] = ExerciseSetData(
@@ -406,6 +492,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   }
 
   void _addSetToExercise(int exerciseIndex) {
+    _dismissStarterUndo();
     setState(() {
       final sets = _exercises[exerciseIndex].sets;
       final lastSet =
@@ -432,19 +519,19 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   }
 
   void _deleteSet(int exerciseIndex, int setIndex) {
-    setState(() {
-      final sets = _exercises[exerciseIndex].sets;
-      if (sets.length <= 1) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Each exercise needs at least one set')),
-        );
-        return;
-      }
-      sets.removeAt(setIndex);
-    });
+    final sets = _exercises[exerciseIndex].sets;
+    if (sets.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Each exercise needs at least one set')),
+      );
+      return;
+    }
+    _dismissStarterUndo();
+    setState(() => sets.removeAt(setIndex));
   }
 
   void _onReorder(int oldIndex, int newIndex) {
+    _dismissStarterUndo();
     setState(() {
       final item = _exercises.removeAt(oldIndex);
       _exercises.insert(newIndex, item);
@@ -462,7 +549,9 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
       exerciseName: name,
     );
     if (!confirmed || !mounted) return;
+    _dismissStarterUndo();
     setState(() => _exercises.removeWhere((exercise) => exercise.id == id));
+    _exerciseKeys.remove(id);
   }
 
   void _addExercise(String name, [String? exerciseId]) {
@@ -473,17 +562,23 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     )) {
       return;
     }
+    final cardId = _nextExerciseId++;
+    _markArriving([cardId]);
     setState(() {
       _exercises.add(
         _EditorExercise(
-          id: _nextExerciseId++,
+          id: cardId,
           name: name,
           exerciseId: id,
+          // Three working sets, the most common prescription, so a plan
+          // starts close to finished: adding a set is one tap, while
+          // removing one is a hold and a confirm.
           sets: [
-            ExerciseSetData(
-              reps: ExerciseCatalog.isTimed(name, id) ? 30 : 8,
-              weight: 0,
-            ),
+            for (var i = 0; i < kNewExerciseSets; i++)
+              ExerciseSetData(
+                reps: ExerciseCatalog.isTimed(name, id) ? 30 : 8,
+                weight: 0,
+              ),
           ],
           expanded: true,
         ),
@@ -491,27 +586,185 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     });
   }
 
-  void _removeExercise(String name, [String? exerciseId]) {
-    final normalizedName = ExerciseCatalog.identity(name, exerciseId);
+  /// Fills an empty plan from a common workout: its exercises with their set
+  /// and rep targets, and its name if the plan has none yet. Undo restores
+  /// both.
+  void _applyStarter(PlanStarter starter) {
+    final previousName = _nameController.text;
+    final nameIt = previousName.trim().isEmpty;
+    final added = <int>[];
+    // Put the keyboard away: the workout that just arrived is what to look
+    // at next, and the keyboard would cover most of it.
+    FocusManager.instance.primaryFocus?.unfocus();
     setState(() {
-      _exercises.removeWhere(
-        (exercise) =>
-            ExerciseCatalog.identity(exercise.name, exercise.exerciseId) ==
-            normalizedName,
-      );
+      for (final exercise in starter.exercises) {
+        final known = ExerciseCatalog.findByName(exercise.name);
+        final exerciseId =
+            known == null ? null : ExerciseCatalog.canonicalId(known.id);
+        final identity = ExerciseCatalog.identity(exercise.name, exerciseId);
+        if (_exercises.any(
+          (e) => ExerciseCatalog.identity(e.name, e.exerciseId) == identity,
+        )) {
+          continue;
+        }
+        final id = _nextExerciseId++;
+        added.add(id);
+        _exercises.add(
+          _EditorExercise(
+            id: id,
+            name: exercise.name,
+            exerciseId: exerciseId,
+            note: exercise.note,
+            sets: [
+              for (final reps in exercise.seedReps)
+                ExerciseSetData(reps: reps, weight: 0),
+            ],
+            // Folded, a whole workout fits on screen and each row previews
+            // its targets; open one to set its weights.
+            expanded: false,
+          ),
+        );
+      }
+    });
+    if (nameIt) _nameController.text = starter.name;
+    if (added.isEmpty) return;
+    _markArriving(added);
+
+    final count = added.length;
+    // The queue is cleared and the showing snackbar removed rather than
+    // hidden, so Undo shows at once instead of waiting its turn: withdrawing
+    // it then hides it, not whatever happened to be on screen.
+    final messenger =
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..removeCurrentSnackBar();
+    late final ScaffoldFeatureController<SnackBar, SnackBarClosedReason> undo;
+    undo = messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Added $count ${count == 1 ? 'exercise' : 'exercises'} '
+          'from ${starter.name}',
+        ),
+        // An Undo that outlives the moment would strip the starter's
+        // exercises after the plan had moved on, so it times out.
+        persist: false,
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Undo',
+          textColor: accentColor(context),
+          onPressed: () {
+            // A withdrawn Undo stays tappable while it fades out; by then it
+            // would throw away the edit that withdrew it.
+            if (!mounted || !identical(_starterUndo, undo)) return;
+            setState(() => _exercises.removeWhere((e) => added.contains(e.id)));
+            added.forEach(_exerciseKeys.remove);
+            if (nameIt && _nameController.text == starter.name) {
+              _nameController.text = previousName;
+            }
+          },
+        ),
+      ),
+    );
+    _starterUndo = undo;
+    undo.closed.then((_) {
+      if (identical(_starterUndo, undo)) _starterUndo = null;
     });
   }
 
-  void _showAddExerciseSheet() {
+  /// Withdraws a starter's Undo once the reader moves on: an edit to the plan,
+  /// the picker, or leaving. Undo removes the starter's exercises whole, so
+  /// after an edit it would throw that edit away too.
+  void _dismissStarterUndo() {
+    if (_starterUndo == null) return;
+    _starterUndo = null;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+  }
+
+  /// Folds every exercise when any is open, otherwise opens them all: a
+  /// folded list is easier to review and to reorder.
+  void _toggleAllExpanded() {
+    final expand = !_exercises.any((exercise) => exercise.expanded);
+    setState(() {
+      for (final exercise in _exercises) {
+        exercise.expanded = expand;
+      }
+    });
+  }
+
+  GlobalKey _keyFor(int exerciseId) =>
+      _exerciseKeys.putIfAbsent(exerciseId, GlobalKey.new);
+
+  /// Lets the cards for [ids] play their entrance when they are first built,
+  /// in this order. The list is cleared after the frame, so a card rebuilt
+  /// later (a reorder's drag proxy, say) doesn't play it again.
+  void _markArriving(List<int> ids) {
+    _hadExercises = true;
+    if (_arriving.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _arriving.clear());
+    }
+    _arriving.addAll(ids);
+  }
+
+  /// Brings newly added exercises into view: as many as fit, and never past
+  /// the first of them. Nothing moves when they are already on screen.
+  void _revealAdded(List<int> ids) {
+    if (ids.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final first = _exerciseKeys[ids.first]?.currentContext;
+      final last = _exerciseKeys[ids.last]?.currentContext;
+      if (first == null || last == null) return;
+      // Resolve the destination with instant moves, then animate to it from
+      // where the reader was, so the list visibly slides to the new rows.
+      final position = _scrollController.position;
+      final start = position.pixels;
+      Scrollable.ensureVisible(
+        last,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+      Scrollable.ensureVisible(
+        first,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+      );
+      final target = position.pixels;
+      final duration = AppMotion.of(context, AppMotion.enter);
+      // Under reduced motion the list simply stays where it was resolved.
+      if (target == start || duration == Duration.zero) return;
+      position.jumpTo(start);
+      position.animateTo(target, duration: duration, curve: AppMotion.curve);
+    });
+  }
+
+  void _removeExercise(String name, [String? exerciseId]) {
+    final normalizedName = ExerciseCatalog.identity(name, exerciseId);
+    setState(() {
+      _exercises.removeWhere((exercise) {
+        final match =
+            ExerciseCatalog.identity(exercise.name, exercise.exerciseId) ==
+            normalizedName;
+        if (match) _exerciseKeys.remove(exercise.id);
+        return match;
+      });
+    });
+  }
+
+  Future<void> _showAddExerciseSheet() async {
     // Unfocus the field itself: unfocusing the route's scope leaves the field
     // in that scope's history, so closing the sheet would refocus it.
     FocusManager.instance.primaryFocus?.unfocus();
-    showExercisePickerSheet(
+    _dismissStarterUndo();
+    final before = {for (final exercise in _exercises) exercise.id};
+    // Exercises already in the plan read as *Added* rather than as ticks, as
+    // in the workout: unticking one would throw away the targets set on it
+    // without a word. Removing stays with the card's own Delete.
+    await showExercisePickerSheet(
       context,
-      selectedExerciseNames: _exercises.map((exercise) => exercise.name),
+      selectedExerciseNames: const <String>[],
+      alreadyAddedExerciseNames: _exercises.map((exercise) => exercise.name),
       userId:
           _splitId == null ? null : HiveService.getSplitById(_splitId!)?.userId,
-      selectedExerciseIds: _exercises.map(
+      selectedExerciseIds: const <String>[],
+      alreadyAddedExerciseIds: _exercises.map(
         (e) => ExerciseCatalog.identity(e.name, e.exerciseId),
       ),
       onAddIdentified: _addExercise,
@@ -520,6 +773,13 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
       onRemove: _removeExercise,
       selectionOwner: 'plan',
     );
+    // Into an empty plan the new cards land just under the heading, already
+    // in view; scrolling would only carry the name away.
+    if (!mounted || before.isEmpty) return;
+    _revealAdded([
+      for (final exercise in _exercises)
+        if (!before.contains(exercise.id)) exercise.id,
+    ]);
   }
 
   Widget _buildReorderProxyDecorator(
@@ -552,6 +812,21 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     );
   }
 
+  /// The line under the Exercises heading, about what can be done with the
+  /// cards as they are now: targets are only tappable on an open card.
+  String get _editorHint {
+    final many = _exercises.length > 1;
+    if (_exercises.any((exercise) => exercise.expanded)) {
+      return many
+          ? 'Tap a target to change it, or hold a set to delete it. Drag the '
+              'grip to reorder exercises.'
+          : 'Tap a target to change it, or hold a set to delete it.';
+    }
+    return many
+        ? 'Open an exercise to set its targets. Drag the grip to reorder.'
+        : 'Open the exercise to set its targets.';
+  }
+
   @override
   Widget build(BuildContext context) {
     context.watch<TrainingBlockProvider?>();
@@ -560,7 +835,12 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     return PopScope(
       canPop: _saved || (!_isSaving && !_isDirty),
       onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
+        if (didPop) {
+          // However the editor closes, a starter's Undo goes with it: left on
+          // Home it would offer to undo something on a screen that is gone.
+          _dismissStarterUndo();
+          return;
+        }
         await _handleBack();
       },
       child: Scaffold(
@@ -570,9 +850,10 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
           title: Text(widget.isEdit ? 'Edit plan' : 'New plan'),
           actions: [
             _SaveButton(
-              canSave: _canSave && !_isSaving && !_saved,
+              ready: _isReady,
+              missingHint: _missingHint,
               isSaving: _isSaving,
-              onSave: _savePlan,
+              onSave: _isSaving || _saved ? null : _savePlan,
             ),
             const SizedBox(width: AppSpacing.sm),
           ],
@@ -590,6 +871,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                 child: AbsorbPointer(
                   absorbing: _isSaving,
                   child: SingleChildScrollView(
+                    controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.lg,
                       AppSpacing.xl,
@@ -609,7 +891,15 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                             // high on the screen.
                             _PlanNameField(
                               controller: _nameController,
+                              focusNode: _nameFocus,
+                              // Naming is the first step of a new plan, so
+                              // the cursor waits there; an edit opens calm.
+                              autofocus: !widget.isEdit,
                               marker: planColor,
+                              errorText:
+                                  _showMissing && !_hasName
+                                      ? 'Name this plan to save it'
+                                      : null,
                             ),
                             const SizedBox(height: AppSpacing.md),
                             Wrap(
@@ -638,22 +928,33 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                                 ),
                               ],
                             ),
-                            if (_showColors) ...[
-                              const SizedBox(height: AppSpacing.md),
-                              _ColorPicker(
-                                selectedColor: _selectedColor,
-                                onChanged:
-                                    (value) =>
-                                        setState(() => _selectedColor = value),
+                            _Collapsible(
+                              open: _showColors,
+                              child: Padding(
+                                padding: const EdgeInsets.only(
+                                  top: AppSpacing.md,
+                                ),
+                                child: _ColorPicker(
+                                  selectedColor: _selectedColor,
+                                  onChanged:
+                                      (value) => setState(
+                                        () => _selectedColor = value,
+                                      ),
+                                ),
                               ),
-                            ],
+                            ),
                             const SizedBox(height: AppSpacing.xl),
                             _SectionHeading(
                               title: 'Exercises',
-                              count: _exercises.length,
-                              hint:
+                              count:
+                                  _exercises.isEmpty ? null : _exercises.length,
+                              trailing:
                                   _exercises.length > 1
-                                      ? 'Drag to reorder'
+                                      ? _FoldAllButton(
+                                        expand:
+                                            !_exercises.any((e) => e.expanded),
+                                        onTap: _toggleAllExpanded,
+                                      )
                                       : null,
                             ),
                             if (_exercises.isNotEmpty)
@@ -661,13 +962,20 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                                 padding: const EdgeInsets.only(
                                   bottom: AppSpacing.md,
                                 ),
-                                child: Text(
-                                  'Weight, reps or seconds, and RPE. Hold a set to delete it.',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
+                                child: _EditorHint(_editorHint),
                               ),
                             if (_exercises.isEmpty)
-                              const _EmptyExercises()
+                              _Entrance(
+                                animate: _hadExercises,
+                                child: _EmptyExercises(
+                                  starters: planStarters,
+                                  onStarter:
+                                      _isSaving || _saved
+                                          ? null
+                                          : _applyStarter,
+                                  showMissing: _showMissing,
+                                ),
+                              )
                             else
                               _buildExerciseList(),
                             // Room for the keypad below the last card, so
@@ -704,9 +1012,14 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
           key: ValueKey(exercise.id),
           padding: const EdgeInsets.only(bottom: AppSpacing.lg),
           child: _ExerciseEditorSection(
+            key: _keyFor(exercise.id),
             exercise: exercise,
             splitId: _splitId,
             index: index,
+            arrivalOrder:
+                _arriving.contains(exercise.id)
+                    ? _arriving.indexOf(exercise.id)
+                    : null,
             accent: accentColor(context),
             onToggle:
                 () => setState(() => exercise.expanded = !exercise.expanded),
@@ -743,59 +1056,125 @@ class _EditorExercise {
   });
 }
 
-/// Save on the accent ground. Disabled falls back to the theme's quiet
-/// surface style, so a blank plan doesn't advertise an action it can't take.
+/// Save on the accent ground once the plan is complete. Until then it sits
+/// quietly on the control fill, so a blank plan doesn't advertise an action it
+/// can't finish, but it stays tappable: a tap names what is missing, where a
+/// greyed-out button would leave the reader guessing.
 class _SaveButton extends StatelessWidget {
-  final bool canSave;
+  final bool ready;
+
+  /// What the plan still needs, read to screen readers with the button.
+  final String? missingHint;
   final bool isSaving;
-  final VoidCallback onSave;
+
+  /// Null only while saving or after saving.
+  final VoidCallback? onSave;
 
   const _SaveButton({
-    required this.canSave,
+    required this.ready,
+    required this.missingHint,
     required this.isSaving,
     required this.onSave,
   });
 
   @override
   Widget build(BuildContext context) {
+    final quiet = !ready;
+    // Quiet, it is the app's secondary button: a neutral fill with readable
+    // ink, so it still looks pressable. Grey ink would read as disabled.
+    final ink = quiet ? textPrimaryColor(context) : onAccentColor(context);
     // AppBar stretches its actions to the toolbar height; keep a 48px button.
     return Center(
-      child: ElevatedButton(
-        onPressed: canSave ? onSave : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: accentFillColor(context),
-          foregroundColor: onAccentColor(context),
-          // A 40px pill; the padded tap target keeps it 48px to the finger.
-          minimumSize: const Size(72, 40),
-          tapTargetSize: MaterialTapTargetSize.padded,
-          shape: const RoundedRectangleBorder(borderRadius: AppRadius.pill),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg + 2),
+      child: Semantics(
+        hint: ready ? null : missingHint,
+        child: ElevatedButton(
+          onPressed: onSave,
+          style: ElevatedButton.styleFrom(
+            backgroundColor:
+                quiet ? controlFillColor(context) : accentFillColor(context),
+            foregroundColor: ink,
+            // A 40px pill; the padded tap target keeps it 48px to the finger.
+            minimumSize: const Size(72, 40),
+            tapTargetSize: MaterialTapTargetSize.padded,
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.pill),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg + 2),
+            // The fill and ink ease between quiet and ready.
+            animationDuration: AppMotion.of(context, AppMotion.standard),
+          ).copyWith(
+            // A pill in the header stays flat: a hover or press lifting it
+            // into a shadow reads as a different control.
+            elevation: const WidgetStatePropertyAll(0),
+            overlayColor: WidgetStateProperty.resolveWith(
+              (states) => switch (states) {
+                _ when states.contains(WidgetState.pressed) => ink.withAlpha(
+                  31,
+                ),
+                _ when states.contains(WidgetState.focused) => ink.withAlpha(
+                  26,
+                ),
+                _ when states.contains(WidgetState.hovered) => ink.withAlpha(
+                  20,
+                ),
+                _ => null,
+              },
+            ),
+          ),
+          child:
+              isSaving
+                  ? const ActionProgress('Saving plan')
+                  : const Text('Save'),
         ),
-        child:
-            isSaving ? const ActionProgress('Saving plan') : const Text('Save'),
       ),
     );
   }
 }
 
+/// *Collapse all* while any exercise is open, *Expand all* once every one is
+/// folded.
+class _FoldAllButton extends StatelessWidget {
+  final bool expand;
+  final VoidCallback onTap;
+
+  const _FoldAllButton({required this.expand, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        foregroundColor: accentColor(context),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.padded,
+      ),
+      icon: Icon(
+        expand ? LucideIcons.chevronsUpDown : LucideIcons.chevronsDownUp,
+        size: 16,
+      ),
+      label: Text(expand ? 'Expand all' : 'Collapse all'),
+    );
+  }
+}
+
 /// A sentence-case label over one section of the editor, with an optional
-/// count beside it and a muted hint pushed to the far edge.
+/// count beside it and an action pushed to the far edge.
 class _SectionHeading extends StatelessWidget {
   final String title;
   final int? count;
-  final String? hint;
+  final Widget? trailing;
 
-  const _SectionHeading({required this.title, this.count, this.hint});
+  const _SectionHeading({required this.title, this.count, this.trailing});
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: EdgeInsets.only(
+        // The action's padded target supplies its own breathing room.
+        bottom: trailing == null ? AppSpacing.sm : 0,
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
         children: [
           Semantics(
             header: true,
@@ -808,22 +1187,15 @@ class _SectionHeading extends StatelessWidget {
           ),
           if (count != null) ...[
             const SizedBox(width: AppSpacing.sm),
-            Text(
+            // The count rolls as exercises arrive or go, like the workout's
+            // running figures.
+            RollingFigure(
               '$count',
               style: textTheme.titleSmall?.copyWith(color: secondary),
             ),
           ],
-          const SizedBox(width: AppSpacing.md),
-          if (hint != null)
-            Expanded(
-              child: Text(
-                hint!,
-                textAlign: TextAlign.end,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.bodySmall?.copyWith(color: secondary),
-              ),
-            ),
+          const Spacer(),
+          if (trailing != null) trailing!,
         ],
       ),
     );
@@ -832,12 +1204,21 @@ class _SectionHeading extends StatelessWidget {
 
 class _PlanNameField extends StatelessWidget {
   final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool autofocus;
 
   /// The plan's colour, shown as the same bar the workout header leads with,
   /// so the name and colour read as one identity while they are being chosen.
   final Color marker;
+  final String? errorText;
 
-  const _PlanNameField({required this.controller, required this.marker});
+  const _PlanNameField({
+    required this.controller,
+    required this.focusNode,
+    required this.autofocus,
+    required this.marker,
+    this.errorText,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -849,46 +1230,66 @@ class _PlanNameField extends StatelessWidget {
       height: 1.2,
       color: textPrimaryColor(context),
     );
+    final quick = AppMotion.of(context, AppMotion.quick);
     // The name is set as the page title rather than inside a box: a hairline
-    // under it at rest, the accent under it while typing.
-    return Semantics(
-      label: 'Plan name',
-      child: TextField(
-        controller: controller,
-        textCapitalization: TextCapitalization.sentences,
-        textInputAction: TextInputAction.done,
-        style: title,
-        decoration: InputDecoration(
-          hintText: 'Plan name',
-          hintStyle: title?.copyWith(color: textSecondaryColor(context)),
-          filled: false,
-          isDense: true,
-          contentPadding: const EdgeInsets.only(
-            top: AppSpacing.xs,
-            bottom: AppSpacing.md,
-          ),
-          border: UnderlineInputBorder(
-            borderSide: BorderSide(color: hairlineColor(context)),
-          ),
-          enabledBorder: UnderlineInputBorder(
-            borderSide: BorderSide(color: hairlineColor(context)),
-          ),
-          focusedBorder: UnderlineInputBorder(
-            borderSide: BorderSide(color: accentColor(context), width: 2),
-          ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 0),
-          prefixIcon: Padding(
-            padding: const EdgeInsets.only(
-              right: AppSpacing.md,
-              bottom: AppSpacing.sm,
+    // under it at rest, the accent under it while typing. The error line
+    // fades in on its own; the size animation keeps it from shoving the page.
+    return AnimatedSize(
+      duration: quick,
+      curve: AppMotion.curve,
+      alignment: AlignmentDirectional.topStart,
+      child: Semantics(
+        label: 'Plan name',
+        child: TextField(
+          controller: controller,
+          focusNode: focusNode,
+          autofocus: autofocus,
+          textCapitalization: TextCapitalization.sentences,
+          textInputAction: TextInputAction.done,
+          style: title,
+          decoration: InputDecoration(
+            hintText: 'Plan name',
+            hintStyle: title?.copyWith(color: textSecondaryColor(context)),
+            errorText: errorText,
+            filled: false,
+            isDense: true,
+            contentPadding: const EdgeInsets.only(
+              top: AppSpacing.xs,
+              bottom: AppSpacing.md,
             ),
-            child: ExcludeSemantics(
-              child: Container(
-                width: 4,
-                height: 28,
-                decoration: BoxDecoration(
-                  color: marker,
-                  borderRadius: AppRadius.micro,
+            border: UnderlineInputBorder(
+              borderSide: BorderSide(color: hairlineColor(context)),
+            ),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: hairlineColor(context)),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: accentColor(context), width: 2),
+            ),
+            // The same rule in the error colour, never the theme's ring: the
+            // name stays a title, not a boxed field.
+            errorBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: errorColor(context)),
+            ),
+            focusedErrorBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: errorColor(context), width: 2),
+            ),
+            prefixIconConstraints: const BoxConstraints(minWidth: 0),
+            prefixIcon: Padding(
+              padding: const EdgeInsets.only(
+                right: AppSpacing.md,
+                bottom: AppSpacing.sm,
+              ),
+              child: ExcludeSemantics(
+                child: AnimatedContainer(
+                  duration: quick,
+                  curve: AppMotion.curve,
+                  width: 4,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: marker,
+                    borderRadius: AppRadius.micro,
+                  ),
                 ),
               ),
             ),
@@ -899,8 +1300,10 @@ class _PlanNameField extends StatelessWidget {
   }
 }
 
-/// The plan colour as a pill beside the block pill: its swatch, and the
-/// action that opens or closes the palette.
+/// The plan colour as a compact pill beside the block pill: its swatch and a
+/// chevron that turns as the palette opens. Without a label it fits on the
+/// block pill's row at phone width; the swatch beside the name's colour bar
+/// says what it changes, and its tooltip and screen-reader label say it too.
 class _ColorPill extends StatelessWidget {
   final Color color;
   final bool open;
@@ -914,41 +1317,52 @@ class _ColorPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      expanded: open,
-      child: Material(
-        color: controlFillColor(context),
-        borderRadius: AppRadius.pill,
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onTap,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 44),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ExcludeSemantics(
-                    child: Container(
-                      width: 16,
-                      height: 16,
+    final quick = AppMotion.of(context, AppMotion.quick);
+    return Tooltip(
+      message: 'Change color',
+      excludeFromSemantics: true,
+      child: Semantics(
+        button: true,
+        expanded: open,
+        label: 'Change color',
+        onTap: onTap,
+        excludeSemantics: true,
+        child: Material(
+          color: controlFillColor(context),
+          borderRadius: AppRadius.pill,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44, minWidth: 44),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    AnimatedContainer(
+                      duration: quick,
+                      curve: AppMotion.curve,
+                      width: 18,
+                      height: 18,
                       decoration: BoxDecoration(
                         color: color,
                         shape: BoxShape.circle,
                       ),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  Text(
-                    open ? 'Done' : 'Change color',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: textPrimaryColor(context),
+                    const SizedBox(width: AppSpacing.xs + AppSpacing.xxs),
+                    AnimatedRotation(
+                      turns: open ? 0.5 : 0,
+                      duration: quick,
+                      curve: AppMotion.curve,
+                      child: Icon(
+                        LucideIcons.chevronDown,
+                        size: 16,
+                        color: textSecondaryColor(context),
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -1020,7 +1434,7 @@ class _ColorPicker extends StatelessWidget {
         onTap: () => onChanged(colorValue),
         borderRadius: AppRadius.button,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
+          duration: AppMotion.of(context, AppMotion.quick),
           width: _swatch,
           height: _swatch,
           padding: const EdgeInsets.all(AppSpacing.xs),
@@ -1050,6 +1464,10 @@ class _ColorPicker extends StatelessWidget {
 class _ExerciseEditorSection extends StatelessWidget {
   final _EditorExercise exercise;
   final int index;
+
+  /// This card's place among exercises that just arrived, or null for one
+  /// that was already here: only arrivals play an entrance.
+  final int? arrivalOrder;
   final String? splitId;
   final Color accent;
   final VoidCallback onToggle;
@@ -1060,9 +1478,11 @@ class _ExerciseEditorSection extends StatelessWidget {
   final VoidCallback onSetAdded;
 
   const _ExerciseEditorSection({
+    super.key,
     required this.exercise,
     this.splitId,
     required this.index,
+    this.arrivalOrder,
     required this.accent,
     required this.onToggle,
     required this.onDelete,
@@ -1167,44 +1587,61 @@ class _ExerciseEditorSection extends StatelessWidget {
       splitId: splitId,
     );
 
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: hairlineColor(context))),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _buildHeader(context, expanded, previous),
-          if (expanded) ...[
-            if (exercise.note?.trim().isNotEmpty ?? false)
-              Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Text(
-                  exercise.note!,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+    // The entrance sits under this card's GlobalKey, so a reorder's drag
+    // proxy carries its finished state along instead of replaying it.
+    return _Entrance(
+      animate: arrivalOrder != null,
+      order: arrivalOrder ?? 0,
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: hairlineColor(context))),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildHeader(context, expanded, previous),
+            _Collapsible(
+              open: expanded,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (exercise.note?.trim().isNotEmpty ?? false)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: Text(
+                        exercise.note!,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  SetEntryTable(
+                    isTimed: ExerciseCatalog.isTimed(
+                      exercise.name,
+                      exercise.exerciseId,
+                    ),
+                    continuousLog: true,
+                    scrollWideTable: true,
+                    hostReservesSpace: true,
+                    showPrevious: false,
+                    sets: [
+                      for (final set in exercise.sets)
+                        SetEntry(
+                          weight: set.weight,
+                          reps: set.reps,
+                          rpe: set.rpe,
+                        ),
+                    ],
+                    onChanged:
+                        (index, weight, reps) =>
+                            onSetChanged(index, reps, weight),
+                    onRpeChanged: onRpeChanged,
+                    onDelete: onSetDeleted,
+                  ),
+                  _buildFooter(context),
+                ],
               ),
-            SetEntryTable(
-              isTimed: ExerciseCatalog.isTimed(
-                exercise.name,
-                exercise.exerciseId,
-              ),
-              continuousLog: true,
-              scrollWideTable: true,
-              hostReservesSpace: true,
-              showPrevious: false,
-              sets: [
-                for (final set in exercise.sets)
-                  SetEntry(weight: set.weight, reps: set.reps, rpe: set.rpe),
-              ],
-              onChanged:
-                  (index, weight, reps) => onSetChanged(index, reps, weight),
-              onRpeChanged: onRpeChanged,
-              onDelete: onSetDeleted,
             ),
-            _buildFooter(context),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1240,6 +1677,11 @@ class _ExerciseEditorSection extends StatelessWidget {
     );
   }
 
+  /// How far the header's tap ground reaches past its text: inside the ground
+  /// as padding, and out into the page gutter by the same amount, so a press
+  /// lights a padded box while the name keeps the column's left edge.
+  static const double _headerInset = AppSpacing.sm;
+
   Widget _buildHeader(
     BuildContext context,
     bool expanded,
@@ -1251,40 +1693,54 @@ class _ExerciseEditorSection extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Semantics(
-              button: true,
-              expanded: expanded,
-              child: InkWell(
-                onTap: onToggle,
-                borderRadius: AppRadius.button,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              exercise.name,
-                              style: Theme.of(context).textTheme.titleLarge,
+            child: _GutterBleed(
+              bleed: _headerInset,
+              child: Semantics(
+                button: true,
+                expanded: expanded,
+                child: InkWell(
+                  onTap: onToggle,
+                  borderRadius: AppRadius.button,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: AppSpacing.md,
+                      horizontal: _headerInset,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                exercise.name,
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
                             ),
+                            const SizedBox(width: AppSpacing.sm),
+                            AnimatedRotation(
+                              turns: expanded ? 0.5 : 0,
+                              duration: AppMotion.of(context, AppMotion.quick),
+                              curve: AppMotion.curve,
+                              child: Icon(
+                                LucideIcons.chevronDown,
+                                size: 16,
+                                color: textSecondaryColor(context),
+                              ),
+                            ),
+                          ],
+                        ),
+                        // The summary stands in for the table while folded,
+                        // and gives way to it as the card opens.
+                        _Collapsible(
+                          open: !expanded,
+                          child: Padding(
+                            padding: const EdgeInsets.only(top: AppSpacing.xs),
+                            child: _prescriptionSummary(context, previous),
                           ),
-                          const SizedBox(width: AppSpacing.sm),
-                          Icon(
-                            expanded
-                                ? LucideIcons.chevronUp
-                                : LucideIcons.chevronDown,
-                            size: 16,
-                            color: textSecondaryColor(context),
-                          ),
-                        ],
-                      ),
-                      if (!expanded) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        _prescriptionSummary(context, previous),
+                        ),
                       ],
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1335,6 +1791,33 @@ class _ExerciseEditorSection extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Lays [child] out [bleed] wider than its slot and lets the extra reach into
+/// the page gutter on the start side.
+///
+/// For a tap ground that needs padding round its text without moving the text
+/// off the column's edge. Only the painted ground bleeds: a tap in the gutter
+/// strip itself still falls outside the row, which is fine for an 8px margin.
+class _GutterBleed extends StatelessWidget {
+  final double bleed;
+  final Widget child;
+
+  const _GutterBleed({required this.bleed, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder:
+          (context, constraints) => OverflowBox(
+            alignment: AlignmentDirectional.centerEnd,
+            minWidth: constraints.maxWidth + bleed,
+            maxWidth: constraints.maxWidth + bleed,
+            fit: OverflowBoxFit.deferToChild,
+            child: child,
+          ),
     );
   }
 }
@@ -1406,41 +1889,361 @@ class _FooterAction extends StatelessWidget {
   }
 }
 
-/// Shown in place of the exercise list until the first one is added.
+/// Shown in place of the exercise list until the first one is added: the two
+/// ways to begin, the library below and a common workout to adapt.
+///
+/// The guidance sits on the page; only the starters, which are tappable, get
+/// a ground of their own.
 class _EmptyExercises extends StatelessWidget {
-  const _EmptyExercises();
+  final List<PlanStarter> starters;
+  final ValueChanged<PlanStarter>? onStarter;
+
+  /// Whether Save has asked for an exercise, so the gap is named here.
+  final bool showMissing;
+
+  const _EmptyExercises({
+    required this.starters,
+    required this.onStarter,
+    required this.showMissing,
+  });
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.xl,
-      ),
-      // An empty state is a quiet invitation, not a box to fill in.
-      decoration: BoxDecoration(
-        color: controlFillColor(context),
-        borderRadius: AppRadius.card,
-      ),
-      child: Column(
-        children: [
-          Icon(LucideIcons.dumbbell, size: 24, color: secondary),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'No exercises yet',
-            textAlign: TextAlign.center,
-            style: textTheme.titleMedium,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Add exercises from the library, or start from a common workout '
+          'and adjust its targets.',
+          style: textTheme.bodyMedium?.copyWith(color: secondary),
+        ),
+        _Collapsible(
+          open: showMissing,
+          child: Padding(
+            padding: const EdgeInsets.only(top: AppSpacing.sm),
+            child: Semantics(
+              liveRegion: true,
+              child: Row(
+                children: [
+                  Icon(
+                    LucideIcons.circleAlert,
+                    size: 16,
+                    color: errorColor(context),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'Add at least one exercise to save',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: errorColor(context),
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Pick from the exercise library or create your own, then set '
-            'target weights, reps or seconds and optional RPE for each set.',
-            textAlign: TextAlign.center,
-            style: textTheme.bodyMedium?.copyWith(color: secondary),
+        ),
+        if (starters.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xl),
+          Semantics(
+            header: true,
+            child: Text(
+              'Start from',
+              style: textTheme.titleSmall?.copyWith(
+                color: textPrimaryColor(context),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          // One raised card of rows, like a settings group: six starters read
+          // as one choice rather than six loose controls.
+          RaisedCard(
+            child: Column(
+              children: [
+                for (var i = 0; i < starters.length; i++) ...[
+                  if (i > 0)
+                    Divider(
+                      height: 1,
+                      indent: AppSpacing.lg,
+                      endIndent: AppSpacing.lg,
+                      color: hairlineColor(context),
+                    ),
+                  _StarterRow(
+                    starter: starters[i],
+                    onTap:
+                        onStarter == null
+                            ? null
+                            : () => onStarter!(starters[i]),
+                  ),
+                ],
+              ],
+            ),
           ),
         ],
+      ],
+    );
+  }
+}
+
+/// A common workout as a row: its name, then what it holds and trains (*6
+/// exercises · Chest, shoulders, arms*), so the choice is made knowing what
+/// arrives. The trailing plus says a tap adds it to the plan.
+class _StarterRow extends StatelessWidget {
+  final PlanStarter starter;
+  final VoidCallback? onTap;
+
+  const _StarterRow({required this.starter, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final secondary = textSecondaryColor(context);
+    final count = starter.exercises.length;
+    final exercises = '$count ${count == 1 ? 'exercise' : 'exercises'}';
+    final focus = starter.focus;
+    final trains = [
+      for (var i = 0; i < focus.length; i++)
+        i == 0 ? focus[i] : focus[i].toLowerCase(),
+    ].join(', ');
+    final enabled = onTap != null;
+    return Semantics(
+      button: true,
+      enabled: enabled,
+      label: [
+        'Start from ${starter.name}',
+        exercises,
+        if (trains.isNotEmpty) trains.toLowerCase(),
+      ].join(', '),
+      onTap: onTap,
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.md,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        starter.name,
+                        style: textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: textPrimaryColor(context),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xxs),
+                      Text(
+                        trains.isEmpty ? exercises : '$exercises  ·  $trains',
+                        style: textTheme.bodySmall?.copyWith(color: secondary),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                // The tonal wash, as on Add exercise: an add, not a link.
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color:
+                        enabled
+                            ? accentMutedColor(context)
+                            : controlFillColor(context),
+                    borderRadius: AppRadius.pill,
+                  ),
+                  child: Icon(
+                    LucideIcons.plus,
+                    size: 18,
+                    color: enabled ? accentOnMutedColor(context) : secondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The line under the Exercises heading. It cross-fades when the cards change
+/// between open and folded, since what it describes changes with them.
+class _EditorHint extends StatelessWidget {
+  final String text;
+
+  const _EditorHint(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    // The two hints can differ by a line; the height eases instead of
+    // snapping when the old one leaves.
+    return AnimatedSize(
+      duration: AppMotion.of(context, AppMotion.standard),
+      curve: AppMotion.curve,
+      alignment: AlignmentDirectional.topStart,
+      child: AnimatedSwitcher(
+        duration: AppMotion.of(context, AppMotion.quick),
+        switchInCurve: AppMotion.curve,
+        switchOutCurve: AppMotion.exit,
+        layoutBuilder:
+            (current, previous) => Stack(
+              alignment: AlignmentDirectional.topStart,
+              children: [...previous, if (current != null) current],
+            ),
+        child: Text(
+          text,
+          key: ValueKey(text),
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ),
+    );
+  }
+}
+
+/// Opens and closes [child] by growing and fading it from the top, and drops
+/// it from the tree once closed, so a folded region holds no controls or
+/// semantics. It starts at rest: only a change of [open] animates.
+class _Collapsible extends StatefulWidget {
+  final bool open;
+  final Widget child;
+
+  const _Collapsible({required this.open, required this.child});
+
+  @override
+  State<_Collapsible> createState() => _CollapsibleState();
+}
+
+class _CollapsibleState extends State<_Collapsible>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.standard,
+    value: widget.open ? 1 : 0,
+  )..addStatusListener(_onStatus);
+  late final CurvedAnimation _progress = CurvedAnimation(
+    parent: _controller,
+    curve: AppMotion.curve,
+    reverseCurve: AppMotion.exit,
+  );
+
+  void _onStatus(AnimationStatus status) {
+    // Settling changes the clip, and closing drops the child.
+    if (!status.isAnimating && mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(_Collapsible oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.open == oldWidget.open) return;
+    _controller.duration = AppMotion.of(context, AppMotion.standard);
+    if (widget.open) {
+      _controller.forward();
+    } else {
+      _controller.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _progress.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.open && _controller.isDismissed) return const SizedBox.shrink();
+    return ClipRect(
+      // Clip only while moving, so a settled region can paint past its edge
+      // (focus rings, shadows) as it did before it could fold.
+      clipBehavior: _controller.isAnimating ? Clip.hardEdge : Clip.none,
+      child: SizeTransition(
+        sizeFactor: _progress,
+        alignment: AlignmentDirectional.topStart,
+        child: FadeTransition(opacity: _progress, child: widget.child),
+      ),
+    );
+  }
+}
+
+/// Fades [child] in and lifts it a few pixels into place when it is first
+/// built, if [animate]; later [order]s start a beat later, so a batch of new
+/// cards arrives in sequence. Changing [animate] afterwards does nothing.
+class _Entrance extends StatefulWidget {
+  final bool animate;
+  final int order;
+  final Widget child;
+
+  const _Entrance({required this.animate, this.order = 0, required this.child});
+
+  @override
+  State<_Entrance> createState() => _EntranceState();
+}
+
+class _EntranceState extends State<_Entrance>
+    with SingleTickerProviderStateMixin {
+  /// The gap between one arrival and the next, and how many gaps at most, so
+  /// a long batch doesn't keep the last card waiting.
+  static const Duration _stagger = Duration(milliseconds: 40);
+  static const int _maxStagger = 6;
+  static const double _lift = 8;
+
+  AnimationController? _controller;
+  Animation<double> _progress = kAlwaysCompleteAnimation;
+  bool _decided = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_decided) return;
+    _decided = true;
+    if (!widget.animate || MediaQuery.disableAnimationsOf(context)) return;
+    final delay = _stagger * widget.order.clamp(0, _maxStagger);
+    final total = delay + AppMotion.enter;
+    final controller = AnimationController(vsync: this, duration: total);
+    _controller = controller;
+    _progress = CurvedAnimation(
+      parent: controller,
+      curve: Interval(
+        delay.inMicroseconds / total.inMicroseconds,
+        1,
+        curve: AppMotion.curve,
+      ),
+    );
+    controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // One tree shape whether or not this entrance plays, so the child keeps
+    // its state either way.
+    return FadeTransition(
+      opacity: _progress,
+      child: AnimatedBuilder(
+        animation: _progress,
+        builder:
+            (context, child) => Transform.translate(
+              offset: Offset(0, _lift * (1 - _progress.value)),
+              child: child,
+            ),
+        child: widget.child,
       ),
     );
   }

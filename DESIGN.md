@@ -699,16 +699,80 @@ signature:
   workout. Keypad keys keep their own selection clicks.
 - Create and Edit plan share the workout log's open exercise sections, hairline
   dividers, filled weight/rep cells, and optional RPE controls. Exercises start
-  expanded and can be collapsed or reordered using the trailing grip. Add set
-  uses the app accent; Delete exercise stays separate in the error role. Holding
-  a set opens its delete action, as in the workout. The shared keypad validates
-  RPE from 1 to 10 and supports clearing it. Wide editor tables scroll at large
-  text sizes. The plan colour palette opens from Change color to leave more room
-  for training targets; Add exercise stays pinned at the bottom as a tonal
-  button. The plan name is the page's title: a large field led by the plan's
-  colour bar and underlined by a hairline, the accent while typing. The
-  starting week (or, when editing, the training block) and Change color are
-  pills beneath it, and Save in the header is a pill.
+  expanded and can be collapsed or reordered using the trailing grip; with two
+  or more, *Collapse all* (or *Expand all* once every one is folded) sits at
+  the end of the Exercises heading, so a long plan can be reviewed and
+  reordered folded. Add set uses the app accent; Delete exercise stays separate
+  in the error role. Holding a set opens its delete action, as in the workout.
+  The shared keypad validates RPE from 1 to 10 and supports clearing it. Wide
+  editor tables scroll at large text sizes. The plan colour palette opens from
+  a compact colour pill (the swatch and a chevron, labelled *Change color* for
+  screen readers and as its tooltip) to leave more room for training targets;
+  Add exercise stays pinned at the bottom as a tonal button. The plan name is
+  the page's title: a large field led by the plan's colour bar and underlined
+  by a hairline, the accent while typing. The starting week (or, when editing,
+  the training block) and the colour pill share one row beneath it at phone
+  width, and Save in the header is a pill. The line under the Exercises heading
+  follows the cards: how to change targets while any card is open, and how to
+  open one while all are folded.
+- The editor moves with the app's motion tokens (`lib/theme/motion.dart`):
+  exercise cards fold and unfold by growing and fading from the top while the
+  folded summary gives way, chevrons turn, the palette and the missing-exercise
+  message open the same way, the exercise count rolls, and the colour bar and
+  swatch ease to a new colour. Exercises that arrive (from a starter or the
+  picker) fade and lift into place, a starter's in quick sequence; exercises
+  loaded with a plan don't. Under reduced motion every change is immediate.
+- Creating a plan starts at its name: the field takes focus on a new plan (not
+  on an edit), and the plan's colour defaults to the first palette colour no
+  other plan in the split wears, repeating in order once all ten are taken.
+  Until the first exercise is added, the list's place holds one line of
+  guidance and a *Start from* card of rows (*Push day*, *Pull day*, *Leg day*,
+  *Upper body*, *Lower body*, *Full body*; `lib/data/plan_starters.dart`). Each
+  row names what it holds and trains (*6 exercises · Chest, shoulders, arms*,
+  the busiest three muscle groups) beside a tonal plus. Each copies one day of
+  a bundled hypertrophy preset (exercises, set and rep targets, and the
+  preset's note) into the draft, folded so the whole workout shows at once,
+  names the plan only when the name is still blank, and puts the keyboard
+  away. A snackbar offers *Undo* for six seconds; it is withdrawn by any edit
+  to the exercises (Undo would discard the edit too), by opening the exercise
+  picker, by Save, and by leaving the editor, and it ignores a tap while it
+  fades. It clears any snackbars queued before it, so it is always the one a
+  withdrawal hides. The guidance has no ground of its own;
+  only the tappable starters are raised.
+- Save is a quiet pill until the plan has a name and an exercise, and the
+  accent once it has both. Quiet, it is the app's secondary button (the
+  control fill with primary ink, so it still reads as pressable), and it stays
+  flat in every state. It never disables (except while
+  saving): a tap on an incomplete plan names each gap where it is, *Name this
+  plan to save it* under the name (which takes focus) and *Add at least one
+  exercise to save* in the empty list, and each message clears as soon as its
+  gap is filled. Screen readers hear what is missing as the button's hint.
+- An exercise added to a plan starts with three sets (eight reps, or 30 seconds
+  for a hold) at no target weight. In the plan's exercise picker, exercises
+  already in the plan read *Added*, as in the workout, so a stray tap can't
+  drop one along with its targets; removing stays with the card's Delete. When
+  the picker closes on a plan that already had exercises, the editor scrolls
+  the new ones into view, as many as fit and never past the first.
+- The exercise picker (`lib/widgets/exercise_picker_sheet.dart`, shared by
+  the plan editor and the workout) is a tall sheet with a drag handle, a
+  search field, and pages that trade places along a horizontal axis: a fade
+  and a 24px shift, arriving from the end side when going deeper (a group,
+  the selected list, then search results) and from the start side going back.
+  Typing more into a search does not replay it, and under reduced motion the
+  page simply changes. Muscle groups open as two columns of illustrated
+  cards on the control fill: the front and back body map
+  (`MuscleGroupIllustration`) leads, then the name and *13 exercises*. The
+  three rows grow to fill the sheet (an open keyboard doesn't shrink them; the
+  grid scrolls instead), and two cards in a row always match in height. A group
+  with selections takes the selected ground and an accent edge, reads
+  *2 of 13 selected* in the accent, and ends its text with an accent count
+  badge, kept off the figures. Under 360dp or at large text each group becomes
+  a full-width row led by its primary figure, with the badge and a chevron at
+  the end. Cards give slightly under the finger, except under reduced motion. A
+  group's page keeps its small figure beside the name in the header. The footer
+  says *Changes apply as you select.* above *Selected (N)* and *Done* (stacked
+  at narrow widths and large text). Selected is the quiet secondary button at
+  zero and turns tonal once anything is chosen, and its number rolls.
 - Timed exercises use *Seconds* in editable set tables and the shared keypad,
   including History and set dialogs. Counts remain integer seconds in the
   existing reps field. Ordinary and custom exercises retain *Reps*. RPE uses
