@@ -9,6 +9,8 @@ import '../theme/app_theme.dart';
 import '../theme/spacing.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_wordmark.dart';
+import '../widgets/motion/collapsible.dart';
+import '../widgets/motion/state_switcher.dart';
 
 enum _LoginMode { signIn, signUp, resetEmail, newPassword }
 
@@ -50,6 +52,10 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _confirmationError;
   String? _message;
 
+  /// The last error or message shown, kept while its region folds away.
+  String? _shownNotice;
+  bool _shownNoticeIsError = false;
+
   bool get _isSignUp => _mode == _LoginMode.signUp;
   bool get _resetEmail => _mode == _LoginMode.resetEmail;
   bool get _newPassword => _mode == _LoginMode.newPassword;
@@ -83,6 +89,12 @@ class _LoginScreenState extends State<LoginScreen> {
           : _newPassword
           ? 'Save password'
           : _title;
+  String get _switchLabel =>
+      _resetEmail
+          ? 'Back to sign in'
+          : _isSignUp
+          ? 'Have an account? Sign in'
+          : 'No account? Create one';
   String get _progress =>
       _resetEmail
           ? 'Sending reset email'
@@ -242,6 +254,11 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
     final savedPassword = _newPassword && _message == 'Password updated.';
+    final notice = _error ?? _message;
+    if (notice != null) {
+      _shownNotice = notice;
+      _shownNoticeIsError = _error != null;
+    }
     return Scaffold(
       backgroundColor: backgroundColor(context),
       body: SafeArea(
@@ -257,143 +274,177 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     const AppWordmark(fontSize: 28),
                     const SizedBox(height: AppSpacing.sm),
-                    Semantics(
-                      header: true,
-                      child: Text(_title, style: theme.headlineMedium),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      _resetEmail
-                          ? 'Enter your account email to receive a reset link.'
-                          : _newPassword
-                          ? 'Save a new password for your account.'
-                          : _isSignUp
-                          ? 'Sync your training across devices.'
-                          : 'Continue with your saved plans and history.',
-                      style: theme.bodyMedium?.copyWith(
-                        color: textSecondaryColor(context),
+                    // The heading and its line change together with the mode.
+                    StateSwitcher(
+                      // AnimatedSize asserts at zero duration, so under
+                      // reduced motion the size simply changes.
+                      animateSize: !MediaQuery.disableAnimationsOf(context),
+                      child: Column(
+                        key: ValueKey(_mode),
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            header: true,
+                            child: Text(_title, style: theme.headlineMedium),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            _resetEmail
+                                ? 'Enter your account email to receive a reset link.'
+                                : _newPassword
+                                ? 'Save a new password for your account.'
+                                : _isSignUp
+                                ? 'Sync your training across devices.'
+                                : 'Continue with your saved plans and history.',
+                            style: theme.bodyMedium?.copyWith(
+                              color: textSecondaryColor(context),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: AppSpacing.xxl),
-                    if (!savedPassword) ...[
-                      if (!_newPassword) ...[
-                        TextField(
-                          controller: _emailController,
-                          focusNode: _emailFocus,
-                          enabled: !_loading,
-                          autofillHints: const [AutofillHints.email],
-                          keyboardType: TextInputType.emailAddress,
-                          textInputAction:
-                              _resetEmail
-                                  ? TextInputAction.done
-                                  : TextInputAction.next,
-                          autocorrect: false,
-                          onSubmitted:
-                              (_) =>
-                                  _resetEmail
-                                      ? _submit()
-                                      : _passwordFocus.requestFocus(),
-                          onChanged: (_) {
-                            if (_emailError != null) {
-                              setState(() => _emailError = null);
-                            }
-                          },
-                          decoration: _decoration('Email', error: _emailError),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                      ],
-                      if (!_resetEmail)
-                        TextField(
-                          controller: _passwordController,
-                          focusNode: _passwordFocus,
-                          enabled: !_loading,
-                          autofillHints: [
-                            _isSignUp || _newPassword
-                                ? AutofillHints.newPassword
-                                : AutofillHints.password,
-                          ],
-                          keyboardType: TextInputType.visiblePassword,
-                          textInputAction:
-                              _newPassword
-                                  ? TextInputAction.next
-                                  : TextInputAction.done,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          obscureText: _obscurePassword,
-                          onSubmitted:
-                              (_) =>
-                                  _newPassword
-                                      ? _confirmationFocus.requestFocus()
-                                      : _submit(),
-                          onChanged: (_) {
-                            if (_passwordError != null) {
-                              setState(() => _passwordError = null);
-                            }
-                          },
-                          decoration: _decoration(
-                            _newPassword ? 'New password' : 'Password',
-                            error: _passwordError,
-                            suffixIcon: IconButton(
-                              tooltip:
-                                  _obscurePassword
-                                      ? 'Show password'
-                                      : 'Hide password',
-                              onPressed:
-                                  _loading
-                                      ? null
-                                      : () => setState(
-                                        () =>
-                                            _obscurePassword =
-                                                !_obscurePassword,
-                                      ),
-                              icon: Icon(
+                    // Fields that come and go with the mode fold open and
+                    // closed; one that is leaving gives up focus at once.
+                    _Region(
+                      open: !savedPassword && !_newPassword,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          TextField(
+                            controller: _emailController,
+                            focusNode: _emailFocus,
+                            enabled: !_loading,
+                            autofillHints: const [AutofillHints.email],
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction:
+                                _resetEmail
+                                    ? TextInputAction.done
+                                    : TextInputAction.next,
+                            autocorrect: false,
+                            onSubmitted:
+                                (_) =>
+                                    _resetEmail
+                                        ? _submit()
+                                        : _passwordFocus.requestFocus(),
+                            onChanged: (_) {
+                              if (_emailError != null) {
+                                setState(() => _emailError = null);
+                              }
+                            },
+                            decoration: _decoration(
+                              'Email',
+                              error: _emailError,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                        ],
+                      ),
+                    ),
+                    _Region(
+                      open: !savedPassword && !_resetEmail,
+                      child: TextField(
+                        controller: _passwordController,
+                        focusNode: _passwordFocus,
+                        enabled: !_loading,
+                        autofillHints: [
+                          _isSignUp || _newPassword
+                              ? AutofillHints.newPassword
+                              : AutofillHints.password,
+                        ],
+                        keyboardType: TextInputType.visiblePassword,
+                        textInputAction:
+                            _newPassword
+                                ? TextInputAction.next
+                                : TextInputAction.done,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        obscureText: _obscurePassword,
+                        onSubmitted:
+                            (_) =>
+                                _newPassword
+                                    ? _confirmationFocus.requestFocus()
+                                    : _submit(),
+                        onChanged: (_) {
+                          if (_passwordError != null) {
+                            setState(() => _passwordError = null);
+                          }
+                        },
+                        decoration: _decoration(
+                          _newPassword ? 'New password' : 'Password',
+                          error: _passwordError,
+                          suffixIcon: IconButton(
+                            tooltip:
                                 _obscurePassword
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
-                              ),
+                                    ? 'Show password'
+                                    : 'Hide password',
+                            onPressed:
+                                _loading
+                                    ? null
+                                    : () => setState(
+                                      () =>
+                                          _obscurePassword = !_obscurePassword,
+                                    ),
+                            icon: Icon(
+                              _obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                             ),
                           ),
                         ),
-                      if (_newPassword) ...[
-                        const SizedBox(height: AppSpacing.lg),
-                        TextField(
-                          controller: _confirmationController,
-                          focusNode: _confirmationFocus,
-                          enabled: !_loading,
-                          obscureText: _obscurePassword,
-                          autofillHints: const [AutofillHints.newPassword],
-                          keyboardType: TextInputType.visiblePassword,
-                          textInputAction: TextInputAction.done,
-                          autocorrect: false,
-                          enableSuggestions: false,
-                          onSubmitted: (_) => _submit(),
-                          onChanged: (_) {
-                            if (_confirmationError != null) {
-                              setState(() => _confirmationError = null);
-                            }
-                          },
-                          decoration: _decoration(
-                            'Confirm password',
-                            error: _confirmationError,
-                          ),
-                        ),
-                      ],
-                    ],
-                    if (_error != null || _message != null) ...[
-                      const SizedBox(height: AppSpacing.lg),
-                      Semantics(
-                        liveRegion: true,
-                        child: Text(
-                          _error ?? _message!,
-                          style: theme.bodySmall?.copyWith(
-                            color:
-                                _error != null
-                                    ? errorColor(context)
-                                    : textPrimaryColor(context),
-                          ),
-                        ),
                       ),
-                    ],
+                    ),
+                    _Region(
+                      open: !savedPassword && _newPassword,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: AppSpacing.lg),
+                          TextField(
+                            controller: _confirmationController,
+                            focusNode: _confirmationFocus,
+                            enabled: !_loading,
+                            obscureText: _obscurePassword,
+                            autofillHints: const [AutofillHints.newPassword],
+                            keyboardType: TextInputType.visiblePassword,
+                            textInputAction: TextInputAction.done,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            onSubmitted: (_) => _submit(),
+                            onChanged: (_) {
+                              if (_confirmationError != null) {
+                                setState(() => _confirmationError = null);
+                              }
+                            },
+                            decoration: _decoration(
+                              'Confirm password',
+                              error: _confirmationError,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _Region(
+                      open: notice != null,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          const SizedBox(height: AppSpacing.lg),
+                          Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              _shownNotice ?? '',
+                              style: theme.bodySmall?.copyWith(
+                                color:
+                                    _shownNoticeIsError
+                                        ? errorColor(context)
+                                        : textPrimaryColor(context),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.xl),
                     AppButton.primary(
                       label: savedPassword ? 'Continue' : _action,
@@ -403,28 +454,40 @@ class _LoginScreenState extends State<LoginScreen> {
                               : savedPassword
                               ? widget.onPasswordRecovered
                               : _submit,
-                      child:
-                          _loading
-                              ? Semantics(
-                                label: _progress,
-                                value: 'In progress',
-                                liveRegion: true,
-                                child: SizedBox.square(
-                                  dimension: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: onAccentColor(context),
+                      // The label crosses to the next label, or to progress.
+                      child: StateSwitcher(
+                        alignment: Alignment.center,
+                        child:
+                            _loading
+                                ? Semantics(
+                                  key: const ValueKey('loading'),
+                                  label: _progress,
+                                  value: 'In progress',
+                                  liveRegion: true,
+                                  child: SizedBox.square(
+                                    dimension: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: onAccentColor(context),
+                                    ),
+                                  ),
+                                )
+                                : Text(
+                                  savedPassword ? 'Continue' : _action,
+                                  key: ValueKey(
+                                    savedPassword ? 'Continue' : _action,
                                   ),
                                 ),
-                              )
-                              : null,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    if (_mode == _LoginMode.signIn)
-                      AppButton.text(
+                    _Region(
+                      open: _mode == _LoginMode.signIn,
+                      child: AppButton.text(
                         label: 'Forgot password?',
                         onPressed: _loading ? null : _beginReset,
                       ),
+                    ),
                     if (!_newPassword)
                       TextButton(
                         onPressed:
@@ -435,38 +498,41 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ? _LoginMode.signIn
                                       : _LoginMode.signUp,
                                 ),
-                        child: Text(
-                          _resetEmail
-                              ? 'Back to sign in'
-                              : _isSignUp
-                              ? 'Have an account? Sign in'
-                              : 'No account? Create one',
+                        child: StateSwitcher(
+                          alignment: Alignment.center,
+                          child: Text(
+                            _switchLabel,
+                            key: ValueKey(_switchLabel),
+                          ),
                         ),
                       ),
-                    if (_newPassword && !savedPassword)
-                      AppButton.text(
-                        label: 'Cancel password reset',
-                        onPressed:
-                            _loading
-                                ? null
-                                : () async {
-                                  setState(() => _loading = true);
-                                  try {
-                                    await SupabaseService.signOut();
-                                  } catch (_) {
-                                    if (mounted) {
-                                      setState(
-                                        () =>
-                                            _error =
-                                                'Could not sign out. Try again.',
-                                      );
+                    if (_newPassword)
+                      _Region(
+                        open: !savedPassword,
+                        child: AppButton.text(
+                          label: 'Cancel password reset',
+                          onPressed:
+                              _loading
+                                  ? null
+                                  : () async {
+                                    setState(() => _loading = true);
+                                    try {
+                                      await SupabaseService.signOut();
+                                    } catch (_) {
+                                      if (mounted) {
+                                        setState(
+                                          () =>
+                                              _error =
+                                                  'Could not sign out. Try again.',
+                                        );
+                                      }
+                                    } finally {
+                                      if (mounted) {
+                                        setState(() => _loading = false);
+                                      }
                                     }
-                                  } finally {
-                                    if (mounted) {
-                                      setState(() => _loading = false);
-                                    }
-                                  }
-                                },
+                                  },
+                        ),
                       ),
                   ],
                 ),
@@ -488,4 +554,29 @@ class _LoginScreenState extends State<LoginScreen> {
     errorMaxLines: 3,
     suffixIcon: suffixIcon,
   );
+}
+
+/// A part of the form that comes and goes with the mode: it folds open and
+/// closed ([Collapsible]), and while it folds away it takes no taps, says
+/// nothing to screen readers and gives up focus, so a leaving field can't
+/// keep the keyboard or be typed into.
+class _Region extends StatelessWidget {
+  final bool open;
+  final Widget child;
+
+  const _Region({required this.open, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Collapsible(
+      open: open,
+      child: IgnorePointer(
+        ignoring: !open,
+        child: ExcludeSemantics(
+          excluding: !open,
+          child: ExcludeFocus(excluding: !open, child: child),
+        ),
+      ),
+    );
+  }
 }
