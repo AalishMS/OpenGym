@@ -75,13 +75,15 @@ class _StrengthTrendState extends State<StrengthTrend> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Keyed by the dataset, so a figure from another lift, period or
-        // measure lands at once instead of rolling from a value it isn't
-        // comparable with.
         Semantics(
-          key: ValueKey(('readout', dataset)),
           liveRegion: true,
+          // Keyed by the dataset, so a figure from another lift, period or
+          // measure lands at once instead of rolling from a value it isn't
+          // comparable with. The key sits below this column's own children:
+          // a keyed sibling would make the plot beside it rebuild from
+          // scratch, and its cross would never play.
           child: Column(
+            key: ValueKey(('readout', dataset)),
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
@@ -229,17 +231,21 @@ class _StrengthTrendState extends State<StrengthTrend> {
           },
         ),
         const SizedBox(height: AppSpacing.lg),
-        StatisticsFigures(
-          key: ValueKey(('figures', dataset)),
-          values: [
-            (
-              'Change',
-              change == null
-                  ? 'Need 2 workouts'
-                  : formatSignedChange(change, value),
-            ),
-            ('Best in period', value(high)),
-          ],
+        // Lands at once for a new dataset, like the readout; the unkeyed
+        // wrapper keeps the key out of this column's own children.
+        KeyedSubtree(
+          child: StatisticsFigures(
+            key: ValueKey(('figures', dataset)),
+            values: [
+              (
+                'Change',
+                change == null
+                    ? 'Need 2 workouts'
+                    : formatSignedChange(change, value),
+              ),
+              ('Best in period', value(high)),
+            ],
+          ),
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(
