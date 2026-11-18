@@ -44,6 +44,7 @@ import '../widgets/action_progress.dart';
 import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/motion/app_modals.dart';
+import '../widgets/motion/collapsible.dart';
 import '../widgets/plan_title_hero.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
@@ -131,6 +132,9 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   bool _isNavigating = false;
   bool _isSaving = false;
   String? _saveError;
+
+  /// The last save error shown, kept while its line folds away.
+  String? _shownSaveError;
   String? _timerAction;
   bool _confirmingFinish = false;
   Timer? _ticker;
@@ -1898,6 +1902,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       );
     }
     final session = _getOrCreateSession();
+    if (_saveError != null) _shownSaveError = _saveError;
     _celebratedRecords ??= _recordSetsIn(session);
     final liveRecords = _liveRecords(session);
     final accent = accentColor(context);
@@ -2093,13 +2098,15 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                       onAction: _continueCompleted,
                     ),
 
-              if (_isSaving || (_timerAction != null && !_confirmingFinish))
-                Padding(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  child: ActionProgress(_timerAction ?? 'Saving workout'),
-                ),
-              if (_saveError != null)
-                Padding(
+              _ProgressBand(
+                busy: _isSaving || (_timerAction != null && !_confirmingFinish),
+                label: _timerAction ?? 'Saving workout',
+              ),
+              // Folds open and closed rather than shoving the log; it keeps
+              // the last message while it folds away after a retry.
+              Collapsible(
+                open: _saveError != null,
+                child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.lg,
                   ),
@@ -2108,7 +2115,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                       Expanded(
                         child: Semantics(
                           liveRegion: true,
-                          child: Text(_saveError!),
+                          child: Text(_shownSaveError ?? ''),
                         ),
                       ),
                       TextButton(
@@ -2118,6 +2125,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                     ],
                   ),
                 ),
+              ),
               Expanded(
                 child: PlanSwipeRegion(
                   onNextPlan: onNextPlan,
@@ -2727,3 +2735,118 @@ class _PlanSwitchEntry extends StatelessWidget {
   }
 }
 
+/// The log's progress line, for work in flight: saving, starting or pausing
+/// the clock, logging, changing blocks.
+///
+/// Most of that work is done within a frame or two, and a line that appeared
+/// and went that fast would shove the whole log down and straight back under
+/// the reader's thumb. So the line waits [_grace] and opens only if the work
+/// is still going, folding open and closed as a [Collapsible] region does.
+/// Its label is in the tree from the moment the work starts, so it can be
+/// found at once; it is shown, and announced, only once it opens. Leaving, it
+/// keeps the label it had. Under reduced motion it opens and closes at once,
+/// after the same wait.
+class _ProgressBand extends StatefulWidget {
+  final bool busy;
+  final String label;
+
+  const _ProgressBand({required this.busy, required this.label});
+
+  @override
+  State<_ProgressBand> createState() => _ProgressBandState();
+}
+
+class _ProgressBandState extends State<_ProgressBand>
+    with SingleTickerProviderStateMixin {
+  /// How long work runs before it is worth a line of its own: past a quick
+  /// save or a timer change, short of a wait anyone would wonder about.
+  static const Duration _grace = Duration(milliseconds: 300);
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.standard,
+  )..addStatusListener(_onStatus);
+  late final CurvedAnimation _progress = CurvedAnimation(
+    parent: _controller,
+    curve: AppMotion.curve,
+    reverseCurve: AppMotion.exit,
+  );
+  Timer? _wait;
+  late String _label = widget.label;
+
+  /// Whether the line is in the tree: from the start of the work until it has
+  /// folded away.
+  late bool _present = widget.busy;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.busy) _wait = Timer(_grace, _open);
+  }
+
+  void _open() {
+    _wait = null;
+    if (!mounted || !widget.busy) return;
+    _controller.duration = AppMotion.of(context, AppMotion.standard);
+    _controller.forward();
+  }
+
+  void _onStatus(AnimationStatus status) {
+    if (status.isDismissed && !widget.busy && mounted) {
+      setState(() => _present = false);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_ProgressBand oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.busy) _label = widget.label;
+    if (widget.busy == oldWidget.busy) return;
+    _controller.duration = AppMotion.of(context, AppMotion.standard);
+    if (widget.busy) {
+      _present = true;
+      if (_controller.isDismissed) {
+        _wait?.cancel();
+        _wait = Timer(_grace, _open);
+      } else {
+        // Work resumed while the line was folding away: it stays.
+        _controller.forward();
+      }
+    } else {
+      _wait?.cancel();
+      _wait = null;
+      if (_controller.isDismissed) {
+        // Done before it was worth showing: it leaves without a trace.
+        _present = false;
+      } else {
+        _controller.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _wait?.cancel();
+    _progress.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_present) return const SizedBox.shrink();
+    return ClipRect(
+      child: SizeTransition(
+        sizeFactor: _progress,
+        alignment: Alignment.topCenter,
+        child: FadeTransition(
+          opacity: _progress,
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: ActionProgress(_label),
+          ),
+        ),
+      ),
+    );
+  }
+}
