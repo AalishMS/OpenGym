@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/motion.dart';
 import '../theme/spacing.dart';
 
 /// Which edge of the strip carries its hairline rule. A strip under an app bar
@@ -106,7 +107,8 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
     if (oldWidget.selectedIndex != widget.selectedIndex ||
         oldWidget.tabs.length != widget.tabs.length) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _revealSelected(const Duration(milliseconds: 220));
+        if (!mounted) return;
+        _revealSelected(AppMotion.of(context, AppMotion.standard));
         _syncFades();
       });
     }
@@ -126,7 +128,7 @@ class _UnderlineTabStripState extends State<UnderlineTabStrip> {
       tabContext,
       alignment: 0.5,
       duration: duration,
-      curve: Curves.easeOut,
+      curve: AppMotion.curve,
     );
   }
 
