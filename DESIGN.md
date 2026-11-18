@@ -774,10 +774,10 @@ signature:
   header's timer controls and the clock change in place without motion.
   Under reduced motion every change is immediate.
 - Haptics are named for the moment (`lib/utils/haptics.dart`): a selection
-  tick when the main tab changes or a plan is picked up or dropped into a new
-  place, a
-  medium impact when the workout clock starts, a heavy one for a new record or
-  a logged workout. Keypad keys keep their own selection clicks.
+  tick when the main tab changes or a plan is dropped into a new place, a
+  light impact when a plan card is picked up to drag, a medium impact when
+  the workout clock starts, a heavy one for a new record or a logged workout.
+  Keypad keys keep their own selection clicks.
 - Create and Edit plan share the workout log's open exercise sections, hairline
   dividers, filled weight/rep cells, and optional RPE controls. Exercises start
   expanded and can be collapsed or reordered using the trailing grip; with two
@@ -1006,13 +1006,29 @@ exist. The rules that follow from that:
   gives way at once and is mostly gone in the first half of its time: a
   departure reads shorter than its arrival, and leaves the way it came.
 - Distances are small: lifts and shifts of 8 to 24px, and scale stays within
-  about 0.96 to 1 (a press and a dialog use 0.97). A record badge earned just
-  now is the one mark that pops in from nothing. Staggering is rare: first
+  about 0.96 to 1 (a press and a dialog use 0.97). A plan card picked up to
+  drag lifts to 1.025 under a deepening shadow, the one scale above full
+  size. A record badge earned just now is the one mark that pops in from
+  nothing: it pops only as it is earned, never when the log opens with it or
+  a card scrolls back into view. Staggering is rare: first
   appearance only, a handful of items at most, 40ms apart, and never replayed
   on a rebuild, on returning to a tab, or on coming back from a pushed route.
 - Reduced motion (`MediaQuery.disableAnimationsOf`) makes every change
   immediate, page pushes included. Each primitive applies it itself; motion
-  written directly wraps its duration in `AppMotion.of`.
+  written directly wraps its duration in `AppMotion.of`. The exception is
+  `AnimatedSize`, which asserts when a size change is given no time: under
+  reduced motion leave it out of the tree, as `StateSwitcher` does, rather
+  than passing it a zero duration.
+- Work that finishes within `AppMotion.patience` shows no progress
+  indicator. The sign-in check, loading local data and the workout's saves
+  usually take a frame or two, and a spinner or progress line that appeared
+  and vanished that fast would only flicker, or shove the page. Its label is
+  in the tree from the start; what is painted, and announced, waits.
+- A change made while the screen is covered lands at rest. A covered
+  screen's tickers are muted but its animations' clocks keep running, so a
+  change made under a pushed page or on another tab would otherwise jump, or
+  play part of the way, as the page leaves. Check
+  `TickerMode.valuesOf(context).enabled` and skip the animation.
 - Large subtrees move by opacity and transform through the `*Transition`
   widgets; layout animates only for a region's own size (`Collapsible`,
   `StateSwitcher(animateSize: true)`). Nothing loops: no pulsing, breathing or
@@ -1034,6 +1050,7 @@ exist. The rules that follow from that:
 | `AppMotion.enter` | 280ms | An arrival, a sheet rising, a scroll the reader should follow |
 | `AppMotion.long` | 400ms | A large move across much of the screen: chart bars growing to a new week, intro pages |
 | `AppMotion.stagger` | 40ms | The gap between arrivals in one batch |
+| `AppMotion.patience` | 300ms | How long work may run before a progress indicator shows |
 | `AppMotion.curve` | ease out cubic | Arriving, settling at a new value |
 | `AppMotion.exit` | ease in cubic | The reverse curve for leaving |
 | `AppMotion.lift` | 8px | How far an arrival rises into place |
@@ -1067,7 +1084,8 @@ handles reduced motion itself.
   For expandable details, inline palettes and messages.
 - `StateSwitcher` (change) crosses one keyed state to the next in the same
   place over `quick`, stacking both so nothing jumps, and optionally easing
-  the space they take to its new size. The leaving state stops taking taps and
+  the space they take to its new size (the size simply changes under reduced
+  motion). The leaving state stops taking taps, gives up keyboard focus and
   leaves the semantics tree at once. For loading to content, empty to list,
   one label for another. Not for figures (use `RollingFigure`) or regions that
   open and close.
@@ -1093,8 +1111,10 @@ handles reduced motion itself.
   push or pop lands at once, and a back swipe still follows the finger.
 - There is no second route style for task flows. On iOS a full-screen-dialog
   route would lose edge-swipe back. The workout's plan switch is the one
-  bespoke route: a sideways replacement that enters from the side of the plan
-  chosen.
+  bespoke route: the chosen plan's workout comes in over the current one from
+  its side, travelling `shift` over `standard` while it fades up from mostly
+  there, and the workout it replaces holds still. Once it has landed it is an
+  ordinary page, so its pop transition and back gestures are the platform's.
 - A dialog fades in while it settles from 0.97 to full size over `standard`,
   and leaves with a plain fade on `exit`. `showDialog` takes one duration for
   both directions, so the exit is shorter in effect rather than in time. The
@@ -1106,19 +1126,39 @@ handles reduced motion itself.
 - Popup menus keep Material's reveal from their anchor, which is continuity
   already and can't be retimed from the theme. Snackbars and the floating
   notice keep their own motion.
+- The split menu is a `MenuAnchor` overlay with no transition that can be put
+  on the tokens. It settles out of the split name like a dialog (a fade and
+  0.97 to full size over `standard`) and closes at once.
 
 ### What does not animate
 
-- The workout's set entry. Values land as they are typed and a logged set is
-  simply there. The keypad slides in once when entry starts, the active cell's
-  wash eases across, and the table keeps the active row in view, but nothing
-  moves between keystrokes except the record badge's pop, which never delays
-  the next entry. Ink and haptics carry the feedback.
+- The workout's set entry. Values land as they are typed, and a logged or
+  added set is simply there. The keypad slides in once when entry starts, the
+  active cell's wash eases across, and the table keeps the active row in
+  view, but nothing moves between keystrokes except the record badge's pop,
+  which never delays the next entry. A set deleted from its hold menu is the
+  one row that moves: it folds away so the rows below rise into its place.
+  Ink and haptics carry the feedback.
+- Changing week in the workout. The log swaps as tab content does while the
+  tab underline eases, and the header's timer controls and clock change in
+  place.
 - Content that was already there. A plan's own exercises when its editor
   opens, a list loaded with its screen and the History ledger appear without
   an arrival: staggering a screen's content on every visit is decoration.
 - Returning to anything. Coming back to a tab or from a pushed route replays
-  no arrival, roll or chart growth.
+  no arrival, roll or chart growth, and entering Stats shows its view without
+  the sideways swap that changing views inside it uses. The resume strip, and
+  Home's week bars, are simply as they now are if they changed out of view.
+- Charts on first appearance. Bars ease only to new values for the same
+  weeks; a line shown for another lift, period or measure crosses to the new
+  one rather than morphing through values nobody logged, and its readouts
+  land at once.
+- Surfaces the auth gate replaces. Login, recovery and the app fade in on the
+  page colour, but what they replace is removed at once and never crosses
+  beneath them, so the previous account's screens never linger.
+- Search results. Typing into a search filters the list in place; rows don't
+  arrive or leave, and a merged or renamed exercise simply takes its new
+  place in Manage exercises.
 - Main tabs. They change with a brief fade and no slide: they are peers, not a
   stack, and swiping between them is navigation, not a carousel.
 - Rows, text buttons and icon buttons do not scale; ink is their response.

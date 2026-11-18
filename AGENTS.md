@@ -267,18 +267,24 @@ Action labels should say what happens in familiar, concise language:
   don't write a `PageRouteBuilder` for an ordinary push
 - Motion written by hand uses the tokens in `lib/theme/motion.dart`:
   `AppMotion.quick` (150ms flips), `.standard` (220ms regions), `.enter`
-  (280ms arrivals), `.long` (400ms large moves), `.stagger` (40ms), distances
-  `.lift` (8), `.shift` (24) and `.scale` (0.97), and the `.settle` spring for
+  (280ms arrivals), `.long` (400ms large moves), `.stagger` (40ms),
+  `.patience` (300ms before a progress indicator shows), distances `.lift`
+  (8), `.shift` (24) and `.scale` (0.97), and the `.settle` spring for
   gesture-driven settles. Arrive on `AppMotion.curve`; leave by passing
   `AppMotion.exit` as the reverse curve. Wrap durations in
-  `AppMotion.of(context, …)` so reduced motion makes them immediate
+  `AppMotion.of(context, …)` so reduced motion makes them immediate, except
+  on `AnimatedSize`, which asserts at zero duration: leave it out of the tree
+  under reduced motion
+- A change made while the screen is covered (a pushed page, another tab)
+  lands at rest: check `TickerMode.valuesOf(context).enabled` before
+  animating it
 - Animate opacity and transforms, not the layout of large subtrees. Content
   is in the tree, tappable and announced from its first frame, and nothing
   waits for an animation. Nothing loops (it hangs `pumpAndSettle`); dispose
   controllers
-- Haptics go through `lib/utils/haptics.dart` (`selection`, `confirm`,
-  `celebrate`), never `HapticFeedback` directly; the keypad keeps its own key
-  clicks
+- Haptics go through `lib/utils/haptics.dart` (`selection`, `lift`,
+  `confirm`, `celebrate`), never `HapticFeedback` directly; the keypad keeps
+  its own key clicks
 
 ### Corner Radii
 - Use the tokens from `lib/theme/radii.dart`, never a literal `BorderRadius`:
