@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -32,6 +33,7 @@ import '../services/workout_session_initializer.dart';
 import '../services/workout_timer_notification_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
@@ -136,6 +138,9 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   bool _didShowInitialLogConfirmation = false;
   late final AnimationController _planSwipeOffset =
       AnimationController.unbounded(vsync: this);
+
+  /// How far the content moves for each pixel the finger drags.
+  double _planSwipeFollow = 0.20;
 
   @override
   void initState() {
@@ -476,24 +481,47 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final index = _currentPlanIndex(plans);
     final canMove = distance < 0 ? index < plans.length - 1 : index > 0;
     // Follow the finger just enough to acknowledge the gesture without
-    // pulling the workout table far from its reading position.
-    _planSwipeOffset.value = (distance * (canMove ? 0.20 : 0.05)).clamp(
-      -28.0,
-      28.0,
+    // pulling the workout table far from its reading position. Past the
+    // first or last plan it barely moves, so the edge reads as an edge.
+    _planSwipeFollow = canMove ? 0.20 : 0.05;
+    _planSwipeOffset.value = (distance * _planSwipeFollow).clamp(
+      -AppMotion.shift,
+      AppMotion.shift,
     );
   }
 
-  void _settlePlanSwipe() {
+  /// Springs the content that followed a plan swipe back to rest, carrying
+  /// the finger's release [velocity] so a flick and a slow let-go settle
+  /// differently, as the hand did. Critically damped: it never overshoots.
+  void _settlePlanSwipe([double velocity = 0]) {
     if (!mounted) return;
-    if (MediaQuery.disableAnimationsOf(context)) {
+    final offset = _planSwipeOffset.value;
+    if (MediaQuery.disableAnimationsOf(context) ||
+        (offset == 0 && velocity == 0)) {
       _planSwipeOffset.value = 0;
       return;
     }
-    _planSwipeOffset.animateTo(
-      0,
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOutCubic,
-    );
+    // Content held at the end of its travel had stopped following the
+    // finger, so it has no speed of its own away from rest.
+    var speed = velocity * _planSwipeFollow;
+    if (offset.abs() >= AppMotion.shift && speed.sign == offset.sign) {
+      speed = 0;
+    }
+    _planSwipeOffset
+        .animateWith(
+          SpringSimulation(
+            AppMotion.settle,
+            offset,
+            0,
+            speed,
+            // A tenth of a pixel is rest; the spring's default tolerance
+            // would keep ticking through invisible fractions of one.
+            tolerance: const Tolerance(distance: 0.1, velocity: 1),
+          ),
+        )
+        .whenComplete(() {
+          if (mounted) _planSwipeOffset.value = 0;
+        });
   }
 
   Future<void> _switchPlan(WorkoutPlan plan, int index) async {
@@ -502,45 +530,25 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     );
     if (index == currentIndex) return;
     final direction = index > currentIndex ? 1.0 : -1.0;
-    if (!MediaQuery.disableAnimationsOf(context)) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (!reduceMotion) {
+      // This page gives way toward the side it is leaving by while the
+      // chosen plan's page comes in over it from the other.
       _planSwipeOffset.animateTo(
-        -direction * 28,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOutCubic,
+        -direction * AppMotion.shift,
+        duration: AppMotion.quick,
+        curve: AppMotion.curve,
       );
     }
-    final duration =
-        MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 190);
+    final replaced = ModalRoute.of(context);
     await _saveBeforeNavigation(
       () => Navigator.pushReplacement(
         context,
-        PageRouteBuilder<void>(
-          transitionDuration: duration,
-          reverseTransitionDuration: duration,
-          pageBuilder:
-              (context, animation, secondaryAnimation) =>
-                  WorkoutScreen(plan: plan, planIndex: index),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation.drive(
-                Tween<double>(
-                  begin: 0.78,
-                  end: 1,
-                ).chain(CurveTween(curve: Curves.easeOutCubic)),
-              ),
-              child: SlideTransition(
-                position: animation.drive(
-                  Tween(
-                    begin: Offset(direction * 0.08, 0),
-                    end: Offset.zero,
-                  ).chain(CurveTween(curve: Curves.easeOutCubic)),
-                ),
-                child: child,
-              ),
-            );
-          },
+        _PlanSwitchRoute(
+          direction: direction,
+          replacing: replaced,
+          reduceMotion: reduceMotion,
+          builder: (_) => WorkoutScreen(plan: plan, planIndex: index),
         ),
       ),
       leavesScreen: true,
@@ -2606,3 +2614,116 @@ class _SessionClock extends StatelessWidget {
     );
   }
 }
+
+/// The plan switch: the chosen plan's workout replaces this one, coming in
+/// over it from the side of the plan chosen. It fades up from most of the way
+/// there while it travels the last [AppMotion.shift], and the page it replaces
+/// holds still underneath. That much is the one bespoke route in the app.
+///
+/// Once the switch has landed the page is an ordinary one: Back, the
+/// platform's back gestures (Android's predictive back, iOS's edge swipe) and
+/// the pop transition all come from the theme, exactly as for the workout it
+/// replaced. Under reduced motion the switch lands at once.
+class _PlanSwitchRoute extends MaterialPageRoute<void> {
+  /// +1 when the chosen plan comes after the current one, so the page enters
+  /// from the right; -1 when it comes before.
+  final double direction;
+
+  /// The workout being switched away from, which holds still.
+  final Route<dynamic>? replacing;
+  final bool reduceMotion;
+
+  /// True until the switch has landed.
+  bool _switching = true;
+
+  _PlanSwitchRoute({
+    required super.builder,
+    required this.direction,
+    required this.replacing,
+    required this.reduceMotion,
+  });
+
+  @override
+  Duration get transitionDuration =>
+      reduceMotion ? Duration.zero : AppMotion.standard;
+
+  @override
+  Duration get reverseTransitionDuration =>
+      reduceMotion ? Duration.zero : super.reverseTransitionDuration;
+
+  // The platform's transitions would also move the outgoing workout aside;
+  // here it stays where it is while the new one arrives over it. Any other
+  // page under this one (Home) still takes part as usual.
+  @override
+  bool canTransitionFrom(TransitionRoute<dynamic> previousRoute) =>
+      previousRoute != replacing && super.canTransitionFrom(previousRoute);
+
+  @override
+  TickerFuture didPush() {
+    final pushed = super.didPush();
+    pushed.whenCompleteOrCancel(() => _switching = false);
+    return pushed;
+  }
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    // One tree shape before and after the switch lands, so the workout keeps
+    // its state: the platform's transition sits still while the page slides
+    // in, and the slide sits still for everything after.
+    final switching = _switching;
+    return super.buildTransitions(
+      context,
+      switching ? kAlwaysCompleteAnimation : animation,
+      secondaryAnimation,
+      _PlanSwitchEntry(
+        animation: switching ? animation : kAlwaysCompleteAnimation,
+        direction: direction,
+        child: child,
+      ),
+    );
+  }
+}
+
+/// The arriving half of the plan switch.
+class _PlanSwitchEntry extends StatelessWidget {
+  /// How opaque the arriving page starts: mostly there, so the two workouts
+  /// never read as one table, with enough give to show it is arriving.
+  static const double _startOpacity = 0.78;
+
+  final Animation<double> animation;
+  final double direction;
+  final Widget child;
+
+  const _PlanSwitchEntry({
+    required this.animation,
+    required this.direction,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final shift = width == 0 ? 0.0 : AppMotion.shift / width;
+    final settle = CurveTween(curve: AppMotion.curve);
+    return FadeTransition(
+      opacity: animation.drive(
+        Tween<double>(begin: _startOpacity, end: 1).chain(settle),
+      ),
+      child: SlideTransition(
+        position: animation.drive(
+          Tween<Offset>(
+            begin: Offset(direction * shift, 0),
+            end: Offset.zero,
+          ).chain(settle),
+        ),
+        child: child,
+      ),
+    );
+  }
+}
+

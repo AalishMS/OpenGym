@@ -8,7 +8,11 @@ class PlanSwipeRegion extends StatefulWidget {
   final VoidCallback? onNextPlan;
   final VoidCallback? onPreviousPlan;
   final ValueChanged<double>? onDragProgress;
-  final VoidCallback? onDragCancel;
+
+  /// The drag ended without changing plans. Called with the finger's release
+  /// velocity in logical pixels per second (0 when the gesture was taken
+  /// away), so content that followed the finger can settle carrying it.
+  final ValueChanged<double>? onDragCancel;
 
   const PlanSwipeRegion({
     super.key,
@@ -36,17 +40,17 @@ class _PlanSwipeRegionState extends State<PlanSwipeRegion> {
         if (widget.onNextPlan != null) {
           widget.onNextPlan!();
         } else {
-          widget.onDragCancel?.call();
+          widget.onDragCancel?.call(velocity);
         }
       } else {
         if (widget.onPreviousPlan != null) {
           widget.onPreviousPlan!();
         } else {
-          widget.onDragCancel?.call();
+          widget.onDragCancel?.call(velocity);
         }
       }
     } else {
-      widget.onDragCancel?.call();
+      widget.onDragCancel?.call(velocity);
     }
     _dragDistance = 0;
   }
@@ -74,7 +78,7 @@ class _PlanSwipeRegionState extends State<PlanSwipeRegion> {
                     ..onEnd = _onDragEnd
                     ..onCancel = () {
                       _dragDistance = 0;
-                      widget.onDragCancel?.call();
+                      widget.onDragCancel?.call(0);
                     };
                 },
               ),
