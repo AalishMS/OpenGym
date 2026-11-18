@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -667,6 +668,95 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
 Color accentToneFor(Color seed, Brightness brightness) =>
     _deriveScheme(seed, brightness == Brightness.dark).accent;
 
+/// Page transitions follow the platform. They are stated here rather than left
+/// to Material's defaults, so a Flutter upgrade can't change them unnoticed:
+///
+/// - Android: [PredictiveBackPageTransitionsBuilder]. On Android 13+ a back
+///   swipe previews the page underneath and can be cancelled; a push, or Back
+///   from a button, plays Android's fade-forwards slide (450ms).
+/// - iOS and macOS: [CupertinoPageTransitionsBuilder], the platform slide with
+///   edge-swipe back.
+/// - Windows, Linux and Fuchsia: [ZoomPageTransitionsBuilder], Material's
+///   zoom, which reads well on a wide window where a slide would travel far.
+///
+/// Each of these carries the platform's back gesture, which is why the app
+/// keeps them instead of drawing its own. Pages guarding unsaved work still
+/// intercept both gestures through `PopScope`, and `PlanTitleHero` flies the
+/// same under all three. The fade-forwards and zoom transitions show a
+/// backdrop between the two pages that Material fills with
+/// `ColorScheme.surface`: here the *raised* ground, which in dark mode
+/// flashes grey between two black pages, so the page colour is passed
+/// instead. Under reduced motion a push or pop is immediate; a back swipe
+/// still follows the finger.
+PageTransitionsTheme _pageTransitions(Color page) {
+  final android = _ReducedMotionPageTransitions(
+    PredictiveBackPageTransitionsBuilder(fallbackColor: page),
+  );
+  const cupertino = _ReducedMotionPageTransitions(
+    CupertinoPageTransitionsBuilder(),
+  );
+  final zoom = _ReducedMotionPageTransitions(
+    ZoomPageTransitionsBuilder(backgroundColor: page),
+  );
+  return PageTransitionsTheme(
+    builders: {
+      TargetPlatform.android: android,
+      TargetPlatform.iOS: cupertino,
+      TargetPlatform.macOS: cupertino,
+      TargetPlatform.windows: zoom,
+      TargetPlatform.linux: zoom,
+      TargetPlatform.fuchsia: zoom,
+    },
+  );
+}
+
+/// [platform]'s transition, made immediate when the system asks for reduced
+/// motion.
+///
+/// A route reads its duration once, without a [BuildContext], so this reads
+/// the platform's setting directly: the same one `MediaQuery` reports in the
+/// app. The transition itself is left alone, because it also carries the back
+/// gesture; with no time to play, a push or pop simply lands.
+class _ReducedMotionPageTransitions extends PageTransitionsBuilder {
+  final PageTransitionsBuilder platform;
+
+  const _ReducedMotionPageTransitions(this.platform);
+
+  static bool get _reduced =>
+      WidgetsBinding
+          .instance
+          .platformDispatcher
+          .accessibilityFeatures
+          .disableAnimations;
+
+  @override
+  Duration get transitionDuration =>
+      _reduced ? Duration.zero : platform.transitionDuration;
+
+  @override
+  Duration get reverseTransitionDuration =>
+      _reduced ? Duration.zero : platform.reverseTransitionDuration;
+
+  @override
+  DelegatedTransitionBuilder? get delegatedTransition =>
+      platform.delegatedTransition;
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => platform.buildTransitions(
+    route,
+    context,
+    animation,
+    secondaryAnimation,
+    child,
+  );
+}
+
 ThemeData buildTheme(Color seed, Brightness brightness) {
   final isDark = brightness == Brightness.dark;
   final c = _deriveScheme(seed, isDark);
@@ -721,6 +811,7 @@ ThemeData buildTheme(Color seed, Brightness brightness) {
       shadow: c.shadow,
     ),
     extensions: [c],
+    pageTransitionsTheme: _pageTransitions(background),
     fontFamily: GoogleFonts.manrope().fontFamily,
     textTheme: textTheme,
     // One header everywhere: flat on the page colour with a permanent hairline,
