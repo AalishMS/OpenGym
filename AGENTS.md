@@ -267,7 +267,10 @@ Action labels should say what happens in familiar, concise language:
     scrollbar reads it). Give each copy its own with `OwnScrollController`
     (`lib/widgets/own_scroll_controller.dart`), which hands the screen the
     newest; the same goes for a list that crosses with itself in a
-    `StateSwitcher`. Build pages outside anything that rebuilds per frame
+    `StateSwitcher`. Build pages outside anything that rebuilds per frame.
+    Its fade intervals (`PageSwitchTransition.leavingFade`, `.arrivingFade`)
+    are public for a trade driven another way, as the workout's plan switch
+    is
   - `SurfaceFade` - a whole surface replaced by another fades in from
     `SurfaceFade.floor` when its `identity` changes: main tabs, Home's
     content, the auth gate. It skips muted tickers, reduced motion and a
@@ -289,8 +292,9 @@ Action labels should say what happens in familiar, concise language:
   `AppMotion.quick` (150ms flips), `.standard` (220ms regions), `.enter`
   (280ms arrivals), `.long` (400ms large moves), `.stagger` (40ms),
   `.patience` (300ms before a progress indicator shows), distances `.lift`
-  (8), `.shift` (24) and `.scale` (0.97), and the `.settle` spring for
-  gesture-driven settles. Arrive on `AppMotion.curve`; leave by passing
+  (8), `.shift` (24), `.swipeShift(width)` (a quarter of the width, 72 to
+  144, only for a page traded after a swipe) and `.scale` (0.97), and the
+  `.settle` spring for gesture-driven settles. Arrive on `AppMotion.curve`; leave by passing
   `AppMotion.exit` as the reverse curve; something already on screen
   travelling to another place on screen moves on `AppMotion.move`. Under
   reduced motion, jump a `PageController` or scroll position rather than
