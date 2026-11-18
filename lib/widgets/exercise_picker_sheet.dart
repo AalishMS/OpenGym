@@ -15,6 +15,7 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import 'app_header.dart';
 import 'motion/app_modals.dart';
+import 'motion/press_scale.dart';
 import 'muscle_group_illustration.dart';
 import 'rolling_figure.dart';
 
@@ -465,9 +466,10 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
           _showGroups();
         }
       },
+      // Follows the keyboard on the app's quick timing.
       child: AnimatedPadding(
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOut,
+        duration: AppMotion.of(context, AppMotion.quick),
+        curve: AppMotion.curve,
         padding: EdgeInsets.only(bottom: keyboardInset),
         child: SafeArea(
           top: false,
@@ -1063,7 +1065,7 @@ class _ContextBar extends StatelessWidget {
 /// large text) it becomes a row led by a single figure, ending in a chevron.
 /// A group with selections takes the selected ground and accent edge, says
 /// how many in its count line, and wears a count badge.
-class _MuscleGroupTile extends StatefulWidget {
+class _MuscleGroupTile extends StatelessWidget {
   final String category;
   final int count;
   final int selectedCount;
@@ -1151,17 +1153,9 @@ class _MuscleGroupTile extends StatefulWidget {
   static const double _cardChrome = AppSpacing.md * 3;
 
   @override
-  State<_MuscleGroupTile> createState() => _MuscleGroupTileState();
-}
-
-class _MuscleGroupTileState extends State<_MuscleGroupTile> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
-    final selectedCount = widget.selectedCount;
     final hasSelection = selectedCount > 0;
     // On the dark selected ground (the accent's wash) the plain accent can
     // fall short, so ink there is re-solved against the wash.
@@ -1169,15 +1163,13 @@ class _MuscleGroupTileState extends State<_MuscleGroupTile> {
         hasSelection && Theme.of(context).brightness == Brightness.dark;
     final ink = onWash ? accentOnMutedColor(context) : accentColor(context);
     final name = Text(
-      widget.category,
+      category,
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
       style: _MuscleGroupTile._nameStyle(textTheme),
     );
     final summary = Text(
-      hasSelection
-          ? '$selectedCount of ${widget.count} selected'
-          : '${widget.count} exercises',
+      hasSelection ? '$selectedCount of $count selected' : '$count exercises',
       // Two lines before it ever clips: the row grows and the grid scrolls.
       maxLines: 2,
       overflow: TextOverflow.ellipsis,
@@ -1189,7 +1181,7 @@ class _MuscleGroupTileState extends State<_MuscleGroupTile> {
     final badge = _CountBadge(count: selectedCount);
 
     final Widget content;
-    if (widget.compact) {
+    if (compact) {
       content = Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Row(
@@ -1198,7 +1190,7 @@ class _MuscleGroupTileState extends State<_MuscleGroupTile> {
               width: 36,
               height: 52,
               child: MuscleGroupIllustration(
-                group: widget.category,
+                group: category,
                 bothViews: false,
                 highlightColor: onWash ? ink : null,
               ),
@@ -1236,9 +1228,9 @@ class _MuscleGroupTileState extends State<_MuscleGroupTile> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             SizedBox(
-              height: widget.heroHeight,
+              height: heroHeight,
               child: MuscleGroupIllustration(
-                group: widget.category,
+                group: category,
                 highlightColor: onWash ? ink : null,
               ),
             ),
@@ -1272,42 +1264,37 @@ class _MuscleGroupTileState extends State<_MuscleGroupTile> {
       );
     }
 
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return Semantics(
       button: true,
       label:
           hasSelection
-              ? '${widget.category}, ${widget.count} exercises, '
+              ? '$category, $count exercises, '
                   '$selectedCount selected'
-              : '${widget.category}, ${widget.count} exercises',
+              : '$category, $count exercises',
       excludeSemantics: true,
-      onTap: widget.onTap,
+      onTap: onTap,
       // A slight give under the finger; still under reduced motion.
-      child: AnimatedScale(
-        scale: _pressed && !reduceMotion ? 0.97 : 1,
-        duration: AppMotion.quick,
-        curve: AppMotion.curve,
-        child: Material(
-          color:
-              hasSelection
-                  ? selectedGroundColor(context)
-                  : controlFillColor(context),
-          shape: RoundedRectangleBorder(
-            side:
-                hasSelection
-                    ? BorderSide(color: accentColor(context), width: 1.5)
-                    : BorderSide.none,
-            borderRadius: AppRadius.card,
-          ),
-          child: InkWell(
-            onTap: widget.onTap,
-            onHighlightChanged: (pressed) {
-              if (pressed != _pressed) setState(() => _pressed = pressed);
-            },
-            borderRadius: AppRadius.card,
-            child: content,
-          ),
-        ),
+      child: PressScale(
+        builder:
+            (context, onHighlightChanged) => Material(
+              color:
+                  hasSelection
+                      ? selectedGroundColor(context)
+                      : controlFillColor(context),
+              shape: RoundedRectangleBorder(
+                side:
+                    hasSelection
+                        ? BorderSide(color: accentColor(context), width: 1.5)
+                        : BorderSide.none,
+                borderRadius: AppRadius.card,
+              ),
+              child: InkWell(
+                onTap: onTap,
+                onHighlightChanged: onHighlightChanged,
+                borderRadius: AppRadius.card,
+                child: content,
+              ),
+            ),
       ),
     );
   }

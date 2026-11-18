@@ -26,6 +26,9 @@ import '../widgets/action_progress.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
+import '../widgets/motion/collapsible.dart';
+import '../widgets/motion/entrance.dart';
+import '../widgets/motion/state_switcher.dart';
 import '../widgets/raised_card.dart';
 import '../widgets/rolling_figure.dart';
 import '../widgets/workout/set_entry_table.dart';
@@ -928,7 +931,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                                 ),
                               ],
                             ),
-                            _Collapsible(
+                            Collapsible(
                               open: _showColors,
                               child: Padding(
                                 padding: const EdgeInsets.only(
@@ -958,14 +961,21 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                                       : null,
                             ),
                             if (_exercises.isNotEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(
-                                  bottom: AppSpacing.md,
+                              // New with the first exercises, so it arrives
+                              // with them; a plan that opens with some
+                              // simply has it.
+                              Entrance(
+                                key: const ValueKey('editor-hint'),
+                                animate: _arriving.isNotEmpty,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(
+                                    bottom: AppSpacing.md,
+                                  ),
+                                  child: _EditorHint(_editorHint),
                                 ),
-                                child: _EditorHint(_editorHint),
                               ),
                             if (_exercises.isEmpty)
-                              _Entrance(
+                              Entrance(
                                 animate: _hadExercises,
                                 child: _EmptyExercises(
                                   starters: planStarters,
@@ -1589,9 +1599,9 @@ class _ExerciseEditorSection extends StatelessWidget {
 
     // The entrance sits under this card's GlobalKey, so a reorder's drag
     // proxy carries its finished state along instead of replaying it.
-    return _Entrance(
+    return Entrance(
       animate: arrivalOrder != null,
-      order: arrivalOrder ?? 0,
+      index: arrivalOrder ?? 0,
       child: Container(
         decoration: BoxDecoration(
           border: Border(bottom: BorderSide(color: hairlineColor(context))),
@@ -1600,7 +1610,7 @@ class _ExerciseEditorSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _buildHeader(context, expanded, previous),
-            _Collapsible(
+            Collapsible(
               open: expanded,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1732,7 +1742,7 @@ class _ExerciseEditorSection extends StatelessWidget {
                         ),
                         // The summary stands in for the table while folded,
                         // and gives way to it as the card opens.
-                        _Collapsible(
+                        Collapsible(
                           open: !expanded,
                           child: Padding(
                             padding: const EdgeInsets.only(top: AppSpacing.xs),
@@ -1919,7 +1929,7 @@ class _EmptyExercises extends StatelessWidget {
           'and adjust its targets.',
           style: textTheme.bodyMedium?.copyWith(color: secondary),
         ),
-        _Collapsible(
+        Collapsible(
           open: showMissing,
           child: Padding(
             padding: const EdgeInsets.only(top: AppSpacing.sm),
@@ -2077,8 +2087,10 @@ class _StarterRow extends StatelessWidget {
   }
 }
 
-/// The line under the Exercises heading. It cross-fades when the cards change
-/// between open and folded, since what it describes changes with them.
+/// The line under the Exercises heading. It crosses to the new line when
+/// the cards change between open and folded, since what it describes changes
+/// with them, and the two can differ by a line, so the height eases instead
+/// of snapping when the old one leaves.
 class _EditorHint extends StatelessWidget {
   final String text;
 
@@ -2086,164 +2098,12 @@ class _EditorHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The two hints can differ by a line; the height eases instead of
-    // snapping when the old one leaves.
-    return AnimatedSize(
-      duration: AppMotion.of(context, AppMotion.standard),
-      curve: AppMotion.curve,
-      alignment: AlignmentDirectional.topStart,
-      child: AnimatedSwitcher(
-        duration: AppMotion.of(context, AppMotion.quick),
-        switchInCurve: AppMotion.curve,
-        switchOutCurve: AppMotion.exit,
-        layoutBuilder:
-            (current, previous) => Stack(
-              alignment: AlignmentDirectional.topStart,
-              children: [...previous, if (current != null) current],
-            ),
-        child: Text(
-          text,
-          key: ValueKey(text),
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-      ),
-    );
-  }
-}
-
-/// Opens and closes [child] by growing and fading it from the top, and drops
-/// it from the tree once closed, so a folded region holds no controls or
-/// semantics. It starts at rest: only a change of [open] animates.
-class _Collapsible extends StatefulWidget {
-  final bool open;
-  final Widget child;
-
-  const _Collapsible({required this.open, required this.child});
-
-  @override
-  State<_Collapsible> createState() => _CollapsibleState();
-}
-
-class _CollapsibleState extends State<_Collapsible>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: AppMotion.standard,
-    value: widget.open ? 1 : 0,
-  )..addStatusListener(_onStatus);
-  late final CurvedAnimation _progress = CurvedAnimation(
-    parent: _controller,
-    curve: AppMotion.curve,
-    reverseCurve: AppMotion.exit,
-  );
-
-  void _onStatus(AnimationStatus status) {
-    // Settling changes the clip, and closing drops the child.
-    if (!status.isAnimating && mounted) setState(() {});
-  }
-
-  @override
-  void didUpdateWidget(_Collapsible oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.open == oldWidget.open) return;
-    _controller.duration = AppMotion.of(context, AppMotion.standard);
-    if (widget.open) {
-      _controller.forward();
-    } else {
-      _controller.reverse();
-    }
-  }
-
-  @override
-  void dispose() {
-    _progress.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!widget.open && _controller.isDismissed) return const SizedBox.shrink();
-    return ClipRect(
-      // Clip only while moving, so a settled region can paint past its edge
-      // (focus rings, shadows) as it did before it could fold.
-      clipBehavior: _controller.isAnimating ? Clip.hardEdge : Clip.none,
-      child: SizeTransition(
-        sizeFactor: _progress,
-        alignment: AlignmentDirectional.topStart,
-        child: FadeTransition(opacity: _progress, child: widget.child),
-      ),
-    );
-  }
-}
-
-/// Fades [child] in and lifts it a few pixels into place when it is first
-/// built, if [animate]; later [order]s start a beat later, so a batch of new
-/// cards arrives in sequence. Changing [animate] afterwards does nothing.
-class _Entrance extends StatefulWidget {
-  final bool animate;
-  final int order;
-  final Widget child;
-
-  const _Entrance({required this.animate, this.order = 0, required this.child});
-
-  @override
-  State<_Entrance> createState() => _EntranceState();
-}
-
-class _EntranceState extends State<_Entrance>
-    with SingleTickerProviderStateMixin {
-  /// The gap between one arrival and the next, and how many gaps at most, so
-  /// a long batch doesn't keep the last card waiting.
-  static const Duration _stagger = Duration(milliseconds: 40);
-  static const int _maxStagger = 6;
-  static const double _lift = 8;
-
-  AnimationController? _controller;
-  Animation<double> _progress = kAlwaysCompleteAnimation;
-  bool _decided = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_decided) return;
-    _decided = true;
-    if (!widget.animate || MediaQuery.disableAnimationsOf(context)) return;
-    final delay = _stagger * widget.order.clamp(0, _maxStagger);
-    final total = delay + AppMotion.enter;
-    final controller = AnimationController(vsync: this, duration: total);
-    _controller = controller;
-    _progress = CurvedAnimation(
-      parent: controller,
-      curve: Interval(
-        delay.inMicroseconds / total.inMicroseconds,
-        1,
-        curve: AppMotion.curve,
-      ),
-    );
-    controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // One tree shape whether or not this entrance plays, so the child keeps
-    // its state either way.
-    return FadeTransition(
-      opacity: _progress,
-      child: AnimatedBuilder(
-        animation: _progress,
-        builder:
-            (context, child) => Transform.translate(
-              offset: Offset(0, _lift * (1 - _progress.value)),
-              child: child,
-            ),
-        child: widget.child,
+    return StateSwitcher(
+      animateSize: true,
+      child: Text(
+        text,
+        key: ValueKey(text),
+        style: Theme.of(context).textTheme.bodySmall,
       ),
     );
   }
