@@ -12,12 +12,14 @@ import '../providers/workout_session_provider.dart';
 import '../services/exercise_catalog.dart';
 import '../services/statistics_analytics_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/scroll_to_top.dart';
 import '../utils/statistics_format.dart';
 import '../widgets/app_header.dart';
 import '../widgets/motion/app_modals.dart';
+import '../widgets/motion/entrance.dart';
 import '../widgets/statistics/block_statistics.dart';
 import '../widgets/statistics/lift_list.dart';
 import '../widgets/statistics/statistics_controls.dart';
@@ -73,8 +75,21 @@ class StatsScreenState extends State<StatsScreen> {
   final _weekly = _Memo<List<WeeklyTrainingValue>>();
   final _lifts = _Memo<List<LiftSummary>>();
   final _blocks = _Memo<List<BlockStatistics>>();
-  final ScrollController _scrollController = ScrollController();
+
+  /// Scrolls the view on screen. Each view arrives as a new page that starts
+  /// at the top, so the controller keeps no offset to restore. While two pages
+  /// trade places both are attached, and the one leaving keeps its place.
+  final ScrollController _scrollController = ScrollController(
+    keepScrollOffset: false,
+  );
   _StatisticsView _view = _StatisticsView.overview;
+
+  /// The page on screen. A new page for a view chosen here trades places with
+  /// the last; [_cut] changes when a view is set from outside (entering the
+  /// tab, the Home shortcut, a split switch), and the new page simply appears.
+  int _page = 0;
+  int _cut = 0;
+  bool _pageForward = true;
   StatisticsPeriod _period = StatisticsPeriod.fourWeeks;
   ExerciseMetric _metric = ExerciseMetric.estimatedOneRepMax;
   String? _blockId;
@@ -82,6 +97,10 @@ class StatsScreenState extends State<StatsScreen> {
   String? _progressExercise;
   String? _lastSplit;
   int _recordLimit = 12;
+
+  /// The first record row revealed by the last *Show earlier records*, for
+  /// the one frame those rows are built; they arrive, the rest were there.
+  int? _recordsArrivingFrom;
   bool _hasSections = false;
 
   /// Home's weekly shortcut asks for the week in progress; any other entry
@@ -98,7 +117,7 @@ class StatsScreenState extends State<StatsScreen> {
         widget.weeklyTrainingRequest != oldWidget.weeklyTrainingRequest;
     if (!weekly && widget.visitRequest == oldWidget.visitRequest) return;
     if (weekly) {
-      _view = _StatisticsView.overview;
+      _turnTo(_StatisticsView.overview, animate: false);
       _weeklyExercise = null;
     }
     _showCurrentWeek = weekly;
@@ -111,9 +130,23 @@ class StatsScreenState extends State<StatsScreen> {
     });
   }
 
-  void _selectView(_StatisticsView view) {
-    setState(() => _view = view);
-    _resetScroll();
+  /// Shows [view] on a page of its own. With [animate] the page trades
+  /// places with the last along the order of the views; otherwise it simply
+  /// appears, as when the tab is entered and the tab's own fade carries it.
+  void _turnTo(_StatisticsView view, {required bool animate}) {
+    if (view == _view) return;
+    _pageForward = view.index > _view.index;
+    _view = view;
+    _page++;
+    if (!animate) _cut++;
+  }
+
+  void _selectView(_StatisticsView view, {bool animate = true}) {
+    if (view == _view) {
+      _resetScroll();
+      return;
+    }
+    setState(() => _turnTo(view, animate: animate));
   }
 
   /// Handles a shell swipe before it moves to an adjacent main tab.
@@ -127,7 +160,9 @@ class StatsScreenState extends State<StatsScreen> {
             ? (forward ? 0 : views.length - 1)
             : _view.index + (forward ? 1 : -1);
     if (next < 0 || next >= views.length) return false;
-    _selectView(views[next]);
+    // Entering arrives with the tab's own fade; within the tab the views
+    // trade places in the direction of the swipe.
+    _selectView(views[next], animate: !entering);
     return true;
   }
 
@@ -239,6 +274,17 @@ class StatsScreenState extends State<StatsScreen> {
     if (mounted && value != null) setState(() => _progressExercise = value);
   }
 
+  void _showEarlierRecords() {
+    setState(() {
+      _recordsArrivingFrom = _recordLimit;
+      _recordLimit += 12;
+    });
+    // Entrance reads whether to arrive once, on its first build.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _recordsArrivingFrom = null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final splitId = context.watch<SplitProvider?>()?.activeSplitId;
@@ -256,7 +302,7 @@ class StatsScreenState extends State<StatsScreen> {
     _hasSections = sessions.isNotEmpty;
     if (_lastSplit != splitId) {
       _lastSplit = splitId;
-      _view = _StatisticsView.overview;
+      _turnTo(_StatisticsView.overview, animate: false);
       _blockId = null;
       _weeklyExercise = null;
       _progressExercise = null;
@@ -332,8 +378,10 @@ class StatsScreenState extends State<StatsScreen> {
     switch (_view) {
       case _StatisticsView.overview:
         content = TrainingOverview(
+          // The exercise is not part of the key: choosing another keeps the
+          // chart, so its bars ease to the new values.
           key: ValueKey(
-            'overview-$splitId-$weeklyExercise-'
+            'overview-$splitId-'
             '${widget.weeklyTrainingRequest}-$_showCurrentWeek',
           ),
           sessions: sessions,
@@ -486,9 +534,9 @@ class StatsScreenState extends State<StatsScreen> {
               )
             else
               StrengthTrend(
-                key: ValueKey(
-                  'strength-$splitId-${lift.exerciseId ?? lift.exerciseName}-$_period-$_metric',
-                ),
+                key: ValueKey('strength-$splitId'),
+                dataset:
+                    '${lift.exerciseId ?? lift.exerciseName}-$_period-$_metric',
                 progress: lift.progress,
                 metric: _metric,
                 weightUnit: unit,
@@ -533,17 +581,28 @@ class StatsScreenState extends State<StatsScreen> {
                 icon: LucideIcons.trophy,
               )
             else ...[
-              for (final event in records.take(_recordLimit))
-                RecordEventRow(
+              for (final (index, event) in records.take(_recordLimit).indexed)
+                // Rows revealed by Show earlier records are new to the
+                // screen and arrive; the rest were already there.
+                Entrance(
                   key: ValueKey(
-                    'record-${event.session.id}-${event.exerciseId ?? event.exerciseName}',
+                    'record-arrival-${event.session.id}-${event.exerciseId ?? event.exerciseName}',
                   ),
-                  event: event,
-                  weightUnit: unit,
+                  animate:
+                      _recordsArrivingFrom != null &&
+                      index >= _recordsArrivingFrom!,
+                  index: index - (_recordsArrivingFrom ?? 0),
+                  child: RecordEventRow(
+                    key: ValueKey(
+                      'record-${event.session.id}-${event.exerciseId ?? event.exerciseName}',
+                    ),
+                    event: event,
+                    weightUnit: unit,
+                  ),
                 ),
               if (records.length > _recordLimit)
                 TextButton(
-                  onPressed: () => setState(() => _recordLimit += 12),
+                  onPressed: _showEarlierRecords,
                   child: const Text('Show earlier records'),
                 ),
             ],
@@ -567,21 +626,32 @@ class StatsScreenState extends State<StatsScreen> {
                     onSelected: _selectView,
                   ),
                   Expanded(
-                    child: SingleChildScrollView(
-                      key: const ValueKey('statistics-scroll'),
-                      controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.xl,
-                        AppSpacing.lg,
-                        AppSpacing.xl,
-                        AppSpacing.xl,
-                      ),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 832),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: content,
+                    child: KeyedSubtree(
+                      key: ValueKey('statistics-cut-$_cut'),
+                      child: _PageSwitcher(
+                        forward: _pageForward,
+                        child: KeyedSubtree(
+                          key: ValueKey('statistics-page-$_page'),
+                          child: SingleChildScrollView(
+                            key: const ValueKey('statistics-scroll'),
+                            controller: _scrollController,
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.xl,
+                              AppSpacing.lg,
+                              AppSpacing.xl,
+                              AppSpacing.xl,
+                            ),
+                            child: Center(
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 832,
+                                ),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: content,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ),
@@ -733,6 +803,100 @@ class _EmptyStatistics extends StatelessWidget {
           ),
         ),
   );
+}
+
+/// The views trade places along the order of the tabs, as the exercise
+/// picker's pages do: the arriving page fades in as it slides the last
+/// [AppMotion.shift] pixels into place from the end side going forward (from
+/// the start side going back), while the leaving one clears out the other way
+/// in the first third of [AppMotion.standard]. The arriving page is laid out,
+/// tappable and announced from its first frame; the leaving one takes no taps
+/// or focus and says nothing. Under reduced motion the page simply changes.
+class _PageSwitcher extends StatelessWidget {
+  final bool forward;
+
+  /// A keyed page; a new key is a new page.
+  final Widget child;
+
+  const _PageSwitcher({required this.forward, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    final direction = (forward ? 1.0 : -1.0) * (rtl ? -1.0 : 1.0);
+    return AnimatedSwitcher(
+      duration: AppMotion.standard,
+      layoutBuilder:
+          (current, previous) => Stack(
+            fit: StackFit.expand,
+            children: [...previous, if (current != null) current],
+          ),
+      // A new closure each build, so a page already leaving picks up the
+      // latest direction too.
+      transitionBuilder:
+          (page, animation) => _PageTransition(
+            animation: animation,
+            direction: direction,
+            child: page,
+          ),
+      child: child,
+    );
+  }
+}
+
+class _PageTransition extends AnimatedWidget {
+  /// +1 when pages move toward the start (arriving from the right in LTR),
+  /// -1 when they move toward the end.
+  final double direction;
+  final Widget child;
+
+  const _PageTransition({
+    required Animation<double> animation,
+    required this.direction,
+    required this.child,
+  }) : super(listenable: animation);
+
+  // The leaving page clears out early and the arriving one fades in after
+  // it, so two pages never read as one.
+  static const Interval _fadeOut = Interval(0, 0.35);
+  static const Interval _fadeIn = Interval(0.3, 1, curve: AppMotion.curve);
+
+  @override
+  Widget build(BuildContext context) {
+    final animation = listenable as Animation<double>;
+    final t = animation.value;
+    // Arriving or leaving by the animation's own direction: a view chosen
+    // again before its old page has gone arrives as a new page, while the
+    // old one keeps leaving.
+    final incoming = animation.isForwardOrCompleted;
+    final double dx;
+    final double opacity;
+    if (incoming) {
+      dx = (1 - AppMotion.curve.transform(t)) * AppMotion.shift * direction;
+      opacity = _fadeIn.transform(t);
+    } else {
+      final progress = 1 - t;
+      dx = -AppMotion.curve.transform(progress) * AppMotion.shift * direction;
+      opacity = 1 - _fadeOut.transform(progress);
+    }
+    return IgnorePointer(
+      ignoring: !incoming,
+      child: ExcludeSemantics(
+        excluding: !incoming,
+        child: ExcludeFocus(
+          excluding: !incoming,
+          // The arriving page is announced before it can be seen, as it is
+          // findable and tappable.
+          child: Opacity(
+            opacity: opacity,
+            alwaysIncludeSemantics: incoming,
+            child: Transform.translate(offset: Offset(dx, 0), child: child),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// One derived value, kept until its inputs change. Inputs compare with

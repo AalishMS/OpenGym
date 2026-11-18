@@ -84,6 +84,12 @@ hero illustrations, or independent color themes.
   percentage; tapping reveals the start and end weights. Older block selection
   updates all three sections. The page is deliberately scrollable.
 - Records load twelve events at a time, with more available on demand.
+- Motion only says what changed. The views trade places in the direction of
+  travel between tabs. Weekly bars ease to their new heights when the
+  exercise filter changes, since each bar is still the same week; a line
+  chart crosses to a new dataset instead, because a line morphing from one
+  lift or measure to another would draw values nobody logged. Exact readouts
+  land at once, and nothing replays when Stats is entered again.
 - Large text can expand the page; navigation scrolls horizontally when its
   labels need more space. Empty states provide a next step.
 

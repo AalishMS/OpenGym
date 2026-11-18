@@ -635,7 +635,8 @@ void main() {
       expect(find.textContaining('Estimated 1RM'), findsNothing);
       expect(find.textContaining('Best set volume'), findsNothing);
       await tester.tap(find.text('+2 more'));
-      await tester.pump();
+      // The other tags fold open before they reach their places.
+      await tester.pumpAndSettle();
       final heaviest =
           tester.getTopLeft(find.textContaining('Heaviest weight')).dy;
       final oneRepMax =
@@ -646,7 +647,7 @@ void main() {
       expect(oneRepMax, lessThan(volume));
       expect(find.text('+2 more'), findsNothing);
       await tester.tap(find.text('Show less'));
-      await tester.pump();
+      await tester.pumpAndSettle();
       expect(find.textContaining('Estimated 1RM'), findsNothing);
       expect(find.text('+2 more'), findsOneWidget);
     });
