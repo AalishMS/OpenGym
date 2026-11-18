@@ -18,6 +18,7 @@ import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/motion.dart';
 import 'package:gymapp/widgets/action_progress.dart';
+import 'package:gymapp/widgets/motion/collapsible.dart';
 import 'package:gymapp/widgets/plan_title_hero.dart';
 import 'package:gymapp/widgets/underline_tab_strip.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
@@ -419,7 +420,7 @@ void main() {
           find
               .ancestor(
                 of: find.text('Retry'),
-                matching: find.byType(SizeTransition),
+                matching: find.byType(Collapsible),
               )
               .first;
       // There to find and tap from the first frame, opening rather than
