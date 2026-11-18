@@ -186,7 +186,7 @@ class _DraggablePlanCardState extends State<_DraggablePlanCard> {
                                 return cardBox.globalToLocal(position);
                               },
                               onDragStarted: () {
-                                Haptics.selection();
+                                Haptics.lift();
                                 setState(() => _dragging = true);
                               },
                               onDragEnd: (_) {

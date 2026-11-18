@@ -133,8 +133,8 @@ void main() {
       }
     });
 
-    testWidgets('picking a card up and dropping it each give a selection '
-        'click', (tester) async {
+    testWidgets('picking a card up gives a light lift, and dropping it a '
+        'selection click', (tester) async {
       final haptics = <Object?>[];
       tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
         SystemChannels.platform,
@@ -160,12 +160,12 @@ void main() {
       );
       await gesture.moveTo(tester.getCenter(card('Pull')));
       await tester.pumpAndSettle();
-      expect(haptics, ['HapticFeedbackType.selectionClick']);
+      expect(haptics, ['HapticFeedbackType.lightImpact']);
       await gesture.up();
       await tester.pumpAndSettle();
       expect(moves, [('Push', 'Pull')]);
       expect(haptics, [
-        'HapticFeedbackType.selectionClick',
+        'HapticFeedbackType.lightImpact',
         'HapticFeedbackType.selectionClick',
       ]);
     });

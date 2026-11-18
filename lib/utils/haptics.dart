@@ -11,6 +11,9 @@ class Haptics {
   /// place in the order. The lightest tick, for a change the eye also sees.
   static void selection() => HapticFeedback.selectionClick();
 
+  /// A card picked up to be dragged into a new place.
+  static void lift() => HapticFeedback.lightImpact();
+
   /// The workout clock started.
   static void confirm() => HapticFeedback.mediumImpact();
 
