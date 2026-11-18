@@ -240,7 +240,6 @@ class _CoachScreenState extends State<CoachScreen> {
     final locked = coach.limitReached;
     final busy = coach.sending || locked;
     final rows = _rowCount(coach);
-    final settledRows = _settledRows;
     _settleRows(rows);
     _followConversation(rows);
 
@@ -320,10 +319,17 @@ class _CoachScreenState extends State<CoachScreen> {
                                                 padding: EdgeInsets.only(
                                                   top: _gapAbove(coach, index),
                                                 ),
+                                                // Read as each row is built,
+                                                // not when the list was: a row
+                                                // built lazily later, as it
+                                                // scrolls back into view, is
+                                                // settled by then. Rows built in
+                                                // the frame of a change still see
+                                                // the count from before it.
                                                 child: _buildRow(
                                                   coach,
                                                   index,
-                                                  settledRows: settledRows,
+                                                  settledRows: _settledRows,
                                                   busy: busy,
                                                 ),
                                               ),

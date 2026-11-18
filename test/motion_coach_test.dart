@@ -383,6 +383,53 @@ void main() {
       await tester.pumpAndSettle();
     });
 
+    testWidgets('rows scrolled back into view while a reply is pending do '
+        'not arrive again', (tester) async {
+      final fixture = await openCoach(tester, size: const Size(390, 600));
+      for (var i = 0; i < 12; i++) {
+        await turn(
+          tester,
+          fixture,
+          'Question $i',
+          'A reply long enough to take a few lines of the chat, number $i, '
+              'so that the conversation scrolls well past one screen.',
+        );
+      }
+      final held = fixture.client.hold();
+      await send(tester, 'One more question');
+      await tester.pump();
+      await tester.pump(AppMotion.enter + AppMotion.stagger * 2);
+      expectAllAtRest(tester);
+
+      // Nothing rebuilds the screen from here: no typing, only scrolling.
+      // The newest rows leave the lazy list and are built again on the way
+      // back, by then long settled.
+      final list = find.byType(Scrollable).first;
+      await tester.fling(list, const Offset(0, 3000), 3000);
+      for (var i = 0; i < 120; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(find.text('One more question'), findsNothing);
+      await tester.fling(list, const Offset(0, -3000), 3000);
+      for (
+        var i = 0;
+        i < 120 && find.text('One more question').evaluate().isEmpty;
+        i++
+      ) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      expect(find.text('One more question'), findsOneWidget);
+      expectAllAtRest(tester);
+      await tester.pump(const Duration(milliseconds: 16));
+      expectAllAtRest(tester);
+
+      held.complete(
+        CoachAnswer(output: jsonEncode({'reply': 'Done.', 'proposal': null})),
+      );
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+    });
+
     testWidgets('history the Coach opens with is simply there', (tester) async {
       final fixture = await openCoach(tester);
       await turn(tester, fixture, 'First question', 'First answer.');
