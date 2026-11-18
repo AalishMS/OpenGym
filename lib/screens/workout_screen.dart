@@ -2152,13 +2152,26 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                           sliver: SliverReorderableList(
                             itemCount: session.exercises.length + 1,
                             onReorderItem: _reorderExercises,
-                            proxyDecorator: (child, index, animation) {
-                              return Material(
-                                color: surfaceColor(context),
-                                borderRadius: AppRadius.card,
-                                child: child,
-                              );
-                            },
+                            // The held exercise rises off the page onto a
+                            // raised ground as it lifts, and sinks back into
+                            // the page as it drops into place.
+                            proxyDecorator:
+                                (child, index, animation) => AnimatedBuilder(
+                                  animation: animation,
+                                  builder:
+                                      (context, child) => Material(
+                                        color: Color.lerp(
+                                          backgroundColor(context),
+                                          surfaceColor(context),
+                                          AppMotion.curve.transform(
+                                            animation.value,
+                                          ),
+                                        ),
+                                        borderRadius: AppRadius.card,
+                                        child: child,
+                                      ),
+                                  child: child,
+                                ),
                             itemBuilder: (context, index) {
                               if (index == session.exercises.length) {
                                 return TextButton.icon(

@@ -22,6 +22,7 @@ import '../utils/statistics_format.dart';
 import '../utils/workout_context.dart';
 import '../widgets/app_header.dart';
 import '../widgets/app_wordmark.dart';
+import '../widgets/motion/state_switcher.dart';
 
 /// What a logged workout added up to: the moment after Finish.
 ///
@@ -199,20 +200,27 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen> {
             key: _shareKey,
             tooltip: 'Share workout',
             onPressed: _sharing ? null : _share,
-            icon:
-                _sharing
-                    ? SizedBox.square(
-                      dimension: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: accentColor(context),
+            // Share crosses to its progress and back in place. It sits in the
+            // header, outside the captured summary, so no part of the cross
+            // can reach the shared image.
+            icon: StateSwitcher(
+              alignment: Alignment.center,
+              child:
+                  _sharing
+                      ? SizedBox.square(
+                        key: const ValueKey('summary-sharing'),
+                        dimension: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: accentColor(context),
+                        ),
+                      )
+                      : const Icon(
+                        LucideIcons.share2,
+                        key: ValueKey('summary-share'),
+                        size: 20,
                       ),
-                    )
-                    : const Icon(
-                      LucideIcons.share2,
-                      key: ValueKey('summary-share'),
-                      size: 20,
-                    ),
+            ),
           ),
           const SizedBox(width: AppSpacing.sm),
         ],

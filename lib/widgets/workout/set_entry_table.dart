@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import '../../providers/settings_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
+import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../theme/semantic_colors.dart';
@@ -525,16 +526,9 @@ class _SetEntryTableState extends State<SetEntryTable> {
               builder:
                   (context, target, child) => TweenAnimationBuilder<double>(
                     tween: Tween(begin: 1, end: target),
-                    duration:
-                        MediaQuery.disableAnimationsOf(context)
-                            ? Duration.zero
-                            : Duration(
-                              milliseconds: session.closing ? 144 : 176,
-                            ),
-                    curve:
-                        session.closing
-                            ? Curves.easeInCubic
-                            : Curves.easeOutCubic,
+                    // Quick both ways: entry starts the moment it is open.
+                    duration: AppMotion.of(context, AppMotion.quick),
+                    curve: session.closing ? AppMotion.exit : AppMotion.curve,
                     onEnd: () {
                       if (session.closing && session.slide.value == 1) {
                         session.owner._finishExit(session);
@@ -655,11 +649,18 @@ class _SetEntryTableState extends State<SetEntryTable> {
           position.maxScrollExtent,
         );
         if ((target - position.pixels).abs() > .5) {
-          position.animateTo(
-            target,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-          );
+          // A scroll the reader follows to the row the keys now edit; under
+          // reduced motion the row is simply there.
+          final duration = AppMotion.of(context, AppMotion.enter);
+          if (duration == Duration.zero) {
+            position.jumpTo(target);
+          } else {
+            position.animateTo(
+              target,
+              duration: duration,
+              curve: AppMotion.curve,
+            );
+          }
         }
         return false;
       });
@@ -1294,10 +1295,8 @@ class _EntryRow extends StatelessWidget {
           // lifts into an accent wash; the keypad header carries the value
           // and replace mode.
           child: AnimatedContainer(
-            duration:
-                MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : const Duration(milliseconds: 120),
+            duration: AppMotion.of(context, AppMotion.quick),
+            curve: AppMotion.curve,
             constraints: const BoxConstraints(minHeight: 44),
             padding: const EdgeInsets.all(AppSpacing.xs),
             alignment: Alignment.center,
@@ -1336,7 +1335,7 @@ class _PopIn extends StatelessWidget {
     if (!enabled || MediaQuery.disableAnimationsOf(context)) return child;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 360),
+      duration: AppMotion.enter,
       curve: Curves.easeOutBack,
       builder:
           (context, scale, child) =>
