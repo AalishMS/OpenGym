@@ -91,9 +91,7 @@ void main() {
           ChangeNotifierProvider<WorkoutPlanProvider>.value(
             value: _Plans(plans),
           ),
-          ChangeNotifierProvider<WorkoutSessionProvider>.value(
-            value: sessions,
-          ),
+          ChangeNotifierProvider<WorkoutSessionProvider>.value(value: sessions),
         ],
         child: MaterialApp(
           theme: buildTheme(
@@ -160,7 +158,8 @@ void main() {
 
   Future<void> switchTo(WidgetTester tester, String plan) async {
     final strip = find.byWidgetPredicate(
-      (widget) => widget is UnderlineTabStrip && widget.rule == StripRule.bottom,
+      (widget) =>
+          widget is UnderlineTabStrip && widget.rule == StripRule.bottom,
     );
     await tester.tap(find.descendant(of: strip, matching: find.text(plan)));
   }
@@ -225,16 +224,14 @@ void main() {
   });
 
   group('plan switch', () {
-    testWidgets('the chosen plan comes in from its side over a still page', (
-      tester,
-    ) async {
+    testWidgets('the chosen plan comes in from its side as the old page '
+        'gives way by the nudge', (tester) async {
       await open(tester);
       final rest = tester.getTopLeft(title('Pull')).dx;
       await switchTo(tester, 'Legs');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 60));
       final route = ModalRoute.of(tester.element(title('Legs')))!;
-      expect(route.transitionDuration, AppMotion.standard);
       expect(route.animation!.value, inExclusiveRange(0, 1));
       // The page being replaced only gives way by the nudge; the platform's
       // own transition doesn't carry it off.
@@ -243,9 +240,37 @@ void main() {
       expect(outgoing, greaterThanOrEqualTo(rest - AppMotion.shift - 0.5));
       // The arriving page is still short of its place, to the right.
       expect(tester.getTopLeft(title('Legs')).dx, greaterThan(rest));
+      // It lands within the standard time.
+      await tester.pump(AppMotion.standard - const Duration(milliseconds: 60));
+      expect(route.animation!.value, 1);
+      expect(tester.getTopLeft(title('Legs')).dx, closeTo(rest, 0.5));
       await tester.pumpAndSettle();
       expect(currentPlan(tester), 'Legs');
       expect(tester.getTopLeft(title('Legs')).dx, closeTo(rest, 0.5));
+    });
+
+    testWidgets('once it has landed, it lets go of the workout it replaced', (
+      tester,
+    ) async {
+      await open(tester, fromHome: true);
+      final replaced =
+          ModalRoute.of(tester.element(title('Pull')))!
+              as TransitionRoute<dynamic>;
+      await switchTo(tester, 'Legs');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 60));
+      final route =
+          ModalRoute.of(tester.element(title('Legs')))!
+              as TransitionRoute<dynamic>;
+      // While it arrives, the workout it replaces is singled out to hold
+      // still under it.
+      expect(route.canTransitionFrom(replaced), isFalse);
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+      expect(replaced.isActive, isFalse);
+      // Landed, it no longer refers to the disposed route; held, every
+      // switch would keep the whole chain of workouts before it alive.
+      expect(route.canTransitionFrom(replaced), isTrue);
     });
 
     testWidgets('once it has landed, Back plays the page transition', (
@@ -263,12 +288,14 @@ void main() {
       expect(route.animation!.value, inExclusiveRange(0, 1));
       // The sideways entry stays put; it doesn't play backwards.
       final slide = tester.widget<SlideTransition>(
-        find.ancestor(of: title('Legs'), matching: find.byType(SlideTransition))
+        find
+            .ancestor(of: title('Legs'), matching: find.byType(SlideTransition))
             .first,
       );
       expect(slide.position.value, Offset.zero);
       final fade = tester.widget<FadeTransition>(
-        find.ancestor(of: title('Legs'), matching: find.byType(FadeTransition))
+        find
+            .ancestor(of: title('Legs'), matching: find.byType(FadeTransition))
             .first,
       );
       expect(fade.opacity.value, 1);
@@ -428,18 +455,38 @@ void main() {
             .scale
             .value;
 
-    testWidgets('grows out of the block button on the app timing', (
+    /// How visible the menu is through every fade above its title.
+    double menuOpacity(WidgetTester tester) => tester
+        .widgetList<FadeTransition>(
+          find.ancestor(
+            of: find.text('Training blocks'),
+            matching: find.byType(FadeTransition),
+          ),
+        )
+        .fold(1.0, (opacity, fade) => opacity * fade.opacity.value);
+
+    testWidgets('grows out of the block button, and leaves with a plain fade', (
       tester,
     ) async {
       await open(tester);
       await tester.tap(find.text('Block 1'));
       await tester.pump();
-      final route = ModalRoute.of(tester.element(find.text('Training blocks')))!;
-      expect(route.transitionDuration, AppMotion.standard);
       expect(menuScale(tester), AppMotion.scale);
-      await tester.pump(AppMotion.standard);
+      await tester.pump(AppMotion.standard ~/ 2);
+      expect(menuScale(tester), inExclusiveRange(AppMotion.scale, 1));
+      await tester.pump(AppMotion.standard ~/ 2);
       expect(menuScale(tester), 1);
+      expect(menuOpacity(tester), 1);
+      await tester.pumpAndSettle();
+
+      // Leaving, it holds its size as a dialog does, and is mostly gone
+      // halfway through.
       await tester.tapAt(const Offset(10, 10));
+      await tester.pump();
+      await tester.pump(AppMotion.standard ~/ 2);
+      expect(find.text('Training blocks'), findsOneWidget);
+      expect(menuScale(tester), 1);
+      expect(menuOpacity(tester), lessThan(0.2));
       await tester.pumpAndSettle();
       expect(find.text('Training blocks'), findsNothing);
     });
@@ -448,8 +495,9 @@ void main() {
       await open(tester, reduceMotion: true);
       await tester.tap(find.text('Block 1'));
       await tester.pump();
-      final route = ModalRoute.of(tester.element(find.text('Training blocks')))!;
-      expect(route.transitionDuration, Duration.zero);
+      final route =
+          ModalRoute.of(tester.element(find.text('Training blocks')))!;
+      expect(route.animation!.isCompleted, isTrue);
       expect(menuScale(tester), 1);
       await tester.tapAt(const Offset(10, 10));
       await tester.pumpAndSettle();

@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../widgets/motion/app_modals.dart';
+import '../widgets/motion/patient_progress.dart';
 import '../widgets/motion/state_switcher.dart';
 import 'exercise_management_screen.dart';
 import '../services/exercise_catalog.dart';
@@ -557,18 +558,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           // Saving must not resize the viewport or move the controls being
-          // used. The banner fades in over the page and out again, so work
-          // that finishes at once never flashes a full banner.
+          // used. The banner fades in over the page, and only for work still
+          // going after a beat, so a save that finishes at once never
+          // flashes it.
           Positioned(
             top: 0,
             left: 0,
             right: 0,
-            child: StateSwitcher(
+            child: PatientProgress(
               child:
                   _busyAction == null
-                      ? const SizedBox.shrink(key: ValueKey('idle'))
+                      ? null
                       : SizedBox(
-                        key: const ValueKey('busy'),
                         width: double.infinity,
                         child: Material(
                           color: surface,

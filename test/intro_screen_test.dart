@@ -5,6 +5,7 @@ import 'package:gymapp/main.dart' show loadIntroPending;
 import 'package:gymapp/screens/intro_screen.dart';
 import 'package:gymapp/services/tutorial_preferences.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/theme/motion.dart';
 
 void main() {
   test('new installs keep the intro pending until completion', () async {
@@ -59,12 +60,53 @@ void main() {
     },
   );
 
-  Widget host(Future<void> Function() onFinish) {
+  Widget host(Future<void> Function() onFinish, {bool reduceMotion = false}) {
     return MaterialApp(
       theme: buildTheme(const Color(0xFF00CED1), Brightness.light),
-      home: IntroScreen(onFinish: onFinish),
+      home: Builder(
+        builder:
+            (context) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(disableAnimations: reduceMotion),
+              child: IntroScreen(onFinish: onFinish),
+            ),
+      ),
     );
   }
+
+  testWidgets('the page turn leaves from rest and comes to rest', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(() async {}));
+    final page = tester.widget<PageView>(find.byType(PageView));
+    final width = tester.getSize(find.byType(PageView)).width;
+    await tester.tap(find.text('Next'));
+    await tester.pump();
+    // An eighth of the way through, a page already on screen has barely
+    // started to travel: it eases out of rest rather than lurching off.
+    await tester.pump(AppMotion.long ~/ 8);
+    final early = page.controller!.offset;
+    expect(early, greaterThan(0));
+    expect(early, lessThan(width * 0.05));
+    await tester.pump(AppMotion.long * 3 ~/ 8);
+    expect(page.controller!.offset, closeTo(width / 2, width * 0.05));
+    await tester.pumpAndSettle();
+    expect(page.controller!.offset, closeTo(width, 0.5));
+  });
+
+  testWidgets('under reduced motion Next turns the page at once', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(() async {}, reduceMotion: true));
+    final page = tester.widget<PageView>(find.byType(PageView));
+    final width = tester.getSize(find.byType(PageView)).width;
+    await tester.tap(find.text('Next'));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(page.controller!.offset, width);
+    expect(find.text('Log as you lift'), findsOneWidget);
+  });
 
   testWidgets('introduces planning and logging in two slides', (tester) async {
     var finishes = 0;

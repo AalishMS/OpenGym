@@ -45,6 +45,7 @@ import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/motion/app_modals.dart';
 import '../widgets/motion/collapsible.dart';
+import '../widgets/motion/patient_progress.dart';
 import '../widgets/plan_title_hero.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
@@ -2098,9 +2099,23 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                       onAction: _continueCompleted,
                     ),
 
-              _ProgressBand(
-                busy: _isSaving || (_timerAction != null && !_confirmingFinish),
-                label: _timerAction ?? 'Saving workout',
+              // The log's progress line, for work in flight: saving,
+              // starting or pausing the clock, logging, changing blocks. It
+              // opens only for work still going after a beat, so a save
+              // done within a frame or two never shoves the log.
+              PatientProgress(
+                fold: true,
+                child:
+                    _isSaving || (_timerAction != null && !_confirmingFinish)
+                        ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(AppSpacing.sm),
+                            child: ActionProgress(
+                              _timerAction ?? 'Saving workout',
+                            ),
+                          ),
+                        )
+                        : null,
               ),
               // Folds open and closed rather than shoving the log; it keeps
               // the last message while it folds away after a retry.
@@ -2650,8 +2665,10 @@ class _PlanSwitchRoute extends MaterialPageRoute<void> {
   /// from the right; -1 when it comes before.
   final double direction;
 
-  /// The workout being switched away from, which holds still.
-  final Route<dynamic>? replacing;
+  /// The workout being switched away from, until the switch has landed.
+  /// Only the push needs it; held any longer, each switch would keep the
+  /// disposed workout before it alive, and that one the one before it.
+  Route<dynamic>? _replacing;
   final bool reduceMotion;
 
   /// True until the switch has landed.
@@ -2660,9 +2677,9 @@ class _PlanSwitchRoute extends MaterialPageRoute<void> {
   _PlanSwitchRoute({
     required super.builder,
     required this.direction,
-    required this.replacing,
+    required Route<dynamic>? replacing,
     required this.reduceMotion,
-  });
+  }) : _replacing = replacing;
 
   @override
   Duration get transitionDuration =>
@@ -2677,12 +2694,15 @@ class _PlanSwitchRoute extends MaterialPageRoute<void> {
   // page under this one (Home) still takes part as usual.
   @override
   bool canTransitionFrom(TransitionRoute<dynamic> previousRoute) =>
-      previousRoute != replacing && super.canTransitionFrom(previousRoute);
+      previousRoute != _replacing && super.canTransitionFrom(previousRoute);
 
   @override
   TickerFuture didPush() {
     final pushed = super.didPush();
-    pushed.whenCompleteOrCancel(() => _switching = false);
+    pushed.whenCompleteOrCancel(() {
+      _switching = false;
+      _replacing = null;
+    });
     return pushed;
   }
 
@@ -2743,119 +2763,6 @@ class _PlanSwitchEntry extends StatelessWidget {
           ).chain(settle),
         ),
         child: child,
-      ),
-    );
-  }
-}
-
-/// The log's progress line, for work in flight: saving, starting or pausing
-/// the clock, logging, changing blocks.
-///
-/// Most of that work is done within a frame or two, and a line that appeared
-/// and went that fast would shove the whole log down and straight back under
-/// the reader's thumb. So the line waits [AppMotion.patience] and opens only
-/// if the work is still going, folding open and closed as a [Collapsible]
-/// region does.
-/// Its label is in the tree from the moment the work starts, so it can be
-/// found at once; it is shown, and announced, only once it opens. Leaving, it
-/// keeps the label it had. Under reduced motion it opens and closes at once,
-/// after the same wait.
-class _ProgressBand extends StatefulWidget {
-  final bool busy;
-  final String label;
-
-  const _ProgressBand({required this.busy, required this.label});
-
-  @override
-  State<_ProgressBand> createState() => _ProgressBandState();
-}
-
-class _ProgressBandState extends State<_ProgressBand>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: AppMotion.standard,
-  )..addStatusListener(_onStatus);
-  late final CurvedAnimation _progress = CurvedAnimation(
-    parent: _controller,
-    curve: AppMotion.curve,
-    reverseCurve: AppMotion.exit,
-  );
-  Timer? _wait;
-  late String _label = widget.label;
-
-  /// Whether the line is in the tree: from the start of the work until it has
-  /// folded away.
-  late bool _present = widget.busy;
-
-  @override
-  void initState() {
-    super.initState();
-    if (widget.busy) _wait = Timer(AppMotion.patience, _open);
-  }
-
-  void _open() {
-    _wait = null;
-    if (!mounted || !widget.busy) return;
-    _controller.duration = AppMotion.of(context, AppMotion.standard);
-    _controller.forward();
-  }
-
-  void _onStatus(AnimationStatus status) {
-    if (status.isDismissed && !widget.busy && mounted) {
-      setState(() => _present = false);
-    }
-  }
-
-  @override
-  void didUpdateWidget(_ProgressBand oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.busy) _label = widget.label;
-    if (widget.busy == oldWidget.busy) return;
-    _controller.duration = AppMotion.of(context, AppMotion.standard);
-    if (widget.busy) {
-      _present = true;
-      if (_controller.isDismissed) {
-        _wait?.cancel();
-        _wait = Timer(AppMotion.patience, _open);
-      } else {
-        // Work resumed while the line was folding away: it stays.
-        _controller.forward();
-      }
-    } else {
-      _wait?.cancel();
-      _wait = null;
-      if (_controller.isDismissed) {
-        // Done before it was worth showing: it leaves without a trace.
-        _present = false;
-      } else {
-        _controller.reverse();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _wait?.cancel();
-    _progress.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!_present) return const SizedBox.shrink();
-    return ClipRect(
-      child: SizeTransition(
-        sizeFactor: _progress,
-        alignment: Alignment.topCenter,
-        child: FadeTransition(
-          opacity: _progress,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            child: ActionProgress(_label),
-          ),
-        ),
       ),
     );
   }

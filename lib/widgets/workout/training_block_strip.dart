@@ -559,6 +559,7 @@ class _BlockMenuRoute extends PopupRoute<VoidCallback> {
       media.disableAnimations ? Duration.zero : AppMotion.standard;
 
   CurvedAnimation? _curved;
+  Animation<double>? _scale;
 
   @override
   void dispose() {
@@ -589,21 +590,42 @@ class _BlockMenuRoute extends PopupRoute<VoidCallback> {
     Widget child,
   ) {
     // Made once: this runs on every frame of the transition.
-    final curved = _curved ??= CurvedAnimation(
-      parent: animation,
-      curve: AppMotion.curve,
-      reverseCurve: AppMotion.exit,
-    );
+    final curved =
+        _curved ??= CurvedAnimation(
+          parent: animation,
+          curve: AppMotion.curve,
+          reverseCurve: AppMotion.exit,
+        );
     return FadeTransition(
       opacity: curved,
       child: ScaleTransition(
-        // Grows out of the block button, which sits under its left edge.
-        alignment: Alignment.bottomLeft,
-        scale: Tween<double>(begin: AppMotion.scale, end: 1).animate(curved),
+        // Grows out of the block button, which sits under its start edge.
+        alignment: AlignmentDirectional.bottomStart.resolve(
+          Directionality.of(context),
+        ),
+        // As a dialog does, it settles to full size arriving and holds it
+        // leaving, so the departure is a plain fade.
+        scale: _scale ??= _ArrivalScale(curved),
         child: child,
       ),
     );
   }
+}
+
+/// [AppMotion.scale] to full size while [parent] runs forward, and full size
+/// while it runs in reverse.
+class _ArrivalScale extends Animation<double>
+    with AnimationWithParentMixin<double> {
+  @override
+  final Animation<double> parent;
+
+  _ArrivalScale(this.parent);
+
+  @override
+  double get value =>
+      parent.status == AnimationStatus.reverse
+          ? 1
+          : AppMotion.scale + (1 - AppMotion.scale) * parent.value;
 }
 
 class _BlockMenuLayout extends SingleChildLayoutDelegate {

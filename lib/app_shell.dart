@@ -33,6 +33,7 @@ import 'widgets/coach/coach_button.dart';
 import 'widgets/guided_tour.dart';
 import 'widgets/history/history_journal_data.dart';
 import 'widgets/motion/collapsible.dart';
+import 'widgets/motion/surface_fade.dart';
 import 'widgets/update_dialog.dart';
 
 class AppShell extends StatefulWidget {
@@ -42,8 +43,7 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   // Index into [_screens]. Dashboard is index 0 (desktop-only); the phone
   // bottom bar addresses screens 1–4.
   int _currentIndex = 0;
@@ -57,24 +57,6 @@ class _AppShellState extends State<AppShell>
   int _statsTopRequest = 0;
   int _settingsTopRequest = 0;
 
-  /// Fades the incoming tab in, so a tap or swipe reads as a move rather than
-  /// a cut. The IndexedStack underneath still keeps every tab's state.
-  late final AnimationController _tabFade = AnimationController(
-    vsync: this,
-    duration: AppMotion.quick,
-    value: 1,
-  );
-
-  /// The fade starts from [_tabFadeFloor] rather than from nothing: the
-  /// IndexedStack paints only the new tab, so a fade from zero would spend
-  /// its first frame on the bare page, a blink that reads as a flicker
-  /// (black, in dark mode). From the floor, the first frame already shows
-  /// where the tap went, and the rest of the fade still marks the change.
-  late final Animation<double> _tabOpacity = Tween<double>(
-    begin: _tabFadeFloor,
-    end: 1,
-  ).chain(CurveTween(curve: AppMotion.curve)).animate(_tabFade);
-  static const double _tabFadeFloor = 0.4;
   double _tabDragDistance = 0;
   TabSwipeGestureRecognizer? _tabSwipeRecognizer;
   bool _openingHistoryWorkout = false;
@@ -260,10 +242,7 @@ class _AppShellState extends State<AppShell>
   /// scrolls that tab back to the top.
   void _selectTab(int index, {required int showing}) {
     final reselected = index == showing;
-    if (!reselected) {
-      Haptics.selection();
-      _fadeInTab();
-    }
+    if (!reselected) Haptics.selection();
     setState(() {
       if (index == 1) _homeResetRequest++;
       if (reselected) {
@@ -283,15 +262,6 @@ class _AppShellState extends State<AppShell>
       if (index == 3 && showing != 3) _statsVisit++;
       _currentIndex = index;
     });
-  }
-
-  /// The brief fade every main-tab change makes; none under reduced motion.
-  void _fadeInTab() {
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _tabFade.value = 1;
-    } else {
-      _tabFade.forward(from: 0);
-    }
   }
 
   void _resumeWorkout(WorkoutSession session) {
@@ -384,7 +354,6 @@ class _AppShellState extends State<AppShell>
   }
 
   void _openWeeklyTraining() {
-    _fadeInTab();
     setState(() {
       _currentIndex = 3;
       _weeklyTrainingRequest++;
@@ -433,7 +402,6 @@ class _AppShellState extends State<AppShell>
     _updateOpenSubscription?.cancel();
     _updates?.canInterrupt = () async => true;
     _homeScrollController.dispose();
-    _tabFade.dispose();
     super.dispose();
   }
 
@@ -608,8 +576,12 @@ class _AppShellState extends State<AppShell>
         );
     final coachInView = coachShown && effectiveIndex == 1;
 
-    final stack = FadeTransition(
-      opacity: _tabOpacity,
+    // A tab change fades the new tab in, so a tap or swipe reads as a move
+    // rather than a cut, while the IndexedStack keeps every tab's state.
+    // Starting the tour moves to Home without it.
+    final stack = SurfaceFade(
+      identity: effectiveIndex,
+      enabled: !_tourActive,
       child: IndexedStack(
         index: effectiveIndex,
         children: _screens(coachShown: coachShown, showing: effectiveIndex),
@@ -837,8 +809,8 @@ class _CoachTransition extends AnimatedWidget {
 /// It moves only for a change the user can see: one made while a workout or
 /// another route covers the shell, or while the app is in the background,
 /// lands at rest, so returning to the shell never replays it. While it folds
-/// away it keeps showing the workout that just ended, takes no taps and says
-/// nothing to screen readers.
+/// away it keeps showing the workout that just ended, and like any closing
+/// [Collapsible] it takes no taps and says nothing to screen readers.
 class _ResumeStrip extends StatefulWidget {
   final ValueChanged<WorkoutSession> onResume;
 
@@ -882,15 +854,9 @@ class _ResumeStripState extends State<_ResumeStrip> {
           child:
               shown == null
                   ? const SizedBox.shrink()
-                  : IgnorePointer(
-                    ignoring: !isLive,
-                    child: ExcludeSemantics(
-                      excluding: !isLive,
-                      child: ActiveWorkoutBar(
-                        session: shown,
-                        onTap: () => widget.onResume(shown),
-                      ),
-                    ),
+                  : ActiveWorkoutBar(
+                    session: shown,
+                    onTap: () => widget.onResume(shown),
                   ),
         );
       },

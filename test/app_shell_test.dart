@@ -53,7 +53,9 @@ void main() {
     // channel in every test, including when runAsync lets that work complete.
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-          const MethodChannel('com.aalishms.opengym/workout_timer_notification'),
+          const MethodChannel(
+            'com.aalishms.opengym/workout_timer_notification',
+          ),
           (_) async => null,
         );
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
@@ -358,22 +360,23 @@ void main() {
     // A body swipe also changes sections and resets the vertical offset.
     await tester.tap(find.byKey(const ValueKey('statistics-tab-Overview')));
     await tester.pumpAndSettle();
-    final scroll =
+    // Each section's page scrolls on a controller of its own.
+    ScrollController scroll() =>
         tester
             .widget<SingleChildScrollView>(
               find.byKey(const ValueKey('statistics-scroll')),
             )
             .controller!;
-    scroll.jumpTo(300);
+    scroll().jumpTo(300);
     await tester.pump();
-    expect(scroll.offset, greaterThan(0));
+    expect(scroll().offset, greaterThan(0));
     await tester.dragFrom(
       tester.getCenter(find.byType(AppShell)),
       const Offset(-250, 0),
     );
     await tester.pumpAndSettle();
     expectSection('Strength');
-    expect(scroll.offset, 0);
+    expect(scroll().offset, 0);
 
     // Re-entering from either side starts at its adjacent section, even if
     // a different section was selected when Stats was last visible.

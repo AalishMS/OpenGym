@@ -40,6 +40,13 @@ abstract final class AppMotion {
   /// Motion into place: arrivals, and anything settling at a new value.
   static const Curve curve = Curves.easeOutCubic;
 
+  /// Something already on screen travelling to another place on screen: a
+  /// page turning, a spotlight moving between targets, a card sliding to a
+  /// new slot, a title flying into a header. It starts from rest and comes to
+  /// rest, so it neither lurches off nor brakes hard; an arrival, which comes
+  /// from nowhere, settles on [curve] instead.
+  static const Curve move = Curves.easeInOutCubic;
+
   /// Motion out of the way. Pass it as the *reverse* curve (`reverseCurve`,
   /// `switchOutCurve`) of the animation that brought the thing in: Flutter
   /// evaluates a reverse curve against the same 0–1 value, so the leaving
@@ -51,7 +58,8 @@ abstract final class AppMotion {
   static const double lift = 8;
 
   /// How far a page or panel travels sideways when it trades places with
-  /// another, as the exercise picker's pages do.
+  /// another (`PageSwitcher`: the exercise picker, Stats' views, the preset
+  /// browser).
   static const double shift = 24;
 
   /// How small an object gets when it moves in scale: a card giving under the

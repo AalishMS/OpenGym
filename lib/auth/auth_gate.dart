@@ -16,8 +16,9 @@ import '../providers/split_provider.dart';
 import '../screens/login_screen.dart';
 import '../app_shell.dart';
 import '../theme/app_theme.dart';
-import '../theme/motion.dart';
 import '../widgets/floating_notice.dart';
+import '../widgets/motion/patient_progress.dart';
+import '../widgets/motion/surface_fade.dart';
 
 const String _kOfflineTitle = "You're offline";
 const String _kOfflineDetail =
@@ -168,35 +169,58 @@ class _AuthGateState extends State<AuthGate> {
     ),
   );
 
+  /// Whether the last surface shown was password recovery, so the app it
+  /// uncovers fades back in.
+  bool _showedRecovery = false;
+
+  /// The surface in place and its identity. Each surface fades in on the page
+  /// colour where it replaces another (login, password recovery, the app
+  /// uncovered when recovery finishes), and what it replaces is removed at
+  /// once rather than kept beside it: on an account change that would be the
+  /// previous account's app, its routes and its focus.
   Widget _buildContent(BuildContext context) {
     // Offline-only build (no Supabase config): behave exactly like before.
     if (!SupabaseService.isConfigured) {
       return widget.child;
     }
+    final showedRecovery = _showedRecovery;
+    _showedRecovery = false;
     // Wait for the SDK's replayed event before preparing account data. A
     // recovered session may already exist when this widget is first mounted.
     if (!_authStateReady) {
-      return const Scaffold(
-        body: Center(child: _PatientProgress(label: 'Checking sign-in')),
+      return SurfaceFade(
+        identity: 'checking',
+        child: Scaffold(
+          body: Center(
+            child: Semantics(
+              label: 'Checking sign-in',
+              liveRegion: true,
+              child: const PatientProgress(child: CircularProgressIndicator()),
+            ),
+          ),
+        ),
       );
     }
     final session = SupabaseService.auth.currentSession;
     if (session != null && !_requestingPasswordReset) {
       final recovering =
           _recoveringPassword && session.user.id == _recoveryUserId;
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          Offstage(
-            offstage: recovering,
-            child: Focus(
-              descendantsAreFocusable: !recovering,
-              descendantsAreTraversable: !recovering,
-              // The app arrives through AuthenticatedHome; this only fades it
-              // back in when a finished password recovery uncovers it.
-              child: _ArrivalFade(
-                initial: false,
-                shown: !recovering,
+      _showedRecovery = recovering;
+      return SurfaceFade(
+        identity:
+            recovering ? 'password-recovery:${session.user.id}' : 'signed-in',
+        // The app arriving from login or the sign-in check fades in through
+        // AuthenticatedHome once its data is ready; a second fade here would
+        // only dim it. The gate fades it back in only when it uncovers it.
+        enabled: recovering || showedRecovery,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Offstage(
+              offstage: recovering,
+              child: Focus(
+                descendantsAreFocusable: !recovering,
+                descendantsAreTraversable: !recovering,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
@@ -216,11 +240,8 @@ class _AuthGateState extends State<AuthGate> {
                 ),
               ),
             ),
-          ),
-          if (recovering)
-            _ArrivalFade(
-              key: ValueKey('password-recovery:${session.user.id}'),
-              child: LoginScreen(
+            if (recovering)
+              LoginScreen(
                 key: ValueKey('password-recovery:${session.user.id}'),
                 passwordRecovery: true,
                 initialError: _authError,
@@ -232,12 +253,12 @@ class _AuthGateState extends State<AuthGate> {
                       SupabaseService.passwordRecoveryPending = false;
                     }),
               ),
-            ),
-        ],
+          ],
+        ),
       );
     }
-    return _ArrivalFade(
-      key: const ValueKey('login'),
+    return SurfaceFade(
+      identity: 'login',
       child: LoginScreen(key: ValueKey(_authError), initialError: _authError),
     );
   }
@@ -271,174 +292,48 @@ class _AuthenticatedHomeState extends State<AuthenticatedHome> {
     return FutureBuilder<void>(
       future: _ready,
       builder: (context, snap) {
+        final String phase;
+        final Widget surface;
         if (snap.connectionState != ConnectionState.done) {
-          return Scaffold(
+          phase = 'loading';
+          surface = Scaffold(
             backgroundColor: backgroundColor(context),
-            body: const Center(
-              child: _PatientProgress(
+            body: Center(
+              child: Semantics(
                 label: 'Loading your data',
                 value: 'In progress',
+                liveRegion: true,
+                child: const PatientProgress(
+                  child: CircularProgressIndicator(),
+                ),
               ),
             ),
           );
-        }
-        if (snap.hasError) {
+        } else if (snap.hasError) {
           final error = snap.error;
-          return _ArrivalFade(
-            key: const ValueKey('preparation-failed'),
-            child: DataPreparationFailure(
-              onRetry: () async {
-                setState(() => _ready = _prepare());
-              },
-              onExport:
-                  () => exportTrainingSafetyCopy(
-                    error is TrainingPreparationException
-                        ? error.safetySnapshotPath
-                        : null,
-                  ),
-            ),
+          phase = 'preparation-failed';
+          surface = DataPreparationFailure(
+            onRetry: () async {
+              setState(() => _ready = _prepare());
+            },
+            onExport:
+                () => exportTrainingSafetyCopy(
+                  error is TrainingPreparationException
+                      ? error.safetySnapshotPath
+                      : null,
+                ),
           );
+        } else {
+          phase = 'app';
+          surface = const AppShell();
         }
-        return const _ArrivalFade(key: ValueKey('app'), child: AppShell());
+        // The app, or the failure, fades in on the page colour in place of
+        // the wait; what it replaces is gone at once.
+        return SurfaceFade(
+          identity: phase,
+          child: KeyedSubtree(key: ValueKey(phase), child: surface),
+        );
       },
     );
   }
-}
-
-/// A progress indicator for a wait that is usually too short to see. Signing
-/// in is checked from the device and account data is prepared locally, so
-/// both usually finish within a frame or two: the page stays bare for
-/// [AppMotion.patience], then the spinner fades in over [AppMotion.quick].
-/// Screen readers hear [label] from the first frame, and finders find it, as
-/// before; only what is painted waits. Under reduced motion it still waits,
-/// then appears without the fade.
-class _PatientProgress extends StatefulWidget {
-  final String label;
-  final String? value;
-
-  const _PatientProgress({required this.label, this.value});
-
-  @override
-  State<_PatientProgress> createState() => _PatientProgressState();
-}
-
-class _PatientProgressState extends State<_PatientProgress>
-    with SingleTickerProviderStateMixin {
-  static final Duration _total = AppMotion.patience + AppMotion.quick;
-  static final double _start =
-      AppMotion.patience.inMicroseconds / _total.inMicroseconds;
-
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: _total,
-  );
-  Animation<double>? _opacity;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_opacity != null) return;
-    _opacity = CurvedAnimation(
-      parent: _controller,
-      curve:
-          MediaQuery.disableAnimationsOf(context)
-              ? Threshold(_start)
-              : Interval(_start, 1, curve: AppMotion.curve),
-    );
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: widget.label,
-      value: widget.value,
-      liveRegion: true,
-      child: FadeTransition(
-        opacity: _opacity!,
-        alwaysIncludeSemantics: true,
-        child: const CircularProgressIndicator(),
-      ),
-    );
-  }
-}
-
-/// Fades a surface in from the page over [AppMotion.quick] where it takes
-/// the place of another: the login screen, the app after its data is ready,
-/// password recovery. What it replaces is gone at once, never kept alive
-/// beside it: on an account change that would be the previous account's
-/// app, its routes and its focus. So a swap reads as the new surface
-/// arriving on the page colour.
-///
-/// It plays once per State when [initial] is set, and again whenever [shown]
-/// turns true, for a surface uncovered after being hidden. The surface is laid
-/// out, tappable and announced from its first frame. Under reduced motion it
-/// simply appears.
-class _ArrivalFade extends StatefulWidget {
-  final bool initial;
-  final bool shown;
-  final Widget child;
-
-  const _ArrivalFade({
-    super.key,
-    this.initial = true,
-    this.shown = true,
-    required this.child,
-  });
-
-  @override
-  State<_ArrivalFade> createState() => _ArrivalFadeState();
-}
-
-class _ArrivalFadeState extends State<_ArrivalFade>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: AppMotion.quick,
-    value: 1,
-  );
-  late final CurvedAnimation _opacity = CurvedAnimation(
-    parent: _controller,
-    curve: AppMotion.curve,
-  );
-  bool _decided = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_decided) return;
-    _decided = true;
-    if (widget.initial && widget.shown) _play();
-  }
-
-  @override
-  void didUpdateWidget(_ArrivalFade oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.shown && !oldWidget.shown) _play();
-  }
-
-  void _play() {
-    if (MediaQuery.disableAnimationsOf(context)) return;
-    _controller.forward(from: 0);
-  }
-
-  @override
-  void dispose() {
-    _opacity.dispose();
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => FadeTransition(
-    opacity: _opacity,
-    alwaysIncludeSemantics: true,
-    child: widget.child,
-  );
 }

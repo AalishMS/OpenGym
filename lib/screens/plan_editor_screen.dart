@@ -451,7 +451,8 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     if (!_hasName) {
       _nameFocus.requestFocus();
     } else if (_scrollController.hasClients) {
-      final duration = AppMotion.of(context, AppMotion.standard);
+      // A scroll the reader follows up to the name.
+      final duration = AppMotion.of(context, AppMotion.enter);
       if (duration == Duration.zero) {
         _scrollController.jumpTo(0);
       } else {

@@ -15,6 +15,7 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import 'app_header.dart';
 import 'motion/app_modals.dart';
+import 'motion/page_switcher.dart';
 import 'motion/press_scale.dart';
 import 'muscle_group_illustration.dart';
 import 'rolling_figure.dart';
@@ -574,7 +575,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
       if (previous != null) _forward = _depthOf(id) >= _depthOf(previous);
       _shownViewId = id;
     }
-    return _SharedAxisSwitcher(
+    return PageSwitcher(
       forward: _forward,
       child: KeyedSubtree(key: ValueKey<String>(id), child: _buildView()),
     );
@@ -1327,101 +1328,6 @@ class _CountBadge extends StatelessWidget {
             height: 1,
             color: onAccentColor(context),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The picker's pages trade places along a shared horizontal axis: the
-/// arriving page fades in as it slides the last [_SharedAxisTransition.shift]
-/// pixels into place, the leaving one fades out sliding the other way. Going
-/// deeper arrives from the end side, going back from the start side. Under
-/// reduced motion the page simply changes.
-class _SharedAxisSwitcher extends StatelessWidget {
-  final bool forward;
-
-  /// A keyed page; a new key is a new page.
-  final Widget child;
-
-  const _SharedAxisSwitcher({required this.forward, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    if (MediaQuery.disableAnimationsOf(context)) return child;
-    final rtl = Directionality.of(context) == TextDirection.rtl;
-    final direction = (forward ? 1.0 : -1.0) * (rtl ? -1.0 : 1.0);
-    return AnimatedSwitcher(
-      duration: AppMotion.standard,
-      layoutBuilder:
-          (currentChild, previousChildren) => Stack(
-            fit: StackFit.expand,
-            children: [
-              ...previousChildren,
-              if (currentChild != null) currentChild,
-            ],
-          ),
-      // A new closure each build, so pages already leaving pick up the
-      // latest direction too.
-      transitionBuilder:
-          (page, animation) => _SharedAxisTransition(
-            animation: animation,
-            direction: direction,
-            child: page,
-          ),
-      child: child,
-    );
-  }
-}
-
-class _SharedAxisTransition extends AnimatedWidget {
-  /// +1 when pages move toward the start (arriving from the right in LTR),
-  /// -1 when they move toward the end.
-  final double direction;
-  final Widget child;
-
-  const _SharedAxisTransition({
-    required Animation<double> animation,
-    required this.direction,
-    required this.child,
-  }) : super(listenable: animation);
-
-  static const double shift = 24;
-
-  // The leaving page clears out early and the arriving one fades in after
-  // it, so two lists never read as one.
-  static const Interval _fadeOut = Interval(0, 0.35);
-  static const Interval _fadeIn = Interval(0.3, 1, curve: AppMotion.curve);
-
-  @override
-  Widget build(BuildContext context) {
-    final animation = listenable as Animation<double>;
-    final t = animation.value;
-    // Arriving or leaving by the animation's own direction, not by key: a
-    // page returned to before it finished leaving has the arriving page's
-    // key, and must keep leaving rather than flash back in alongside it.
-    final incoming =
-        animation.status == AnimationStatus.forward ||
-        animation.status == AnimationStatus.completed;
-    final double dx;
-    final double opacity;
-    if (incoming) {
-      dx = (1 - AppMotion.curve.transform(t)) * shift * direction;
-      opacity = _fadeIn.transform(t);
-    } else {
-      final progress = 1 - t;
-      dx = -AppMotion.curve.transform(progress) * shift * direction;
-      opacity = 1 - _fadeOut.transform(progress);
-    }
-    return IgnorePointer(
-      // The arriving page takes taps once it can be seen, so a quick second
-      // tap can't land on a row nobody has read yet.
-      ignoring: !incoming || opacity < 0.5,
-      child: ExcludeSemantics(
-        excluding: !incoming,
-        child: Opacity(
-          opacity: opacity,
-          child: Transform.translate(offset: Offset(dx, 0), child: child),
         ),
       ),
     );

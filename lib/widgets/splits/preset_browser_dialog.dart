@@ -17,6 +17,7 @@ import '../app_button.dart';
 import '../app_header.dart';
 import '../motion/app_modals.dart';
 import '../motion/collapsible.dart';
+import '../motion/page_switcher.dart';
 import '../raised_card.dart';
 import '../statistics/statistics_controls.dart';
 
@@ -227,18 +228,17 @@ class _BrowserFrame extends StatelessWidget {
   }
 }
 
-/// The catalog and a preset's details trade places along a shared horizontal
-/// axis, as the exercise picker's pages do: the details arrive from the end
-/// side as the catalog gives way toward the start, and going back reverses
-/// it, over [AppMotion.standard]. The leaving page fades out early and the
-/// arriving one fades in after it, so two lists never read as one.
+/// The catalog and a preset's details trade places as the exercise picker's
+/// pages do ([PageSwitchTransition]): the details arrive from the end side as
+/// the catalog gives way toward the start, and going back reverses it.
 ///
 /// Both pages stay alive the whole time, as they did in an `IndexedStack`:
 /// the catalog keeps its goal and scroll position through a trip into the
-/// details and back. Only opacity and a [AppMotion.shift] offset move. The
-/// arriving page takes taps and is announced from its first frame; the
-/// leaving one takes neither and can't hold focus. At rest the hidden page is
-/// offstage. Under reduced motion the page simply changes.
+/// details and back, and at rest the page that isn't showing is offstage.
+/// Each page is built once per change rather than on every frame of it, and
+/// each scrolls on its own controller. The arriving page takes taps and is
+/// announced from its first frame; the leaving one takes neither and can't
+/// hold focus. Under reduced motion the page simply changes.
 class _BrowserPages extends StatefulWidget {
   final WorkoutPreset? selected;
   final Widget catalog;
@@ -262,6 +262,7 @@ class _BrowserPagesState extends State<_BrowserPages>
     duration: AppMotion.standard,
     value: widget.selected == null ? 0 : 1,
   )..addStatusListener(_onStatus);
+  late final Animation<double> _catalog = ReverseAnimation(_axis);
 
   /// The preset whose details show, kept while they leave.
   WorkoutPreset? _shown;
@@ -273,8 +274,12 @@ class _BrowserPagesState extends State<_BrowserPages>
   }
 
   void _onStatus(AnimationStatus status) {
-    // Back at the catalog: let the details go, as the stack used to.
-    if (status.isDismissed && mounted) setState(() => _shown = null);
+    if (!mounted) return;
+    // The direction of travel turns with the status; back at the catalog,
+    // the details go, as the stack used to let them.
+    setState(() {
+      if (status.isDismissed) _shown = null;
+    });
   }
 
   @override
@@ -302,83 +307,23 @@ class _BrowserPagesState extends State<_BrowserPages>
   @override
   Widget build(BuildContext context) {
     final shown = _shown;
-    final rtl = Directionality.of(context) == TextDirection.rtl;
-    return AnimatedBuilder(
-      animation: _axis,
-      builder: (context, _) {
-        final t = _axis.value;
-        final moving = _axis.isAnimating;
-        // Which way the pages travel this time; at rest either reads the same.
-        final deeper = _axis.status == AnimationStatus.forward;
-        final details = widget.selected != null;
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            _page(
-              current: !details,
-              visible: !details || moving,
-              // The catalog leaves toward the start going deeper and comes
-              // back from it.
-              arriving: !deeper,
-              progress: deeper ? t : 1 - t,
-              side: rtl ? 1 : -1,
-              child: widget.catalog,
-            ),
-            _page(
-              current: details,
-              visible: details || moving,
-              arriving: deeper,
-              progress: deeper ? t : 1 - t,
-              side: rtl ? -1 : 1,
-              child:
-                  shown == null
-                      ? const SizedBox.shrink()
-                      : widget.details(shown),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  static const Interval _fadeOut = Interval(0, 0.35);
-  static const Interval _fadeIn = Interval(0.3, 1, curve: AppMotion.curve);
-
-  /// One page at [progress] through the change, on the [side] it leaves to
-  /// or comes from (-1 the start, 1 the end, in screen terms). The tree
-  /// keeps one shape whether the page shows or not, so its state survives.
-  Widget _page({
-    required bool current,
-    required bool visible,
-    required bool arriving,
-    required double progress,
-    required double side,
-    required Widget child,
-  }) {
-    final double dx;
-    final double opacity;
-    if (arriving) {
-      dx = (1 - AppMotion.curve.transform(progress)) * AppMotion.shift * side;
-      opacity = _fadeIn.transform(progress);
-    } else {
-      dx = AppMotion.curve.transform(progress) * AppMotion.shift * side;
-      opacity = 1 - _fadeOut.transform(progress);
-    }
-    return Offstage(
-      offstage: !visible,
-      child: ExcludeFocus(
-        excluding: !current,
-        child: IgnorePointer(
-          ignoring: !current,
-          child: ExcludeSemantics(
-            excluding: !current,
-            child: Opacity(
-              opacity: opacity,
-              child: Transform.translate(offset: Offset(dx, 0), child: child),
-            ),
-          ),
+    // Which way the pages travel this time; at rest either reads the same.
+    final deeper = _axis.status == AnimationStatus.forward;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        PageSwitchTransition(
+          animation: _catalog,
+          forward: deeper,
+          child: widget.catalog,
         ),
-      ),
+        PageSwitchTransition(
+          animation: _axis,
+          forward: deeper,
+          child:
+              shown == null ? const SizedBox.shrink() : widget.details(shown),
+        ),
+      ],
     );
   }
 }

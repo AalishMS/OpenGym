@@ -323,7 +323,7 @@ void main() {
     expect(find.text('Bench Press'), findsOneWidget);
 
     // Changing course mid-way settles on the last page asked for. The
-    // arriving page takes taps once it can be seen.
+    // arriving page takes taps from its first frame.
     await tester.binding.handlePopRoute();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 150));
@@ -374,17 +374,41 @@ void main() {
     expect(find.text('Bench Press'), findsNothing);
   });
 
-  testWidgets('arriving rows ignore taps until they can be seen', (
-    tester,
-  ) async {
+  testWidgets('arriving rows take taps from their first frame', (tester) async {
     await pumpPicker(tester);
     await tester.tap(find.text('Chest'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 30));
-    // A quick second tap where a row is about to appear selects nothing.
-    await tester.tap(find.text('Bench Press'), warnIfMissed: false);
+    // Nothing waits on the trade: a row on its way in is already tappable.
+    await tester.tap(find.text('Bench Press'));
     await tester.pumpAndSettle();
-    expect(find.text('Selected (0)'), findsOneWidget);
+    expect(find.text('Selected (1)'), findsOneWidget);
+  });
+
+  testWidgets('the leaving page gives up keyboard focus and says nothing', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await pumpPicker(tester);
+    final grid = find.byKey(const ValueKey('muscle-group-grid'));
+    await tester.tap(find.text('Chest'));
+    await tester.pump();
+    expect(
+      tester
+          .widget<ExcludeFocus>(
+            find.ancestor(of: grid, matching: find.byType(ExcludeFocus)).first,
+          )
+          .excluding,
+      isTrue,
+    );
+    expect(
+      find.semantics.byLabel(RegExp('^Chest, 13 exercises')),
+      findsNothing,
+    );
+    // The arriving page is announced from its first frame.
+    expect(find.semantics.byLabel(RegExp('Bench Press')), findsWidgets);
+    await tester.pumpAndSettle();
+    semantics.dispose();
   });
 
   testWidgets(

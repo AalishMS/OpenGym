@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -11,6 +12,7 @@ import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/stats_screen.dart';
 import 'package:gymapp/services/statistics_analytics_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/theme/motion.dart';
 import 'package:gymapp/widgets/motion/entrance.dart';
 import 'package:gymapp/widgets/statistics/block_statistics.dart';
 import 'package:gymapp/widgets/statistics/block_trend.dart';
@@ -185,20 +187,56 @@ void main() {
         phone(tester, height: 600);
         await tester.pumpWidget(stats());
         await tester.pumpAndSettle();
-        final controller =
-            tester.widget<SingleChildScrollView>(pages).controller!;
-        controller.jumpTo(200);
+        tester.widget<SingleChildScrollView>(pages).controller!.jumpTo(200);
         await tester.pump();
         await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
         await tester.pump();
-        expect(controller.positions.map((position) => position.pixels), [
-          200,
-          0,
+        // Each page scrolls on a controller of its own, so neither moves the
+        // other while they cross.
+        final controllers = [
+          for (final page in tester.widgetList<SingleChildScrollView>(pages))
+            page.controller!,
+        ];
+        expect(controllers.map((controller) => controller.positions.length), [
+          1,
+          1,
         ]);
+        expect(controllers.map((controller) => controller.offset), [200, 0]);
         await tester.pumpAndSettle();
-        expect(controller.offset, 0);
+        expect(
+          tester.widget<SingleChildScrollView>(pages).controller!.offset,
+          0,
+        );
       },
     );
+
+    testWidgets('on desktop, a view change while the scrollbar fades is safe', (
+      tester,
+    ) async {
+      // Each page owns its scroll position: the leaving and arriving pages
+      // never share one controller, which the desktop scrollbar reads.
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      try {
+        phone(tester, height: 600);
+        await tester.pumpWidget(stats());
+        await tester.pumpAndSettle();
+        await tester.drag(pages, const Offset(0, -200));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 450));
+        await tester.tap(find.byKey(const ValueKey('statistics-tab-Strength')));
+        await tester.pump();
+        // The scrollbar's fade-out timer fires while the pages cross.
+        for (var i = 0; i < 6; i++) {
+          await tester.pump(const Duration(milliseconds: 40));
+          expect(tester.takeException(), isNull);
+        }
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+        expect(pages, findsOneWidget);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
 
     testWidgets('a swipe within the tab trades places; entering does not', (
       tester,
@@ -749,6 +787,11 @@ void main() {
       expect(opacity(0), 1);
       expect(opacity(11), 1);
       expect(opacity(12), lessThan(1));
+      // The whole batch, eight rows, has landed within the long time.
+      await tester.pump(AppMotion.long);
+      for (var i = 12; i < 20; i++) {
+        expect(opacity(i), 1, reason: 'row $i still arriving');
+      }
       await tester.pumpAndSettle();
       expect(opacity(19), 1);
 

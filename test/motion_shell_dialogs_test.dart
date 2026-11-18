@@ -192,13 +192,30 @@ void main() {
     testWidgets('arrives on the sheet timing and leaves faster', (
       tester,
     ) async {
+      double shown(String title) => tester
+          .widgetList<FadeTransition>(
+            find.ancestor(
+              of: find.text(title),
+              matching: find.byType(FadeTransition),
+            ),
+          )
+          .fold(1.0, (opacity, fade) => opacity * fade.opacity.value);
+
+      await tester.pumpWidget(host(null));
       await tester.pumpWidget(host(notice('Hello', () {})));
-      final switcher = tester.widget<AnimatedSwitcher>(
-        find.byType(AnimatedSwitcher),
-      );
-      expect(switcher.duration, AppMotion.enter);
-      expect(switcher.reverseDuration, AppMotion.standard);
-      await tester.pumpAndSettle();
+      // Still arriving past the standard time; in by the enter time.
+      await tester.pump(AppMotion.standard);
+      expect(shown('Hello'), inExclusiveRange(0, 1));
+      await tester.pump(AppMotion.enter - AppMotion.standard);
+      expect(shown('Hello'), 1);
+
+      // Leaving takes only the standard time.
+      await tester.pumpWidget(host(null));
+      await tester.pump(AppMotion.standard - const Duration(milliseconds: 20));
+      expect(find.text('Hello'), findsOneWidget);
+      expect(shown('Hello'), inExclusiveRange(0, 1));
+      await tester.pump(const Duration(milliseconds: 21));
+      expect(find.text('Hello'), findsNothing);
     });
   });
 }

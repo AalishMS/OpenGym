@@ -318,44 +318,41 @@ class _ReviewBarState extends State<_ReviewBar> {
               // is no longer read out.
               Collapsible(
                 open: showing,
-                child: ExcludeSemantics(
-                  excluding: !showing,
-                  child: StateSwitcher(
-                    animateSize: true,
-                    child:
-                        message == null
-                            ? const SizedBox.shrink()
-                            : Padding(
-                              key: ValueKey(message),
-                              padding: const EdgeInsets.only(
-                                bottom: AppSpacing.sm,
-                              ),
-                              child: Semantics(
-                                liveRegion: true,
-                                child: Row(
-                                  children: [
-                                    if (isProblem) ...[
-                                      Icon(
-                                        LucideIcons.circleAlert,
-                                        size: 16,
-                                        color: messageColor,
-                                      ),
-                                      const SizedBox(width: AppSpacing.sm),
-                                    ],
-                                    Expanded(
-                                      child: Text(
-                                        message,
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(color: messageColor),
-                                      ),
+                child: StateSwitcher(
+                  animateSize: true,
+                  child:
+                      message == null
+                          ? const SizedBox.shrink()
+                          : Padding(
+                            key: ValueKey(message),
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: Semantics(
+                              liveRegion: true,
+                              child: Row(
+                                children: [
+                                  if (isProblem) ...[
+                                    Icon(
+                                      LucideIcons.circleAlert,
+                                      size: 16,
+                                      color: messageColor,
                                     ),
+                                    const SizedBox(width: AppSpacing.sm),
                                   ],
-                                ),
+                                  Expanded(
+                                    child: Text(
+                                      message,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(color: messageColor),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                  ),
+                          ),
                 ),
               ),
               Row(

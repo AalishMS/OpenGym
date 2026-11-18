@@ -88,7 +88,10 @@ void main() {
           .any((ignore) => ignore.ignoring);
 
   group('the saving banner', () {
-    testWidgets('fades in over the page and out again', (tester) async {
+    testWidgets('waits a beat, then fades in over the page and out again', (
+      tester,
+    ) async {
+      final semantics = tester.ensureSemantics();
       final settings = await pumpSettings(tester);
       final banner = find.byType(ActionProgress);
       final swatch = find.byKey(const ValueKey('accent-swatch-1'));
@@ -96,10 +99,17 @@ void main() {
 
       await tester.tap(swatch);
       await tester.pump();
-      // In the tree and announced from the first frame, on its way in.
+      // In the tree and announced from the first frame, but not painted for
+      // a wait that may not need it.
       expect(banner, findsOneWidget);
-      expect(crossOpacity(tester, banner), lessThan(1));
-      await tester.pump(AppMotion.quick);
+      expect(find.semantics.byLabel('Saving settings'), findsOne);
+      expect(crossOpacity(tester, banner), 0);
+      await tester.pump(AppMotion.patience - const Duration(milliseconds: 1));
+      expect(crossOpacity(tester, banner), 0);
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump(AppMotion.quick ~/ 2);
+      expect(crossOpacity(tester, banner), inExclusiveRange(0, 1));
+      await tester.pump(AppMotion.quick ~/ 2);
       expect(crossOpacity(tester, banner), 1);
       expect(tester.getRect(swatch), before);
 
@@ -108,21 +118,42 @@ void main() {
       await tester.pump(AppMotion.quick ~/ 3);
       // Leaving: still fading, already past taking taps or being read.
       expect(banner, findsOneWidget);
-      expect(crossOpacity(tester, banner), lessThan(1));
+      expect(crossOpacity(tester, banner), inExclusiveRange(0, 1));
       expect(takesTaps(tester, banner), isFalse);
+      expect(find.semantics.byLabel('Saving settings'), findsNothing);
       await tester.pumpAndSettle();
       expect(banner, findsNothing);
       expect(tester.getRect(swatch), before);
       expect(settings.accentIndex, 1);
+      semantics.dispose();
     });
 
-    testWidgets('appears and leaves at once under reduced motion', (
-      tester,
-    ) async {
+    testWidgets('a save done within a beat never paints it', (tester) async {
+      final settings = await pumpSettings(tester);
+      final banner = find.byType(ActionProgress);
+      await tester.tap(find.byKey(const ValueKey('accent-swatch-1')));
+      await tester.pump();
+      expect(banner, findsOneWidget);
+      await tester.pump(AppMotion.patience ~/ 2);
+      settings.accent.complete();
+      for (var i = 0; i < 20 && banner.evaluate().isNotEmpty; i++) {
+        expect(crossOpacity(tester, banner), 0);
+        await tester.pump();
+      }
+      expect(banner, findsNothing);
+      await tester.pump(AppMotion.patience);
+      expect(banner, findsNothing);
+      expect(settings.accentIndex, 1);
+    });
+
+    testWidgets('waits as long, then appears and leaves at once under reduced '
+        'motion', (tester) async {
       final settings = await pumpSettings(tester, reduceMotion: true);
       final banner = find.byType(ActionProgress);
       await tester.tap(find.byKey(const ValueKey('accent-swatch-2')));
       await tester.pump();
+      expect(crossOpacity(tester, banner), 0);
+      await tester.pump(AppMotion.patience);
       expect(crossOpacity(tester, banner), 1);
       settings.accent.complete();
       await settle(tester, () => banner.evaluate().isEmpty);
@@ -187,35 +218,43 @@ void main() {
       matching: find.byIcon(LucideIcons.check),
     );
 
-    Duration ringDuration(WidgetTester tester, int index) =>
-        tester
-            .widget<AnimatedContainer>(
-              find.descendant(
-                of: find.byKey(ValueKey('accent-swatch-$index')),
-                matching: find.byType(AnimatedContainer),
-              ),
+    /// How much of the selection ring round a swatch is painted.
+    double ring(WidgetTester tester, int index) {
+      final box = tester.widget<DecoratedBox>(
+        find
+            .descendant(
+              of: find.byKey(ValueKey('accent-swatch-$index')),
+              matching: find.byType(DecoratedBox),
             )
-            .duration;
+            .first,
+      );
+      return ((box.decoration as BoxDecoration).border! as Border).top.color.a;
+    }
 
-    testWidgets('the check settles with the ring on the quick token', (
-      tester,
-    ) async {
+    testWidgets('the check settles with the ring', (tester) async {
       final settings = await pumpSettings(tester);
       final from = settings.accentIndex;
       final to = (from + 3) % SettingsProvider.accents.length;
       expect(check(from), findsOneWidget);
-      expect(ringDuration(tester, from), AppMotion.quick);
+      expect(ring(tester, from), 1);
+      expect(ring(tester, to), 0);
 
       await tester.tap(find.byKey(ValueKey('accent-swatch-$to')));
       await tester.pump();
       settings.accent.complete();
       await settle(tester, () => check(to).evaluate().isNotEmpty);
-      // The new check fades in as the old one fades out.
+      // The new check fades in as the old one fades out, and both rings are
+      // between their states with them.
       expect(check(to), findsOneWidget);
       expect(check(from), findsOneWidget);
       await tester.pump(AppMotion.quick ~/ 3);
       expect(crossOpacity(tester, check(to)), lessThan(1));
       expect(crossOpacity(tester, check(to)), greaterThan(0));
+      expect(ring(tester, to), inExclusiveRange(0, 1));
+      expect(ring(tester, from), inExclusiveRange(0, 1));
+      await tester.pump(AppMotion.quick);
+      expect(ring(tester, to), 1);
+      expect(ring(tester, from), 0);
       await tester.pumpAndSettle();
       expect(check(from), findsNothing);
       expect(crossOpacity(tester, check(to)), 1);
@@ -225,13 +264,14 @@ void main() {
       final settings = await pumpSettings(tester, reduceMotion: true);
       final from = settings.accentIndex;
       final to = (from + 3) % SettingsProvider.accents.length;
-      expect(ringDuration(tester, from), Duration.zero);
       await tester.tap(find.byKey(ValueKey('accent-swatch-$to')));
       await tester.pump();
       settings.accent.complete();
       await settle(tester, () => check(to).evaluate().isNotEmpty);
       expect(check(to), findsOneWidget);
       expect(check(from), findsNothing);
+      expect(ring(tester, to), 1);
+      expect(ring(tester, from), 0);
     });
   });
 }
