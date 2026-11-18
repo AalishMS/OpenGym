@@ -10,11 +10,13 @@ import '../../providers/split_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/breakpoints.dart';
+import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../app_button.dart';
 import '../app_header.dart';
 import '../motion/app_modals.dart';
+import '../motion/collapsible.dart';
 import '../raised_card.dart';
 import '../statistics/statistics_controls.dart';
 
@@ -192,29 +194,191 @@ class _BrowserFrame extends StatelessWidget {
           ),
         ),
         Expanded(
-          child: IndexedStack(
-            index: selected == null ? 0 : 1,
-            children: [
-              _CatalogOverview(
-                goal: goal,
-                onGoalChanged: onGoalChanged,
-                onSelect: onSelect,
-              ),
-              if (selected != null)
-                _PresetDetails(preset: selected!)
-              else
-                const SizedBox.shrink(),
-            ],
+          child: _BrowserPages(
+            selected: selected,
+            catalog: _CatalogOverview(
+              goal: goal,
+              onGoalChanged: onGoalChanged,
+              onSelect: onSelect,
+            ),
+            // The install bar belongs to the preset it installs, so it
+            // arrives and leaves with the details.
+            details:
+                (preset) => Column(
+                  children: [
+                    Expanded(
+                      child: _PresetDetails(
+                        key: ValueKey(preset.id),
+                        preset: preset,
+                      ),
+                    ),
+                    _InstallBar(
+                      preset: preset,
+                      installing: installing,
+                      error: error,
+                      onInstall: onInstall,
+                    ),
+                  ],
+                ),
           ),
         ),
-        if (selected != null)
-          _InstallBar(
-            preset: selected!,
-            installing: installing,
-            error: error,
-            onInstall: onInstall,
-          ),
       ],
+    );
+  }
+}
+
+/// The catalog and a preset's details trade places along a shared horizontal
+/// axis, as the exercise picker's pages do: the details arrive from the end
+/// side as the catalog gives way toward the start, and going back reverses
+/// it, over [AppMotion.standard]. The leaving page fades out early and the
+/// arriving one fades in after it, so two lists never read as one.
+///
+/// Both pages stay alive the whole time, as they did in an `IndexedStack`:
+/// the catalog keeps its goal and scroll position through a trip into the
+/// details and back. Only opacity and a [AppMotion.shift] offset move. The
+/// arriving page takes taps and is announced from its first frame; the
+/// leaving one takes neither and can't hold focus. At rest the hidden page is
+/// offstage. Under reduced motion the page simply changes.
+class _BrowserPages extends StatefulWidget {
+  final WorkoutPreset? selected;
+  final Widget catalog;
+  final Widget Function(WorkoutPreset preset) details;
+
+  const _BrowserPages({
+    required this.selected,
+    required this.catalog,
+    required this.details,
+  });
+
+  @override
+  State<_BrowserPages> createState() => _BrowserPagesState();
+}
+
+class _BrowserPagesState extends State<_BrowserPages>
+    with SingleTickerProviderStateMixin {
+  // 0 is the catalog, 1 a preset's details.
+  late final AnimationController _axis = AnimationController(
+    vsync: this,
+    duration: AppMotion.standard,
+    value: widget.selected == null ? 0 : 1,
+  )..addStatusListener(_onStatus);
+
+  /// The preset whose details show, kept while they leave.
+  WorkoutPreset? _shown;
+
+  @override
+  void initState() {
+    super.initState();
+    _shown = widget.selected;
+  }
+
+  void _onStatus(AnimationStatus status) {
+    // Back at the catalog: let the details go, as the stack used to.
+    if (status.isDismissed && mounted) setState(() => _shown = null);
+  }
+
+  @override
+  void didUpdateWidget(_BrowserPages oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selected != null) _shown = widget.selected;
+    if ((widget.selected == null) == (oldWidget.selected == null)) return;
+    final details = widget.selected != null;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _axis.value = details ? 1 : 0;
+      if (!details) _shown = null;
+    } else if (details) {
+      _axis.forward();
+    } else {
+      _axis.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _axis.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = _shown;
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    return AnimatedBuilder(
+      animation: _axis,
+      builder: (context, _) {
+        final t = _axis.value;
+        final moving = _axis.isAnimating;
+        // Which way the pages travel this time; at rest either reads the same.
+        final deeper = _axis.status == AnimationStatus.forward;
+        final details = widget.selected != null;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            _page(
+              current: !details,
+              visible: !details || moving,
+              // The catalog leaves toward the start going deeper and comes
+              // back from it.
+              arriving: !deeper,
+              progress: deeper ? t : 1 - t,
+              side: rtl ? 1 : -1,
+              child: widget.catalog,
+            ),
+            _page(
+              current: details,
+              visible: details || moving,
+              arriving: deeper,
+              progress: deeper ? t : 1 - t,
+              side: rtl ? -1 : 1,
+              child:
+                  shown == null
+                      ? const SizedBox.shrink()
+                      : widget.details(shown),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  static const Interval _fadeOut = Interval(0, 0.35);
+  static const Interval _fadeIn = Interval(0.3, 1, curve: AppMotion.curve);
+
+  /// One page at [progress] through the change, on the [side] it leaves to
+  /// or comes from (-1 the start, 1 the end, in screen terms). The tree
+  /// keeps one shape whether the page shows or not, so its state survives.
+  Widget _page({
+    required bool current,
+    required bool visible,
+    required bool arriving,
+    required double progress,
+    required double side,
+    required Widget child,
+  }) {
+    final double dx;
+    final double opacity;
+    if (arriving) {
+      dx = (1 - AppMotion.curve.transform(progress)) * AppMotion.shift * side;
+      opacity = _fadeIn.transform(progress);
+    } else {
+      dx = AppMotion.curve.transform(progress) * AppMotion.shift * side;
+      opacity = 1 - _fadeOut.transform(progress);
+    }
+    return Offstage(
+      offstage: !visible,
+      child: ExcludeFocus(
+        excluding: !current,
+        child: IgnorePointer(
+          ignoring: !current,
+          child: ExcludeSemantics(
+            excluding: !current,
+            child: Opacity(
+              opacity: opacity,
+              child: Transform.translate(offset: Offset(dx, 0), child: child),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -473,7 +637,7 @@ class _RhythmDots extends StatelessWidget {
 class _PresetDetails extends StatelessWidget {
   final WorkoutPreset preset;
 
-  const _PresetDetails({required this.preset});
+  const _PresetDetails({required this.preset, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -981,8 +1145,8 @@ class _DayCardState extends State<_DayCard> {
                     ),
                     AnimatedRotation(
                       turns: _expanded ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 200),
-                      curve: Curves.easeOutCubic,
+                      duration: AppMotion.of(context, AppMotion.quick),
+                      curve: AppMotion.curve,
                       child: Icon(
                         LucideIcons.chevronDown,
                         size: 20,
@@ -994,20 +1158,17 @@ class _DayCardState extends State<_DayCard> {
               ),
             ),
           ),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            alignment: Alignment.topCenter,
-            child:
-                _expanded
-                    ? Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final exercise in plan.exercises)
-                          _ExercisePrescription(exercise: exercise),
-                      ],
-                    )
-                    : const SizedBox(width: double.infinity),
+          // The exercises fold open and away, and leave the tree once
+          // folded, so a closed day holds nothing for a screen reader.
+          Collapsible(
+            open: _expanded,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final exercise in plan.exercises)
+                  _ExercisePrescription(exercise: exercise),
+              ],
+            ),
           ),
         ],
       ),
