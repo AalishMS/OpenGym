@@ -753,6 +753,26 @@ signature:
   drop one along with its targets; removing stays with the card's Delete. When
   the picker closes on a plan that already had exercises, the editor scrolls
   the new ones into view, as many as fit and never past the first.
+- The exercise picker (`lib/widgets/exercise_picker_sheet.dart`, shared by
+  the plan editor and the workout) is a tall sheet with a drag handle, a
+  search field, and pages that trade places along a horizontal axis: a fade
+  and a 24px shift, arriving from the end side when going deeper (a group,
+  the selected list, then search results) and from the start side going back.
+  Typing more into a search does not replay it, and under reduced motion the
+  page simply changes. Muscle groups open as two columns of illustrated
+  cards on the control fill: the front and back body map
+  (`MuscleGroupIllustration`) leads, then the name and *13 exercises*. The
+  three rows grow to fill the sheet (an open keyboard doesn't shrink them; the
+  grid scrolls instead), and two cards in a row always match in height. A group
+  with selections takes the selected ground and an accent edge, reads
+  *2 of 13 selected* in the accent, and ends its text with an accent count
+  badge, kept off the figures. Under 360dp or at large text each group becomes
+  a full-width row led by its primary figure, with the badge and a chevron at
+  the end. Cards give slightly under the finger, except under reduced motion. A
+  group's page keeps its small figure beside the name in the header. The footer
+  says *Changes apply as you select.* above *Selected (N)* and *Done* (stacked
+  at narrow widths and large text). Selected is the quiet secondary button at
+  zero and turns tonal once anything is chosen, and its number rolls.
 - Timed exercises use *Seconds* in editable set tables and the shared keypad,
   including History and set dialogs. Counts remain integer seconds in the
   existing reps field. Ordinary and custom exercises retain *Reps*. RPE uses

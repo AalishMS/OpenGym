@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
@@ -7,10 +9,24 @@ import '../models/exercise_definition.dart';
 import '../services/exercise_catalog.dart';
 import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/app_typography.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import 'app_header.dart';
 import 'muscle_group_illustration.dart';
+import 'rolling_figure.dart';
+
+/// Whether the picker lays out for little room: one column of group rows,
+/// stacked footer buttons, an icon-only custom action. Decided by the width
+/// the text effectively has, so a mid-size phone with larger text drops to
+/// one column before a label would clip, not only at a fixed scale.
+bool _isCompact(MediaQueryData media) {
+  final scale = media.textScaler.scale(1);
+  return media.size.width < 360 ||
+      scale >= 1.375 ||
+      media.size.width / scale < 320;
+}
 
 /// Completes when the picker closes, however it was closed. Selections have
 /// already been applied through [onAdd]/[onRemove] by then.
@@ -163,6 +179,14 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
   _PickerView _view = _PickerView.groups;
   String? _selectedCategory;
   String _query = '';
+
+  /// The view on screen, and whether reaching it went deeper (or across) or
+  /// back, so the transition knows which side to enter from.
+  String? _shownViewId;
+  bool _forward = true;
+
+  /// The share of the room above the keyboard the sheet takes.
+  static const double _sheetHeightFactor = 0.92;
 
   @override
   void initState() {
@@ -444,7 +468,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
         child: SafeArea(
           top: false,
           child: SizedBox(
-            height: availableHeight * 0.92,
+            height: availableHeight * _sheetHeightFactor,
             child: Column(
               children: [
                 _buildHeader(),
@@ -468,36 +492,89 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
   }
 
   Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.lg,
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.sm,
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Text(
-              widget.title,
-              style: Theme.of(context).textTheme.headlineSmall,
+    return Column(
+      children: [
+        // The sheet already drags down to close; the handle only says so. It
+        // is the Material handle other sheets show (32x4, the secondary ink),
+        // without the 48px band `showDragHandle` reserves above a header that
+        // has its own Close.
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.sm),
+          child: ExcludeSemantics(
+            child: Container(
+              width: 32,
+              height: 4,
+              decoration: BoxDecoration(
+                color: textSecondaryColor(context),
+                borderRadius: AppRadius.micro,
+              ),
             ),
           ),
-          Semantics(
-            button: true,
-            label: 'Close exercise picker',
-            child: IconButton(
-              tooltip: 'Close',
-              onPressed: () => Navigator.pop(context),
-              icon: const Icon(LucideIcons.x),
-            ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            AppSpacing.xs,
+            AppSpacing.sm,
+            AppSpacing.sm,
           ),
-        ],
-      ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  widget.title,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+              ),
+              Semantics(
+                button: true,
+                label: 'Close exercise picker',
+                child: IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(LucideIcons.x),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
+  /// One id per page: typing more into a search keeps the id, so only moving
+  /// between pages animates.
+  String get _viewId {
+    if (_query.trim().isNotEmpty) return 'search';
+    return switch (_view) {
+      _PickerView.groups => 'groups',
+      _PickerView.category => 'category:$_selectedCategory',
+      _PickerView.selected => 'selected',
+    };
+  }
+
+  /// Groups are the top; a category or the selected list sits one step in,
+  /// and search results one step further.
+  static int _depthOf(String viewId) => switch (viewId) {
+    'groups' => 0,
+    'search' => 2,
+    _ => 1,
+  };
+
   Widget _buildContent() {
+    final id = _viewId;
+    if (id != _shownViewId) {
+      final previous = _shownViewId;
+      if (previous != null) _forward = _depthOf(id) >= _depthOf(previous);
+      _shownViewId = id;
+    }
+    return _SharedAxisSwitcher(
+      forward: _forward,
+      child: KeyedSubtree(key: ValueKey<String>(id), child: _buildView()),
+    );
+  }
+
+  Widget _buildView() {
     if (_query.trim().isNotEmpty) return _buildSearchResults();
     switch (_view) {
       case _PickerView.groups:
@@ -519,8 +596,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
 
   Widget _buildGroupGrid() {
     final media = MediaQuery.of(context);
-    final useSingleColumn =
-        media.size.width < 360 || media.textScaler.scale(16) >= 22;
+    final useSingleColumn = _isCompact(media);
     final categories = [
       ...ExerciseLibrary.categoryNames,
       ...ExerciseCatalog.active
@@ -529,50 +605,83 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
           .toSet(),
     ];
     final columns = useSingleColumn ? 1 : 2;
-    Widget tile(String category) => _MuscleGroupTile(
-      category: category,
-      count: _inCategory(category).length,
-      selectedCount: _selectedIn(category),
-      showChevron: useSingleColumn,
-      onTap: () => _openCategory(category),
-    );
+    // Counted now, so a builder that runs again while this page animates out
+    // reads what it was built with.
+    final counts = {for (final c in categories) c: _inCategory(c).length};
+    final selectedCounts = {for (final c in categories) c: _selectedIn(c)};
+    final keyboardInset = media.viewInsets.bottom;
+    final textTheme = Theme.of(context).textTheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _ContextBar(title: 'Muscle groups', trailing: _customAction),
         Expanded(
-          // Rows sized by their content rather than a fixed aspect ratio, so
-          // larger text grows a tile instead of clipping its label.
-          child: ListView(
-            key: const ValueKey('muscle-group-grid'),
-            padding: const EdgeInsets.fromLTRB(
-              AppSpacing.lg,
-              AppSpacing.xs,
-              AppSpacing.lg,
-              AppSpacing.lg,
-            ),
-            children: [
-              for (var start = 0; start < categories.length; start += columns)
-                Padding(
-                  padding: EdgeInsets.only(top: start == 0 ? 0 : AppSpacing.sm),
-                  child: IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (var i = start; i < start + columns; i++) ...[
-                          if (i > start) const SizedBox(width: AppSpacing.sm),
-                          Expanded(
-                            child:
-                                i < categories.length
-                                    ? tile(categories[i])
-                                    : const SizedBox.shrink(),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final heroHeight =
+                  useSingleColumn
+                      ? 0.0
+                      : _MuscleGroupTile.heroHeightFor(
+                        width: constraints.maxWidth,
+                        // The keyboard only borrows the room: cards keep
+                        // their size and the grid scrolls under it.
+                        height:
+                            constraints.maxHeight +
+                            keyboardInset * _sheetHeightFactor,
+                        rows: (categories.length / columns).ceil(),
+                        textTheme: textTheme,
+                        textScaler: media.textScaler,
+                      );
+              Widget tile(String category) => _MuscleGroupTile(
+                category: category,
+                count: counts[category]!,
+                selectedCount: selectedCounts[category]!,
+                compact: useSingleColumn,
+                heroHeight: heroHeight,
+                onTap: () => _openCategory(category),
+              );
+              // Rows sized by their content rather than a fixed aspect
+              // ratio, so larger text grows a tile instead of clipping its
+              // label, and the two tiles in a row always match.
+              return ListView(
+                key: const ValueKey('muscle-group-grid'),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  _MuscleGroupTile.gridTopPadding,
+                  AppSpacing.lg,
+                  _MuscleGroupTile.gridBottomPadding,
                 ),
-            ],
+                children: [
+                  for (
+                    var start = 0;
+                    start < categories.length;
+                    start += columns
+                  )
+                    Padding(
+                      padding: EdgeInsets.only(
+                        top: start == 0 ? 0 : _MuscleGroupTile.gap,
+                      ),
+                      child: IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (var i = start; i < start + columns; i++) ...[
+                              if (i > start)
+                                const SizedBox(width: _MuscleGroupTile.gap),
+                              Expanded(
+                                child:
+                                    i < categories.length
+                                        ? tile(categories[i])
+                                        : const SizedBox.shrink(),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
         ),
       ],
@@ -589,6 +698,12 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
         _ContextBar(
           backTooltip: 'Muscle groups',
           onBack: _showGroups,
+          // The tile's figure, small, so the list reads as the group opened.
+          leading: SizedBox(
+            width: 28,
+            height: 40,
+            child: MuscleGroupIllustration(group: category, bothViews: false),
+          ),
           title: category,
           subtitle:
               selected == 0
@@ -686,14 +801,37 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
     final media = MediaQuery.of(context);
     // Where the grid drops to one column, two half-width buttons cannot hold
     // their labels either; stack them and let the semantics carry the hint.
-    final compact = media.size.width < 360 || media.textScaler.scale(16) >= 22;
-    final selected = OutlinedButton(
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size.fromHeight(48),
-        shape: const RoundedRectangleBorder(borderRadius: AppRadius.button),
+    final compact = _isCompact(media);
+    final count = _selectedNames.length;
+    // Quiet while there is nothing to review, the tonal accent once there is.
+    final quietGround = controlFillColor(context);
+    final quietInk = textSecondaryColor(context);
+    final tonalGround = accentMutedColor(context);
+    final tonalInk = accentOnMutedColor(context);
+    final selected = TweenAnimationBuilder<double>(
+      tween: Tween<double>(end: count == 0 ? 0 : 1),
+      duration: AppMotion.of(context, AppMotion.quick),
+      curve: AppMotion.curve,
+      child: _RollingCountLabel(
+        prefix: 'Selected (',
+        count: count,
+        suffix: ')',
       ),
-      onPressed: _showSelected,
-      child: Text('Selected (${_selectedNames.length})'),
+      builder:
+          (context, t, label) => OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              backgroundColor: Color.lerp(quietGround, tonalGround, t),
+              foregroundColor: Color.lerp(quietInk, tonalInk, t),
+              // The tween above already eases the colours.
+              animationDuration: Duration.zero,
+              minimumSize: const Size.fromHeight(48),
+              shape: const RoundedRectangleBorder(
+                borderRadius: AppRadius.button,
+              ),
+            ),
+            onPressed: _showSelected,
+            child: label,
+          ),
     );
     final done = FilledButton(
       style: FilledButton.styleFrom(
@@ -808,7 +946,7 @@ class _CustomExerciseButton extends StatelessWidget {
     final media = MediaQuery.of(context);
     // Same cut-off as the muscle-group grid: where the tiles drop to one
     // column, the label would crowd the title, so the icon stands alone.
-    final compact = media.size.width < 360 || media.textScaler.scale(16) >= 22;
+    final compact = _isCompact(media);
     return Semantics(
       button: true,
       label: _label,
@@ -845,6 +983,9 @@ class _ContextBar extends StatelessWidget {
   final String? subtitle;
   final String? backTooltip;
   final VoidCallback? onBack;
+
+  /// A small decorative mark between the back step and the title.
+  final Widget? leading;
   final Widget? trailing;
 
   const _ContextBar({
@@ -852,6 +993,7 @@ class _ContextBar extends StatelessWidget {
     this.subtitle,
     this.backTooltip,
     this.onBack,
+    this.leading,
     this.trailing,
   });
 
@@ -871,6 +1013,10 @@ class _ContextBar extends StatelessWidget {
           children: [
             if (onBack != null)
               AppBackButton(tooltip: backTooltip ?? 'Back', onPressed: onBack),
+            if (leading != null) ...[
+              leading!,
+              const SizedBox(width: AppSpacing.md),
+            ],
             Expanded(
               child: Semantics(
                 header: true,
@@ -908,89 +1054,459 @@ class _ContextBar extends StatelessWidget {
   }
 }
 
-class _MuscleGroupTile extends StatelessWidget {
+/// A muscle group as an illustrated card: the front and back figures lead,
+/// the name and its count below. Where two columns don't fit (narrow screens,
+/// large text) it becomes a row led by a single figure, ending in a chevron.
+/// A group with selections takes the selected ground and accent edge, says
+/// how many in its count line, and wears a count badge.
+class _MuscleGroupTile extends StatefulWidget {
   final String category;
   final int count;
   final int selectedCount;
-  final bool showChevron;
+
+  /// The one-column row instead of the card.
+  final bool compact;
+
+  /// The card's figure height; see [heroHeightFor]. Unused when [compact].
+  final double heroHeight;
   final VoidCallback onTap;
 
   const _MuscleGroupTile({
     required this.category,
     required this.count,
     required this.selectedCount,
-    required this.showChevron,
+    required this.compact,
+    required this.heroHeight,
     required this.onTap,
   });
+
+  /// The grid's own insets and the gap between tiles, shared with the sizing
+  /// below so the arithmetic and the layout can't drift apart.
+  static const double gridTopPadding = AppSpacing.xs;
+  static const double gridBottomPadding = AppSpacing.lg;
+  static const double gap = AppSpacing.sm;
+  static const double _heroInset = AppSpacing.sm;
+  static const double _textInset = AppSpacing.md;
+  static const double _minHero = 64;
+
+  /// On a tall tablet sheet the rows stop growing here and the grid ends
+  /// short instead of the figures turning into posters.
+  static const double _maxHero = 160;
+
+  static TextStyle? _nameStyle(TextTheme textTheme) =>
+      textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700);
+
+  /// How tall a card's figures can be so the first three rows fill a grid of
+  /// [width] by [height]: the figures grow on a taller phone instead of
+  /// leaving the bottom of the sheet empty. A fourth row (custom categories)
+  /// peeks in below. Never so small the pair stops reading, and never much
+  /// taller than the pair can be drawn at the card's width or than
+  /// [_maxHero].
+  static double heroHeightFor({
+    required double width,
+    required double height,
+    required int rows,
+    required TextTheme textTheme,
+    required TextScaler textScaler,
+  }) {
+    double lineHeight(TextStyle? style) {
+      final painter = TextPainter(
+        text: TextSpan(text: 'Ag', style: style),
+        textDirection: TextDirection.ltr,
+        textScaler: textScaler,
+        maxLines: 1,
+      )..layout();
+      final result = painter.height;
+      painter.dispose();
+      return result;
+    }
+
+    final cardWidth = (width - AppSpacing.lg * 2 - gap) / 2;
+    final drawable =
+        (cardWidth - _heroInset * 2) /
+        MuscleGroupIllustration.aspectRatio(bothViews: true);
+    final visibleRows = rows <= 3 ? rows.toDouble() : 3.4;
+    final perRow =
+        (height -
+            gridTopPadding -
+            gridBottomPadding -
+            gap * (visibleRows - 1)) /
+        visibleRows;
+    final text =
+        lineHeight(_nameStyle(textTheme)) +
+        AppSpacing.xxs +
+        lineHeight(textTheme.bodySmall);
+    final budget = perRow - _cardChrome - text;
+    return budget.clamp(
+      _minHero,
+      math.max(_minHero, math.min(_maxHero, drawable * 1.2)),
+    );
+  }
+
+  /// The card's vertical padding plus the gap between figure and name.
+  static const double _cardChrome = AppSpacing.md * 3;
+
+  @override
+  State<_MuscleGroupTile> createState() => _MuscleGroupTileState();
+}
+
+class _MuscleGroupTileState extends State<_MuscleGroupTile> {
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
+    final selectedCount = widget.selectedCount;
     final hasSelection = selectedCount > 0;
+    // On the dark selected ground (the accent's wash) the plain accent can
+    // fall short, so ink there is re-solved against the wash.
+    final onWash =
+        hasSelection && Theme.of(context).brightness == Brightness.dark;
+    final ink = onWash ? accentOnMutedColor(context) : accentColor(context);
+    final name = Text(
+      widget.category,
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: _MuscleGroupTile._nameStyle(textTheme),
+    );
+    final summary = Text(
+      hasSelection
+          ? '$selectedCount of ${widget.count} selected'
+          : '${widget.count} exercises',
+      // Two lines before it ever clips: the row grows and the grid scrolls.
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: textTheme.bodySmall?.copyWith(
+        color: hasSelection ? ink : secondary,
+        fontWeight: hasSelection ? FontWeight.w600 : null,
+      ),
+    );
+    final badge = _CountBadge(count: selectedCount);
+
+    final Widget content;
+    if (widget.compact) {
+      content = Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 36,
+              height: 52,
+              child: MuscleGroupIllustration(
+                group: widget.category,
+                bothViews: false,
+                highlightColor: onWash ? ink : null,
+              ),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  name,
+                  const SizedBox(height: AppSpacing.xxs),
+                  summary,
+                ],
+              ),
+            ),
+            if (hasSelection) ...[const SizedBox(width: AppSpacing.sm), badge],
+            const SizedBox(width: AppSpacing.sm),
+            Icon(LucideIcons.chevronRight, size: 18, color: secondary),
+          ],
+        ),
+      );
+    } else {
+      // The badge closes the text block rather than sitting in a corner: the
+      // figure pair spans the card's width, so a corner badge lands on it.
+      content = Padding(
+        padding: const EdgeInsets.fromLTRB(
+          _MuscleGroupTile._heroInset,
+          AppSpacing.md,
+          _MuscleGroupTile._heroInset,
+          AppSpacing.md,
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              height: widget.heroHeight,
+              child: MuscleGroupIllustration(
+                group: widget.category,
+                highlightColor: onWash ? ink : null,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal:
+                    _MuscleGroupTile._textInset - _MuscleGroupTile._heroInset,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        name,
+                        const SizedBox(height: AppSpacing.xxs),
+                        summary,
+                      ],
+                    ),
+                  ),
+                  if (hasSelection) ...[
+                    const SizedBox(width: AppSpacing.sm),
+                    badge,
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return Semantics(
       button: true,
       label:
           hasSelection
-              ? '$category, $count exercises, $selectedCount selected'
-              : '$category, $count exercises',
+              ? '${widget.category}, ${widget.count} exercises, '
+                  '$selectedCount selected'
+              : '${widget.category}, ${widget.count} exercises',
       excludeSemantics: true,
-      onTap: onTap,
-      child: Material(
-        color:
-            hasSelection
-                ? selectedGroundColor(context)
-                : controlFillColor(context),
-        shape: RoundedRectangleBorder(
-          side:
+      onTap: widget.onTap,
+      // A slight give under the finger; still under reduced motion.
+      child: AnimatedScale(
+        scale: _pressed && !reduceMotion ? 0.97 : 1,
+        duration: AppMotion.quick,
+        curve: AppMotion.curve,
+        child: Material(
+          color:
               hasSelection
-                  ? BorderSide(color: accentColor(context), width: 1.5)
-                  : BorderSide.none,
-          borderRadius: AppRadius.card,
-        ),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: AppRadius.card,
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 34,
-                  height: 40,
-                  child: MuscleGroupIllustration(
-                    group: category,
-                    silhouetteColor: secondary.withValues(alpha: 0.28),
-                    highlightColor: accentColor(context),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(category, style: textTheme.titleMedium),
-                      const SizedBox(height: AppSpacing.xxs),
-                      Text(
-                        hasSelection
-                            ? '$selectedCount of $count selected'
-                            : '$count exercises',
-                        style: textTheme.bodySmall?.copyWith(
-                          color:
-                              hasSelection ? accentColor(context) : secondary,
-                          fontWeight: hasSelection ? FontWeight.w600 : null,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (showChevron)
-                  Icon(LucideIcons.chevronRight, size: 18, color: secondary),
-              ],
-            ),
+                  ? selectedGroundColor(context)
+                  : controlFillColor(context),
+          shape: RoundedRectangleBorder(
+            side:
+                hasSelection
+                    ? BorderSide(color: accentColor(context), width: 1.5)
+                    : BorderSide.none,
+            borderRadius: AppRadius.card,
+          ),
+          child: InkWell(
+            onTap: widget.onTap,
+            onHighlightChanged: (pressed) {
+              if (pressed != _pressed) setState(() => _pressed = pressed);
+            },
+            borderRadius: AppRadius.card,
+            child: content,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// How many of a group's exercises are selected, as a small accent pill.
+class _CountBadge extends StatelessWidget {
+  final int count;
+
+  const _CountBadge({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    // Sized by its figure, never stretched by the row it sits in.
+    return Container(
+      constraints: const BoxConstraints(minWidth: 22, minHeight: 22),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs + 2),
+      decoration: BoxDecoration(
+        color: accentFillColor(context),
+        borderRadius: AppRadius.pill,
+      ),
+      child: Center(
+        widthFactor: 1,
+        heightFactor: 1,
+        child: Text(
+          '$count',
+          style: AppTypography.figures(
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+            height: 1,
+            color: onAccentColor(context),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The picker's pages trade places along a shared horizontal axis: the
+/// arriving page fades in as it slides the last [_SharedAxisTransition.shift]
+/// pixels into place, the leaving one fades out sliding the other way. Going
+/// deeper arrives from the end side, going back from the start side. Under
+/// reduced motion the page simply changes.
+class _SharedAxisSwitcher extends StatelessWidget {
+  final bool forward;
+
+  /// A keyed page; a new key is a new page.
+  final Widget child;
+
+  const _SharedAxisSwitcher({required this.forward, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    final direction = (forward ? 1.0 : -1.0) * (rtl ? -1.0 : 1.0);
+    return AnimatedSwitcher(
+      duration: AppMotion.standard,
+      layoutBuilder:
+          (currentChild, previousChildren) => Stack(
+            fit: StackFit.expand,
+            children: [
+              ...previousChildren,
+              if (currentChild != null) currentChild,
+            ],
+          ),
+      // A new closure each build, so pages already leaving pick up the
+      // latest direction too.
+      transitionBuilder:
+          (page, animation) => _SharedAxisTransition(
+            animation: animation,
+            direction: direction,
+            child: page,
+          ),
+      child: child,
+    );
+  }
+}
+
+class _SharedAxisTransition extends AnimatedWidget {
+  /// +1 when pages move toward the start (arriving from the right in LTR),
+  /// -1 when they move toward the end.
+  final double direction;
+  final Widget child;
+
+  const _SharedAxisTransition({
+    required Animation<double> animation,
+    required this.direction,
+    required this.child,
+  }) : super(listenable: animation);
+
+  static const double shift = 24;
+
+  // The leaving page clears out early and the arriving one fades in after
+  // it, so two lists never read as one.
+  static const Interval _fadeOut = Interval(0, 0.35);
+  static const Interval _fadeIn = Interval(0.3, 1, curve: AppMotion.curve);
+
+  @override
+  Widget build(BuildContext context) {
+    final animation = listenable as Animation<double>;
+    final t = animation.value;
+    // Arriving or leaving by the animation's own direction, not by key: a
+    // page returned to before it finished leaving has the arriving page's
+    // key, and must keep leaving rather than flash back in alongside it.
+    final incoming =
+        animation.status == AnimationStatus.forward ||
+        animation.status == AnimationStatus.completed;
+    final double dx;
+    final double opacity;
+    if (incoming) {
+      dx = (1 - AppMotion.curve.transform(t)) * shift * direction;
+      opacity = _fadeIn.transform(t);
+    } else {
+      final progress = 1 - t;
+      dx = -AppMotion.curve.transform(progress) * shift * direction;
+      opacity = 1 - _fadeOut.transform(progress);
+    }
+    return IgnorePointer(
+      // The arriving page takes taps once it can be seen, so a quick second
+      // tap can't land on a row nobody has read yet.
+      ignoring: !incoming || opacity < 0.5,
+      child: ExcludeSemantics(
+        excluding: !incoming,
+        child: Opacity(
+          opacity: opacity,
+          child: Transform.translate(offset: Offset(dx, 0), child: child),
+        ),
+      ),
+    );
+  }
+}
+
+/// A label such as "Selected (3)" whose number rolls to its new value.
+///
+/// The whole label stays one [Text], so screen readers and finders read it
+/// as written; its number is drawn in clear ink and a [RollingFigure] sits
+/// exactly over it. Under reduced motion the number is simply drawn.
+class _RollingCountLabel extends StatelessWidget {
+  final String prefix;
+  final int count;
+  final String suffix;
+
+  const _RollingCountLabel({
+    required this.prefix,
+    required this.count,
+    required this.suffix,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final style = DefaultTextStyle.of(context).style;
+    // Tabular, so the suffix holds still while the number rolls.
+    final figureStyle = style.merge(
+      AppTypography.figures(fontWeight: style.fontWeight),
+    );
+    final digits = '$count';
+    final roll = !MediaQuery.disableAnimationsOf(context);
+    final label = Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(text: prefix),
+          TextSpan(
+            text: digits,
+            style:
+                roll
+                    ? figureStyle.copyWith(
+                      color: figureStyle.color?.withValues(alpha: 0),
+                    )
+                    : figureStyle,
+          ),
+          TextSpan(text: suffix),
+        ],
+      ),
+      maxLines: 1,
+      softWrap: false,
+    );
+    // Shrinks rather than clips where the button runs short of room; the
+    // number's overlay scales with it, so the two stay aligned.
+    if (!roll) return FittedBox(fit: BoxFit.scaleDown, child: label);
+    // Separate spans shape separately, so the number starts exactly where
+    // the prefix alone ends.
+    final painter = TextPainter(
+      text: TextSpan(text: prefix, style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    final start = painter.width;
+    painter.dispose();
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Stack(
+        children: [
+          label,
+          PositionedDirectional(
+            start: start,
+            top: 0,
+            child: ExcludeSemantics(
+              child: RollingFigure(digits, style: figureStyle),
+            ),
+          ),
+        ],
       ),
     );
   }
