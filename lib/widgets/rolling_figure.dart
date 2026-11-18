@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/motion.dart';
+
 /// A figure that rolls to its new value instead of blinking: the old value
 /// slides out and fades as the new one slides in, upward when the number grew
 /// and downward when it fell. With reduced motion it simply changes.
@@ -62,9 +64,9 @@ class _RollingFigureState extends State<RollingFigure> {
     final current = ValueKey(widget.text);
     final direction = _up ? 1.0 : -1.0;
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 260),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
+      duration: AppMotion.enter,
+      switchInCurve: AppMotion.curve,
+      switchOutCurve: AppMotion.exit,
       layoutBuilder:
           (currentChild, previousChildren) => Stack(
             alignment: widget.alignment,

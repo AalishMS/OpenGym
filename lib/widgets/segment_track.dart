@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 
 /// One option in a [SegmentTrack].
@@ -40,10 +41,7 @@ class SegmentTrack<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     final index = segments.indexWhere((s) => s.value == selected);
     final count = segments.length;
-    final duration =
-        MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 220);
+    final duration = AppMotion.of(context, AppMotion.standard);
     final textStyle = Theme.of(context).textTheme.labelLarge;
     final ink = textPrimaryColor(context);
     final onThumb = onAccentColor(context);
@@ -59,7 +57,7 @@ class SegmentTrack<T> extends StatelessWidget {
           if (index >= 0)
             AnimatedAlign(
               duration: duration,
-              curve: Curves.easeOutCubic,
+              curve: AppMotion.curve,
               alignment: Alignment(
                 count == 1 ? 0 : -1 + 2 * index / (count - 1),
                 0,
