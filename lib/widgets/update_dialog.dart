@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../theme/radii.dart';
 import 'app_button.dart';
+import 'motion/app_modals.dart';
 
 typedef ReleasePageLauncher = Future<bool> Function(Uri uri);
 
@@ -20,7 +21,7 @@ Future<void> showUpdateDialog(
   BuildContext context, {
   ReleasePageLauncher? openRelease,
 }) {
-  return showDialog<void>(
+  return showAppDialog<void>(
     context: context,
     // Downloading is cancellable from inside the dialog, so a stray tap on the
     // barrier must not orphan a download the user can no longer see.
@@ -36,7 +37,7 @@ Future<void> showWhatsNewDialog(
   ReleaseInfo release, {
   ReleasePageLauncher? openRelease,
 }) {
-  return showDialog<void>(
+  return showAppDialog<void>(
     context: context,
     routeSettings: const RouteSettings(name: '/whats-new'),
     builder: (_) => WhatsNewDialog(release: release, openRelease: openRelease),

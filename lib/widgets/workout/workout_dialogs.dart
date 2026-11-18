@@ -10,6 +10,7 @@ import '../../theme/app_typography.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../motion/app_modals.dart';
 import 'set_entry_table.dart';
 
 class WorkoutDialogs {
@@ -21,7 +22,7 @@ class WorkoutDialogs {
     void Function(String name)? onRenameEverywhere,
   }) {
     final offerEverywhere = impactFor != null && onRenameEverywhere != null;
-    showDialog<void>(
+    showAppDialog<void>(
       context: context,
       builder:
           (_) => _RenameExerciseDialog(
@@ -50,7 +51,7 @@ class WorkoutDialogs {
     );
     int? selectedRpe = settings.autoFillLast ? lastSet?.rpe : null;
 
-    showDialog(
+    showAppDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
@@ -206,7 +207,7 @@ class WorkoutDialogs {
     required void Function(gym.Set updatedSet) onSave,
     required VoidCallback onDelete,
   }) {
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -229,7 +230,7 @@ class WorkoutDialogs {
   }) {
     final noteController = TextEditingController(text: currentNote ?? '');
 
-    showDialog(
+    showAppDialog(
       context: context,
       builder: (context) {
         return Dialog(
@@ -298,7 +299,7 @@ class WorkoutDialogs {
     required VoidCallback onDelete,
   }) {
     final error = errorColor(context);
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
@@ -434,7 +435,7 @@ class WorkoutDialogs {
     required String confirmLabel,
     String cancelLabel = 'Cancel',
   }) async {
-    final result = await showDialog<bool>(
+    final result = await showAppDialog<bool>(
       context: context,
       builder:
           (dialogContext) => AlertDialog(

@@ -8,6 +8,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../widgets/motion/app_modals.dart';
 import 'exercise_management_screen.dart';
 import '../services/exercise_catalog.dart';
 import '../providers/settings_provider.dart';
@@ -90,7 +91,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (_busyAction != null || _confirmingMutation) return;
     setState(() => _confirmingMutation = true);
     try {
-      final saved = await showDialog<bool>(
+      final saved = await showAppDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder:

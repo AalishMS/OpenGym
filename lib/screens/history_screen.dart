@@ -27,6 +27,7 @@ import '../widgets/app_header.dart';
 import '../widgets/history/history_journal_data.dart';
 import '../widgets/history/history_journal_widgets.dart';
 import '../widgets/history/workout_details_widgets.dart';
+import '../widgets/motion/app_modals.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../widgets/workout/workout_dialogs.dart';
 import '../widgets/raised_card.dart';
@@ -298,7 +299,7 @@ class WorkoutDetailsScreen extends StatelessWidget {
   Future<void> _delete(BuildContext context, WorkoutSession session) async {
     var deleting = false;
     String? error;
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       barrierDismissible: false,
       builder:
@@ -565,7 +566,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
     }
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _isConfirmingLeave = true);
-    final action = await showDialog<_EditLeaveAction>(
+    final action = await showAppDialog<_EditLeaveAction>(
       context: context,
       builder:
           (dialogContext) => AlertDialog(
@@ -604,7 +605,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
     required String message,
   }) async {
     FocusManager.instance.primaryFocus?.unfocus();
-    return await showDialog<bool>(
+    return await showAppDialog<bool>(
           context: context,
           builder:
               (dialogContext) => AlertDialog(

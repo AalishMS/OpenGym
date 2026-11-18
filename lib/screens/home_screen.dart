@@ -27,6 +27,7 @@ import '../widgets/home/home_plan_row.dart';
 import '../widgets/home/plan_grid.dart';
 import '../widgets/home/training_snapshot.dart';
 import '../widgets/home/up_next_card.dart';
+import '../widgets/motion/app_modals.dart';
 import '../widgets/persistence_dialog.dart';
 import '../widgets/splits/preset_browser_dialog.dart';
 import '../widgets/splits/split_switcher.dart';
@@ -79,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_mutatingPlan) return;
     _mutatingPlan = true;
     try {
-      final saved = await showDialog<bool>(
+      final saved = await showAppDialog<bool>(
         context: context,
         barrierDismissible: false,
         builder:
@@ -548,7 +549,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // A sheet rather than a dialog: it rises from where the thumb already is,
     // and the theme gives it the surface colour and the sheet radius.
-    showModalBottomSheet<void>(
+    showAppSheet<void>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
@@ -780,7 +781,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final surface = surfaceColor(context);
     final textSecondary = textSecondaryColor(context);
 
-    showDialog(
+    showAppDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {

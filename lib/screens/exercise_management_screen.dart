@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../widgets/app_header.dart';
+import '../widgets/motion/app_modals.dart';
 import '../widgets/persistence_dialog.dart';
 
 class ExerciseManagementScreen extends StatefulWidget {
@@ -41,14 +42,14 @@ class _ExerciseManagementScreenState extends State<ExerciseManagementScreen> {
   }
 
   Future<void> _merge(ExerciseDefinition source) async {
-    final target = await showModalBottomSheet<ExerciseDefinition>(
+    final target = await showAppSheet<ExerciseDefinition>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
       builder: (_) => _MergeTargetSheet(source: source),
     );
     if (target == null || !mounted) return;
-    final saved = await showDialog<bool>(
+    final saved = await showAppDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder:
@@ -88,7 +89,7 @@ class _ExerciseManagementScreenState extends State<ExerciseManagementScreen> {
     String input = exercise.name;
     String? error;
     bool saving = false;
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       barrierDismissible: false,
       builder:

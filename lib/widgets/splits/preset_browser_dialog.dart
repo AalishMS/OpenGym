@@ -14,6 +14,7 @@ import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../app_button.dart';
 import '../app_header.dart';
+import '../motion/app_modals.dart';
 import '../raised_card.dart';
 import '../statistics/statistics_controls.dart';
 
@@ -22,7 +23,7 @@ class PresetBrowserDialog extends StatefulWidget {
 
   const PresetBrowserDialog({required this.hostContext, super.key});
 
-  static Future<void> show(BuildContext context) => showDialog<void>(
+  static Future<void> show(BuildContext context) => showAppDialog<void>(
     context: context,
     useSafeArea: false,
     builder: (_) => PresetBrowserDialog(hostContext: context),

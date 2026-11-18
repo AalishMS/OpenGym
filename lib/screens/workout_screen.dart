@@ -41,6 +41,7 @@ import '../utils/workout_context.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
+import '../widgets/motion/app_modals.dart';
 import '../widgets/plan_title_hero.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
@@ -681,7 +682,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     if (!mounted) return;
     while (other != null) {
       final conflict = other;
-      final switchWorkout = await showDialog<bool>(
+      final switchWorkout = await showAppDialog<bool>(
         context: context,
         builder:
             (dialogContext) => AlertDialog(
@@ -831,7 +832,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       _confirmingFinish = true;
     });
     try {
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showAppDialog<bool>(
         context: context,
         builder:
             (dialogContext) => AlertDialog(
@@ -906,7 +907,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
 
   Future<bool> _confirmDiscard(WorkoutSession draft) async {
     final duration = formatDuration(draft.elapsedSeconds());
-    return await showDialog<bool>(
+    return await showAppDialog<bool>(
           context: context,
           builder:
               (dialogContext) => AlertDialog(
@@ -1571,7 +1572,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final session = _getOrCreateSession();
     final revision = _progress?.revision;
     if (revision == null) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder:
           (dialog) => AlertDialog(
@@ -1623,7 +1624,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     var saving = false;
     String? error;
     try {
-      await showModalBottomSheet<void>(
+      await showAppSheet<void>(
         context: context,
         showDragHandle: true,
         isScrollControlled: true,

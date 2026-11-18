@@ -7,16 +7,17 @@ import '../../providers/split_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../motion/app_modals.dart';
 
 class SplitDialogs {
   SplitDialogs._();
 
-  static Future<void> showCreate(BuildContext context) => showDialog<void>(
+  static Future<void> showCreate(BuildContext context) => showAppDialog<void>(
     context: context,
     builder: (_) => _SplitNameDialog(hostContext: context),
   );
 
-  static Future<void> showManage(BuildContext context) => showDialog<void>(
+  static Future<void> showManage(BuildContext context) => showAppDialog<void>(
     context: context,
     builder: (_) => _ManageSplitsDialog(hostContext: context),
   );
@@ -211,7 +212,7 @@ class _ManageSplitsDialog extends StatelessWidget {
                               isActive: split.id == provider.activeSplitId,
                               canDelete: provider.splits.length > 1,
                               onRename:
-                                  () => showDialog<void>(
+                                  () => showAppDialog<void>(
                                     context: context,
                                     builder:
                                         (_) => _SplitNameDialog(
@@ -220,7 +221,7 @@ class _ManageSplitsDialog extends StatelessWidget {
                                         ),
                                   ),
                               onDelete:
-                                  () => showDialog<void>(
+                                  () => showAppDialog<void>(
                                     context: context,
                                     builder:
                                         (_) => _DeleteSplitDialog(

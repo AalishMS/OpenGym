@@ -3,11 +3,12 @@ import 'package:flutter/material.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../motion/app_modals.dart';
 
 /// First-use disclosure. Resolves to true only when the user confirmed their
 /// age and chose `Continue`.
 Future<bool> showCoachDisclosureSheet(BuildContext context) async {
-  final accepted = await showModalBottomSheet<bool>(
+  final accepted = await showAppSheet<bool>(
     context: context,
     backgroundColor: surfaceColor(context),
     shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),

@@ -9,6 +9,7 @@ import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
+import '../motion/app_modals.dart';
 import 'block_trend.dart';
 import 'statistics_controls.dart';
 import 'statistics_widgets.dart';
@@ -205,7 +206,7 @@ class _BlockOverviewState extends State<BlockOverview> {
                 color: textSecondaryColor(context),
               ),
               onPressed:
-                  () => showDialog<void>(
+                  () => showAppDialog<void>(
                     context: context,
                     builder:
                         (context) => AlertDialog(

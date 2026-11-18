@@ -12,6 +12,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../motion/app_modals.dart';
 import 'training_block_strip.dart';
 
 /// The split's blocks and the weeks each one offers, read fresh so the
@@ -114,7 +115,7 @@ abstract final class TrainingBlockDialogs {
     )?
     onEditBlock,
     TrainingBlockLifecycle? lifecycle,
-  }) => showModalBottomSheet<String>(
+  }) => showAppSheet<String>(
     context: context,
     useSafeArea: true,
     isScrollControlled: true,
@@ -148,7 +149,7 @@ abstract final class TrainingBlockDialogs {
     TrainingBlockLifecycle? lifecycle,
   }) {
     final snapshot = load();
-    return showModalBottomSheet<void>(
+    return showAppSheet<void>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
@@ -429,7 +430,7 @@ class _SheetActions extends StatelessWidget {
 /// Shows [child] as a modal block sheet: drag handle, keyboard-aware, scrolls
 /// when the content outgrows the screen.
 Future<T?> _showBlockSheet<T>(BuildContext context, Widget child) =>
-    showModalBottomSheet<T>(
+    showAppSheet<T>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
@@ -689,7 +690,7 @@ class _BlockFormState extends State<_BlockForm> {
   Future<void> _delete() async {
     if (_busy) return;
     final name = widget.initialName!;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (_) => _DeleteBlockConfirmation(name: name),
     );

@@ -14,6 +14,7 @@ import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import 'app_header.dart';
+import 'motion/app_modals.dart';
 import 'muscle_group_illustration.dart';
 import 'rolling_figure.dart';
 
@@ -52,6 +53,7 @@ Future<void> showExercisePickerSheet(
       ),
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       backgroundColor: surfaceColor(context),
+      sheetAnimationStyle: appSheetAnimationStyle(context),
       builder:
           (sheetContext) => _ExercisePickerSheet(
             selectedExerciseNames: selectedExerciseNames,
@@ -92,6 +94,7 @@ Future<PickedExercise?> pickSingleExercise(
       ),
       barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
       backgroundColor: surfaceColor(context),
+      sheetAnimationStyle: appSheetAnimationStyle(context),
       builder:
           (sheetContext) => _ExercisePickerSheet(
             title: title,
@@ -116,6 +119,7 @@ class _ExercisePickerRoute<T> extends ModalBottomSheetRoute<T> {
     required super.capturedThemes,
     required super.barrierLabel,
     required super.backgroundColor,
+    required super.sheetAnimationStyle,
   }) : super(
          isScrollControlled: true,
          shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
@@ -305,7 +309,7 @@ class _ExercisePickerSheetState extends State<_ExercisePickerSheet> {
       errorText = 'Exercise with this name already exists';
     }
 
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) {

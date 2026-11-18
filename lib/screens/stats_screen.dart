@@ -17,6 +17,7 @@ import '../theme/spacing.dart';
 import '../utils/scroll_to_top.dart';
 import '../utils/statistics_format.dart';
 import '../widgets/app_header.dart';
+import '../widgets/motion/app_modals.dart';
 import '../widgets/statistics/block_statistics.dart';
 import '../widgets/statistics/lift_list.dart';
 import '../widgets/statistics/statistics_controls.dart';
@@ -154,7 +155,7 @@ class StatsScreenState extends State<StatsScreen> {
     required String Function(T) labelFor,
     required ValueChanged<T> onSelected,
   }) async {
-    final value = await showModalBottomSheet<T>(
+    final value = await showAppSheet<T>(
       context: context,
       isScrollControlled: true,
       builder:
@@ -203,7 +204,7 @@ class StatsScreenState extends State<StatsScreen> {
     String selected,
     String unit,
   ) async {
-    final value = await showModalBottomSheet<String>(
+    final value = await showAppSheet<String>(
       context: context,
       isScrollControlled: true,
       builder:
@@ -458,7 +459,7 @@ class StatsScreenState extends State<StatsScreen> {
                     color: textSecondaryColor(context),
                   ),
                   onPressed:
-                      () => showDialog<void>(
+                      () => showAppDialog<void>(
                         context: context,
                         builder:
                             (context) => AlertDialog(
