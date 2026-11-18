@@ -19,6 +19,7 @@ import 'package:gymapp/theme/motion.dart';
 import 'package:gymapp/widgets/underline_tab_strip.dart';
 import 'package:gymapp/widgets/workout/training_block_strip.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
+import 'package:gymapp/widgets/workout/set_entry_table.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
@@ -345,6 +346,42 @@ void main() {
     await tester.pumpAndSettle();
     expect(currentPlan(tester), 'Legs');
   });
+
+  testWidgets(
+    'a switch with the keypad open saves what was typed and closes the keypad',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final sessions = _Sessions();
+      await open(tester, sessions: sessions);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(ExerciseCard).first,
+          matching: find.text('Add set'),
+        ),
+      );
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Set 1 Kg').first);
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Hide keypad'), findsOneWidget);
+      await tester.tap(find.text('5').last);
+      await tester.pump();
+      // Swiped on the log above the open keypad.
+      await tester.dragFrom(const Offset(300, 250), const Offset(-160, 0));
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+      expect(currentPlan(tester), 'Legs');
+      final saved = sessions.writes.lastWhere(
+        (write) => write.planId == 'Pull',
+      );
+      expect(saved.exercises.first.sets.single.weight, 5);
+      expect(find.bySemanticsLabel('Hide keypad'), findsNothing);
+      expect(SetEntryTable.keyboardHeight.value, 0);
+      expect(find.byType(WorkoutScreen), findsOneWidget);
+      semantics.dispose();
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('reduced motion switches plans immediately', (tester) async {
     await open(tester, reduceMotion: true);
