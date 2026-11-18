@@ -12,6 +12,7 @@ import 'package:gymapp/widgets/motion/collapsible.dart';
 import 'package:gymapp/widgets/motion/entrance.dart';
 import 'package:gymapp/widgets/motion/press_scale.dart';
 import 'package:gymapp/widgets/motion/state_switcher.dart';
+import 'package:gymapp/widgets/plan_title_hero.dart';
 import 'package:gymapp/widgets/raised_card.dart';
 
 import 'support/test_fonts.dart';
@@ -874,6 +875,62 @@ void main() {
       final route = ModalRoute.of(tester.element(find.text('Next page')))!;
       expect(route.animation!.isCompleted, isTrue);
       expect(find.text('Push'), findsNothing);
+    });
+
+    testWidgets('the plan name still flies into the workout header', (
+      tester,
+    ) async {
+      for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: _theme.copyWith(platform: platform),
+            home: Builder(
+              builder:
+                  (context) => Scaffold(
+                    body: GestureDetector(
+                      onTap:
+                          () => Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder:
+                                  (_) => const Scaffold(
+                                    body: Align(
+                                      alignment: Alignment.topLeft,
+                                      child: PlanTitleHero(
+                                        tag: 'plan',
+                                        text: 'Push Day',
+                                        style: TextStyle(fontSize: 18),
+                                      ),
+                                    ),
+                                  ),
+                            ),
+                          ),
+                      child: const Center(
+                        child: PlanTitleHero(
+                          tag: 'plan',
+                          text: 'Push Day',
+                          style: TextStyle(fontSize: 22),
+                        ),
+                      ),
+                    ),
+                  ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('Push Day'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 150));
+        final inFlight = tester
+            .widgetList<Text>(find.text('Push Day'))
+            .map((text) => text.style?.fontSize);
+        expect(
+          inFlight.any((size) => size != null && size > 18 && size < 22),
+          isTrue,
+          reason: '$platform',
+        );
+        await _settle(tester);
+        expect(tester.takeException(), isNull);
+        await tester.pumpWidget(const SizedBox.shrink());
+      }
     });
 
     testWidgets('each platform keeps its own transition', (tester) async {
