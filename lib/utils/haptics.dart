@@ -7,6 +7,10 @@ import 'package:flutter/services.dart';
 class Haptics {
   Haptics._();
 
+  /// A choice moved: another main tab selected, a plan dropped into a new
+  /// place in the order. The lightest tick, for a change the eye also sees.
+  static void selection() => HapticFeedback.selectionClick();
+
   /// The workout clock started.
   static void confirm() => HapticFeedback.mediumImpact();
 
