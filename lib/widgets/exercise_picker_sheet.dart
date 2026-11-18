@@ -12,7 +12,9 @@ import '../theme/spacing.dart';
 import 'app_header.dart';
 import 'muscle_group_illustration.dart';
 
-void showExercisePickerSheet(
+/// Completes when the picker closes, however it was closed. Selections have
+/// already been applied through [onAdd]/[onRemove] by then.
+Future<void> showExercisePickerSheet(
   BuildContext context, {
   required Iterable<String> selectedExerciseNames,
   Iterable<String> alreadyAddedExerciseNames = const <String>[],
@@ -26,7 +28,7 @@ void showExercisePickerSheet(
   void Function(String name, String exerciseId)? onRemoveIdentified,
 }) {
   final navigator = Navigator.of(context);
-  navigator.push(
+  return navigator.push(
     _ExercisePickerRoute<void>(
       capturedThemes: InheritedTheme.capture(
         from: context,

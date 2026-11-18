@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../services/exercise_catalog.dart';
 import '../data/plan_colors.dart';
+import '../data/plan_starters.dart';
 import '../models/exercise_set_data.dart';
 import '../models/exercise_template.dart';
 import '../models/set.dart' as gym;
@@ -34,6 +35,9 @@ import '../models/training_week.dart';
 import '../providers/training_block_provider.dart';
 import '../widgets/workout/training_block_strip.dart';
 
+/// How many sets an exercise added to a plan starts with.
+const int kNewExerciseSets = 3;
+
 class PlanEditorScreen extends StatefulWidget {
   final WorkoutPlan? plan;
 
@@ -53,7 +57,12 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   Future<void> leaveRoute() => _handleBack();
 
   final _nameController = TextEditingController();
+  final _nameFocus = FocusNode();
+  final _scrollController = ScrollController();
   final List<_EditorExercise> _exercises = [];
+
+  /// Each exercise's card, so the editor can scroll to what was just added.
+  final Map<int, GlobalKey> _exerciseKeys = {};
   int _nextExerciseId = 0;
   int? _selectedColor = kPlanColors[0];
   late String _initialSignature;
@@ -61,13 +70,31 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   bool _isSaving = false;
   bool _saved = false;
   bool _showColors = false;
+
+  /// The Undo offered after a starter fills the plan, while it is showing.
+  ScaffoldFeatureController<SnackBar, SnackBarClosedReason>? _starterUndo;
+
+  /// Set by a Save that found the plan incomplete: from then on, whatever is
+  /// still missing is named inline, and clears as soon as it is supplied.
+  bool _showMissing = false;
   String? _draftId;
   String? _startingWeekId;
   // The block the starting week is in, kept so a week removed by shortening
   // can fall back to that block's last remaining week.
   String? _startingBlockId;
 
-  bool get _canSave => _nameController.text.trim().isNotEmpty;
+  bool get _hasName => _nameController.text.trim().isNotEmpty;
+
+  /// A plan needs a name and at least one exercise. Save stays tappable
+  /// either way, so it can say what is missing instead of greying out.
+  bool get _isReady => _hasName && _exercises.isNotEmpty;
+
+  String? get _missingHint => switch ((_hasName, _exercises.isNotEmpty)) {
+    (false, false) => 'Needs a name and an exercise',
+    (false, true) => 'Needs a name',
+    (true, false) => 'Needs an exercise',
+    (true, true) => null,
+  };
 
   bool get _isDirty => _signature() != _initialSignature;
 
@@ -107,6 +134,8 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
       }
     }
 
+    if (!widget.isEdit) _selectedColor = _firstFreeColor();
+
     if (!widget.isEdit && _splitId != null) {
       final blocks = HiveService.blocksForSplit(_splitId!);
       if (blocks.isNotEmpty) {
@@ -125,7 +154,24 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   @override
   void dispose() {
     _nameController.dispose();
+    _nameFocus.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  /// The first palette colour no other plan in this split wears, so a new
+  /// plan is told apart on Home without a trip to the palette. Once all ten
+  /// are taken, the palette repeats in order.
+  int _firstFreeColor() {
+    final plans = HiveService.getPlans(splitId: _splitId);
+    final used = {
+      for (final plan in plans)
+        if (plan.planColor != null) planSlotOf(plan.planColor!),
+    };
+    for (var slot = 0; slot < kPlanColors.length; slot++) {
+      if (!used.contains(slot)) return kPlanColors[slot];
+    }
+    return kPlanColors[plans.length % kPlanColors.length];
   }
 
   String _signature() {
@@ -294,12 +340,10 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
   );
 
   Future<void> _savePlan() async {
-    if (_isSaving || _saved || !_canSave) return;
+    if (_isSaving || _saved) return;
 
-    if (_exercises.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Add at least one exercise to save')),
-      );
+    if (!_isReady) {
+      _explainMissing();
       return;
     }
 
@@ -374,6 +418,21 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
       // Storage assigns an identity before writing. Reuse it on retry even
       // when the write reports failure after assigning the identity.
       _draftId = plan.id;
+    }
+  }
+
+  /// Names what Save is waiting for, beside the thing that needs it, and puts
+  /// the cursor in the name when that is the gap.
+  void _explainMissing() {
+    setState(() => _showMissing = true);
+    if (!_hasName) {
+      _nameFocus.requestFocus();
+    } else if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+      );
     }
   }
 
@@ -463,6 +522,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     );
     if (!confirmed || !mounted) return;
     setState(() => _exercises.removeWhere((exercise) => exercise.id == id));
+    _exerciseKeys.remove(id);
   }
 
   void _addExercise(String name, [String? exerciseId]) {
@@ -479,14 +539,143 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
           id: _nextExerciseId++,
           name: name,
           exerciseId: id,
+          // Three working sets, the most common prescription, so a plan
+          // starts close to finished: adding a set is one tap, while
+          // removing one is a hold and a confirm.
           sets: [
-            ExerciseSetData(
-              reps: ExerciseCatalog.isTimed(name, id) ? 30 : 8,
-              weight: 0,
-            ),
+            for (var i = 0; i < kNewExerciseSets; i++)
+              ExerciseSetData(
+                reps: ExerciseCatalog.isTimed(name, id) ? 30 : 8,
+                weight: 0,
+              ),
           ],
           expanded: true,
         ),
+      );
+    });
+  }
+
+  /// Fills an empty plan from a common workout: its exercises with their set
+  /// and rep targets, and its name if the plan has none yet. Undo restores
+  /// both.
+  void _applyStarter(PlanStarter starter) {
+    final previousName = _nameController.text;
+    final nameIt = previousName.trim().isEmpty;
+    final added = <int>[];
+    setState(() {
+      for (final exercise in starter.exercises) {
+        final known = ExerciseCatalog.findByName(exercise.name);
+        final exerciseId =
+            known == null ? null : ExerciseCatalog.canonicalId(known.id);
+        final identity = ExerciseCatalog.identity(exercise.name, exerciseId);
+        if (_exercises.any(
+          (e) => ExerciseCatalog.identity(e.name, e.exerciseId) == identity,
+        )) {
+          continue;
+        }
+        final id = _nextExerciseId++;
+        added.add(id);
+        _exercises.add(
+          _EditorExercise(
+            id: id,
+            name: exercise.name,
+            exerciseId: exerciseId,
+            note: exercise.note,
+            sets: [
+              for (final reps in exercise.seedReps)
+                ExerciseSetData(reps: reps, weight: 0),
+            ],
+            // Folded, a whole workout fits on screen and each row previews
+            // its targets; open one to set its weights.
+            expanded: false,
+          ),
+        );
+      }
+    });
+    if (nameIt) _nameController.text = starter.name;
+    if (added.isEmpty) return;
+
+    final count = added.length;
+    final messenger = ScaffoldMessenger.of(context)..hideCurrentSnackBar();
+    final undo = messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          'Added $count ${count == 1 ? 'exercise' : 'exercises'} '
+          'from ${starter.name}',
+        ),
+        // An Undo that outlives the moment would strip the starter's
+        // exercises after the plan had moved on, so it times out.
+        persist: false,
+        duration: const Duration(seconds: 6),
+        action: SnackBarAction(
+          label: 'Undo',
+          textColor: accentColor(context),
+          onPressed: () {
+            if (!mounted) return;
+            setState(() => _exercises.removeWhere((e) => added.contains(e.id)));
+            if (nameIt && _nameController.text == starter.name) {
+              _nameController.text = previousName;
+            }
+          },
+        ),
+      ),
+    );
+    _starterUndo = undo;
+    undo.closed.then((_) {
+      if (identical(_starterUndo, undo)) _starterUndo = null;
+    });
+  }
+
+  /// Withdraws a starter's Undo once the reader moves on to building the plan
+  /// by hand.
+  void _dismissStarterUndo() {
+    if (_starterUndo == null) return;
+    _starterUndo = null;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+  }
+
+  /// Folds every exercise when any is open, otherwise opens them all: a
+  /// folded list is easier to review and to reorder.
+  void _toggleAllExpanded() {
+    final expand = !_exercises.any((exercise) => exercise.expanded);
+    setState(() {
+      for (final exercise in _exercises) {
+        exercise.expanded = expand;
+      }
+    });
+  }
+
+  GlobalKey _keyFor(int exerciseId) =>
+      _exerciseKeys.putIfAbsent(exerciseId, GlobalKey.new);
+
+  /// Brings newly added exercises into view: as many as fit, and never past
+  /// the first of them. Nothing moves when they are already on screen.
+  void _revealAdded(List<int> ids) {
+    if (ids.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final first = _exerciseKeys[ids.first]?.currentContext;
+      final last = _exerciseKeys[ids.last]?.currentContext;
+      if (first == null || last == null) return;
+      // Resolve the destination with instant moves, then animate to it from
+      // where the reader was, so the list visibly slides to the new rows.
+      final position = _scrollController.position;
+      final start = position.pixels;
+      Scrollable.ensureVisible(
+        last,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+      Scrollable.ensureVisible(
+        first,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtStart,
+      );
+      final target = position.pixels;
+      if (target == start) return;
+      position.jumpTo(start);
+      position.animateTo(
+        target,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOutCubic,
       );
     });
   }
@@ -502,16 +691,23 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
     });
   }
 
-  void _showAddExerciseSheet() {
+  Future<void> _showAddExerciseSheet() async {
     // Unfocus the field itself: unfocusing the route's scope leaves the field
     // in that scope's history, so closing the sheet would refocus it.
     FocusManager.instance.primaryFocus?.unfocus();
-    showExercisePickerSheet(
+    _dismissStarterUndo();
+    final before = {for (final exercise in _exercises) exercise.id};
+    // Exercises already in the plan read as *Added* rather than as ticks, as
+    // in the workout: unticking one would throw away the targets set on it
+    // without a word. Removing stays with the card's own Delete.
+    await showExercisePickerSheet(
       context,
-      selectedExerciseNames: _exercises.map((exercise) => exercise.name),
+      selectedExerciseNames: const <String>[],
+      alreadyAddedExerciseNames: _exercises.map((exercise) => exercise.name),
       userId:
           _splitId == null ? null : HiveService.getSplitById(_splitId!)?.userId,
-      selectedExerciseIds: _exercises.map(
+      selectedExerciseIds: const <String>[],
+      alreadyAddedExerciseIds: _exercises.map(
         (e) => ExerciseCatalog.identity(e.name, e.exerciseId),
       ),
       onAddIdentified: _addExercise,
@@ -520,6 +716,13 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
       onRemove: _removeExercise,
       selectionOwner: 'plan',
     );
+    // Into an empty plan the new cards land just under the heading, already
+    // in view; scrolling would only carry the name away.
+    if (!mounted || before.isEmpty) return;
+    _revealAdded([
+      for (final exercise in _exercises)
+        if (!before.contains(exercise.id)) exercise.id,
+    ]);
   }
 
   Widget _buildReorderProxyDecorator(
@@ -570,9 +773,10 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
           title: Text(widget.isEdit ? 'Edit plan' : 'New plan'),
           actions: [
             _SaveButton(
-              canSave: _canSave && !_isSaving && !_saved,
+              ready: _isReady,
+              missingHint: _missingHint,
               isSaving: _isSaving,
-              onSave: _savePlan,
+              onSave: _isSaving || _saved ? null : _savePlan,
             ),
             const SizedBox(width: AppSpacing.sm),
           ],
@@ -590,6 +794,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                 child: AbsorbPointer(
                   absorbing: _isSaving,
                   child: SingleChildScrollView(
+                    controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(
                       AppSpacing.lg,
                       AppSpacing.xl,
@@ -609,7 +814,15 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                             // high on the screen.
                             _PlanNameField(
                               controller: _nameController,
+                              focusNode: _nameFocus,
+                              // Naming is the first step of a new plan, so
+                              // the cursor waits there; an edit opens calm.
+                              autofocus: !widget.isEdit,
                               marker: planColor,
+                              errorText:
+                                  _showMissing && !_hasName
+                                      ? 'Name this plan to save it'
+                                      : null,
                             ),
                             const SizedBox(height: AppSpacing.md),
                             Wrap(
@@ -650,10 +863,15 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                             const SizedBox(height: AppSpacing.xl),
                             _SectionHeading(
                               title: 'Exercises',
-                              count: _exercises.length,
-                              hint:
+                              count:
+                                  _exercises.isEmpty ? null : _exercises.length,
+                              trailing:
                                   _exercises.length > 1
-                                      ? 'Drag to reorder'
+                                      ? _FoldAllButton(
+                                        expand:
+                                            !_exercises.any((e) => e.expanded),
+                                        onTap: _toggleAllExpanded,
+                                      )
                                       : null,
                             ),
                             if (_exercises.isNotEmpty)
@@ -662,12 +880,22 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                                   bottom: AppSpacing.md,
                                 ),
                                 child: Text(
-                                  'Weight, reps or seconds, and RPE. Hold a set to delete it.',
+                                  _exercises.length > 1
+                                      ? 'Tap a target to change it, or hold '
+                                          'a set to delete it. Drag the grip '
+                                          'to reorder exercises.'
+                                      : 'Tap a target to change it, or hold '
+                                          'a set to delete it.',
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
                               ),
                             if (_exercises.isEmpty)
-                              const _EmptyExercises()
+                              _EmptyExercises(
+                                starters: planStarters,
+                                onStarter:
+                                    _isSaving || _saved ? null : _applyStarter,
+                                showMissing: _showMissing,
+                              )
                             else
                               _buildExerciseList(),
                             // Room for the keypad below the last card, so
@@ -704,6 +932,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
           key: ValueKey(exercise.id),
           padding: const EdgeInsets.only(bottom: AppSpacing.lg),
           child: _ExerciseEditorSection(
+            key: _keyFor(exercise.id),
             exercise: exercise,
             splitId: _splitId,
             index: index,
@@ -743,59 +972,103 @@ class _EditorExercise {
   });
 }
 
-/// Save on the accent ground. Disabled falls back to the theme's quiet
-/// surface style, so a blank plan doesn't advertise an action it can't take.
+/// Save on the accent ground once the plan is complete. Until then it sits
+/// quietly on the control fill, so a blank plan doesn't advertise an action it
+/// can't finish, but it stays tappable: a tap names what is missing, where a
+/// greyed-out button would leave the reader guessing.
 class _SaveButton extends StatelessWidget {
-  final bool canSave;
+  final bool ready;
+
+  /// What the plan still needs, read to screen readers with the button.
+  final String? missingHint;
   final bool isSaving;
-  final VoidCallback onSave;
+
+  /// Null only while saving or after saving.
+  final VoidCallback? onSave;
 
   const _SaveButton({
-    required this.canSave,
+    required this.ready,
+    required this.missingHint,
     required this.isSaving,
     required this.onSave,
   });
 
   @override
   Widget build(BuildContext context) {
+    final quiet = !ready;
     // AppBar stretches its actions to the toolbar height; keep a 48px button.
     return Center(
-      child: ElevatedButton(
-        onPressed: canSave ? onSave : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: accentFillColor(context),
-          foregroundColor: onAccentColor(context),
-          // A 40px pill; the padded tap target keeps it 48px to the finger.
-          minimumSize: const Size(72, 40),
-          tapTargetSize: MaterialTapTargetSize.padded,
-          shape: const RoundedRectangleBorder(borderRadius: AppRadius.pill),
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg + 2),
+      child: Semantics(
+        hint: ready ? null : missingHint,
+        child: ElevatedButton(
+          onPressed: onSave,
+          style: ElevatedButton.styleFrom(
+            backgroundColor:
+                quiet ? controlFillColor(context) : accentFillColor(context),
+            foregroundColor:
+                quiet ? textSecondaryColor(context) : onAccentColor(context),
+            // A 40px pill; the padded tap target keeps it 48px to the finger.
+            minimumSize: const Size(72, 40),
+            tapTargetSize: MaterialTapTargetSize.padded,
+            shape: const RoundedRectangleBorder(borderRadius: AppRadius.pill),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg + 2),
+          ),
+          child:
+              isSaving
+                  ? const ActionProgress('Saving plan')
+                  : const Text('Save'),
         ),
-        child:
-            isSaving ? const ActionProgress('Saving plan') : const Text('Save'),
       ),
     );
   }
 }
 
+/// *Collapse all* while any exercise is open, *Expand all* once every one is
+/// folded.
+class _FoldAllButton extends StatelessWidget {
+  final bool expand;
+  final VoidCallback onTap;
+
+  const _FoldAllButton({required this.expand, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: onTap,
+      style: TextButton.styleFrom(
+        foregroundColor: accentColor(context),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+        visualDensity: VisualDensity.compact,
+        tapTargetSize: MaterialTapTargetSize.padded,
+      ),
+      icon: Icon(
+        expand ? LucideIcons.chevronsUpDown : LucideIcons.chevronsDownUp,
+        size: 16,
+      ),
+      label: Text(expand ? 'Expand all' : 'Collapse all'),
+    );
+  }
+}
+
 /// A sentence-case label over one section of the editor, with an optional
-/// count beside it and a muted hint pushed to the far edge.
+/// count beside it and an action pushed to the far edge.
 class _SectionHeading extends StatelessWidget {
   final String title;
   final int? count;
-  final String? hint;
+  final Widget? trailing;
 
-  const _SectionHeading({required this.title, this.count, this.hint});
+  const _SectionHeading({required this.title, this.count, this.trailing});
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      padding: EdgeInsets.only(
+        // The action's padded target supplies its own breathing room.
+        bottom: trailing == null ? AppSpacing.sm : 0,
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
         children: [
           Semantics(
             header: true,
@@ -813,17 +1086,8 @@ class _SectionHeading extends StatelessWidget {
               style: textTheme.titleSmall?.copyWith(color: secondary),
             ),
           ],
-          const SizedBox(width: AppSpacing.md),
-          if (hint != null)
-            Expanded(
-              child: Text(
-                hint!,
-                textAlign: TextAlign.end,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: textTheme.bodySmall?.copyWith(color: secondary),
-              ),
-            ),
+          const Spacer(),
+          if (trailing != null) trailing!,
         ],
       ),
     );
@@ -832,12 +1096,21 @@ class _SectionHeading extends StatelessWidget {
 
 class _PlanNameField extends StatelessWidget {
   final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool autofocus;
 
   /// The plan's colour, shown as the same bar the workout header leads with,
   /// so the name and colour read as one identity while they are being chosen.
   final Color marker;
+  final String? errorText;
 
-  const _PlanNameField({required this.controller, required this.marker});
+  const _PlanNameField({
+    required this.controller,
+    required this.focusNode,
+    required this.autofocus,
+    required this.marker,
+    this.errorText,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -855,12 +1128,15 @@ class _PlanNameField extends StatelessWidget {
       label: 'Plan name',
       child: TextField(
         controller: controller,
+        focusNode: focusNode,
+        autofocus: autofocus,
         textCapitalization: TextCapitalization.sentences,
         textInputAction: TextInputAction.done,
         style: title,
         decoration: InputDecoration(
           hintText: 'Plan name',
           hintStyle: title?.copyWith(color: textSecondaryColor(context)),
+          errorText: errorText,
           filled: false,
           isDense: true,
           contentPadding: const EdgeInsets.only(
@@ -875,6 +1151,14 @@ class _PlanNameField extends StatelessWidget {
           ),
           focusedBorder: UnderlineInputBorder(
             borderSide: BorderSide(color: accentColor(context), width: 2),
+          ),
+          // The same rule in the error colour, never the theme's ring: the
+          // name stays a title, not a boxed field.
+          errorBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: errorColor(context)),
+          ),
+          focusedErrorBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: errorColor(context), width: 2),
           ),
           prefixIconConstraints: const BoxConstraints(minWidth: 0),
           prefixIcon: Padding(
@@ -1060,6 +1344,7 @@ class _ExerciseEditorSection extends StatelessWidget {
   final VoidCallback onSetAdded;
 
   const _ExerciseEditorSection({
+    super.key,
     required this.exercise,
     this.splitId,
     required this.index,
@@ -1406,41 +1691,142 @@ class _FooterAction extends StatelessWidget {
   }
 }
 
-/// Shown in place of the exercise list until the first one is added.
+/// Shown in place of the exercise list until the first one is added: the two
+/// ways to begin, the library below and a common workout to adapt.
+///
+/// It sits on the page rather than in a box. A ground means tappable, and
+/// only the starter pills are.
 class _EmptyExercises extends StatelessWidget {
-  const _EmptyExercises();
+  final List<PlanStarter> starters;
+  final ValueChanged<PlanStarter>? onStarter;
+
+  /// Whether Save has asked for an exercise, so the gap is named here.
+  final bool showMissing;
+
+  const _EmptyExercises({
+    required this.starters,
+    required this.onStarter,
+    required this.showMissing,
+  });
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.lg,
-        vertical: AppSpacing.xl,
-      ),
-      // An empty state is a quiet invitation, not a box to fill in.
-      decoration: BoxDecoration(
-        color: controlFillColor(context),
-        borderRadius: AppRadius.card,
-      ),
-      child: Column(
-        children: [
-          Icon(LucideIcons.dumbbell, size: 24, color: secondary),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'No exercises yet',
-            textAlign: TextAlign.center,
-            style: textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Pick from the exercise library or create your own, then set '
-            'target weights, reps or seconds and optional RPE for each set.',
-            textAlign: TextAlign.center,
-            style: textTheme.bodyMedium?.copyWith(color: secondary),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Add exercises from the library, or start from a common workout '
+          'and adjust its targets.',
+          style: textTheme.bodyMedium?.copyWith(color: secondary),
+        ),
+        if (showMissing) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Semantics(
+            liveRegion: true,
+            child: Row(
+              children: [
+                Icon(
+                  LucideIcons.circleAlert,
+                  size: 16,
+                  color: errorColor(context),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'Add at least one exercise to save',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: errorColor(context),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
+        if (starters.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.xl),
+          Semantics(
+            header: true,
+            child: Text(
+              'Start from',
+              style: textTheme.titleSmall?.copyWith(
+                color: textPrimaryColor(context),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final starter in starters)
+                _StarterPill(
+                  starter: starter,
+                  onTap: onStarter == null ? null : () => onStarter!(starter),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// A common workout as a pill. The exercise count is read aloud but not
+/// shown: a bare figure beside *Push day* reads as part of the name.
+class _StarterPill extends StatelessWidget {
+  final PlanStarter starter;
+  final VoidCallback? onTap;
+
+  const _StarterPill({required this.starter, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final count = starter.exercises.length;
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: 'Start from ${starter.name}, $count exercises',
+      onTap: onTap,
+      excludeSemantics: true,
+      child: Material(
+        color: controlFillColor(context),
+        borderRadius: AppRadius.pill,
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 44),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    LucideIcons.plus,
+                    size: 16,
+                    color:
+                        onTap == null
+                            ? textSecondaryColor(context)
+                            : accentColor(context),
+                  ),
+                  const SizedBox(width: AppSpacing.xs + AppSpacing.xxs),
+                  Text(
+                    starter.name,
+                    style: textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: textPrimaryColor(context),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

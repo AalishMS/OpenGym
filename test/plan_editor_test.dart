@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:gymapp/data/plan_colors.dart';
+import 'package:gymapp/data/plan_starters.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart' as gym;
@@ -354,14 +355,332 @@ void main() {
     expect(find.text('New plan'), findsNothing);
   });
 
-  testWidgets('blank plan name disables save', (tester) async {
-    await pumpEditor(tester);
-    final save = tester.widget<InkWell>(
-      find
-          .ancestor(of: find.text('Save'), matching: find.byType(InkWell))
-          .first,
+  testWidgets('an incomplete plan keeps Save quiet but says what is missing', (
+    tester,
+  ) async {
+    await pumpEditorWithProvider(tester);
+    final context = tester.element(find.byType(PlanEditorScreen));
+    Color? saveGround() =>
+        tester
+            .widget<Material>(
+              find
+                  .descendant(
+                    of: find.ancestor(
+                      of: find.text('Save'),
+                      matching: find.byType(ElevatedButton),
+                    ),
+                    matching: find.byType(Material),
+                  )
+                  .first,
+            )
+            .color;
+
+    // Not advertised as ready, but still a button a reader can press.
+    expect(saveGround(), controlFillColor(context));
+    expect(find.text('Name this plan to save it'), findsNothing);
+    expect(find.text('Add at least one exercise to save'), findsNothing);
+
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Name this plan to save it'), findsOneWidget);
+    expect(find.text('Add at least one exercise to save'), findsOneWidget);
+    expect(HiveService.getPlans(), isEmpty);
+    final name = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byType(TextField).first,
+        matching: find.byType(EditableText),
+      ),
     );
-    expect(save.onTap, isNull);
+    expect(name.focusNode.hasFocus, isTrue);
+
+    // Each message clears as soon as its gap is filled.
+    await tester.enterText(find.byType(TextField).first, 'Push');
+    await tester.pumpAndSettle();
+    expect(find.text('Name this plan to save it'), findsNothing);
+    expect(find.text('Add at least one exercise to save'), findsOneWidget);
+    expect(saveGround(), controlFillColor(context));
+
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Push day')));
+    await tester.pumpAndSettle();
+    expect(find.text('Add at least one exercise to save'), findsNothing);
+    expect(saveGround(), accentFillColor(context));
+  });
+
+  testWidgets('a new plan focuses its name and takes an unused colour', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      final box = Hive.box<WorkoutPlan>(HiveService.plansBox);
+      await box.add(
+        WorkoutPlan(name: 'A', exercises: [], planColor: kPlanColors[0]),
+      );
+      await box.add(
+        WorkoutPlan(name: 'B', exercises: [], planColor: kPlanColors[1]),
+      );
+      await box.add(
+        WorkoutPlan(name: 'C', exercises: [], planColor: kPlanColors[3]),
+      );
+    });
+    await pumpEditor(tester);
+
+    final name = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byType(TextField).first,
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(name.focusNode.hasFocus, isTrue);
+
+    await tester.tap(find.text('Change color'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Plan color 3')),
+      matchesSemantics(
+        label: 'Plan color 3',
+        isSelected: true,
+        isButton: true,
+        hasTapAction: true,
+        hasSelectedState: true,
+      ),
+    );
+    // Picking the default is not an edit.
+    await tester.tap(find.byTooltip('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsNothing);
+  });
+
+  testWidgets('editing a plan leaves the name unfocused', (tester) async {
+    await pumpEditorWithPlan(
+      tester,
+      WorkoutPlan(
+        name: 'Push',
+        exercises: [ExerciseTemplate(name: 'Bench Press', sets: 1)],
+      ),
+    );
+    final name = tester.widget<EditableText>(
+      find.descendant(
+        of: find.byType(TextField).first,
+        matching: find.byType(EditableText),
+      ),
+    );
+    expect(name.focusNode.hasFocus, isFalse);
+  });
+
+  testWidgets('a starter fills the plan, names it, and can be undone', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    for (final label in [
+      'Push day',
+      'Pull day',
+      'Leg day',
+      'Upper body',
+      'Lower body',
+      'Full body',
+    ]) {
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
+    final pill = find.bySemanticsLabel(RegExp('^Start from Push day'));
+    expect(tester.getSize(pill).height, greaterThanOrEqualTo(44));
+
+    await tester.tap(pill);
+    await tester.pumpAndSettle();
+    final push = planStarters.firstWhere((s) => s.name == 'Push day');
+    expect(
+      tester
+          .widget<EditableText>(find.byType(EditableText).first)
+          .controller
+          .text,
+      'Push day',
+    );
+    expect(find.text('Bench Press'), findsOneWidget);
+    // Starters arrive folded, each row previewing its targets.
+    expect(find.bySemanticsLabel('Set 1 Kg'), findsNothing);
+    expect(find.textContaining('3 × 8', findRichText: true), findsWidgets);
+    expect(
+      find.text('Added ${push.exercises.length} exercises from Push day'),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.text('Undo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bench Press'), findsNothing);
+    expect(
+      tester
+          .widget<EditableText>(find.byType(EditableText).first)
+          .controller
+          .text,
+      isEmpty,
+    );
+    expect(find.text('Leg day'), findsOneWidget);
+  });
+
+  testWidgets('a starter\'s Undo is withdrawn once the picker opens', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Pull day')));
+    await tester.pumpAndSettle();
+    expect(find.text('Undo'), findsOneWidget);
+
+    await tester.tap(find.text('Add exercise'));
+    await tester.pumpAndSettle();
+    expect(find.text('Undo'), findsNothing);
+    await closeExercisePicker(tester);
+    expect(find.text('Undo'), findsNothing);
+    expect(find.text('Barbell Row'), findsOneWidget);
+  });
+
+  testWidgets('a starter keeps a name the reader already typed', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    await tester.enterText(find.byType(TextField).first, 'Monday');
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Leg day')));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<EditableText>(find.byType(EditableText).first)
+          .controller
+          .text,
+      'Monday',
+    );
+    expect(find.text('Squat'), findsOneWidget);
+  });
+
+  testWidgets('every starter resolves to catalog exercises with targets', (
+    tester,
+  ) async {
+    expect(planStarters.map((s) => s.name), [
+      'Push day',
+      'Pull day',
+      'Leg day',
+      'Upper body',
+      'Lower body',
+      'Full body',
+    ]);
+    for (final starter in planStarters) {
+      expect(starter.exercises, isNotEmpty, reason: starter.name);
+      for (final exercise in starter.exercises) {
+        expect(
+          ExerciseCatalog.findByName(exercise.name),
+          isNotNull,
+          reason: '${starter.name}: ${exercise.name}',
+        );
+        expect(exercise.seedReps, isNotEmpty);
+      }
+    }
+  });
+
+  testWidgets('collapse all folds every exercise and expand all reopens', (
+    tester,
+  ) async {
+    await pumpEditorWithPlan(
+      tester,
+      WorkoutPlan(
+        name: 'Push',
+        exercises: [
+          ExerciseTemplate(
+            name: 'Bench Press',
+            sets: 1,
+            setTargets: [SetTemplate(reps: 5, weight: 80)],
+          ),
+          ExerciseTemplate(
+            name: 'Barbell Row',
+            sets: 1,
+            setTargets: [SetTemplate(reps: 8, weight: 60)],
+          ),
+        ],
+      ),
+    );
+    expect(find.bySemanticsLabel('Set 1 Kg'), findsNWidgets(2));
+    await tester.tap(find.text('Collapse all'));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('Set 1 Kg'), findsNothing);
+    expect(find.text('Expand all'), findsOneWidget);
+
+    // One open exercise turns the action back into Collapse all.
+    await tester.tap(find.text('Bench Press'));
+    await tester.pumpAndSettle();
+    expect(find.text('Collapse all'), findsOneWidget);
+    await tester.tap(find.text('Collapse all'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Expand all'));
+    await tester.pumpAndSettle();
+    expect(find.bySemanticsLabel('Set 1 Kg'), findsNWidgets(2));
+  });
+
+  testWidgets('exercises already in the plan are marked Added in the picker', (
+    tester,
+  ) async {
+    await pumpEditorWithPlan(
+      tester,
+      WorkoutPlan(
+        name: 'Push',
+        exercises: [
+          ExerciseTemplate(
+            name: 'Bench Press',
+            sets: 2,
+            setTargets: [
+              SetTemplate(reps: 5, weight: 80),
+              SetTemplate(reps: 5, weight: 80),
+            ],
+          ),
+        ],
+      ),
+    );
+    await openExerciseGroup(tester);
+    expect(find.text('Added'), findsOneWidget);
+    expect(find.text('Selected (0)'), findsOneWidget);
+
+    // A tap on it no longer drops the exercise and its targets.
+    await tester.tap(find.text('Bench Press').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Selected (0)'), findsOneWidget);
+    await closeExercisePicker(tester);
+    expect(find.text('80'), findsNWidgets(2));
+  });
+
+  testWidgets('exercises added to a long plan are scrolled into view', (
+    tester,
+  ) async {
+    await pumpEditorWithPlan(
+      tester,
+      WorkoutPlan(
+        name: 'Push',
+        exercises: [
+          for (final name in [
+            'Bench Press',
+            'Incline Bench Press',
+            'Dumbbell Fly',
+            'Cable Fly',
+          ])
+            ExerciseTemplate(
+              name: name,
+              sets: 3,
+              setTargets: [
+                for (var i = 0; i < 3; i++) SetTemplate(reps: 8, weight: 60),
+              ],
+            ),
+        ],
+      ),
+    );
+    await openExerciseGroup(tester, group: 'Back');
+    await tester.tap(find.text('Barbell Row'));
+    await tester.pumpAndSettle();
+    await closeExercisePicker(tester);
+
+    final row = find.text('Barbell Row');
+    expect(row, findsOneWidget);
+    final bar = tester.getTopLeft(
+      find.ancestor(
+        of: find.text('Add exercise'),
+        matching: find.byType(ElevatedButton),
+      ),
+    );
+    final top = tester.getTopLeft(row).dy;
+    expect(top, greaterThan(kToolbarHeight));
+    expect(top, lessThan(bar.dy));
   });
 
   testWidgets('save control uses centered unbracketed text', (tester) async {
@@ -381,7 +700,9 @@ void main() {
   ) async {
     await pumpEditor(tester);
     await tester.enterText(find.byType(TextField).first, 'Push Day');
-    // The label's colour animates in once Save enables.
+    // Save turns to the accent once the plan has a name and an exercise.
+    await tester.tap(find.bySemanticsLabel(RegExp('^Start from Push day')));
+    // The label's colour animates in once Save is ready.
     await tester.pumpAndSettle();
 
     final context = tester.element(find.byType(PlanEditorScreen));
@@ -681,7 +1002,7 @@ void main() {
     );
   });
 
-  testWidgets('new exercise starts with one set and icon footer actions', (
+  testWidgets('new exercise starts with three sets and icon footer actions', (
     tester,
   ) async {
     await pumpEditor(tester);
@@ -690,7 +1011,10 @@ void main() {
     await tester.pumpAndSettle();
     await closeExercisePicker(tester);
 
+    expect(kNewExerciseSets, 3);
     expect(find.bySemanticsLabel('Set 1 Kg'), findsOneWidget);
+    expect(find.bySemanticsLabel('Set 3 Kg'), findsOneWidget);
+    expect(find.bySemanticsLabel('Set 4 Kg'), findsNothing);
     expect(find.text('[+ ADD SET]'), findsNothing);
     expect(find.text('[DELETE]'), findsNothing);
     expect(find.bySemanticsLabel('Add set'), findsOneWidget);
@@ -736,22 +1060,13 @@ void main() {
     await closeExercisePicker(tester);
     await tester.tap(find.bySemanticsLabel('Set 1 Kg'));
     await tester.pumpAndSettle();
-    for (final key in [
-      '5',
-      '0',
-      '.',
-      '2',
-      '5',
-      'Next',
-      '1',
-      '2',
-      'RPE',
-      '8',
-      'Done',
-    ]) {
+    for (final key in ['5', '0', '.', '2', '5', 'Next', '1', '2', 'RPE', '8']) {
       await tester.tap(find.text(key).last);
       await tester.pumpAndSettle();
     }
+    // More sets follow, so the keypad's action is Next rather than Done.
+    await tester.tap(find.bySemanticsLabel('Hide keypad'));
+    await tester.pumpAndSettle();
     await tester.runAsync(() async {
       await tester.tap(find.text('Save'));
       await SyncService.instance.runExclusiveLocalMutation(() async {});
