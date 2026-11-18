@@ -134,7 +134,11 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
                             // space it takes eases, so the chevron glides
                             // rather than jumps to a longer or shorter name.
                             child: StateSwitcher(
-                              animateSize: true,
+                              // Off under reduced motion: StateSwitcher's
+                              // AnimatedSize asserts when a size change gets
+                              // no time.
+                              animateSize:
+                                  !MediaQuery.disableAnimationsOf(context),
                               alignment: AlignmentDirectional.centerStart,
                               child: _SplitName(
                                 active.name,

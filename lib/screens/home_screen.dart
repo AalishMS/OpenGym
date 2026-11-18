@@ -482,7 +482,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 onPressed: () => setState(() => _managing = !_managing),
                 child: StateSwitcher(
                   key: ValueKey('manage-label-$_manageReset'),
-                  animateSize: true,
+                  // Off under reduced motion: StateSwitcher's AnimatedSize
+                  // asserts when a size change gets no time.
+                  animateSize: !MediaQuery.disableAnimationsOf(context),
                   alignment: Alignment.center,
                   child: Text(
                     _managing ? 'Done' : 'Manage',
@@ -496,7 +498,9 @@ class _HomeScreenState extends State<HomeScreen> {
           // place, in step with the summary folding above them.
           StateSwitcher(
             key: ValueKey('plans-$_manageReset'),
-            animateSize: true,
+            // Off under reduced motion: StateSwitcher's AnimatedSize
+            // asserts when a size change gets no time.
+            animateSize: !MediaQuery.disableAnimationsOf(context),
             child:
                 _managing
                     ? Column(
