@@ -56,7 +56,7 @@ class StateSwitcher extends StatelessWidget {
       return switcher;
     }
     return AnimatedSize(
-      duration: AppMotion.of(context, AppMotion.standard),
+      duration: AppMotion.standard,
       curve: AppMotion.curve,
       alignment: alignment,
       child: switcher,

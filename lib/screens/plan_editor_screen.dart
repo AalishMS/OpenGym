@@ -2103,9 +2103,7 @@ class _EditorHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StateSwitcher(
-      // AnimatedSize can't settle in zero time (it re-dirties its own
-      // layout), so under reduced motion the size simply changes.
-      animateSize: !MediaQuery.disableAnimationsOf(context),
+      animateSize: true,
       child: Text(
         text,
         key: ValueKey(text),

@@ -822,7 +822,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // A subtitle that changes with the switch crosses to the new line, and
       // the row eases to its new height rather than shoving what's below.
       subtitle: StateSwitcher(
-        animateSize: !MediaQuery.disableAnimationsOf(context),
+        animateSize: true,
         child: Text(subtitle, key: ValueKey(subtitle)),
       ),
       value: value,
@@ -872,7 +872,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ).textTheme.titleSmall?.copyWith(color: textColor),
                       ),
                       StateSwitcher(
-                        animateSize: !MediaQuery.disableAnimationsOf(context),
+                        animateSize: true,
                         child: Text(
                           subtitle,
                           key: ValueKey(subtitleState ?? subtitle),
