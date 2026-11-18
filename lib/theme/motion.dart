@@ -62,6 +62,14 @@ abstract final class AppMotion {
   /// browser).
   static const double shift = 24;
 
+  /// How far a page travels sideways when a swipe trades it for another, for
+  /// a page [width] wide: a quarter of it, kept between 3 and 6 × [shift].
+  /// The workout's plan switch is the case it is for. It follows a finger
+  /// that has just carried the page a long way, so a [shift] would read as no
+  /// move at all, while a whole width would make the eye chase it.
+  static double swipeShift(double width) =>
+      (width / 4).clamp(shift * 3, shift * 6);
+
   /// How small an object gets when it moves in scale: a card giving under the
   /// finger (`PressScale`), a dialog arriving. Scale is a hint, never a zoom.
   static const double scale = 0.97;
@@ -70,8 +78,9 @@ abstract final class AppMotion {
   /// back to rest, carrying the release velocity, without overshoot. Drive it
   /// with `controller.animateWith(SpringSimulation(AppMotion.settle, from, to,
   /// velocity))`; from a short pull it is within a pixel of rest in about
-  /// [standard]. The workout's plan swipe is the case it is for. Under reduced
-  /// motion, jump to rest.
+  /// [standard]. The workout's plan swipe is the case it is for: a log let go
+  /// short of a switch springs back on it, and one that switches carries on
+  /// out on it at the hand's speed. Under reduced motion, jump to rest.
   static final SpringDescription settle = SpringDescription.withDampingRatio(
     mass: 1,
     stiffness: 700,
