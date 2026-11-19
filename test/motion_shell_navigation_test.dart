@@ -267,10 +267,14 @@ void main() {
       expect(dot().isLabelVisible, isFalse);
       await tester.pumpWidget(nav(3));
       await tester.pump(AppMotion.quick ~/ 2);
-      final ground = accentFillColor(tester.element(find.byType(Badge).first));
       expect(dot().isLabelVisible, isTrue);
-      expect(dot().backgroundColor!.a, inExclusiveRange(0, ground.a));
+      expect(dot().backgroundColor!.a, inExclusiveRange(0, 1));
       await tester.pumpAndSettle();
+      // Read the accent once the theme has settled. Each pumpWidget is a new
+      // MaterialApp, so AnimatedTheme lerps between two equal themes, and
+      // mid-lerp a solved tone can come back a rounding step off.
+      final ground = accentFillColor(tester.element(find.byType(Badge).first));
+      expect(ground.a, 1);
       expect(dot().backgroundColor, ground);
 
       await tester.pumpWidget(nav(null));

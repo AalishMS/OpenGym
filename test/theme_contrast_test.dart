@@ -13,7 +13,6 @@
 library;
 
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -153,11 +152,29 @@ void main() {
             what: '${accent.name} ${brightness.name} wordmark',
           );
         }
-        expect(
-          oklchOf(scheme.brandAccent).c,
-          greaterThan(oklchOf(scheme.accent).c),
-          reason: '${accent.name} wordmark should be more vivid than controls',
-        );
+        if (brightness == Brightness.light) {
+          // Light mode darkens the accent for text, which mutes it; the
+          // wordmark keeps the signature chroma.
+          expect(
+            oklchOf(scheme.brandAccent).c,
+            greaterThan(oklchOf(scheme.accent).c),
+            reason:
+                '${accent.name} wordmark should be more vivid than controls',
+          );
+        } else {
+          // Dark mode's accent is the signature tone, and a separately solved
+          // wordmark read as a second, brighter colour beside it.
+          expect(
+            scheme.brandAccent,
+            scheme.accent,
+            reason: '${accent.name} dark wordmark is the accent itself',
+          );
+          expect(
+            scheme.accentFill,
+            scheme.accent,
+            reason: '${accent.name} dark fill is the accent itself',
+          );
+        }
       }
     }
   });
@@ -367,9 +384,16 @@ void main() {
 
           // The lift is a perceptual step, not a ratio: near black, WCAG's
           // +0.05 term makes the same ratio cost dark mode ~2.4x the step,
-          // which is how a "quiet" card once came out #2F2F2F. Big enough to
-          // see, small enough that dark mode still reads as black.
-          expect(raised - page, inInclusiveRange(0.03, 0.06));
+          // which is how a "quiet" card once came out #2F2F2F (0.146). Big
+          // enough to see, small enough that dark mode still reads as black.
+          // Dark mode's range sits higher: it has no shadow, and its edge is
+          // only lit along the top.
+          expect(
+            raised - page,
+            isDark
+                ? inInclusiveRange(0.05, 0.08)
+                : inInclusiveRange(0.03, 0.06),
+          );
 
           // The control fill steps away from *both* grounds, so a field or a
           // stepper reads on the page and inside a sheet: below the page in
@@ -384,33 +408,39 @@ void main() {
       }
     }
 
-    test('both modes lift by about the same amount', () {
-      double liftFor(Brightness brightness) {
-        final scheme = deriveColorScheme(
-          SettingsProvider.accents.first.seed,
-          brightness,
-        );
-        return oklchOf(scheme.surface).l - oklchOf(scheme.background).l;
-      }
+    test(
+      'dark mode lifts a little further than light, never to a grey box',
+      () {
+        double liftFor(Brightness brightness) {
+          final scheme = deriveColorScheme(
+            SettingsProvider.accents.first.seed,
+            brightness,
+          );
+          return oklchOf(scheme.surface).l - oklchOf(scheme.background).l;
+        }
 
-      final dark = liftFor(Brightness.dark);
-      final light = liftFor(Brightness.light);
-      expect(
-        math.max(dark, light) / math.min(dark, light),
-        lessThan(1.5),
-        reason:
-            'lift is ${dark.toStringAsFixed(3)} dark vs '
-            '${light.toStringAsFixed(3)} light',
-      );
-    });
+        // Light mode's card also casts a shadow; dark mode's has only the fill
+        // and a lit top edge, so its fill steps further. Not much further:
+        // the #2F2F2F grey box was 3.5x light mode's lift.
+        final dark = liftFor(Brightness.dark);
+        final light = liftFor(Brightness.light);
+        expect(
+          dark / light,
+          inInclusiveRange(1.0, 1.75),
+          reason:
+              'lift is ${dark.toStringAsFixed(3)} dark vs '
+              '${light.toStringAsFixed(3)} light',
+        );
+      },
+    );
 
     testWidgets('a raised card always has an edge as well as a fill', (
       tester,
     ) async {
       // The fill step is small on purpose, so it never separates a card on its
       // own: that was the invisible-card bug (1.10:1, no edge). Light mode
-      // casts a shadow; dark mode, where a shadow has nothing to fall on, draws
-      // a hairline.
+      // casts a shadow. Dark mode, where a shadow has nothing to fall on, lights
+      // the top edge; a hairline drawn all round made the card an outline.
       for (final brightness in Brightness.values) {
         late BuildContext context;
         await tester.pumpWidget(
@@ -448,14 +478,22 @@ void main() {
         );
         final side = (material.shape! as RoundedRectangleBorder).side;
 
-        if (brightness == Brightness.light) {
-          expect(raisedShadow(context), isNotEmpty);
-          expect(box.boxShadow, raisedShadow(context));
-          expect(decoration.boxShadow, raisedShadow(context));
-        } else {
-          expect(raisedShadow(context), isEmpty);
-          expect(side.color, hairlineColor(context));
-          expect(decoration.border, isNotNull);
+        expect(raisedShadow(context), isNotEmpty);
+        expect(box.boxShadow, raisedShadow(context));
+        expect(decoration.boxShadow, raisedShadow(context));
+        expect(side, BorderSide.none);
+        expect(decoration.border, isNull);
+        if (brightness == Brightness.dark) {
+          // A hard edge, lifted above the card and lighter than it, so the
+          // only part left showing is a lit band along the top.
+          final [edge] = raisedShadow(context);
+          expect(edge.blurRadius, 0);
+          expect(edge.offset.dy, lessThan(0));
+          expect(edge.offset.dx, 0);
+          expect(
+            oklchOf(edge.color).l,
+            greaterThan(oklchOf(surfaceColor(context)).l),
+          );
         }
         expect(material.color, surfaceColor(context));
       }

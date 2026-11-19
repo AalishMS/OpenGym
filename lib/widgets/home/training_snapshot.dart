@@ -207,6 +207,16 @@ class _DayColumn extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     // Read here so the bar also rebuilds as Home is covered and uncovered.
     final seen = TickerMode.valuesOf(context).enabled;
+    // A light fill on black looks bigger and heavier than the same shape on a
+    // light page. Full-width trained days became slabs that outweighed the
+    // next workout above them, and 3:1 grey pegs crowded the days still
+    // ahead. So dark mode draws slim pills, with untrained days as hairlines
+    // and today's peg the only one at the 3:1 border.
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final idle =
+        dark
+            ? (today ? borderColor(context) : hairlineColor(context))
+            : (today ? textSecondaryColor(context) : borderColor(context));
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
       child: Column(
@@ -215,27 +225,25 @@ class _DayColumn extends StatelessWidget {
             height: 52,
             child: Align(
               alignment: Alignment.bottomCenter,
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(end: trained ? 14 + 38 * share : 5),
-                duration:
-                    seen
-                        ? AppMotion.of(context, AppMotion.long)
-                        : Duration.zero,
-                curve: AppMotion.curve,
-                builder:
-                    (context, height, _) => Container(
-                      width: double.infinity,
-                      height: height,
-                      decoration: BoxDecoration(
-                        color:
-                            trained
-                                ? accentFillColor(context)
-                                : today
-                                ? textSecondaryColor(context)
-                                : borderColor(context),
-                        borderRadius: AppRadius.control,
+              child: FractionallySizedBox(
+                widthFactor: dark ? 0.42 : 1,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(end: trained ? 14 + 38 * share : 5),
+                  duration:
+                      seen
+                          ? AppMotion.of(context, AppMotion.long)
+                          : Duration.zero,
+                  curve: AppMotion.curve,
+                  builder:
+                      (context, height, _) => Container(
+                        width: double.infinity,
+                        height: height,
+                        decoration: BoxDecoration(
+                          color: trained ? accentFillColor(context) : idle,
+                          borderRadius: AppRadius.control,
+                        ),
                       ),
-                    ),
+                ),
               ),
             ),
           ),

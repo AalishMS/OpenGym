@@ -32,10 +32,20 @@ class HomePlanRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final name = titleCase(plan.name);
-    final markerGround = Color.alphaBlend(
-      planColorOf(plan.planColor, context).withAlpha(32),
-      isNext ? surfaceColor(context) : backgroundColor(context),
-    );
+    final planColor = planColorOf(plan.planColor, context);
+    // Light mode washes the marker in the plan's colour. A wash that faint over
+    // near-black is a dark, greyed tone, and a dark orange or yellow *is* brown
+    // or olive, so in dark mode the colour moves into the number instead, on
+    // the control fill. The plan colour is solved for 4.5:1 on that fill.
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final markerGround =
+        dark
+            ? controlFillColor(context)
+            : Color.alphaBlend(
+              planColor.withAlpha(32),
+              isNext ? surfaceColor(context) : backgroundColor(context),
+            );
+    final markerInk = dark ? planColor : onColor(markerGround);
     final exercises = plan.exercises.length;
     final sets = plan.exercises.fold<int>(
       0,
@@ -74,7 +84,7 @@ class HomePlanRow extends StatelessWidget {
                       style: AppTypography.figures(
                         fontSize: 15,
                         fontWeight: FontWeight.w600,
-                        color: onColor(markerGround),
+                        color: markerInk,
                       ),
                     ),
                   ),
