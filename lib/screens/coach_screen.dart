@@ -139,7 +139,10 @@ class _CoachScreenState extends State<CoachScreen> {
   /// Chat rows: every entry, and the progress line while a reply is in
   /// flight.
   static int _rowCount(CoachProvider coach) =>
-      coach.entries.length + (coach.sending ? 1 : 0);
+      _rowsFor(coach.entries, sending: coach.sending);
+
+  static int _rowsFor(List<CoachEntry> entries, {required bool sending}) =>
+      entries.length + (sending ? 1 : 0);
 
   /// Rows built this frame see the count from before it, so every row new
   /// in it arrives; afterwards they are settled.
@@ -176,11 +179,10 @@ class _CoachScreenState extends State<CoachScreen> {
 
   /// Space above an entry. A question opens a new turn, so it gets more room
   /// than the answer under it.
-  double _gapAbove(CoachProvider coach, int index) {
+  double _gapAbove(List<CoachEntry> entries, int index) {
     if (index == 0) return 0;
     final opensTurn =
-        index < coach.entries.length &&
-        coach.entries[index].role == CoachEntryRole.user;
+        index < entries.length && entries[index].role == CoachEntryRole.user;
     return opensTurn ? AppSpacing.xxl : AppSpacing.md;
   }
 
@@ -192,6 +194,7 @@ class _CoachScreenState extends State<CoachScreen> {
   /// from what was there doesn't, so nothing fades twice.
   Widget _buildRow(
     CoachProvider coach,
+    List<CoachEntry> entries,
     int index, {
     required int settledRows,
     required bool busy,
@@ -199,11 +202,11 @@ class _CoachScreenState extends State<CoachScreen> {
     final arrives = index >= settledRows;
     final Widget content;
     final Key key;
-    if (index == coach.entries.length) {
+    if (index == entries.length) {
       key = const ValueKey('coach-thinking');
       content = const _Thinking();
     } else {
-      final entry = coach.entries[index];
+      final entry = entries[index];
       // A question sent again (Try again) is the same line in the same
       // place, so it holds still rather than crossing to itself.
       key =
@@ -239,7 +242,11 @@ class _CoachScreenState extends State<CoachScreen> {
     final quota = coach.quota;
     final locked = coach.limitReached;
     final busy = coach.sending || locked;
-    final rows = _rowCount(coach);
+    // The conversation as of this build, which the list built from it keeps.
+    // A list on its way out goes on building rows as a fling carries it,
+    // after the provider may have cleared them for another split.
+    final entries = coach.entries;
+    final rows = _rowsFor(entries, sending: coach.sending);
     _settleRows(rows);
     _followConversation(rows);
 
@@ -317,7 +324,10 @@ class _CoachScreenState extends State<CoachScreen> {
                                           itemBuilder:
                                               (context, index) => Padding(
                                                 padding: EdgeInsets.only(
-                                                  top: _gapAbove(coach, index),
+                                                  top: _gapAbove(
+                                                    entries,
+                                                    index,
+                                                  ),
                                                 ),
                                                 // Read as each row is built,
                                                 // not when the list was: a row
@@ -328,6 +338,7 @@ class _CoachScreenState extends State<CoachScreen> {
                                                 // the count from before it.
                                                 child: _buildRow(
                                                   coach,
+                                                  entries,
                                                   index,
                                                   settledRows: _settledRows,
                                                   busy: busy,

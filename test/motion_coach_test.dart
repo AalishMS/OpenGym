@@ -512,6 +512,31 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('a chat cleared mid-fling finishes leaving with its own rows', (
+      tester,
+    ) async {
+      final fixture = await openCoach(tester);
+      for (var i = 0; i < 16; i++) {
+        await turn(tester, fixture, 'Question $i', 'Answer $i.\n' * 12);
+      }
+      await tester.pumpAndSettle();
+      final list = find.byType(ListView);
+      // Back to the top, then a fling down that is still travelling when
+      // the conversation clears, as it does when the active split changes.
+      await tester.drag(list, const Offset(0, 20000));
+      await tester.pumpAndSettle();
+      await tester.fling(list, const Offset(0, -200), 8000);
+      await tester.pump(const Duration(milliseconds: 16));
+      fixture.coach.resetForAccount();
+      for (var i = 0; i < 20; i++) {
+        await tester.pump(const Duration(milliseconds: 16));
+        expect(tester.takeException(), isNull);
+      }
+      await tester.pumpAndSettle();
+      expect(find.text(_welcome), findsOneWidget);
+      expect(find.byType(ListView), findsNothing);
+    });
+
     testWidgets('the connection notice folds open, and closed again', (
       tester,
     ) async {
