@@ -127,8 +127,14 @@ void main() {
       await tester.tap(
         find.byKey(ValueKey('block-measure-${BlockTrendMeasure.records}')),
       );
+      // The new line arrives where the old one was being read, from its
+      // first frame, and stays there once the old one has gone.
+      await tester.pump();
+      for (final state in tester.stateList<ScrollableState>(scrollable)) {
+        expect(state.position.pixels, offset);
+      }
       await tester.pumpAndSettle();
-      expect(position.pixels, offset);
+      expect(tester.state<ScrollableState>(scrollable).position.pixels, offset);
       expect(
         tester
             .widget<Text>(find.byKey(const ValueKey('block-trend-value')))

@@ -12,10 +12,17 @@ import 'package:flutter/widgets.dart';
 /// own controller and the leaving copy keeps its place. [onAttach] hands the
 /// screen each new controller as its copy arrives, for scrolling the copy on
 /// show back to the top, and [onDetach] reports one going with its copy.
+/// [initialScrollOffset] lets an arriving copy open where the leaving one
+/// was being read.
 class OwnScrollController extends StatefulWidget {
   /// Whether the scroll view's offset is kept in its `PageStorage`, as
   /// [ScrollController.keepScrollOffset].
   final bool keepScrollOffset;
+
+  /// Where this copy's scroll view starts, as
+  /// [ScrollController.initialScrollOffset]. Read once, when the copy
+  /// arrives.
+  final double initialScrollOffset;
 
   /// Called with the controller when this copy arrives.
   final ValueChanged<ScrollController>? onAttach;
@@ -30,6 +37,7 @@ class OwnScrollController extends StatefulWidget {
   const OwnScrollController({
     super.key,
     this.keepScrollOffset = true,
+    this.initialScrollOffset = 0,
     this.onAttach,
     this.onDetach,
     required this.builder,
@@ -42,6 +50,7 @@ class OwnScrollController extends StatefulWidget {
 class _OwnScrollControllerState extends State<OwnScrollController> {
   late final ScrollController _controller = ScrollController(
     keepScrollOffset: widget.keepScrollOffset,
+    initialScrollOffset: widget.initialScrollOffset,
   );
 
   @override

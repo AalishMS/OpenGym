@@ -9,6 +9,7 @@ import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
 import '../motion/state_switcher.dart';
+import '../own_scroll_controller.dart';
 import 'trend_line.dart';
 
 /// Presentation measures for the block timeline; persisted models stay unchanged.
@@ -49,7 +50,7 @@ extension BlockTrendMeasureValues on BlockTrendMeasure {
 
 /// The block order is the horizontal axis. Selection is shared with the block's
 /// totals and weekly detail below; only the plot browses horizontally.
-class BlockTrendChart extends StatelessWidget {
+class BlockTrendChart extends StatefulWidget {
   final List<BlockStatistics> blocks;
   final String selectedId;
   final BlockTrendMeasure measure;
@@ -68,7 +69,30 @@ class BlockTrendChart extends StatelessWidget {
   });
 
   @override
+  State<BlockTrendChart> createState() => _BlockTrendChartState();
+}
+
+class _BlockTrendChartState extends State<BlockTrendChart> {
+  /// The plot on show. A new measure or basis arrives as a new plot with its
+  /// own controller, opened where this one was being read, so comparing an
+  /// older block doesn't send the reader back to the newest.
+  ScrollController? _shown;
+
+  double get _shownOffset {
+    final shown = _shown;
+    return shown != null && shown.hasClients ? shown.offset : 0;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final BlockTrendChart(
+      :blocks,
+      :selectedId,
+      :measure,
+      :perWeek,
+      :weightUnit,
+      :onSelect,
+    ) = widget;
     if (blocks.isEmpty) return const SizedBox.shrink();
     final values = [
       for (final block in blocks) measure.valueFor(block, perWeek: perWeek),
@@ -116,87 +140,99 @@ class BlockTrendChart extends StatelessWidget {
             // moved, so the plot crosses to it rather than morphing; picking
             // a block only moves the marker, in place.
             StateSwitcher(
-              child: KeyedSubtree(
+              child: OwnScrollController(
                 key: ValueKey('block-trend-$measure-$perWeek'),
-                child: SingleChildScrollView(
-                  key: const ValueKey('block-trend-scroll'),
-                  scrollDirection: Axis.horizontal,
-                  reverse: true,
-                  child: SizedBox(
-                    width: width,
-                    height: height + 44 * scale,
-                    child: Stack(
-                      children: [
-                        SizedBox(
-                          width: width,
-                          height: height,
-                          child: CustomPaint(
-                            painter: TrendLinePainter(
-                              points: offsets,
-                              selected: selected,
-                              ink: accentColor(context),
-                              wash: accentMutedColor(context),
-                              ground: backgroundColor(context),
-                              guide: hairlineColor(context),
-                            ),
-                          ),
-                        ),
-                        for (var i = 0; i < blocks.length; i++)
-                          Positioned(
-                            left: i * pitch,
-                            width: pitch,
-                            top: 0,
-                            bottom: 0,
-                            child: Semantics(
-                              button: true,
-                              selected: i == selected,
-                              label:
-                                  '${blocks[i].block.name}, ${measure.label}, '
-                                  '${measure.format(values[i], weightUnit)}, '
-                                  '${perWeek ? 'per trained week' : 'block total'}',
-                              excludeSemantics: true,
-                              child: InkWell(
-                                key: ValueKey(
-                                  'block-point-${blocks[i].block.id}',
+                // The offset is carried from plot to plot here; a stored one
+                // could be stale and would win over it.
+                keepScrollOffset: false,
+                initialScrollOffset: _shownOffset,
+                onAttach: (scroll) => _shown = scroll,
+                onDetach: (scroll) {
+                  if (identical(_shown, scroll)) _shown = null;
+                },
+                builder:
+                    (context, scroll) => SingleChildScrollView(
+                      key: const ValueKey('block-trend-scroll'),
+                      controller: scroll,
+                      scrollDirection: Axis.horizontal,
+                      reverse: true,
+                      child: SizedBox(
+                        width: width,
+                        height: height + 44 * scale,
+                        child: Stack(
+                          children: [
+                            SizedBox(
+                              width: width,
+                              height: height,
+                              child: CustomPaint(
+                                painter: TrendLinePainter(
+                                  points: offsets,
+                                  selected: selected,
+                                  ink: accentColor(context),
+                                  wash: accentMutedColor(context),
+                                  ground: backgroundColor(context),
+                                  guide: hairlineColor(context),
                                 ),
-                                borderRadius: AppRadius.control,
-                                onTap: () => onSelect(blocks[i].block.id),
-                                child: Align(
-                                  alignment: Alignment.bottomCenter,
-                                  child: Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      AppSpacing.sm,
-                                      0,
-                                      AppSpacing.sm,
-                                      AppSpacing.xs,
+                              ),
+                            ),
+                            for (var i = 0; i < blocks.length; i++)
+                              Positioned(
+                                left: i * pitch,
+                                width: pitch,
+                                top: 0,
+                                bottom: 0,
+                                child: Semantics(
+                                  button: true,
+                                  selected: i == selected,
+                                  label:
+                                      '${blocks[i].block.name}, ${measure.label}, '
+                                      '${measure.format(values[i], weightUnit)}, '
+                                      '${perWeek ? 'per trained week' : 'block total'}',
+                                  excludeSemantics: true,
+                                  child: InkWell(
+                                    key: ValueKey(
+                                      'block-point-${blocks[i].block.id}',
                                     ),
-                                    child: Text(
-                                      blocks[i].block.name,
-                                      textAlign: TextAlign.center,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.labelMedium?.copyWith(
-                                        color:
-                                            i == selected
-                                                ? textPrimaryColor(context)
-                                                : textSecondaryColor(context),
-                                        fontWeight:
-                                            i == selected
-                                                ? FontWeight.w700
-                                                : FontWeight.w400,
+                                    borderRadius: AppRadius.control,
+                                    onTap: () => onSelect(blocks[i].block.id),
+                                    child: Align(
+                                      alignment: Alignment.bottomCenter,
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                          AppSpacing.sm,
+                                          0,
+                                          AppSpacing.sm,
+                                          AppSpacing.xs,
+                                        ),
+                                        child: Text(
+                                          blocks[i].block.name,
+                                          textAlign: TextAlign.center,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.labelMedium?.copyWith(
+                                            color:
+                                                i == selected
+                                                    ? textPrimaryColor(context)
+                                                    : textSecondaryColor(
+                                                      context,
+                                                    ),
+                                            fontWeight:
+                                                i == selected
+                                                    ? FontWeight.w700
+                                                    : FontWeight.w400,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
-                      ],
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
               ),
             ),
             if (blocks.length == 1)
