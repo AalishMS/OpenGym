@@ -208,14 +208,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildHeader(BuildContext context) {
     final splitProvider = context.watch<SplitProvider?>();
+    // Capped first and padded inside the cap, as the plan list is, so the
+    // wordmark and the launcher share a left edge once the cap applies.
     return Padding(
       padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.md,
-        ),
-        child: _CappedWidth(
+      child: _CappedWidth(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.md,
+          ),
           child: LayoutBuilder(
             // The title reads as a path; only the split name yields to the
             // trailing Coach action. At large text on a phone the brand
@@ -417,6 +419,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 : plans.indexWhere((plan) => plan.id == live!.planId);
         final inProgress = liveIndex >= 0;
         final upNext = inProgress ? liveIndex : nextIndex;
+        // The live session itself, not the plan's current week: a paused
+        // workout can sit in an earlier week than the one the plan would open
+        // now. Resume and the row marked *In progress* both open it.
+        void resume() => openWorkoutDestination(
+          context,
+          WorkoutDestination.session(live!.id!),
+          requireIncomplete: true,
+          heroTag: UpNextCard.heroTagFor(plans[liveIndex]),
+        );
 
         HomePlanStatus statusOf(int index) {
           if (index == upNext) {
@@ -457,12 +468,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       inProgress: inProgress,
                       onStart:
                           inProgress
-                              ? () => openWorkoutDestination(
-                                context,
-                                WorkoutDestination.session(live!.id!),
-                                requireIncomplete: true,
-                                heroTag: UpNextCard.heroTagFor(plans[upNext]),
-                              )
+                              ? resume
                               : () => _openWorkout(
                                 context,
                                 plans[nextIndex],
@@ -551,11 +557,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                 workoutCount: plans.length,
                                 status: statusOf(index),
                                 onOpen:
-                                    () => _openWorkout(
-                                      context,
-                                      plans[index],
-                                      index,
-                                    ),
+                                    index == liveIndex
+                                        ? resume
+                                        : () => _openWorkout(
+                                          context,
+                                          plans[index],
+                                          index,
+                                        ),
                                 onShowActions: () => actions(index),
                               ),
                             ],

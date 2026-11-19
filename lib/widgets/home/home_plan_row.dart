@@ -53,6 +53,7 @@ class HomePlanRow extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final name = titleCase(plan.name);
     final secondary = textSecondaryColor(context);
+    final largeText = MediaQuery.textScalerOf(context).scale(1) > 1.5;
     final detailStyle = textTheme.bodySmall?.copyWith(color: secondary);
     final exercises = plan.exercises.length;
     final sets = plan.exercises.fold<int>(
@@ -107,10 +108,13 @@ class HomePlanRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: AppSpacing.sm),
-              // The row is the button; the glyph only says what it does.
-              ExcludeSemantics(
-                child: Icon(LucideIcons.play, size: 16, color: secondary),
-              ),
+              // The row is the button; the glyph only says what it does. Past
+              // 150% text it gives its width to the name and details, which
+              // on a narrow phone would otherwise part a count from its unit.
+              if (!largeText)
+                ExcludeSemantics(
+                  child: Icon(LucideIcons.play, size: 16, color: secondary),
+                ),
               AppIconButton(
                 label: 'Actions for $name',
                 icon: LucideIcons.ellipsis,

@@ -985,7 +985,9 @@ signature:
   over the rotation bar; the same workout numbers appear in the plan list's
   markers. Muscle groups sit on their own line; exercise, set, and duration
   values are dot-separated phrases (`PhraseLine`) that wrap only between
-  phrases, so a count never parts from its unit. The weekly summary keeps its
+  phrases, so a count never parts from its unit. Each phrase is measured
+  against the whole line before its dot; the dot follows only when both
+  fit, so it never squeezes a phrase into breaking mid-word. The weekly summary keeps its
   “This week” label (set like *Your plans*) and Stats navigation affordance
   even before the first workout is logged.
 - Plans on Home are flat rows on the page, ruled by hairlines; none rises
@@ -997,10 +999,13 @@ signature:
   resume that plan, and no other row claims to be next), or a success check
   and *Done* for a plan trained since Monday, so the list reads as the week's
   to-do list. A play glyph before *…* says what a tap on the row does: it
-  opens that plan's workout. Screen readers hear the marker as “Workout N of
+  opens that plan's workout, or for the row *In progress*, the live session
+  itself, as *Resume workout* does, even when that session sits in an
+  earlier week than the plan would open now. Past 150% text the glyph gives
+  its width to the name and details. Screen readers hear the marker as “Workout N of
   M” and the plan's name once.
 - Home's column stops at 680dp. Header, launcher, week and plans share that
-  measure and its left edge, so a tablet or the desktop rail centres a phone-
+  measure, each padded inside the cap, and so one left edge, so a tablet or the desktop rail centres a phone-
   and-a-half column instead of stretching Start the width of the screen. At
   large text on a phone the wordmark scales down to its 40% share of the
   header rather than being clipped.

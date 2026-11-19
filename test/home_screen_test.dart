@@ -11,6 +11,7 @@ import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/home_screen.dart';
 import 'package:gymapp/screens/plan_editor_screen.dart';
+import 'package:gymapp/screens/history_screen.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
@@ -1351,6 +1352,28 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the play glyph gives way to the details at large text', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 1400);
+    addTearDown(tester.view.reset);
+    Finder glyph() => find.descendant(
+      of: find.byType(HomePlanRow),
+      matching: find.byIcon(LucideIcons.play),
+    );
+    await pumpHome(tester, size: const Size(390, 1400), plans: rotationPlans());
+    expect(glyph(), findsNWidgets(3));
+    await pumpHome(
+      tester,
+      size: const Size(390, 1400),
+      textScale: 2,
+      plans: rotationPlans(),
+    );
+    expect(find.byType(HomePlanRow), findsNWidgets(3));
+    expect(glyph(), findsNothing);
+  });
+
   testWidgets('a tablet keeps Home to a readable column', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(820, 1180);
@@ -1359,6 +1382,75 @@ void main() {
     final card = tester.getRect(find.byType(UpNextCard));
     expect(card.width, lessThanOrEqualTo(680));
     expect(card.center.dx, closeTo(410, 1));
+    // The header is capped the same way, so the wordmark lines up with the
+    // launcher instead of sitting a padding's width to its left.
+    expect(
+      tester.getTopLeft(find.byType(AppWordmark)).dx,
+      closeTo(card.left, 1),
+    );
+  });
+
+  testWidgets('the in-progress row opens the live workout, as Resume does', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 1400);
+    addTearDown(tester.view.reset);
+    final plans = rotationPlans();
+    final now = DateTime.now();
+    // Paused twenty minutes ago, so it is live without a ticking clock.
+    final live = WorkoutSession(
+      id: 'live-pull',
+      planId: plans[1].id,
+      planName: plans[1].name,
+      date: now.subtract(const Duration(minutes: 20)),
+      startedAt: now.subtract(const Duration(minutes: 20)),
+      durationSeconds: 600,
+      isCompleted: false,
+      exercises: const [],
+    );
+    await pumpHome(
+      tester,
+      size: const Size(390, 1400),
+      plans: plans,
+      sessions: [live],
+    );
+    await tester.pumpAndSettle();
+
+    Finder openedScreen() {
+      final workout = find.byType(WorkoutScreen);
+      return workout.evaluate().isNotEmpty
+          ? workout
+          : find.byType(WorkoutDetailsScreen);
+    }
+
+    String opened() {
+      final screen = tester.widget(openedScreen());
+      return screen is WorkoutScreen
+          ? 'workout:${screen.destination?.navigationKey}'
+          : 'details:${(screen as WorkoutDetailsScreen).sessionIdentity}';
+    }
+
+    Future<void> back() async {
+      Navigator.of(tester.element(openedScreen())).pop();
+      await tester.pumpAndSettle();
+    }
+
+    await tester.tap(find.text('Resume workout'));
+    await tester.pumpAndSettle();
+    final viaResume = opened();
+    expect(viaResume, contains('live-pull'));
+    await back();
+
+    final row = find.byWidgetPredicate(
+      (widget) =>
+          widget is HomePlanRow && widget.status == HomePlanStatus.inProgress,
+    );
+    expect(tester.widget<HomePlanRow>(row).plan.id, plans[1].id);
+    await tester.tap(find.descendant(of: row, matching: find.text('Pull Day')));
+    await tester.pumpAndSettle();
+    expect(opened(), viaResume);
+    await back();
   });
 }
 
