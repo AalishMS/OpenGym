@@ -176,13 +176,16 @@ Action labels should say what happens in familiar, concise language:
     `raisedDecoration` (`lib/widgets/raised_card.dart`), which add the edge
   - `controlFillColor(context)` - the ground of a control: fields, steppers,
     chips, segment tracks, secondary buttons, keypad keys
-  - `hairlineColor(context)` - dividers, ledger and header rules, card edges
+  - `hairlineColor(context)` - dividers, ledger and header rules, the edges
+    of sheets and dialogs in dark mode, and dark mode's lit card top edge
   - `selectedGroundColor(context)` - a chosen tile or row among filled ones,
     paired with an accent edge (the accent wash in dark mode, white in light)
   - `borderColor(context)` - 3:1, only for the edge of an *unfilled* control
-    (unselected radio, off switch, empty week bar). Never round a container
-  - `raisedShadow(context)` - the soft shadow a raised card casts in light
-    mode; empty in dark mode
+    (unselected radio, off switch, light mode's empty week bar). Never round
+    a container
+  - `raisedShadow(context)` - the edge a raised card gets on the page: a soft
+    shadow in light mode, a lit 1px top edge in dark mode. `RaisedCard` and
+    `raisedDecoration` apply it; don't add a `Border.all` as well
   - `textPrimaryColor(context)` - main text
   - `textSecondaryColor(context)` - secondary text
   - `accentColor(context)` - the accent as **ink**: text, icons, hairlines
@@ -204,7 +207,8 @@ Action labels should say what happens in familiar, concise language:
   ratio: WCAG's `+0.05` term dominates near black, so the same ratio buys dark
   mode ~2.4x the step, which is how a "quiet" card once came out `#2F2F2F`.
   Because the step is small, a raised card on the page always has an edge as
-  well: a shadow in light mode, a hairline in dark mode. Only a control's fill
+  well: a shadow in light mode, a lit top edge in dark mode. A hairline drawn
+  all round made dark cards read as outlined boxes. Only a control's fill
   sits darker than the page. Contrast ratios stay the metric for anything that
   has to be **read** - ink is solved against the hardest of page, surface and
   control fill (`hardestGroundFor`)

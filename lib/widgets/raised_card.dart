@@ -4,8 +4,9 @@ import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import 'motion/press_scale.dart';
 
-/// A card that lifts off the page: the raised surface, a soft shadow in light
-/// mode and a hairline edge in dark mode, where a shadow has nothing to fall on.
+/// A card that lifts off the page: the raised surface, with a soft shadow in
+/// light mode and a lit top edge in dark mode, where a shadow has nothing to
+/// fall on ([raisedShadow]).
 ///
 /// Reserve it for the few things that should stand forward — the workout
 /// launcher, the next plan, a preset to pick. Lists are rows on the page, and
@@ -35,7 +36,6 @@ class RaisedCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     Widget card(Widget content) => DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: borderRadius,
@@ -43,13 +43,7 @@ class RaisedCard extends StatelessWidget {
       ),
       child: Material(
         color: raised ? surfaceColor(context) : Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: borderRadius,
-          side:
-              raised && dark
-                  ? BorderSide(color: hairlineColor(context))
-                  : BorderSide.none,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: borderRadius),
         clipBehavior: Clip.antiAlias,
         child: content,
       ),
@@ -79,12 +73,8 @@ class RaisedCard extends StatelessWidget {
 BoxDecoration raisedDecoration(
   BuildContext context, {
   BorderRadius borderRadius = AppRadius.card,
-}) {
-  final dark = Theme.of(context).brightness == Brightness.dark;
-  return BoxDecoration(
-    color: surfaceColor(context),
-    borderRadius: borderRadius,
-    border: dark ? Border.all(color: hairlineColor(context)) : null,
-    boxShadow: raisedShadow(context),
-  );
-}
+}) => BoxDecoration(
+  color: surfaceColor(context),
+  borderRadius: borderRadius,
+  boxShadow: raisedShadow(context),
+);

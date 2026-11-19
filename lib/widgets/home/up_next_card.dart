@@ -51,6 +51,14 @@ class UpNextCard extends StatelessWidget {
     final secondary = textSecondaryColor(context);
     // Neutral emphasis pairs with every user-selected accent.
     final nextColor = textPrimaryColor(context);
+    // The strip marks the next workout as its strongest step. In light mode
+    // that is near-black ink after accent steps. In dark mode the same rule
+    // drew a white bar, the brightest thing in the card, louder than the
+    // title, so there the next step is the full accent and finished workouts
+    // drop to its dim wash.
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final nextStep = dark ? accentFillColor(context) : nextColor;
+    final doneStep = dark ? accentDimColor(context) : accentFillColor(context);
     final last = stat?.lastTrained;
     final groups =
         plan.exercises
@@ -120,9 +128,9 @@ class UpNextCard extends StatelessWidget {
                           decoration: BoxDecoration(
                             color:
                                 index == day - 1
-                                    ? nextColor
+                                    ? nextStep
                                     : trainedDays.contains(index)
-                                    ? accentFillColor(context)
+                                    ? doneStep
                                     : controlFillColor(context),
                             borderRadius: AppRadius.micro,
                           ),

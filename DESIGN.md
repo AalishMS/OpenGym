@@ -646,9 +646,12 @@ signature:
 - Elevation reads as light. Pages sit on the background; the few things that
   stand forward (the workout launcher, the next plan on Home, preset cards,
   the Workout details readout and exercises, dashboard panels) are *raised*:
-  white with a soft two-layer shadow in light mode, and in dark mode a lifted
-  fill with a hairline edge, since a shadow has nothing to fall on
-  (`RaisedCard`, `raisedDecoration`). Sheets, dialogs and menus are raised too,
+  white with a soft two-layer shadow in light mode. In dark mode, where a
+  shadow has nothing to fall on, they get a lifted fill (about 1.5x light
+  mode's step) and a top edge that catches the light, tapering away round the
+  top corners (`RaisedCard`, `raisedDecoration`, `raisedShadow`). A hairline
+  drawn all round made dark cards read as outlined boxes rather than
+  surfaces. Sheets, dialogs and menus are raised too,
   and the scrim separates them. Nothing sits darker than the page except a
   control's own fill, and a card is never nested in another ground.
 - Controls are fills, not outlines. Text fields, steppers, chips, segment
@@ -659,8 +662,9 @@ signature:
   filled neutrals, and frequent-but-not-primary actions such as Add exercise
   use the tonal accent: the accent's quiet wash with accent ink.
 - Lines are hairlines: dividers, ledger rows, the header and tab rules, and
-  card edges in dark mode. The 3:1 border is kept for the edge of an unfilled
-  control — an unselected radio, an off switch, an empty week bar.
+  the edges of sheets and dialogs in dark mode. The 3:1 border is kept for the
+  edge of an unfilled control: an unselected radio, an off switch, an empty
+  week bar in light mode.
 - In menus and lists, the chosen row is marked by a check and a heavier
   weight, not a coloured wash behind it.
 - Dark and light themes share the same semantic color helpers.
@@ -671,8 +675,14 @@ signature:
   keep their original color family. Text and fills are solved separately for
   readability in each mode, and each role keeps the seed's *vividness* (its
   share of the sRGB chroma available at that hue and lightness) under an
-  absolute chroma cap. Darkened tones therefore don't turn dusty or brown. The wordmark uses a dedicated, more saturated `brandAccent`
-  tone of the selected color; ordinary controls retain the softer accent.
+  absolute chroma cap. Darkened tones therefore don't turn dusty or brown. In
+  light mode the wordmark uses a dedicated, more saturated `brandAccent` tone
+  of the selected color, because the accent is darkened for text and the
+  signature shouldn't be muted with it. Dark mode has one accent tone, a
+  little lighter and more vivid than the seed (L 0.78, vividness x1.15),
+  shared by the wordmark, filled controls and accent ink. A separate
+  wordmark tone there read as a second, brighter colour beside a washed-out
+  button.
   Settings offers them as bare swatches; the chosen one gets a ring and a
   check, which settle in together, rather than a tile behind it.
 - The `> OpenGym` wordmark serves as the main brand signature. Keep it consistent
@@ -969,8 +979,17 @@ signature:
   changes while Home is in view: a workout finished on the workout page, or
   another split's week, is simply there. Today is marked by its bold letter and a small accent
   dot under it, the same dot the workout uses for the week being trained now.
-- Home labels the rotation bar with “Workout N of M”. The same workout
-  numbers appear in the plan list's coloured markers. Muscle groups sit on
+  In dark mode the bars are slim pills and untrained days are hairline pegs,
+  with only today's peg at the 3:1 border. A light fill on black looks
+  heavier than the same shape on a light page, and full-width bars
+  outweighed the next workout above them.
+- Home labels the rotation bar with “Workout N of M”. The bar marks the next
+  workout as its strongest step: near-black after accent steps in light mode,
+  the full accent after dim-accent steps in dark mode, where a white step was
+  the brightest thing in the card. The same workout numbers appear in the plan
+  list's coloured markers. Light mode washes a marker in its plan's colour. In
+  dark mode the number takes the plan's colour on the control fill, because a
+  faint wash of orange or yellow over near-black is brown or olive. Muscle groups sit on
   their own line in the launcher; exercise, set, and duration values wrap as
   whole phrases. The weekly summary keeps its “This week” label and Stats
   navigation affordance even before the first workout is logged.

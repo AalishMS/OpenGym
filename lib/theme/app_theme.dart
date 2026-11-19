@@ -204,13 +204,20 @@ Color selectedGroundColor(BuildContext context) =>
         ? accentMutedColor(context)
         : surfaceColor(context);
 
-/// The soft two-layer shadow a raised surface casts on the page in light mode;
-/// empty in dark mode, where the lighter fill does that job. Put it on cards
-/// that sit on the page, not on sheets or dialogs, which the scrim separates.
+/// The edge a raised surface gets on the page. Light mode casts a soft
+/// two-layer shadow. Dark mode has nothing for a shadow to fall on, so the
+/// card's top edge catches the light instead: a hard 1px "shadow" in the
+/// hairline tone, lifted 1px above the card. The card covers all of it except
+/// a band along the top, which tapers away round the top corners, so the card
+/// reads as a lit surface rather than an outlined box.
+///
+/// Put it on cards that sit on the page, not on sheets or dialogs, which the
+/// scrim separates.
 List<BoxShadow> raisedShadow(BuildContext context) {
   final scheme = Theme.of(context).extension<AppColorScheme>();
-  if (scheme == null || Theme.of(context).brightness == Brightness.dark) {
-    return const [];
+  if (scheme == null) return const [];
+  if (Theme.of(context).brightness == Brightness.dark) {
+    return [BoxShadow(color: scheme.hairline, offset: const Offset(0, -1))];
   }
   return [
     BoxShadow(
@@ -435,14 +442,19 @@ const Color _bgLight = Color(0xFFF2F2F1);
 /// page also casts [raisedShadow]: the shadow, not a darker fill or a heavy
 /// outline, is what lifts it.
 ///
-/// In dark mode a shadow has nothing to fall on, so the fill carries the
-/// separation alone, as a perceptual step in OKLab lightness. It is stated
-/// perceptually rather than as a WCAG ratio because near black the ratio's
-/// `+0.05` term dominates: the same 1.45:1 that is a quiet step in light mode is
-/// a 0.146 step in dark mode, which is how a card once landed on `#2F2F2F`, a
-/// grey box on a black page. The two steps below are within a few hundredths of
-/// each other, so the modes lift by the same amount to the eye.
-const double _raisedLiftDark = 0.045;
+/// In dark mode a shadow has nothing to fall on, so the fill carries most of
+/// the separation, as a perceptual step in OKLab lightness, and the card's top
+/// edge catches the light ([raisedShadow]). It is stated perceptually rather
+/// than as a WCAG ratio because near black the ratio's `+0.05` term dominates:
+/// the same 1.45:1 that is a quiet step in light mode is a 0.146 step in dark
+/// mode, which is how a card once landed on `#2F2F2F`, a grey box on a black
+/// page.
+///
+/// Dark mode lifts about 1.5x as far as light mode's 0.042. At 0.045, with a
+/// hairline drawn all round, a raised card read as an outlined box rather than
+/// a surface. Light mode has a shadow to finish the job; dark mode has only
+/// the fill and a lit top edge, so the fill steps further.
+const double _raisedLiftDark = 0.065;
 
 /// How far a control's fill steps away from what it sits on: above the sheet in
 /// dark mode, below the page in light mode. See [AppColorScheme.controlFill].
@@ -464,9 +476,21 @@ const double _semanticLightness = 0.62;
 /// Absolute chroma ceilings for the accent roles. Vividness alone would let a
 /// gamut-edge seed reach ~0.21 on a pink fill, which is the neon the original
 /// palette had; these hold every accent inside "clearly coloured, not glowing".
-/// Dark mode sits lower because saturated colour on near-black glows harder.
 const double _accentChromaCapLight = 0.15;
-const double _accentChromaCapDark = 0.14;
+const double _accentChromaCapDark = 0.15;
+
+/// Dark mode's accent is one tone, shared by the wordmark, filled controls and
+/// accent ink. It used to be the seed itself (L 0.72) beside a wordmark solved
+/// separately at L 0.80+ with 1.8x the chroma. Side by side they read as two
+/// different colours, and the seed looked washed out next to the wordmark: a
+/// dusty teal button under an electric cyan logo.
+///
+/// The tone sits a little lighter than the seed and spends a little more of the
+/// chroma sRGB allows there ([vividnessOf]). That keeps each accent's
+/// character, and slate stays restrained, while a filled button holds its own
+/// on near-black.
+const double _accentLightnessDark = 0.78;
+const double _accentVividnessBoostDark = 1.15;
 
 /// Solves the full token set for [seed] in one brightness. The accent roles are
 /// solved *against these neutrals*, not against constants, so the accent and the
@@ -551,20 +575,35 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
   // violet and pink, where the gamut is wide, and brown on amber, where it is
   // narrow. The cap keeps a saturated seed from turning back into neon.
   final seedTone = oklchOf(seed);
-  final vividness = vividnessOf(seed);
+  final vividness = math.min(
+    1.0,
+    vividnessOf(seed) * (isDark ? _accentVividnessBoostDark : 1.0),
+  );
   final chromaCap = isDark ? _accentChromaCapDark : _accentChromaCapLight;
   double accentChroma(double l) =>
       math.min(chromaCap, vividness * maxChroma(l, seedTone.h));
+  // Light mode solves its roles from the seed. Dark mode solves them from one
+  // richer tone (see `_accentLightnessDark`), which already clears every
+  // target, so ink, fill and wordmark all come out as that tone.
+  final darkLightness = math.max(seedTone.l, _accentLightnessDark);
+  final roleSeed =
+      isDark
+          ? colorFromOklch(
+            darkLightness,
+            accentChroma(darkLightness),
+            seedTone.h,
+          )
+          : seed;
   final accent = solveForContrast(
-    seed: seed,
-    against: hardestFor(seed),
+    seed: roleSeed,
+    against: hardestFor(roleSeed),
     target: 4.5,
     preferLighter: preferLighter,
     anchor: ToneAnchor.seed,
     chromaAt: accentChroma,
   );
   final accentFill = solveForContrast(
-    seed: seed,
+    seed: roleSeed,
     against: background,
     target: 3.0,
     preferLighter: preferLighter,
@@ -572,25 +611,31 @@ AppColorScheme _deriveScheme(Color seed, bool isDark) {
     chromaAt: accentChroma,
   );
   final onAccent = bestForeground(accentFill);
-  // More chroma gives the signature color without brightening every control.
-  // Dark mode also lifts the wordmark; light mode keeps the lightest tone that
-  // clears text contrast. Slate retains its deliberately restrained chroma.
-  final brandSeed = colorFromOklch(
-    isDark ? math.max(seedTone.l, 0.80) : seedTone.l,
-    math.min(seedTone.c * 1.8, 0.18),
-    seedTone.h,
-  );
-  final brandGround =
-      contrastRatio(brandSeed, background) < contrastRatio(brandSeed, surface)
-          ? background
-          : surface;
-  final brandAccent = solveForContrast(
-    seed: brandSeed,
-    against: brandGround,
-    target: 4.5,
-    preferLighter: preferLighter,
-    anchor: ToneAnchor.seed,
-  );
+  // Light mode gives the wordmark more chroma than the controls: the light
+  // accent is darkened for text contrast, which mutes it, and the signature
+  // shouldn't be. Slate retains its deliberately restrained chroma. Dark mode's
+  // accent is already the signature tone, so the wordmark is simply the accent.
+  final Color brandAccent;
+  if (isDark) {
+    brandAccent = accent;
+  } else {
+    final brandSeed = colorFromOklch(
+      seedTone.l,
+      math.min(seedTone.c * 1.8, 0.18),
+      seedTone.h,
+    );
+    final brandGround =
+        contrastRatio(brandSeed, background) < contrastRatio(brandSeed, surface)
+            ? background
+            : surface;
+    brandAccent = solveForContrast(
+      seed: brandSeed,
+      against: brandGround,
+      target: 4.5,
+      preferLighter: preferLighter,
+      anchor: ToneAnchor.seed,
+    );
+  }
   // The two washes are even perceptual steps from the background up to the fill,
   // opaque — not `accent.withAlpha(...)`, which composited differently on every
   // ground and drifted the token between screens.
