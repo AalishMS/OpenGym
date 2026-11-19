@@ -10,10 +10,15 @@ import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import '../../utils/plan_stats.dart';
 import '../app_button.dart';
+import '../phrase_line.dart';
 import '../plan_title_hero.dart';
 import '../raised_card.dart';
 
 /// A workout launcher; weekly activity lives outside this card.
+///
+/// The card itself is not a button: Start (or Resume) is the one target, so
+/// a screen reader or keyboard meets the action once, and a tap meant for the
+/// page doesn't open a workout.
 class UpNextCard extends StatelessWidget {
   /// Shared with the workout header, so the plan name flies between them.
   static String heroTagFor(WorkoutPlan plan) =>
@@ -72,13 +77,13 @@ class UpNextCard extends StatelessWidget {
     final sets = plan.exercises.fold<int>(0, (sum, e) => sum + e.sets);
     final count = plan.exercises.length;
     final meta = [
-      '$count ${count == 1 ? 'exercise' : 'exercises'}',
-      '$sets ${sets == 1 ? 'set' : 'sets'}',
+      countOf(count, 'exercise'),
+      countOf(sets, 'set'),
       if (durationMinutes != null) '~$durationMinutes min',
     ];
+    final detailStyle = textTheme.bodySmall?.copyWith(color: secondary);
 
     return RaisedCard(
-      onTap: onStart,
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
@@ -86,29 +91,33 @@ class UpNextCard extends StatelessWidget {
           children: [
             Wrap(
               alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
               spacing: AppSpacing.md,
               runSpacing: AppSpacing.xs,
               children: [
-                Text(
-                  inProgress ? 'In progress' : 'Next up',
-                  style: textTheme.labelLarge?.copyWith(color: nextColor),
+                // What this card is and where it sits in the rotation, on one
+                // line: `Next up · Workout 3 of 5`.
+                PhraseLine(
+                  style: detailStyle,
+                  phrases: [
+                    Text(
+                      inProgress ? 'In progress' : 'Next up',
+                      style: textTheme.labelLarge?.copyWith(color: nextColor),
+                    ),
+                    Text('Workout $day of $dayCount', style: detailStyle),
+                  ],
                 ),
                 if (last != null)
                   Text(
-                    'Last: ${formatDaysAgo(last).toLowerCase()}',
-                    style: textTheme.bodySmall?.copyWith(color: secondary),
+                    'Last done ${formatDaysAgo(last).toLowerCase()}',
+                    style: detailStyle,
                   ),
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Workout $day of $dayCount',
-              style: textTheme.bodySmall?.copyWith(color: secondary),
-            ),
-            const SizedBox(height: AppSpacing.sm),
             Semantics(
               label:
-                  'Workout $day of $dayCount. ${trainedDays.length} plans trained this week',
+                  '${trainedDays.length} of $dayCount plans trained this week',
               child: ExcludeSemantics(
                 child: Row(
                   children: [
@@ -153,17 +162,7 @@ class UpNextCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: AppSpacing.sm),
-            Wrap(
-              spacing: AppSpacing.md,
-              runSpacing: AppSpacing.xs,
-              children: [
-                for (final detail in meta)
-                  Text(
-                    detail,
-                    style: textTheme.bodySmall?.copyWith(color: secondary),
-                  ),
-              ],
-            ),
+            PhraseLine.text(meta, style: detailStyle),
             const SizedBox(height: AppSpacing.md),
             AppButton.primary(
               key: tutorialStartKey,

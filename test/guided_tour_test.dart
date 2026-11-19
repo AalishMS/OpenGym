@@ -206,7 +206,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('1 of 4'), findsOneWidget);
       expect(find.text('Plan your first workout'), findsOneWidget);
-      expectSpotlight(tester, find.widgetWithText(AppButton, 'Create plan'));
+      expectSpotlight(tester, find.widgetWithText(AppButton, 'New plan'));
       if (const bool.fromEnvironment('TOUR_PREVIEWS')) {
         await expectLater(
           find.byType(AppShell),
@@ -362,7 +362,7 @@ void main() {
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
     expect(find.text('1 of 4'), findsOneWidget);
-    expectSpotlight(tester, find.widgetWithText(AppButton, 'Create plan'));
+    expectSpotlight(tester, find.widgetWithText(AppButton, 'New plan'));
   });
 
   testWidgets('compact phone supports enlarged text through every step', (
@@ -371,7 +371,7 @@ void main() {
     setSize(tester, const Size(320, 568));
     await tester.pumpWidget(host(brightness: Brightness.dark, textScale: 2));
     await tester.pumpAndSettle();
-    expectSpotlight(tester, find.widgetWithText(AppButton, 'Create plan'));
+    expectSpotlight(tester, find.widgetWithText(AppButton, 'New plan'));
     for (final label in ['History', 'Stats', 'Settings']) {
       await next(tester);
       expectSpotlight(tester, navTarget(label));

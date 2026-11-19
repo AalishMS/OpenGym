@@ -82,14 +82,20 @@ void main() {
           durationSeconds: 9000,
           isCompleted: false,
         ),
+        // Started and finished inside a minute: the timer never ran, so it
+        // doesn't pull the estimate down.
+        WorkoutSession(
+          planId: fullBody.id,
+          planName: fullBody.name,
+          date: now,
+          exercises: const [],
+          durationSeconds: 30,
+        ),
       ];
       await tester.pumpWidget(_host([fullBody], sessions, Brightness.light));
       expect(find.textContaining('~30 min'), findsOneWidget);
       // Muscle groups and whole training values occupy separate lines.
-      expect(
-        find.text('Chest, Back, Shoulders, Legs'),
-        findsOneWidget,
-      );
+      expect(find.text('Chest, Back, Shoulders, Legs'), findsOneWidget);
       await tester.pumpWidget(_host([fullBody], const [], Brightness.light));
       expect(find.textContaining(' min'), findsNothing);
       expect(tester.takeException(), isNull);

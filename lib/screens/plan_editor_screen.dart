@@ -29,6 +29,7 @@ import '../widgets/exercise_picker_sheet.dart';
 import '../widgets/motion/collapsible.dart';
 import '../widgets/motion/entrance.dart';
 import '../widgets/motion/state_switcher.dart';
+import '../widgets/plan_color_picker.dart';
 import '../widgets/raised_card.dart';
 import '../widgets/rolling_figure.dart';
 import '../widgets/workout/set_entry_table.dart';
@@ -938,7 +939,7 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
                                 padding: const EdgeInsets.only(
                                   top: AppSpacing.md,
                                 ),
-                                child: _ColorPicker(
+                                child: PlanColorPicker(
                                   selectedColor: _selectedColor,
                                   onChanged:
                                       (value) => setState(
@@ -1380,95 +1381,6 @@ class _ColorPill extends StatelessWidget {
                 ),
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ColorPicker extends StatelessWidget {
-  final int? selectedColor;
-  final ValueChanged<int> onChanged;
-
-  const _ColorPicker({required this.selectedColor, required this.onChanged});
-
-  static const double _swatch = 48;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // One row when all ten fit, otherwise two even rows of five, spread
-        // edge to edge so the grid lines up with the fields above and below
-        // instead of leaving a ragged 6 + 4.
-        final perRow =
-            constraints.maxWidth >=
-                    kPlanColors.length * _swatch +
-                        (kPlanColors.length - 1) * AppSpacing.sm
-                ? kPlanColors.length
-                : (kPlanColors.length / 2).ceil();
-        return Column(
-          children: [
-            for (
-              var start = 0;
-              start < kPlanColors.length;
-              start += perRow
-            ) ...[
-              if (start > 0) const SizedBox(height: AppSpacing.sm),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  for (
-                    var slot = start;
-                    slot < start + perRow && slot < kPlanColors.length;
-                    slot++
-                  )
-                    _buildSwatch(context, slot),
-                ],
-              ),
-            ],
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildSwatch(BuildContext context, int slot) {
-    final colorValue = kPlanColors[slot];
-    // Resolved swatch, slot-matched selection — see the home-screen picker.
-    final color = planSwatch(slot, context);
-    final selected =
-        selectedColor != null && planSlotOf(selectedColor!) == slot;
-    return Semantics(
-      label: 'Plan color ${slot + 1}',
-      selected: selected,
-      button: true,
-      onTap: () => onChanged(colorValue),
-      child: InkWell(
-        onTap: () => onChanged(colorValue),
-        borderRadius: AppRadius.button,
-        child: AnimatedContainer(
-          duration: AppMotion.of(context, AppMotion.quick),
-          width: _swatch,
-          height: _swatch,
-          padding: const EdgeInsets.all(AppSpacing.xs),
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: selected ? color : Colors.transparent,
-              width: 2,
-            ),
-            borderRadius: AppRadius.button,
-          ),
-          child: Container(
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: AppRadius.badge,
-            ),
-            child:
-                selected
-                    ? Icon(LucideIcons.check, size: 18, color: onColor(color))
-                    : null,
           ),
         ),
       ),

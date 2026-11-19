@@ -139,8 +139,9 @@ void main() {
         Scaffold(
           body: HomePlanRow(
             workoutNumber: 1,
+            workoutCount: 3,
             plan: plan(),
-            isNext: true,
+            status: HomePlanStatus.next,
             onOpen: () => opened++,
             onShowActions: () => actions++,
           ),

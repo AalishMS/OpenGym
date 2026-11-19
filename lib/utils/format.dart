@@ -67,15 +67,27 @@ DateTime startOfWeek(DateTime date) =>
     DateTime(date.year, date.month, date.day - (date.weekday - 1));
 
 /// `push day` → `Push Day`, for display only; stored names keep their case.
+///
+/// Only the first letter of each word is raised, and only when the word
+/// starts with a letter after any opening punctuation, so the rest of what
+/// the user typed stands: `PPL`, `RDL focus` and `5x5` keep their capitals,
+/// and `(heavy week)` becomes `(Heavy Week)`.
 String titleCase(String name) {
   return name
       .trim()
       .split(RegExp(r'\s+'))
-      .map(
-        (word) =>
-            word.isEmpty
-                ? word
-                : '${word[0].toUpperCase()}${word.substring(1).toLowerCase()}',
-      )
+      .map((word) {
+        final match = _wordStart.firstMatch(word);
+        if (match == null) return word;
+        return '${match.group(1)}${match.group(2)!.toUpperCase()}'
+            '${word.substring(match.end)}';
+      })
       .join(' ');
 }
+
+/// Opening punctuation, then the letter that starts a word.
+final RegExp _wordStart = RegExp(r"""^([(\[{"'“‘]*)(\p{L})""", unicode: true);
+
+/// `1 set`, `3 sets`: a count with its noun, singular for one.
+String countOf(int count, String singular, [String? plural]) =>
+    '$count ${count == 1 ? singular : plural ?? '${singular}s'}';

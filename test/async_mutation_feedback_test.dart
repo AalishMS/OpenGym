@@ -162,8 +162,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       expect(plans.writes.length, 1);
-      expect(find.text('Copying plan'), findsOneWidget);
-      expect(find.text('Plan copied'), findsNothing);
+      expect(find.text('Duplicating plan'), findsOneWidget);
+      expect(find.text('Plan duplicated'), findsNothing);
       plans.pending.completeError(StateError('storage unavailable'));
       await tester.pumpAndSettle();
       expect(find.textContaining('Try again'), findsOneWidget);
@@ -175,7 +175,7 @@ void main() {
       expect(identical(plans.writes[0], plans.writes[1]), isTrue);
       plans.pending.complete();
       await tester.pumpAndSettle();
-      expect(find.text('Plan copied'), findsOneWidget);
+      expect(find.text('Plan duplicated'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
@@ -232,8 +232,7 @@ void main() {
       await tester.tap(find.text('Change color'));
       await tester.pumpAndSettle();
       final swatch = find.byWidgetPredicate(
-        (widget) =>
-            widget is Semantics && widget.properties.label == 'Plan color 2',
+        (widget) => widget is Semantics && widget.properties.label == 'Red',
       );
       await tester.tap(swatch);
       await tester.tap(find.text('Save'));
@@ -252,7 +251,11 @@ void main() {
       await tester.tap(find.text('Save'));
       plans.pending.complete();
       await tester.pumpAndSettle();
-      expect(find.text('Plan color saved'), findsOneWidget);
+      // The dialog closes on save; the marker's new colour is the
+      // confirmation, so no snackbar repeats it.
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(find.text('Plan color saved'), findsNothing);
+      expect(plans.writes.length, 2);
 
       plans.pending = Completer<void>();
       await tester.tap(find.byTooltip('Plan actions'));

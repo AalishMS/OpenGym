@@ -30,7 +30,9 @@ import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/breakpoints.dart';
 import 'package:gymapp/widgets/app_bottom_nav.dart';
 import 'package:gymapp/widgets/app_nav_rail.dart';
+import 'package:gymapp/widgets/home/home_plan_row.dart';
 import 'package:gymapp/widgets/home/training_snapshot.dart';
+import 'package:gymapp/widgets/home/up_next_card.dart';
 
 void main() {
   final hiveHarness = HiveTestHarness();
@@ -755,7 +757,23 @@ void main() {
       await tester.pumpWidget(shellHost(390));
       await tester.pump();
 
-      expect(find.text('In progress'), findsOneWidget);
+      // The card offers to resume it, and the list marks the same plan:
+      // no other plan claims to be next while it is under way.
+      expect(
+        find.descendant(
+          of: find.byType(UpNextCard),
+          matching: find.text('In progress'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(HomePlanRow),
+          matching: find.text('In progress'),
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Next'), findsNothing);
       expect(find.text('Resume workout'), findsOneWidget);
       expect(find.text('Next up'), findsNothing);
 
