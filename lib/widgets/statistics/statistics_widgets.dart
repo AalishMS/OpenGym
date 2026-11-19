@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../utils/statistics_format.dart';
+import '../motion/collapsible.dart';
 
 class StatisticsSectionHeader extends StatelessWidget {
   final String title;
@@ -114,9 +115,18 @@ class _RecordEventRowState extends State<RecordEventRow> {
                 if (labels.length == 1)
                   Text(labels.single, style: tagStyle)
                 else ...[
-                  if (_expanded)
-                    for (final label in labels.take(labels.length - 1))
-                      Text(label, style: tagStyle),
+                  // The other tags fold open above the toggle's line, so
+                  // the rows below move down rather than jump.
+                  Collapsible(
+                    open: _expanded,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        for (final label in labels.take(labels.length - 1))
+                          Text(label, style: tagStyle),
+                      ],
+                    ),
+                  ),
                   // The toggle sits on the last tag's line, so its tap target
                   // doesn't add a line of its own.
                   Row(

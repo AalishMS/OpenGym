@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../theme/motion.dart';
+
 /// A plan name that flies from Home's Next up card into the workout header,
 /// so starting a workout reads as opening that card rather than jumping to a
 /// new page. The size and weight ease between the two styles in flight.
@@ -76,7 +78,7 @@ class PlanTitleHero extends StatelessWidget {
               style: TextStyle.lerp(
                 fromStyle,
                 toStyle,
-                Curves.easeInOut.transform(progress),
+                AppMotion.move.transform(progress),
               ),
             ),
           );

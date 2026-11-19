@@ -10,8 +10,12 @@ import '../../services/training_block_lifecycle.dart';
 import '../../services/training_week_choices.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
+import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../motion/app_modals.dart';
+import '../motion/collapsible.dart';
+import '../motion/state_switcher.dart';
 import 'training_block_strip.dart';
 
 /// The split's blocks and the weeks each one offers, read fresh so the
@@ -114,7 +118,7 @@ abstract final class TrainingBlockDialogs {
     )?
     onEditBlock,
     TrainingBlockLifecycle? lifecycle,
-  }) => showModalBottomSheet<String>(
+  }) => showAppSheet<String>(
     context: context,
     useSafeArea: true,
     isScrollControlled: true,
@@ -148,7 +152,7 @@ abstract final class TrainingBlockDialogs {
     TrainingBlockLifecycle? lifecycle,
   }) {
     final snapshot = load();
-    return showModalBottomSheet<void>(
+    return showAppSheet<void>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
@@ -429,7 +433,7 @@ class _SheetActions extends StatelessWidget {
 /// Shows [child] as a modal block sheet: drag handle, keyboard-aware, scrolls
 /// when the content outgrows the screen.
 Future<T?> _showBlockSheet<T>(BuildContext context, Widget child) =>
-    showModalBottomSheet<T>(
+    showAppSheet<T>(
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
@@ -689,7 +693,7 @@ class _BlockFormState extends State<_BlockForm> {
   Future<void> _delete() async {
     if (_busy) return;
     final name = widget.initialName!;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder: (_) => _DeleteBlockConfirmation(name: name),
     );
@@ -1125,7 +1129,6 @@ class _BlockOrderState extends State<_BlockOrder> {
 
   @override
   Widget build(BuildContext context) {
-    final disableAnimations = MediaQuery.disableAnimationsOf(context);
     return PopScope(
       canPop: !_saving,
       child: _SheetFrame(
@@ -1163,10 +1166,8 @@ class _BlockOrderState extends State<_BlockOrder> {
                 index: index,
                 enabled: !_saving,
                 child: AnimatedContainer(
-                  duration:
-                      disableAnimations
-                          ? Duration.zero
-                          : const Duration(milliseconds: 150),
+                  duration: AppMotion.of(context, AppMotion.quick),
+                  curve: AppMotion.curve,
                   decoration: BoxDecoration(
                     border:
                         index == _blocks.length - 1
@@ -1459,30 +1460,16 @@ class _StartingWeekState extends State<_StartingWeek> {
 
   @override
   Widget build(BuildContext context) {
-    final duration =
-        MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 220);
+    // The list and a form trade places in the sheet, which eases to the new
+    // height from its bottom edge; the side going away takes no more taps.
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: AnimatedSize(
-        duration: duration,
-        curve: Curves.easeOutCubic,
+      child: StateSwitcher(
+        animateSize: true,
         alignment: Alignment.bottomCenter,
-        child: AnimatedSwitcher(
-          duration: duration,
-          layoutBuilder:
-              (current, previous) => Stack(
-                alignment: Alignment.bottomCenter,
-                children: [...previous, if (current != null) current],
-              ),
-          child:
-              _form ??
-              KeyedSubtree(
-                key: const ValueKey('blocks'),
-                child: _list(context),
-              ),
-        ),
+        child:
+            _form ??
+            KeyedSubtree(key: const ValueKey('blocks'), child: _list(context)),
       ),
     );
   }
@@ -1640,10 +1627,6 @@ class _BlockRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
-    final duration =
-        MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 180);
     final fill = accentFillColor(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1666,7 +1649,8 @@ class _BlockRow extends StatelessWidget {
                 child: Row(
                   children: [
                     AnimatedContainer(
-                      duration: duration,
+                      duration: AppMotion.of(context, AppMotion.quick),
+                      curve: AppMotion.curve,
                       width: markSize,
                       height: markSize,
                       decoration: BoxDecoration(
@@ -1748,26 +1732,22 @@ class _BlockRow extends StatelessWidget {
             ),
           ),
         ),
-        AnimatedSize(
-          duration: duration,
-          curve: Curves.easeOutCubic,
-          alignment: Alignment.topCenter,
-          child:
-              selected && weeks.isNotEmpty
-                  ? Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      _sheetGutter + markSize + AppSpacing.md,
-                      0,
-                      _sheetGutter,
-                      AppSpacing.md,
-                    ),
-                    child: Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: weeks,
-                    ),
-                  )
-                  : const SizedBox(width: double.infinity),
+        // The chosen block opens to show its weeks; the one left folds away.
+        Collapsible(
+          open: selected && weeks.isNotEmpty,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              _sheetGutter + markSize + AppSpacing.md,
+              0,
+              _sheetGutter,
+              AppSpacing.md,
+            ),
+            child: Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: weeks,
+            ),
+          ),
         ),
       ],
     );

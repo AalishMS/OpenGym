@@ -8,6 +8,7 @@ import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
+import '../motion/state_switcher.dart';
 import 'trend_line.dart';
 
 /// Presentation measures for the block timeline; persisted models stay unchanged.
@@ -111,80 +112,90 @@ class BlockTrendChart extends StatelessWidget {
               style: axisStyle,
             ),
             const SizedBox(height: AppSpacing.sm),
-            SingleChildScrollView(
-              key: const ValueKey('block-trend-scroll'),
-              scrollDirection: Axis.horizontal,
-              reverse: true,
-              child: SizedBox(
-                width: width,
-                height: height + 44 * scale,
-                child: Stack(
-                  children: [
-                    SizedBox(
-                      width: width,
-                      height: height,
-                      child: CustomPaint(
-                        painter: TrendLinePainter(
-                          points: offsets,
-                          selected: selected,
-                          ink: accentColor(context),
-                          wash: accentMutedColor(context),
-                          ground: backgroundColor(context),
-                          guide: hairlineColor(context),
+            // A new measure or basis is a different line, not the same one
+            // moved, so the plot crosses to it rather than morphing; picking
+            // a block only moves the marker, in place.
+            StateSwitcher(
+              child: KeyedSubtree(
+                key: ValueKey('block-trend-$measure-$perWeek'),
+                child: SingleChildScrollView(
+                  key: const ValueKey('block-trend-scroll'),
+                  scrollDirection: Axis.horizontal,
+                  reverse: true,
+                  child: SizedBox(
+                    width: width,
+                    height: height + 44 * scale,
+                    child: Stack(
+                      children: [
+                        SizedBox(
+                          width: width,
+                          height: height,
+                          child: CustomPaint(
+                            painter: TrendLinePainter(
+                              points: offsets,
+                              selected: selected,
+                              ink: accentColor(context),
+                              wash: accentMutedColor(context),
+                              ground: backgroundColor(context),
+                              guide: hairlineColor(context),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    for (var i = 0; i < blocks.length; i++)
-                      Positioned(
-                        left: i * pitch,
-                        width: pitch,
-                        top: 0,
-                        bottom: 0,
-                        child: Semantics(
-                          button: true,
-                          selected: i == selected,
-                          label:
-                              '${blocks[i].block.name}, ${measure.label}, '
-                              '${measure.format(values[i], weightUnit)}, '
-                              '${perWeek ? 'per trained week' : 'block total'}',
-                          excludeSemantics: true,
-                          child: InkWell(
-                            key: ValueKey('block-point-${blocks[i].block.id}'),
-                            borderRadius: AppRadius.control,
-                            onTap: () => onSelect(blocks[i].block.id),
-                            child: Align(
-                              alignment: Alignment.bottomCenter,
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  AppSpacing.sm,
-                                  0,
-                                  AppSpacing.sm,
-                                  AppSpacing.xs,
+                        for (var i = 0; i < blocks.length; i++)
+                          Positioned(
+                            left: i * pitch,
+                            width: pitch,
+                            top: 0,
+                            bottom: 0,
+                            child: Semantics(
+                              button: true,
+                              selected: i == selected,
+                              label:
+                                  '${blocks[i].block.name}, ${measure.label}, '
+                                  '${measure.format(values[i], weightUnit)}, '
+                                  '${perWeek ? 'per trained week' : 'block total'}',
+                              excludeSemantics: true,
+                              child: InkWell(
+                                key: ValueKey(
+                                  'block-point-${blocks[i].block.id}',
                                 ),
-                                child: Text(
-                                  blocks[i].block.name,
-                                  textAlign: TextAlign.center,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.labelMedium?.copyWith(
-                                    color:
-                                        i == selected
-                                            ? textPrimaryColor(context)
-                                            : textSecondaryColor(context),
-                                    fontWeight:
-                                        i == selected
-                                            ? FontWeight.w700
-                                            : FontWeight.w400,
+                                borderRadius: AppRadius.control,
+                                onTap: () => onSelect(blocks[i].block.id),
+                                child: Align(
+                                  alignment: Alignment.bottomCenter,
+                                  child: Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      AppSpacing.sm,
+                                      0,
+                                      AppSpacing.sm,
+                                      AppSpacing.xs,
+                                    ),
+                                    child: Text(
+                                      blocks[i].block.name,
+                                      textAlign: TextAlign.center,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.labelMedium?.copyWith(
+                                        color:
+                                            i == selected
+                                                ? textPrimaryColor(context)
+                                                : textSecondaryColor(context),
+                                        fontWeight:
+                                            i == selected
+                                                ? FontWeight.w700
+                                                : FontWeight.w400,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),

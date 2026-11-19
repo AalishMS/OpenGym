@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -24,6 +23,8 @@ import 'services/hive_service.dart';
 import 'services/tutorial_preferences.dart';
 import 'services/workout_timer_notification_service.dart';
 import 'theme/breakpoints.dart';
+import 'theme/motion.dart';
+import 'utils/haptics.dart';
 import 'utils/scroll_to_top.dart';
 import 'widgets/active_workout_bar.dart';
 import 'widgets/app_bottom_nav.dart';
@@ -31,6 +32,8 @@ import 'widgets/app_nav_rail.dart';
 import 'widgets/coach/coach_button.dart';
 import 'widgets/guided_tour.dart';
 import 'widgets/history/history_journal_data.dart';
+import 'widgets/motion/collapsible.dart';
+import 'widgets/motion/surface_fade.dart';
 import 'widgets/update_dialog.dart';
 
 class AppShell extends StatefulWidget {
@@ -40,8 +43,7 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell>
-    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   // Index into [_screens]. Dashboard is index 0 (desktop-only); the phone
   // bottom bar addresses screens 1–4.
   int _currentIndex = 0;
@@ -55,13 +57,6 @@ class _AppShellState extends State<AppShell>
   int _statsTopRequest = 0;
   int _settingsTopRequest = 0;
 
-  /// Fades the incoming tab in, so a tap or swipe reads as a move rather than
-  /// a cut. The IndexedStack underneath still keeps every tab's state.
-  late final AnimationController _tabFade = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 160),
-    value: 1,
-  );
   double _tabDragDistance = 0;
   TabSwipeGestureRecognizer? _tabSwipeRecognizer;
   bool _openingHistoryWorkout = false;
@@ -98,24 +93,22 @@ class _AppShellState extends State<AppShell>
     const DashboardScreen(),
     CoachHost(
       open: _openCoach,
-      child: IndexedStack(
-        index: coachShown ? 1 : 0,
-        children: [
-          HomeScreen(
-            active: showing == 1 && !coachShown,
-            resetRequest: _homeResetRequest,
-            tutorialPlanKey: _planTourKey,
-            tutorialStartKey: _startTourKey,
-            tutorialScrollController: _homeScrollController,
-            tutorialActive: _tourActive,
-            onOpenWeeklyTraining: _openWeeklyTraining,
-            onOpenLastWorkout: _openLastWorkout,
-          ),
-          if (coachShown)
-            CoachScreen(onClose: _closeCoach)
-          else
-            const SizedBox.shrink(),
-        ],
+      child: _CoachLayer(
+        open: coachShown,
+        // Only a change the user is watching moves: the Coach closing behind
+        // another tab, or for the tour, simply lands.
+        animate: showing == 1 && !_tourActive,
+        home: HomeScreen(
+          active: showing == 1 && !coachShown,
+          resetRequest: _homeResetRequest,
+          tutorialPlanKey: _planTourKey,
+          tutorialStartKey: _startTourKey,
+          tutorialScrollController: _homeScrollController,
+          tutorialActive: _tourActive,
+          onOpenWeeklyTraining: _openWeeklyTraining,
+          onOpenLastWorkout: _openLastWorkout,
+        ),
+        coach: (_) => CoachScreen(onClose: _closeCoach),
       ),
     ),
     HistoryScreen(scrollToTopRequest: _historyTopRequest),
@@ -249,14 +242,7 @@ class _AppShellState extends State<AppShell>
   /// scrolls that tab back to the top.
   void _selectTab(int index, {required int showing}) {
     final reselected = index == showing;
-    if (!reselected) {
-      HapticFeedback.selectionClick();
-      if (MediaQuery.disableAnimationsOf(context)) {
-        _tabFade.value = 1;
-      } else {
-        _tabFade.forward(from: 0);
-      }
-    }
+    if (!reselected) Haptics.selection();
     setState(() {
       if (index == 1) _homeResetRequest++;
       if (reselected) {
@@ -292,19 +278,7 @@ class _AppShellState extends State<AppShell>
 
   /// The resume strip, rebuilt on every session write so it appears when a
   /// timer starts and disappears when the workout is finished or deleted.
-  Widget _liveWorkoutStrip() {
-    return ValueListenableBuilder(
-      valueListenable: HiveService.sessionsListenable(),
-      builder: (context, _, _) {
-        final session = HiveService.getLiveSession();
-        if (session == null) return const SizedBox.shrink();
-        return ActiveWorkoutBar(
-          session: session,
-          onTap: () => _resumeWorkout(session),
-        );
-      },
-    );
-  }
+  Widget _liveWorkoutStrip() => _ResumeStrip(onResume: _resumeWorkout);
 
   void _finishTabSwipe(DragEndDetails details, {required int showing}) {
     final distance = _tabDragDistance;
@@ -428,7 +402,6 @@ class _AppShellState extends State<AppShell>
     _updateOpenSubscription?.cancel();
     _updates?.canInterrupt = () async => true;
     _homeScrollController.dispose();
-    _tabFade.dispose();
     super.dispose();
   }
 
@@ -603,8 +576,12 @@ class _AppShellState extends State<AppShell>
         );
     final coachInView = coachShown && effectiveIndex == 1;
 
-    final stack = FadeTransition(
-      opacity: CurvedAnimation(parent: _tabFade, curve: Curves.easeOut),
+    // A tab change fades the new tab in, so a tap or swipe reads as a move
+    // rather than a cut, while the IndexedStack keeps every tab's state.
+    // Starting the tour moves to Home without it.
+    final stack = SurfaceFade(
+      identity: effectiveIndex,
+      enabled: !_tourActive,
       child: IndexedStack(
         index: effectiveIndex,
         children: _screens(coachShown: coachShown, showing: effectiveIndex),
@@ -685,6 +662,204 @@ class _AppShellState extends State<AppShell>
       ),
       coachInView: coachInView,
       showing: effectiveIndex,
+    );
+  }
+}
+
+/// The Coach opens over Home inside the Home tab, so the navigation stays on
+/// screen and Home keeps its state underneath.
+///
+/// It moves as a page going one level deeper does in the exercise picker: it
+/// fades in while it travels the last [AppMotion.shift] pixels from the end
+/// side, and leaves the same way back on [AppMotion.exit], uncovering Home.
+/// Home stops taking taps, focus and screen-reader attention the moment the
+/// Coach starts to arrive, and is hidden once it is covered. The Coach takes
+/// taps from its first frame; once it starts to leave it takes none, says
+/// nothing to screen readers and gives up focus, which closes the keyboard,
+/// and it is dropped from the tree when it is gone. A change made while
+/// [animate] is off, before or after, or under reduced motion, lands at once.
+class _CoachLayer extends StatefulWidget {
+  final bool open;
+  final bool animate;
+  final Widget home;
+  final WidgetBuilder coach;
+
+  const _CoachLayer({
+    required this.open,
+    required this.animate,
+    required this.home,
+    required this.coach,
+  });
+
+  @override
+  State<_CoachLayer> createState() => _CoachLayerState();
+}
+
+class _CoachLayerState extends State<_CoachLayer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.standard,
+    value: widget.open ? 1 : 0,
+  )..addStatusListener(_onStatus);
+  late final CurvedAnimation _progress = CurvedAnimation(
+    parent: _controller,
+    curve: AppMotion.curve,
+    reverseCurve: AppMotion.exit,
+  );
+
+  void _onStatus(AnimationStatus status) {
+    // Settling hides Home under the Coach, or drops the Coach once it is gone.
+    if (!status.isAnimating && mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(_CoachLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.open == oldWidget.open) return;
+    // In view before and after: Back from another tab selects Home and
+    // closes a Coach left open there in the same moment, and that Coach was
+    // never on screen to leave.
+    final inView = oldWidget.animate && widget.animate;
+    if (!inView || MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = widget.open ? 1 : 0;
+    } else if (widget.open) {
+      _controller.forward();
+    } else {
+      _controller.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _progress.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final open = widget.open;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // One shape whichever state, so Home keeps its State throughout.
+        Visibility(
+          visible: !(open && _controller.isCompleted),
+          maintainState: true,
+          child: IgnorePointer(
+            ignoring: open,
+            child: ExcludeSemantics(
+              excluding: open,
+              child: ExcludeFocus(excluding: open, child: widget.home),
+            ),
+          ),
+        ),
+        if (open || !_controller.isDismissed)
+          _CoachTransition(
+            animation: _progress,
+            leaving: !open,
+            child: widget.coach(context),
+          ),
+      ],
+    );
+  }
+}
+
+class _CoachTransition extends AnimatedWidget {
+  final bool leaving;
+  final Widget child;
+
+  const _CoachTransition({
+    required Animation<double> animation,
+    required this.leaving,
+    required this.child,
+  }) : super(listenable: animation);
+
+  // The Coach is opaque: it is fully there before it finishes moving, so Home
+  // and the chat never read as one screen for more than a moment.
+  static const Interval _opacity = Interval(0, 0.6);
+
+  @override
+  Widget build(BuildContext context) {
+    final t = (listenable as Animation<double>).value;
+    final rtl = Directionality.of(context) == TextDirection.rtl;
+    return IgnorePointer(
+      ignoring: leaving,
+      child: ExcludeSemantics(
+        excluding: leaving,
+        child: ExcludeFocus(
+          excluding: leaving,
+          child: Opacity(
+            opacity: _opacity.transform(t),
+            child: Transform.translate(
+              offset: Offset((1 - t) * AppMotion.shift * (rtl ? -1 : 1), 0),
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The resume strip opens and closes as a region ([Collapsible]), rising out
+/// from behind the navigation instead of shoving it and the content.
+///
+/// It moves only for a change the user can see: one made while a workout or
+/// another route covers the shell, or while the app is in the background,
+/// lands at rest, so returning to the shell never replays it. While it folds
+/// away it keeps showing the workout that just ended, and like any closing
+/// [Collapsible] it takes no taps and says nothing to screen readers.
+class _ResumeStrip extends StatefulWidget {
+  final ValueChanged<WorkoutSession> onResume;
+
+  const _ResumeStrip({required this.onResume});
+
+  @override
+  State<_ResumeStrip> createState() => _ResumeStripState();
+}
+
+class _ResumeStripState extends State<_ResumeStrip> {
+  WorkoutSession? _last;
+  bool? _wasLive;
+
+  /// A new [Collapsible] starts at rest, so a change made out of view swaps
+  /// in a fresh one rather than animating the old.
+  int _generation = 0;
+
+  bool _inView(BuildContext context) {
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    return TickerMode.valuesOf(context).enabled &&
+        (ModalRoute.of(context)?.isCurrent ?? true) &&
+        (lifecycle == null || lifecycle == AppLifecycleState.resumed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder(
+      valueListenable: HiveService.sessionsListenable(),
+      builder: (context, _, _) {
+        final live = HiveService.getLiveSession();
+        final isLive = live != null;
+        if (_wasLive != null && _wasLive != isLive && !_inView(context)) {
+          _generation++;
+        }
+        _wasLive = isLive;
+        if (live != null) _last = live;
+        final shown = live ?? _last;
+        return Collapsible(
+          key: ValueKey(_generation),
+          open: isLive,
+          child:
+              shown == null
+                  ? const SizedBox.shrink()
+                  : ActiveWorkoutBar(
+                    session: shown,
+                    onTap: () => widget.onResume(shown),
+                  ),
+        );
+      },
     );
   }
 }

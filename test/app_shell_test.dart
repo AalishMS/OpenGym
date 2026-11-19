@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
@@ -52,7 +53,9 @@ void main() {
     // channel in every test, including when runAsync lets that work complete.
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
-          const MethodChannel('com.aalishms.opengym/workout_timer_notification'),
+          const MethodChannel(
+            'com.aalishms.opengym/workout_timer_notification',
+          ),
           (_) async => null,
         );
     await Hive.box<WorkoutPlan>(HiveService.plansBox).clear();
@@ -357,22 +360,23 @@ void main() {
     // A body swipe also changes sections and resets the vertical offset.
     await tester.tap(find.byKey(const ValueKey('statistics-tab-Overview')));
     await tester.pumpAndSettle();
-    final scroll =
+    // Each section's page scrolls on a controller of its own.
+    ScrollController scroll() =>
         tester
             .widget<SingleChildScrollView>(
               find.byKey(const ValueKey('statistics-scroll')),
             )
             .controller!;
-    scroll.jumpTo(300);
+    scroll().jumpTo(300);
     await tester.pump();
-    expect(scroll.offset, greaterThan(0));
+    expect(scroll().offset, greaterThan(0));
     await tester.dragFrom(
       tester.getCenter(find.byType(AppShell)),
       const Offset(-250, 0),
     );
     await tester.pumpAndSettle();
     expectSection('Strength');
-    expect(scroll.offset, 0);
+    expect(scroll().offset, 0);
 
     // Re-entering from either side starts at its adjacent section, even if
     // a different section was selected when Stats was last visible.
@@ -729,7 +733,8 @@ void main() {
               .copyWith(isCompleted: true, timerStartedAt: null),
         );
       });
-      await tester.pump();
+      // The strip folds away rather than vanishing.
+      await tester.pumpAndSettle();
       expect(strip, findsNothing);
     });
 
@@ -863,8 +868,12 @@ void main() {
   ) async {
     await tester.pumpWidget(bottomNavHost());
     final context = tester.element(find.byType(AppBottomNav));
-    final selected = tester.widget<Text>(find.text('Home')).style!;
-    final unselected = tester.widget<Text>(find.text('History')).style!;
+    // The painted style: each destination eases its colour and weight
+    // through an inherited text style, so the label's own style is empty.
+    TextStyle painted(String label) =>
+        tester.renderObject<RenderParagraph>(find.text(label)).text.style!;
+    final selected = painted('Home');
+    final unselected = painted('History');
 
     expect(selected.color, accentColor(context));
     expect(selected.fontWeight, FontWeight.w700);

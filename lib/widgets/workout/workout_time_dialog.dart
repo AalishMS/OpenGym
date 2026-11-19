@@ -6,6 +6,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
 import '../app_button.dart';
+import '../motion/app_modals.dart';
 
 /// When a logged workout started and how long it took.
 typedef WorkoutTime = ({DateTime start, int durationSeconds});
@@ -18,7 +19,7 @@ Future<WorkoutTime?> showWorkoutTimeDialog(
   required DateTime start,
   required int durationSeconds,
   DateTime? now,
-}) => showDialog<WorkoutTime>(
+}) => showAppDialog<WorkoutTime>(
   context: context,
   builder:
       (_) => _WorkoutTimeDialog(

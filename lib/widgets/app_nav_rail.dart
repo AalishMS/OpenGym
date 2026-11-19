@@ -4,6 +4,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../theme/app_theme.dart';
 import 'app_wordmark.dart';
 import 'guided_tour.dart';
+import 'nav_selection.dart';
 
 /// Desktop sidebar navigation with the same destinations as [AppBottomNav].
 class AppNavRail extends StatelessWidget {
@@ -37,11 +38,26 @@ class AppNavRail extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = accentColor(context);
     final textSecondary = textSecondaryColor(context);
+    final selectedLabel = Theme.of(context).textTheme.labelMedium?.copyWith(
+      color: accent,
+      fontWeight: FontWeight.bold,
+    );
+    final unselectedLabel = Theme.of(
+      context,
+    ).textTheme.labelMedium?.copyWith(color: textSecondary);
     // Keep icon identity stable when the shell rebuilds during the tour.
     final iconKeys = {
       for (final entry in destinationKeys.entries)
         entry.key: GlobalObjectKey(entry.value),
     };
+    // Built once here, so the selection's frames don't rebuild them.
+    final icons = [
+      for (var i = 0; i < _labels.length; i++)
+        NavBadge(
+          visible: badgedIndex == i,
+          child: Icon(_icons[i], key: iconKeys[i]),
+        ),
+    ];
 
     return SizedBox(
       width: 180,
@@ -58,11 +74,8 @@ class AppNavRail extends StatelessWidget {
           indicatorColor: accent.withAlpha(20),
           selectedIconTheme: IconThemeData(color: accent, size: 20),
           unselectedIconTheme: IconThemeData(color: textSecondary, size: 20),
-          selectedLabelTextStyle: Theme.of(context).textTheme.labelMedium
-              ?.copyWith(color: accent, fontWeight: FontWeight.bold),
-          unselectedLabelTextStyle: Theme.of(
-            context,
-          ).textTheme.labelMedium?.copyWith(color: textSecondary),
+          selectedLabelTextStyle: selectedLabel,
+          unselectedLabelTextStyle: unselectedLabel,
           leading: const Padding(
             padding: EdgeInsets.fromLTRB(16, 22, 16, 22),
             child: AppWordmark(fontSize: 15),
@@ -70,16 +83,32 @@ class AppNavRail extends StatelessWidget {
           destinations: [
             for (var i = 0; i < _labels.length; i++)
               NavigationRailDestination(
-                icon: Badge(
-                  isLabelVisible: badgedIndex == i,
-                  smallSize: 7,
-                  backgroundColor: accentFillColor(context),
-                  child: Icon(_icons[i], key: iconKeys[i]),
+                icon: NavSelection(
+                  selected: i == currentIndex,
+                  builder:
+                      (context, t) => IconTheme.merge(
+                        data: IconThemeData(
+                          color: Color.lerp(textSecondary, accent, t),
+                        ),
+                        child: icons[i],
+                      ),
                 ),
                 label: GuidedTourTarget(
                   key: destinationKeys[i],
                   additionalTarget: iconKeys[i],
-                  child: Text(_labels[i]),
+                  child: NavSelection(
+                    selected: i == currentIndex,
+                    builder:
+                        (context, t) => Text(
+                          _labels[i],
+                          style: (i == currentIndex
+                                  ? selectedLabel
+                                  : unselectedLabel)
+                              ?.copyWith(
+                                color: Color.lerp(textSecondary, accent, t),
+                              ),
+                        ),
+                  ),
                 ),
               ),
           ],

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
@@ -12,11 +14,16 @@ import '../providers/workout_session_provider.dart';
 import '../services/exercise_catalog.dart';
 import '../services/statistics_analytics_service.dart';
 import '../theme/app_theme.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/scroll_to_top.dart';
 import '../utils/statistics_format.dart';
 import '../widgets/app_header.dart';
+import '../widgets/motion/app_modals.dart';
+import '../widgets/motion/entrance.dart';
+import '../widgets/motion/page_switcher.dart';
+import '../widgets/own_scroll_controller.dart';
 import '../widgets/statistics/block_statistics.dart';
 import '../widgets/statistics/lift_list.dart';
 import '../widgets/statistics/statistics_controls.dart';
@@ -72,8 +79,20 @@ class StatsScreenState extends State<StatsScreen> {
   final _weekly = _Memo<List<WeeklyTrainingValue>>();
   final _lifts = _Memo<List<LiftSummary>>();
   final _blocks = _Memo<List<BlockStatistics>>();
-  final ScrollController _scrollController = ScrollController();
+
+  /// Scrolls the page on screen. Each view arrives as a new page that owns
+  /// its controller and starts at the top ([OwnScrollController]): while two
+  /// pages trade places both are attached, the one leaving keeps its place,
+  /// and no controller ever holds both.
+  ScrollController? _pageScroll;
   _StatisticsView _view = _StatisticsView.overview;
+
+  /// The page on screen. A new page for a view chosen here trades places with
+  /// the last; [_cut] changes when a view is set from outside (entering the
+  /// tab, the Home shortcut, a split switch), and the new page simply appears.
+  int _page = 0;
+  int _cut = 0;
+  bool _pageForward = true;
   StatisticsPeriod _period = StatisticsPeriod.fourWeeks;
   ExerciseMetric _metric = ExerciseMetric.estimatedOneRepMax;
   String? _blockId;
@@ -81,6 +100,16 @@ class StatsScreenState extends State<StatsScreen> {
   String? _progressExercise;
   String? _lastSplit;
   int _recordLimit = 12;
+
+  /// The most stagger steps the rows revealed by *Show earlier records* wait:
+  /// three steps and an arrival fill [AppMotion.long].
+  static final int _recordStaggerSteps =
+      (AppMotion.long - AppMotion.enter).inMicroseconds ~/
+      AppMotion.stagger.inMicroseconds;
+
+  /// The first record row revealed by the last *Show earlier records*, for
+  /// the one frame those rows are built; they arrive, the rest were there.
+  int? _recordsArrivingFrom;
   bool _hasSections = false;
 
   /// Home's weekly shortcut asks for the week in progress; any other entry
@@ -91,13 +120,13 @@ class StatsScreenState extends State<StatsScreen> {
   void didUpdateWidget(covariant StatsScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.scrollToTopRequest != oldWidget.scrollToTopRequest) {
-      scrollToTop(context, _scrollController);
+      scrollToTop(context, _pageScroll);
     }
     final weekly =
         widget.weeklyTrainingRequest != oldWidget.weeklyTrainingRequest;
     if (!weekly && widget.visitRequest == oldWidget.visitRequest) return;
     if (weekly) {
-      _view = _StatisticsView.overview;
+      _turnTo(_StatisticsView.overview, animate: false);
       _weeklyExercise = null;
     }
     _showCurrentWeek = weekly;
@@ -106,13 +135,28 @@ class StatsScreenState extends State<StatsScreen> {
 
   void _resetScroll() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _scrollController.hasClients) _scrollController.jumpTo(0);
+      final scroll = _pageScroll;
+      if (mounted && scroll != null && scroll.hasClients) scroll.jumpTo(0);
     });
   }
 
-  void _selectView(_StatisticsView view) {
-    setState(() => _view = view);
-    _resetScroll();
+  /// Shows [view] on a page of its own. With [animate] the page trades
+  /// places with the last along the order of the views; otherwise it simply
+  /// appears, as when the tab is entered and the tab's own fade carries it.
+  void _turnTo(_StatisticsView view, {required bool animate}) {
+    if (view == _view) return;
+    _pageForward = view.index > _view.index;
+    _view = view;
+    _page++;
+    if (!animate) _cut++;
+  }
+
+  void _selectView(_StatisticsView view, {bool animate = true}) {
+    if (view == _view) {
+      _resetScroll();
+      return;
+    }
+    setState(() => _turnTo(view, animate: animate));
   }
 
   /// Handles a shell swipe before it moves to an adjacent main tab.
@@ -126,7 +170,9 @@ class StatsScreenState extends State<StatsScreen> {
             ? (forward ? 0 : views.length - 1)
             : _view.index + (forward ? 1 : -1);
     if (next < 0 || next >= views.length) return false;
-    _selectView(views[next]);
+    // Entering arrives with the tab's own fade; within the tab the views
+    // trade places in the direction of the swipe.
+    _selectView(views[next], animate: !entering);
     return true;
   }
 
@@ -143,7 +189,6 @@ class StatsScreenState extends State<StatsScreen> {
   @override
   void dispose() {
     ExerciseCatalog.changes.removeListener(_catalogChanged);
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -154,7 +199,7 @@ class StatsScreenState extends State<StatsScreen> {
     required String Function(T) labelFor,
     required ValueChanged<T> onSelected,
   }) async {
-    final value = await showModalBottomSheet<T>(
+    final value = await showAppSheet<T>(
       context: context,
       isScrollControlled: true,
       builder:
@@ -203,7 +248,7 @@ class StatsScreenState extends State<StatsScreen> {
     String selected,
     String unit,
   ) async {
-    final value = await showModalBottomSheet<String>(
+    final value = await showAppSheet<String>(
       context: context,
       isScrollControlled: true,
       builder:
@@ -238,6 +283,17 @@ class StatsScreenState extends State<StatsScreen> {
     if (mounted && value != null) setState(() => _progressExercise = value);
   }
 
+  void _showEarlierRecords() {
+    setState(() {
+      _recordsArrivingFrom = _recordLimit;
+      _recordLimit += 12;
+    });
+    // Entrance reads whether to arrive once, on its first build.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _recordsArrivingFrom = null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final splitId = context.watch<SplitProvider?>()?.activeSplitId;
@@ -255,7 +311,7 @@ class StatsScreenState extends State<StatsScreen> {
     _hasSections = sessions.isNotEmpty;
     if (_lastSplit != splitId) {
       _lastSplit = splitId;
-      _view = _StatisticsView.overview;
+      _turnTo(_StatisticsView.overview, animate: false);
       _blockId = null;
       _weeklyExercise = null;
       _progressExercise = null;
@@ -331,8 +387,10 @@ class StatsScreenState extends State<StatsScreen> {
     switch (_view) {
       case _StatisticsView.overview:
         content = TrainingOverview(
+          // The exercise is not part of the key: choosing another keeps the
+          // chart, so its bars ease to the new values.
           key: ValueKey(
-            'overview-$splitId-$weeklyExercise-'
+            'overview-$splitId-'
             '${widget.weeklyTrainingRequest}-$_showCurrentWeek',
           ),
           sessions: sessions,
@@ -458,7 +516,7 @@ class StatsScreenState extends State<StatsScreen> {
                     color: textSecondaryColor(context),
                   ),
                   onPressed:
-                      () => showDialog<void>(
+                      () => showAppDialog<void>(
                         context: context,
                         builder:
                             (context) => AlertDialog(
@@ -485,9 +543,9 @@ class StatsScreenState extends State<StatsScreen> {
               )
             else
               StrengthTrend(
-                key: ValueKey(
-                  'strength-$splitId-${lift.exerciseId ?? lift.exerciseName}-$_period-$_metric',
-                ),
+                key: ValueKey('strength-$splitId'),
+                dataset:
+                    '${lift.exerciseId ?? lift.exerciseName}-$_period-$_metric',
                 progress: lift.progress,
                 metric: _metric,
                 weightUnit: unit,
@@ -532,17 +590,33 @@ class StatsScreenState extends State<StatsScreen> {
                 icon: LucideIcons.trophy,
               )
             else ...[
-              for (final event in records.take(_recordLimit))
-                RecordEventRow(
+              for (final (index, event) in records.take(_recordLimit).indexed)
+                // Rows revealed by Show earlier records are new to the
+                // screen and arrive; the rest were already there.
+                Entrance(
                   key: ValueKey(
-                    'record-${event.session.id}-${event.exerciseId ?? event.exerciseName}',
+                    'record-arrival-${event.session.id}-${event.exerciseId ?? event.exerciseName}',
                   ),
-                  event: event,
-                  weightUnit: unit,
+                  animate:
+                      _recordsArrivingFrom != null &&
+                      index >= _recordsArrivingFrom!,
+                  // Capped so the whole batch has landed within
+                  // AppMotion.long; rows past the cap arrive with the last.
+                  index: math.min(
+                    index - (_recordsArrivingFrom ?? 0),
+                    _recordStaggerSteps,
+                  ),
+                  child: RecordEventRow(
+                    key: ValueKey(
+                      'record-${event.session.id}-${event.exerciseId ?? event.exerciseName}',
+                    ),
+                    event: event,
+                    weightUnit: unit,
+                  ),
                 ),
               if (records.length > _recordLimit)
                 TextButton(
-                  onPressed: () => setState(() => _recordLimit += 12),
+                  onPressed: _showEarlierRecords,
                   child: const Text('Show earlier records'),
                 ),
             ],
@@ -566,22 +640,41 @@ class StatsScreenState extends State<StatsScreen> {
                     onSelected: _selectView,
                   ),
                   Expanded(
-                    child: SingleChildScrollView(
-                      key: const ValueKey('statistics-scroll'),
-                      controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(
-                        AppSpacing.xl,
-                        AppSpacing.lg,
-                        AppSpacing.xl,
-                        AppSpacing.xl,
-                      ),
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 832),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: content,
-                          ),
+                    child: KeyedSubtree(
+                      key: ValueKey('statistics-cut-$_cut'),
+                      child: PageSwitcher(
+                        forward: _pageForward,
+                        child: OwnScrollController(
+                          key: ValueKey('statistics-page-$_page'),
+                          keepScrollOffset: false,
+                          onAttach: (scroll) => _pageScroll = scroll,
+                          onDetach: (scroll) {
+                            if (identical(_pageScroll, scroll)) {
+                              _pageScroll = null;
+                            }
+                          },
+                          builder:
+                              (context, scroll) => SingleChildScrollView(
+                                key: const ValueKey('statistics-scroll'),
+                                controller: scroll,
+                                padding: const EdgeInsets.fromLTRB(
+                                  AppSpacing.xl,
+                                  AppSpacing.lg,
+                                  AppSpacing.xl,
+                                  AppSpacing.xl,
+                                ),
+                                child: Center(
+                                  child: ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxWidth: 832,
+                                    ),
+                                    child: SizedBox(
+                                      width: double.infinity,
+                                      child: content,
+                                    ),
+                                  ),
+                                ),
+                              ),
                         ),
                       ),
                     ),

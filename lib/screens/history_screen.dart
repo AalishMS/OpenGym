@@ -27,6 +27,10 @@ import '../widgets/app_header.dart';
 import '../widgets/history/history_journal_data.dart';
 import '../widgets/history/history_journal_widgets.dart';
 import '../widgets/history/workout_details_widgets.dart';
+import '../widgets/motion/app_modals.dart';
+import '../widgets/motion/collapsible.dart';
+import '../widgets/motion/state_switcher.dart';
+import '../widgets/own_scroll_controller.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../widgets/workout/workout_dialogs.dart';
 import '../widgets/raised_card.dart';
@@ -43,7 +47,12 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
+
+  /// The journal list on show. The list owns its controller
+  /// ([OwnScrollController]): results that come back while the last list is
+  /// still crossing out arrive as a second list, and one controller can't
+  /// hold both.
+  ScrollController? _listScroll;
   String _query = '';
   String? _splitId;
   bool _hasSeenSplit = false;
@@ -52,7 +61,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   void didUpdateWidget(covariant HistoryScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.scrollToTopRequest != oldWidget.scrollToTopRequest) {
-      scrollToTop(context, _scrollController);
+      scrollToTop(context, _listScroll);
     }
   }
 
@@ -64,7 +73,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
       _query = '';
       _searchController.clear();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients) _scrollController.jumpTo(0);
+        final scroll = _listScroll;
+        if (scroll != null && scroll.hasClients) scroll.jumpTo(0);
       });
     }
     _splitId = splitId;
@@ -74,7 +84,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   void dispose() {
     _searchController.dispose();
-    _scrollController.dispose();
     super.dispose();
   }
 
@@ -147,8 +156,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   onClear: _clearSearch,
                 ),
               ),
-              if (searching && !journal.isEmpty)
-                Padding(
+              // The count opens under the field when a search starts and
+              // folds away when it ends, so the ledger moves rather than
+              // jumps. Typing more only changes the number, in place.
+              Collapsible(
+                open: searching && !journal.isEmpty,
+                child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: AppSpacing.lg,
                   ),
@@ -160,60 +173,80 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     ),
                   ),
                 ),
+              ),
               Expanded(
-                child:
-                    journal.isEmpty
-                        ? HistoryEmptyState(
-                          isSearching: searching,
-                          onClearSearch: _clearSearch,
-                        )
-                        : ListView.builder(
-                          key: const PageStorageKey('history-journal-list'),
-                          controller: _scrollController,
-                          padding: const EdgeInsets.fromLTRB(
-                            AppSpacing.lg,
-                            AppSpacing.md,
-                            AppSpacing.lg,
-                            AppSpacing.xxl,
-                          ),
-                          itemCount: entries.length,
-                          itemBuilder: (context, index) {
-                            final entry = entries[index];
-                            if (entry is HistoryMonthGroup) {
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  top: index == 0 ? 0 : AppSpacing.xxl,
-                                ),
-                                child: HistoryMonthHeader(
-                                  group: entry,
-                                  weightUnit: weightUnit,
-                                ),
-                              );
-                            }
-                            final row = entry as _JournalEntry;
-                            final session = row.summary.session;
-                            return HistoryWorkoutRow(
-                              key: ValueKey(
-                                'history-row-${historySessionIdentity(session)}',
-                              ),
-                              summary: row.summary,
-                              weightUnit: weightUnit,
-                              showDate: row.showDate,
-                              rule: row.rule,
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder:
-                                        (_) => WorkoutDetailsScreen(
-                                          sessionIdentity:
-                                              historySessionIdentity(session),
-                                        ),
+                // Results and "No matching workouts" cross in place; typing
+                // more within either one replays nothing.
+                child: StateSwitcher(
+                  child:
+                      journal.isEmpty
+                          ? HistoryEmptyState(
+                            key: ValueKey('history-empty-$searching'),
+                            isSearching: searching,
+                            onClearSearch: _clearSearch,
+                          )
+                          : OwnScrollController(
+                            key: const ValueKey('history-journal'),
+                            onAttach: (scroll) => _listScroll = scroll,
+                            onDetach: (scroll) {
+                              if (identical(_listScroll, scroll)) {
+                                _listScroll = null;
+                              }
+                            },
+                            builder:
+                                (context, scroll) => ListView.builder(
+                                  key: const PageStorageKey(
+                                    'history-journal-list',
                                   ),
-                                );
-                              },
-                            );
-                          },
-                        ),
+                                  controller: scroll,
+                                  padding: const EdgeInsets.fromLTRB(
+                                    AppSpacing.lg,
+                                    AppSpacing.md,
+                                    AppSpacing.lg,
+                                    AppSpacing.xxl,
+                                  ),
+                                  itemCount: entries.length,
+                                  itemBuilder: (context, index) {
+                                    final entry = entries[index];
+                                    if (entry is HistoryMonthGroup) {
+                                      return Padding(
+                                        padding: EdgeInsets.only(
+                                          top: index == 0 ? 0 : AppSpacing.xxl,
+                                        ),
+                                        child: HistoryMonthHeader(
+                                          group: entry,
+                                          weightUnit: weightUnit,
+                                        ),
+                                      );
+                                    }
+                                    final row = entry as _JournalEntry;
+                                    final session = row.summary.session;
+                                    return HistoryWorkoutRow(
+                                      key: ValueKey(
+                                        'history-row-${historySessionIdentity(session)}',
+                                      ),
+                                      summary: row.summary,
+                                      weightUnit: weightUnit,
+                                      showDate: row.showDate,
+                                      rule: row.rule,
+                                      onTap: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute<void>(
+                                            builder:
+                                                (_) => WorkoutDetailsScreen(
+                                                  sessionIdentity:
+                                                      historySessionIdentity(
+                                                        session,
+                                                      ),
+                                                ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  },
+                                ),
+                          ),
+                ),
               ),
             ],
           ),
@@ -298,7 +331,7 @@ class WorkoutDetailsScreen extends StatelessWidget {
   Future<void> _delete(BuildContext context, WorkoutSession session) async {
     var deleting = false;
     String? error;
-    await showDialog<void>(
+    await showAppDialog<void>(
       context: context,
       barrierDismissible: false,
       builder:
@@ -565,7 +598,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
     }
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _isConfirmingLeave = true);
-    final action = await showDialog<_EditLeaveAction>(
+    final action = await showAppDialog<_EditLeaveAction>(
       context: context,
       builder:
           (dialogContext) => AlertDialog(
@@ -604,7 +637,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
     required String message,
   }) async {
     FocusManager.instance.primaryFocus?.unfocus();
-    return await showDialog<bool>(
+    return await showAppDialog<bool>(
           context: context,
           builder:
               (dialogContext) => AlertDialog(
@@ -712,9 +745,7 @@ class _EditSessionScreenState extends State<EditSessionScreen>
                   key: const ValueKey('workout-name-field'),
                   controller: _planNameController,
                   enabled: !_isSaving,
-                  decoration: const InputDecoration(
-                    labelText: 'Workout name',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Workout name'),
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(

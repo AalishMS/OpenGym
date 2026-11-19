@@ -60,6 +60,27 @@ discarded. `AdoptLocalData` adopts on-device data into an account the first
 time that user signs in, and keeps one account's cache hidden from the next
 user on a shared device.
 
+Each surface the gate puts in place of another (login, password recovery,
+the app once `AuthenticatedHome` has prepared its data, or the preparation
+failure) fades in on the page colour from partial opacity over
+`AppMotion.quick` (`SurfaceFade`). What it replaces is removed at once rather
+than kept beside it, so a sign-out never leaves the previous account's
+screens, routes or focus on show. The app is uncovered the same way when
+password recovery finishes; arriving from login or the sign-in check, it fades
+in once, through `AuthenticatedHome`. The sign-in check and data preparation
+usually finish within a frame or two, so their spinners stay unpainted for
+`AppMotion.patience` (300ms) and then fade in over `quick`, only for a wait
+that is real (`PatientProgress`); screen readers hear the progress label from
+the start.
+
+The login screen has four modes (sign in, create account, reset email, new
+password). Switching between them crosses the heading and its line, the
+primary button's label and the mode link in place; fields and links that
+come and go fold open and closed, and one on its way out gives up focus at
+once. The error or confirmation line folds open beneath the fields and, when
+a new attempt clears it, folds away still reading what it said. While
+signing in, the button's label crosses to its progress indicator.
+
 The app is split into small layers:
 
 | Layer | Location | Responsibility |
@@ -295,7 +316,10 @@ current block marked with a check, Edit block and Create block, and a Done
 button. Nothing is picked there, so the other rows carry no empty radio ring,
 and tapping a row edits that block.
 Create block and Edit block open inside that sheet, replacing the block list
-until Cancel or Back returns to it, so only one layer is ever open; from the
+until Cancel or Back returns to it, so only one layer is ever open: the two
+trade places in a quick cross while the sheet eases to the new height, and
+while picking, the chosen block's weeks fold open beneath it as the last
+block's fold away. From the
 workout's block menu they, and Reorder blocks, open as a bottom sheet of their
 own. The form sets the length with one stepper (minus, the week count, plus)
 on a control fill; a key that can't be pressed sinks into the fill. A week
@@ -490,9 +514,17 @@ on Android 13+; screens that guard unsaved work still intercept it through
 into the workout header (`PlanTitleHero`); other entry points open normally.
 
 The selected bottom tab is marked by a short accent rule on the top hairline as
-well as by colour and weight, so selection never rests on colour alone. Moving
-to another tab gives a selection haptic and a brief fade-in (none under reduced
-motion). Tapping the tab that is already showing scrolls it back to the top;
+well as by colour and weight, so selection never rests on colour alone. When the
+selection moves, the rule slides while both destinations' icon and label ease
+their colour over the same time (`NavSelection`), and the update dot fades in
+and out rather than popping (`NavBadge`); the desktop rail settles its labels
+and icons the same way. The label's weight changes at once: the bundled
+Manrope files are static weights, so a weight eased through them would re-lay
+the label out in steps and shift it. Moving to another tab gives a selection
+haptic and a brief fade-in from partial opacity (`SurfaceFade`), so its first
+frame already shows the new tab rather than the bare page (none under reduced
+motion). The weekly-training shortcut's switch
+to Stats fades the same way. Tapping the tab that is already showing scrolls it back to the top;
 on Home it also closes the Coach and Manage.
 
 While a workout is in progress, a resume strip sits directly above the bottom
@@ -501,7 +533,13 @@ colour, the plan name, and the live session clock, and opens that workout in
 one tap, switching split if needed. It shows the running timer, or else a paused
 workout started within the last 12 hours (`HiveService.getLiveSession`). It
 listens to the sessions box directly, so finishing, deleting, or a sync pull
-removes it. Pushed routes such as the workout screen cover it.
+removes it. Pushed routes such as the workout screen cover it. When it appears
+or goes while the shell is in view, it folds open or closed above the
+navigation (`Collapsible`), and a strip on its way out takes no taps or
+semantics; a change
+made while a route covers the shell or the app is in the background lands at
+rest, so returning never replays it. Inside the strip, running and paused
+change together at once, and the clock ticks without animating.
 
 | Tab | Screen |
 | --- | --- |
@@ -513,6 +551,13 @@ removes it. Pushed routes such as the workout screen cover it.
 Workout plan creation, editing, and active workout logging are separate screens
 opened from the main flow. The Coach is the exception: it opens over Home
 inside the Home tab, so the tab bar or rail stays visible (see `docs/coach.md`).
+It arrives as a page one level deeper does in the exercise picker, fading in
+while it travels the last 24px from the end side, and leaves the same way back
+over `AppMotion.standard`. Home keeps its state beneath, stops taking taps the
+moment the Coach starts to arrive, and takes them again the moment it starts
+to leave; the leaving Coach gives up focus, closing the keyboard. A Coach
+closed out of view (behind another tab, for the tour, or on sign-out) simply
+goes.
 
 Back dismisses the nearest active layer before leaving its parent. Manage is a
 Home mode: Back restores normal Home, and leaving or reselecting Home clears
@@ -579,7 +624,13 @@ program's name, a figure sheet (days, minutes per session, exercises, who it
 suits) and a labelled schedule whose training cells use the same solved plan
 tints and numbers as the foldable workout-day list and Home's plan markers.
 Folded days expose complete prescriptions, RIR, rest and substitutions; shared
-guidance closes the page before the user creates a copy.
+guidance closes the page before the user creates a copy. The catalog and a
+program's details trade places along a horizontal axis, as the exercise
+picker's pages do (`PageSwitchTransition`); the install bar belongs to the
+details and travels with them. Both pages stay alive throughout, each on its
+own scroll position, so the catalog keeps its goal and place, and the page
+that isn't showing is offstage. Each page is built once per change, not on
+every frame of it. Workout days fold open and away (`Collapsible`).
 
 ## UI Design
 
@@ -623,7 +674,7 @@ signature:
   absolute chroma cap. Darkened tones therefore don't turn dusty or brown. The wordmark uses a dedicated, more saturated `brandAccent`
   tone of the selected color; ordinary controls retain the softer accent.
   Settings offers them as bare swatches; the chosen one gets a ring and a
-  check rather than a tile behind it.
+  check, which settle in together, rather than a tile behind it.
 - The `> OpenGym` wordmark serves as the main brand signature. Keep it consistent
   and give it room instead of repeating the prompt symbol elsewhere.
 - Every screen except Home shares one header (`AppHeader`): flat on the page
@@ -631,7 +682,14 @@ signature:
   dark mode it reads as black. Screen and dialog titles are set a size up from
   section titles (20px, extra bold, tightly tracked). Home keeps its `> OpenGym` brand header, followed
   by a slash and a borderless active-split selector. An icon-only Coach action
-  sits at the trailing edge on a quiet accent circle when available.
+  sits at the trailing edge on a quiet accent circle when available. The
+  split menu settles out of the selector as it opens and closes at once.
+  Choosing another split crosses the selector's name to the new one while its
+  width eases, and fades Home's content in from partial opacity over `quick`
+  (`SurfaceFade`). The last split's plans go at once rather than crossing, so
+  nothing from them is read or tapped on its way out. The same fade marks plans arriving on an empty Home, or the last
+  one deleted, while Home is in view; a change made under a page or on
+  another tab is simply there on the way back.
 - Back is always the same neutral arrow (`AppBackButton`) with a *Back*
   tooltip, including the steps back inside the exercise picker and preset
   browser. Header actions keep the accent. Plan colours stay on Home, so the
@@ -654,7 +712,10 @@ signature:
   and set count sit right-aligned in `figures` so a month compares down the
   page (they join the context line at large text), and the exercise names run
   full width beneath. A session with no performed sets says *No sets logged*
-  instead of zeros.
+  instead of zeros. The ledger appears with the tab, without an arrival.
+  Searching folds a match count open under the field, and the results and
+  *No matching workouts* cross in place; typing more only changes what is
+  shown, and replays nothing.
 - Workout details opens with the long date, the workout name, its block and
   week, and how many exercises set a record (accent ink). A bounded readout
   puts Volume load and Duration large, over Exercises / Sets / Reps. Each
@@ -671,12 +732,21 @@ signature:
   sheet with a drag handle, not a dialog. *Delete plan* is always the last
   row, set apart by a rule and the error colour. In Manage, the drag grip
   leads each card and *Plan actions* trails it, so the two targets sit at
-  opposite ends.
+  opposite ends. Entering Manage folds the next workout and the week away so
+  the plans rise to the top, while the rows cross to cards and *Manage* to
+  *Done*; leaving unfolds them. Manage cleared by the app (another tab,
+  reselecting Home, the tour) settles at once. Grid cards slide to their new
+  places when one is dropped, moved from its menu, or deleted. They take ink
+  but don't give under the finger: each carries a grip, and a give would pull
+  against the card being lifted.
 - The workout marks records while you lift. The set that would be the
   workout's heaviest-weight record if logged as entered (see Personal
   records: one set per lift, judged against earlier logs, never on a lift's
-  first workout or for a hold) gets the PR badge, which pops in, and a heavy
-  haptic when the entry closes. A set that goes past its Previous set (more weight, or
+  first workout or for a hold) gets the PR badge, which pops in as it is
+  earned, and a heavy haptic when the entry closes. A badge the log opens
+  with, or one on a card scrolled back into view, is simply there, and so is
+  one that moves up a row when a set above it is deleted. A set that goes
+  past its Previous set (more weight, or
   more reps at the same weight) shows an accent arrow beside Previous.
   Exercises with no history are never marked.
 - Finish in the workout header is labelled, not a bare check; large text on a
@@ -693,10 +763,36 @@ signature:
   separately. The wordmark signs the summary at the bottom. Figures show final
   values immediately, so Share always exports accurate totals. The header's
   Share action captures the complete summary as an opaque PNG after pending
-  paint finishes; Done returns to the log.
-- Haptics are named for the moment (`lib/utils/haptics.dart`): a medium impact
-  when the workout clock starts, a heavy one for a new record or a logged
-  workout. Keypad keys keep their own selection clicks.
+  paint finishes, crossing to its progress in place while it works; that
+  cross sits in the header, outside the image. Done returns to the log.
+- The workout moves sparingly, because it is used mid-set in glances. The
+  exception is changing plan, which is swiping between pages and should feel
+  like it. During a swipe the log follows the finger one to one and fades as
+  it goes, to half by 40% of the width; at the first and last plan, with
+  nothing to go to, it gives only a twentieth of the travel and doesn't fade,
+  so the edge reads as an edge. Let go short of a switch, it springs back
+  with its opacity, carrying the flick, without overshoot. A switch, by swipe
+  or tab, trades the logs: the old one carries on out and the chosen plan's
+  comes in over it from the other side (see Pages, dialogs and sheets), while
+  the header, the plan tabs and the week bar hold still and change in place.
+  Once the new workout has landed it leaves like any page, so Back,
+  Android's predictive back and iOS's edge swipe work after a switch. A
+  set deleted from its hold menu folds away so the rows below rise into its
+  place, in the workout and the plan editor. Work in flight (saving, starting
+  or pausing the clock, logging, changing blocks) shows its progress line
+  only once it has lasted 300ms, and the line folds open and away rather
+  than shoving the log down and back; its label is in the tree from the
+  start but is announced only once shown. A failed save's message and Retry
+  fold open the same way. A held exercise rises from the page onto the
+  raised ground as it lifts and sinks back as it drops. Changing week, the
+  header's timer controls and the clock change in place without motion.
+  Under reduced motion every change is immediate: the log doesn't follow a
+  swipe, and a switch lands at once.
+- Haptics are named for the moment (`lib/utils/haptics.dart`): a selection
+  tick when the main tab changes or a plan is dropped into a new place, a
+  light impact when a plan card is picked up to drag, a medium impact when
+  the workout clock starts, a heavy one for a new record or a logged workout.
+  Keypad keys keep their own selection clicks.
 - Create and Edit plan share the workout log's open exercise sections, hairline
   dividers, filled weight/rep cells, and optional RPE controls. Exercises start
   expanded and can be collapsed or reordered using the trailing grip; with two
@@ -720,7 +816,8 @@ signature:
   folded summary gives way, chevrons turn, the palette and the missing-exercise
   message open the same way, the exercise count rolls, and the colour bar and
   swatch ease to a new colour. Exercises that arrive (from a starter or the
-  picker) fade and lift into place, a starter's in quick sequence; exercises
+  picker) fade and lift into place, a starter's in quick sequence, and the
+  line under the Exercises heading arrives with the first of them; exercises
   loaded with a plan don't. Under reduced motion every change is immediate.
 - Creating a plan starts at its name: the field takes focus on a new plan (not
   on an edit), and the plan's colour defaults to the first palette colour no
@@ -788,6 +885,13 @@ signature:
   in. Danger zone is always last. *Load sample data* replaces the active
   split's workouts, so it is a development tool. It only appears in debug
   builds (`SettingsScreen.showSampleData`, which defaults to `kDebugMode`).
+- Settings stays still while it saves: the progress banner waits
+  `AppMotion.patience` and only then fades in over the top of the page, and
+  out again (`PatientProgress`), so work that finishes at once never flashes
+  it, and nothing under it moves. A switch whose description changes with it
+  (the Coach's) crosses to the new line and eases the row to its new height,
+  and the sync status, its *Retry*, and the update check's line cross to
+  their next state. Under reduced motion each simply changes.
 - Settings → Workout → *Weight unit* (Kilograms / Pounds, styled like the theme
   selector) sets `SettingsProvider.weightUnit` (`kg` or `lbs`, stored as
   `weight_unit`, backed up as `weightUnit`). **Storage is always kilograms**:
@@ -835,7 +939,18 @@ signature:
   Sessions belong to blocks through their training week. Records keeps the
   chronological, expandable achievements and reveals older entries on demand.
   Headline figures roll to a new value (`RollingFigure`): up when it grew,
-  down when it fell, and plain under reduced motion. Signed changes use a true
+  down when it fell, and plain under reduced motion. A view chosen with its
+  tab or a swipe trades places with the last along the tabs' order, a fade
+  and a 24px shift in the direction of travel; entering Stats from another
+  tab or the Home shortcut shows the view without one. Charts appear with
+  their screen and never grow in. The weekly bars ease to new heights when
+  the exercise filter changes, and a week new to the plot grows from the
+  baseline; the Strength and Blocks lines cross to a new lift, period, measure
+  or basis rather than morphing between two different lines, while their
+  readouts and figures land at once. Picking a block or a point moves the
+  selection in place, and a selected week's bar eases its emphasis. Expanding
+  gains, lifts and record tags folds open, and records revealed on demand
+  arrive once. Signed changes use a true
   minus sign (`formatSignedChange`), and a change that rounds to zero has none.
   The four view controls remain visible while content scrolls; text can grow
   and scroll naturally on small screens. Returning to Stats resets its vertical
@@ -849,8 +964,10 @@ signature:
   `blockStatistics`. See [statistics design](docs/statistics-design.md) for
   references.
 - Home's weekly strip gives each day a full 48dp target without gaps, so all
-  seven fit a 390dp phone; bars are inset inside their targets and grow in
-  when the week changes. Today is marked by its bold letter and a small accent
+  seven fit a 390dp phone; bars are inset inside their targets. A bar first
+  appears at its height and grows or shrinks over `long` only when its day
+  changes while Home is in view: a workout finished on the workout page, or
+  another split's week, is simply there. Today is marked by its bold letter and a small accent
   dot under it, the same dot the workout uses for the week being trained now.
 - Home labels the rotation bar with “Workout N of M”. The same workout
   numbers appear in the plan list's coloured markers. Muscle groups sit on
@@ -877,6 +994,277 @@ instead of literal `BorderRadius` values. Radii are graduated by element size:
 cards and dialogs are the roundest, while badges use a smaller radius, so the
 same roundness reads correctly on a 148px card and a 20px badge. Retuning the
 whole app means editing the six scale constants in that one file.
+
+## Motion
+
+Motion in OpenGym has four jobs, and nothing moves for any other reason:
+
+- **Continuity**: where something came from or went. A page pushed or popped,
+  a sheet rising, a region folding open, a card reordered.
+- **Feedback**: a touch acknowledged. Ink on rows and buttons, a raised card
+  giving under the finger.
+- **Change**: a value that changed in place. A figure rolling, a segment thumb
+  sliding, a loading state crossing to its content.
+- **Arrival**: content appearing for the first time, once.
+
+A motion that can't be justified in one sentence by one of these does not
+exist. The rules that follow from that:
+
+- Nothing waits on an animation. Content the user came for is laid out,
+  tappable, findable and announced to screen readers from its first frame;
+  only its opacity and transform move, and every animation can be
+  interrupted. Leaving content stops taking taps as soon as it starts to go,
+  and a dialog or sheet on its way out lets taps through to the page. Logging
+  a set is the extreme case: it must feel instant.
+- Arrivals decelerate on `AppMotion.curve`. Departures pass `AppMotion.exit`
+  as the reverse curve of the animation that brought the thing in. Flutter
+  evaluates a reverse curve against the same 0–1 value, so the leaving thing
+  gives way at once and is mostly gone in the first half of its time: a
+  departure reads shorter than its arrival, and leaves the way it came.
+- Distances are small: lifts and shifts of 8 to 24px, and scale stays within
+  about 0.96 to 1 (a press and a dialog use 0.97). The one longer travel
+  follows a swipe: the workout's log is carried by the finger one to one, so
+  when it switches plan the logs trade over a quarter of the width
+  (`AppMotion.swipeShift`), the distance the hand began. A plan card picked up to
+  drag lifts to 1.025 under a deepening shadow, the one scale above full
+  size. A record badge earned just now is the one mark that pops in from
+  nothing: it pops only as it is earned, never when the log opens with it or
+  a card scrolls back into view. Staggering is rare: first
+  appearance only, a handful of items at most, 40ms apart, and never replayed
+  on a rebuild, on returning to a tab, or on coming back from a pushed route.
+- Reduced motion (`MediaQuery.disableAnimationsOf`) makes every change
+  immediate, page pushes included. Each primitive applies it itself; motion
+  written directly wraps its duration in `AppMotion.of`. The exception is
+  `AnimatedSize`, which asserts when a size change is given no time: under
+  reduced motion leave it out of the tree, as `StateSwitcher` does, rather
+  than passing it a zero duration.
+- Work that finishes within `AppMotion.patience` shows no progress
+  indicator (`PatientProgress`). The sign-in check, loading local data,
+  Settings' saves and the workout's saves usually take a frame or two, and a
+  spinner, banner or progress line that appeared and vanished that fast
+  would only flicker, or shove the page. Its label is in the tree from the
+  start. Shown in place, it is in the semantics tree from the start too, so
+  only the painting waits; folded open as a region, it takes no room until it
+  opens, and is announced as it does. Under reduced motion it still waits,
+  then appears without motion.
+- A change made while the screen is covered lands at rest. A covered
+  screen's tickers are muted but its animations' clocks keep running, so a
+  change made under a pushed page or on another tab would otherwise jump, or
+  play part of the way, as the page leaves. Check
+  `TickerMode.valuesOf(context).enabled` and skip the animation.
+- Large subtrees move by opacity and transform through the `*Transition`
+  widgets; layout animates only for a region's own size (`Collapsible`,
+  `StateSwitcher(animateSize: true)`, `PatientProgress(fold: true)`). Nothing
+  loops: no pulsing, breathing or shimmering, which would hang
+  `pumpAndSettle` in tests and cost battery mid-workout. The two things that
+  repeat do so only while they mean something: a progress indicator spins
+  while work is actually in flight, and the keypad's caret blinks in the
+  empty cell being typed into. Controllers are disposed.
+- Platform conventions win over novelty. Android keeps its predictive back
+  preview, iOS its edge swipe, and Material ink stays the touch response for
+  rows, buttons and icon buttons.
+
+### Tokens
+
+`lib/theme/motion.dart` holds the whole vocabulary:
+
+| Token | Value | For |
+| --- | --- | --- |
+| `AppMotion.quick` | 150ms | A state flip, a press, one state crossing to another |
+| `AppMotion.standard` | 220ms | A region opening or closing, a track moving, a dialog arriving, a sheet leaving |
+| `AppMotion.enter` | 280ms | An arrival, a sheet rising, a scroll the reader should follow |
+| `AppMotion.long` | 400ms | A large move across much of the screen: chart bars growing to a new week, intro pages |
+| `AppMotion.stagger` | 40ms | The gap between arrivals in one batch |
+| `AppMotion.patience` | 300ms | How long work may run before a progress indicator shows |
+| `AppMotion.curve` | ease out cubic | Arriving, settling at a new value |
+| `AppMotion.move` | ease in-out cubic | Something already on screen travelling to another place on screen: an intro page turning, the tour spotlight, a plan card sliding to a new slot, a plan title flying into the workout header |
+| `AppMotion.exit` | ease in cubic | The reverse curve for leaving |
+| `AppMotion.lift` | 8px | How far an arrival rises into place |
+| `AppMotion.shift` | 24px | How far a page travels sideways when it trades places with another (`PageSwitcher`) |
+| `AppMotion.swipeShift(width)` | a quarter of the width, 72 to 144px | How far a page travels when a swipe trades it for another: the workout's plan switch |
+| `AppMotion.scale` | 0.97 | A card giving under the finger, a dialog arriving |
+| `AppMotion.settle` | critically damped spring | Content that tracked a gesture springing back to rest, or carrying on out at the hand's speed |
+
+`AppMotion.of(context, duration)` returns the duration, or zero under reduced
+motion.
+
+`long` is the longest any one of the app's own motions runs; a staggered
+batch only delays its later items, by a few `stagger` steps at most. The
+platform's page transitions are exempt (Android's fade-forwards slide runs
+450ms): they carry the back gestures, so the app keeps them as the platform
+has them. An arrival on `curve` comes from nowhere and settles; a move on
+`move` starts from rest as well, because what moves was already being looked
+at.
+
+### Primitives
+
+`lib/widgets/motion/` holds the few widgets screens build motion from. Each one
+handles reduced motion itself.
+
+- `PressScale` (feedback) eases a tappable *object* to 0.97 while it is
+  pressed. It follows the object's own `InkWell` through `onHighlightChanged`,
+  so it waits out a scroll's touch slop as the ink does, adds no gesture
+  recognizer, and can't swallow a tap, long press or drag. For raised cards and
+  large tiles; `RaisedCard` applies it to every raised card with an action.
+  Not for list rows, text buttons or icon buttons, whose response is ink.
+- `Entrance` (arrival) fades a child in and lifts it 8px into place on its
+  first build, with an optional `index` to stagger a batch (at most six steps).
+  It plays once per `State`, so a rebuild, a tab return or a popped route never
+  replays it. For content new to the screen, such as exercises added to a plan.
+  Not for content that was already there, and not for items of a lazily built
+  list, which are rebuilt when they scroll back.
+- `Collapsible` (continuity) grows and fades a region open from the top, and
+  folds it away and out of the tree when closed, so hidden controls hold no
+  semantics. From the moment it starts to close it takes no taps, gives up
+  keyboard focus and leaves the semantics tree, so a folding button can't be
+  pressed and a folding field lets go of the keyboard; callers don't wrap it
+  by hand. It starts at rest, so a region open on arrival is simply there,
+  and it clips only while it moves (`FoldTransition`): a settled region lets a
+  raised card's shadow fall outside it, where a `SizeTransition` would cut the
+  shadow square.
+  For expandable details, inline palettes and messages. Started open with
+  `initiallyOpen` and closed, it folds a thing that has just gone out of its
+  place and reports `onClosed` (a deleted set row).
+- `StateSwitcher` (change) crosses one keyed state to the next in the same
+  place over `quick`, stacking both so nothing jumps, and optionally easing
+  the space they take to its new size (the size simply changes under reduced
+  motion). The leaving state stops taking taps, gives up keyboard focus and
+  leaves the semantics tree at once. For loading to content, empty to list,
+  one label for another. Not for figures (use `RollingFigure`) or regions that
+  open and close.
+- `RollingFigure` (`lib/widgets/rolling_figure.dart`, change) rolls a
+  headline figure up when it grew and down when it fell. It crosses over
+  `enter`, not `quick` as `StateSwitcher` does, on purpose: the roll travels
+  a line's height, and the eye has to follow it.
+- `PageSwitcher` (continuity) trades one keyed page for another along a
+  horizontal axis over `standard`: the arriving page slides the last `shift`
+  into place from the end side going deeper and from the start side going
+  back (mirrored under right-to-left), fading in from 30% of the way, while
+  the leaving page clears out the other way in the first 35%. The arriving
+  page is tappable and announced from its first frame; the leaving one takes
+  no taps, focus or semantics. For the exercise picker's pages and Stats'
+  views. `PageSwitchTransition` is the same trade driven by an animation of
+  the caller's, for two pages that must both stay alive (the preset
+  browser's catalog and details); its fade intervals are public, so the
+  workout's plan switch, which trades two routes' logs and starts the leaving
+  one from a swipe, keeps the same shape. Each page owns its scroll position: pages
+  don't inherit the route's primary scroll controller, and a caller never
+  hands both pages one controller; `OwnScrollController`
+  (`lib/widgets/own_scroll_controller.dart`) gives each copy its own and
+  hands the screen the newest, which History and the Coach use for lists
+  that cross in a `StateSwitcher` too. Each page is built once per change.
+- `SurfaceFade` (change) fades a whole surface in where it has replaced
+  another, when its identity changes: from `SurfaceFade.floor` (0.4) to full
+  over `quick`. What it replaced is gone at once, and the first frame already
+  shows the new surface rather than the bare page, which a fade from zero
+  would blink to (black, in dark mode). It plays only for a change the
+  reader sees: not when disabled, under muted tickers (another tab, a pushed
+  page), under reduced motion, or from or to a null identity (a first load).
+  For the main tabs, Home's content changing split, and the auth gate's
+  surfaces.
+- `PatientProgress` (feedback) shows a progress indicator only for work
+  still going after `patience`: fading it in place over `quick`, or with
+  `fold` opening it as a region over `standard`. Done sooner, it leaves no
+  trace; leaving, it keeps its last label and takes no taps or semantics.
+  For the auth gate's spinners, Settings' banner and the workout's progress
+  line.
+- `showAppDialog` and `showAppSheet` (`app_modals.dart`) open every dialog
+  and modal sheet; see below. `test/motion_test.dart` fails if `lib/` calls
+  `showDialog` or `showModalBottomSheet` directly.
+
+### Pages, dialogs and sheets
+
+- Every push is a `MaterialPageRoute`, and `buildTheme` names each platform's
+  transition rather than inheriting Material's defaults. Android uses the
+  predictive back transition: a back swipe on Android 13+ previews the page
+  underneath and can be cancelled, while a push or a tapped Back plays
+  Android's fade-forwards slide. iOS and macOS use the Cupertino slide with
+  edge-swipe back. Windows and Linux use Material's zoom, which suits a wide
+  window better than a long slide. These transitions carry the back gestures,
+  which is why the app keeps them instead of drawing its own; `PopScope`
+  guards and the `PlanTitleHero` flight work under all three. Material paints
+  the gap between two fading pages in the raised surface colour, which flashes
+  grey in dark mode, so the app passes the page colour. Under reduced motion a
+  push or pop lands at once, and a back swipe still follows the finger.
+- There is no second route style for task flows. On iOS a full-screen-dialog
+  route would lose edge-swipe back. The workout's plan switch is the one
+  bespoke page route, and it trades only the log, as two pages of one book:
+  the header, the plan tabs and the week bar hold still. The moment a plan
+  is chosen (a swipe or a tab), the current log carries on out the way it
+  was going, from wherever the finger left it and at the hand's speed (the
+  `settle` spring, a `swipeShift` further), and clears out in the first 35%
+  of the trade, before the save that must come first has finished. The
+  chosen plan's workout is then pushed over it: opaque where it holds still,
+  with a body that lets the replaced page show through until it has landed,
+  so its log comes in over the old one from the other side, travelling
+  `swipeShift` over `enter` on `curve` and fading in from 30% of the way,
+  the shape of `PageSwitchTransition`. The two logs are never joined, so a
+  save that takes a fifth of a second only delays the new log; work still
+  going after `patience` shows the progress line, which stays in place. The
+  title, plan marker and timer controls change in place on the new page, and
+  the plan tabs' underline slides from the tab left to the one chosen over
+  `standard` on `move`, the strip starting where the old one stood. A
+  failed save pushes nothing, and the log springs back. Once the switch has
+  landed it is an ordinary page, so its pop transition and back gestures are
+  the platform's, and it lets go of the route it replaced.
+- A dialog fades in while it settles from 0.97 to full size over `standard`,
+  and leaves with a plain fade on `exit`. `showDialog` takes one duration for
+  both directions, so the exit is shorter in effect rather than in time. The
+  date and time pickers open Material's own dialogs and keep its 150ms fade.
+- A modal sheet keeps the platform's slide from the bottom edge: it rises over
+  `enter` and drops away over `standard`, and dragging it follows the finger.
+  The exercise picker, pushed as its own sheet route, takes the same timing
+  through `appSheetAnimationStyle`.
+- Popup menus keep Material's reveal from their anchor, which is continuity
+  already and can't be retimed from the theme. Snackbars keep Material's
+  motion. The floating notice keeps its own shape, a short drop from above
+  while it settles from 0.97, on the app's timing: in over `enter` and out
+  over `standard` on `exit`, and a notice on its way out takes no taps.
+- The workout's block menu is a small popup route anchored above the block
+  button, so Back and an outside tap close it like any menu. It moves as a
+  dialog does: it fades in while it settles from 0.97 to full size out of the
+  button's start edge over `standard`, and leaves with a plain fade at full
+  size on `exit`.
+- The split menu is a `MenuAnchor` overlay with no transition that can be put
+  on the tokens. It settles out of the split name like a dialog (a fade and
+  0.97 to full size over `standard`) and closes at once.
+
+### What does not animate
+
+- The workout's set entry. Values land as they are typed, and a logged or
+  added set is simply there. The keypad slides in once when entry starts, the
+  active cell's wash eases across, and the table keeps the active row in
+  view, but nothing moves between keystrokes except the record badge's pop,
+  which never delays the next entry. A set deleted from its hold menu is the
+  one row that moves: it folds away so the rows below rise into its place.
+  Ink and haptics carry the feedback.
+- Changing week in the workout. The log swaps as tab content does while the
+  tab underline eases, and the header's timer controls and clock change in
+  place.
+- Content that was already there. A plan's own exercises when its editor
+  opens, a list loaded with its screen and the History ledger appear without
+  an arrival: staggering a screen's content on every visit is decoration.
+- Returning to anything. Coming back to a tab or from a pushed route replays
+  no arrival, roll or chart growth, and entering Stats shows its view without
+  the sideways swap that changing views inside it uses. The resume strip, and
+  Home's week bars, are simply as they now are if they changed out of view.
+- Charts on first appearance. Bars ease only to new values for the same
+  weeks; a line shown for another lift, period or measure crosses to the new
+  one rather than morphing through values nobody logged, and its readouts
+  land at once.
+- Surfaces the auth gate replaces. Login, recovery and the app fade in on the
+  page colour, but what they replace is removed at once and never crosses
+  beneath them, so the previous account's screens never linger.
+- Search results. Typing into a search filters the list in place; rows don't
+  arrive or leave, and a merged or renamed exercise simply takes its new
+  place in Manage exercises.
+- Main tabs. They change with a brief fade and no slide: they are peers, not a
+  stack, and swiping between them is navigation, not a carousel.
+- Rows, text buttons and icon buttons do not scale; ink is their response.
+- Figures below the headline. Only headline figures roll; the rest change in
+  place, and the workout summary shows final values at once so Share always
+  exports the right totals.
+- Scroll jumps under reduced motion, and everything else in this section.
 
 ## Backup And Import
 

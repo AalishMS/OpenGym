@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 
@@ -64,7 +65,7 @@ class _GuidedTourState extends State<GuidedTour>
   final GlobalKey _bubbleKey = GlobalKey();
   late final AnimationController _transition = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 240),
+    duration: AppMotion.standard,
     value: 1,
   );
   int _index = 0;
@@ -77,7 +78,7 @@ class _GuidedTourState extends State<GuidedTour>
   BorderRadius _targetRadius = AppRadius.card;
   BorderRadius _fromRadius = AppRadius.card;
 
-  double get _progress => Curves.easeInOutCubic.transform(_transition.value);
+  double get _progress => AppMotion.move.transform(_transition.value);
   Rect? get _displayedRect =>
       Rect.lerp(_fromRect ?? _targetRect, _targetRect, _progress);
   BorderRadius get _displayedRadius =>
@@ -396,14 +397,11 @@ class _GuidedTourState extends State<GuidedTour>
                                                 : AppSpacing.xs,
                                       ),
                                       child: AnimatedContainer(
-                                        duration:
-                                            MediaQuery.disableAnimationsOf(
-                                                  context,
-                                                )
-                                                ? Duration.zero
-                                                : const Duration(
-                                                  milliseconds: 180,
-                                                ),
+                                        duration: AppMotion.of(
+                                          context,
+                                          AppMotion.quick,
+                                        ),
+                                        curve: AppMotion.curve,
                                         height: 3,
                                         decoration: BoxDecoration(
                                           color:

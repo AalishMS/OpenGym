@@ -17,6 +17,8 @@ import '../screens/login_screen.dart';
 import '../app_shell.dart';
 import '../theme/app_theme.dart';
 import '../widgets/floating_notice.dart';
+import '../widgets/motion/patient_progress.dart';
+import '../widgets/motion/surface_fade.dart';
 
 const String _kOfflineTitle = "You're offline";
 const String _kOfflineDetail =
@@ -157,24 +159,44 @@ class _AuthGateState extends State<AuthGate> {
     );
   }
 
+  // The page colour under every surface, so one arriving fades in from the
+  // page rather than from black.
   @override
-  Widget build(BuildContext context) =>
-      Overlay.wrap(child: _buildContent(context));
+  Widget build(BuildContext context) => Overlay.wrap(
+    child: ColoredBox(
+      color: backgroundColor(context),
+      child: _buildContent(context),
+    ),
+  );
 
+  /// Whether the last surface shown was password recovery, so the app it
+  /// uncovers fades back in.
+  bool _showedRecovery = false;
+
+  /// The surface in place and its identity. Each surface fades in on the page
+  /// colour where it replaces another (login, password recovery, the app
+  /// uncovered when recovery finishes), and what it replaces is removed at
+  /// once rather than kept beside it: on an account change that would be the
+  /// previous account's app, its routes and its focus.
   Widget _buildContent(BuildContext context) {
     // Offline-only build (no Supabase config): behave exactly like before.
     if (!SupabaseService.isConfigured) {
       return widget.child;
     }
+    final showedRecovery = _showedRecovery;
+    _showedRecovery = false;
     // Wait for the SDK's replayed event before preparing account data. A
     // recovered session may already exist when this widget is first mounted.
     if (!_authStateReady) {
-      return Scaffold(
-        body: Center(
-          child: Semantics(
-            label: 'Checking sign-in',
-            liveRegion: true,
-            child: const CircularProgressIndicator(),
+      return SurfaceFade(
+        identity: 'checking',
+        child: Scaffold(
+          body: Center(
+            child: Semantics(
+              label: 'Checking sign-in',
+              liveRegion: true,
+              child: const PatientProgress(child: CircularProgressIndicator()),
+            ),
           ),
         ),
       );
@@ -183,49 +205,62 @@ class _AuthGateState extends State<AuthGate> {
     if (session != null && !_requestingPasswordReset) {
       final recovering =
           _recoveringPassword && session.user.id == _recoveryUserId;
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          Offstage(
-            offstage: recovering,
-            child: Focus(
-              descendantsAreFocusable: !recovering,
-              descendantsAreTraversable: !recovering,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  KeyedSubtree(
-                    key: const ValueKey('signed-in-content'),
-                    child: widget.child,
-                  ),
-                  // Floats over the app rather than pushing every screen down.
-                  FloatingNoticeHost(
-                    notice:
-                        _authError != null && !recovering
-                            ? _buildNotice(_authError!)
-                            : null,
-                  ),
-                ],
+      _showedRecovery = recovering;
+      return SurfaceFade(
+        identity:
+            recovering ? 'password-recovery:${session.user.id}' : 'signed-in',
+        // The app arriving from login or the sign-in check fades in through
+        // AuthenticatedHome once its data is ready; a second fade here would
+        // only dim it. The gate fades it back in only when it uncovers it.
+        enabled: recovering || showedRecovery,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Offstage(
+              offstage: recovering,
+              child: Focus(
+                descendantsAreFocusable: !recovering,
+                descendantsAreTraversable: !recovering,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    KeyedSubtree(
+                      key: const ValueKey('signed-in-content'),
+                      child: widget.child,
+                    ),
+                    // Floats over the app rather than pushing every screen
+                    // down.
+                    FloatingNoticeHost(
+                      notice:
+                          _authError != null && !recovering
+                              ? _buildNotice(_authError!)
+                              : null,
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          if (recovering)
-            LoginScreen(
-              key: ValueKey('password-recovery:${session.user.id}'),
-              passwordRecovery: true,
-              initialError: _authError,
-              onPasswordRecovered:
-                  () => setState(() {
-                    _recoveringPassword = false;
-                    _recoveryUserId = null;
-                    _authError = null;
-                    SupabaseService.passwordRecoveryPending = false;
-                  }),
-            ),
-        ],
+            if (recovering)
+              LoginScreen(
+                key: ValueKey('password-recovery:${session.user.id}'),
+                passwordRecovery: true,
+                initialError: _authError,
+                onPasswordRecovered:
+                    () => setState(() {
+                      _recoveringPassword = false;
+                      _recoveryUserId = null;
+                      _authError = null;
+                      SupabaseService.passwordRecoveryPending = false;
+                    }),
+              ),
+          ],
+        ),
       );
     }
-    return LoginScreen(key: ValueKey(_authError), initialError: _authError);
+    return SurfaceFade(
+      identity: 'login',
+      child: LoginScreen(key: ValueKey(_authError), initialError: _authError),
+    );
   }
 }
 
@@ -257,22 +292,27 @@ class _AuthenticatedHomeState extends State<AuthenticatedHome> {
     return FutureBuilder<void>(
       future: _ready,
       builder: (context, snap) {
+        final String phase;
+        final Widget surface;
         if (snap.connectionState != ConnectionState.done) {
-          return Scaffold(
+          phase = 'loading';
+          surface = Scaffold(
             backgroundColor: backgroundColor(context),
             body: Center(
               child: Semantics(
                 label: 'Loading your data',
                 value: 'In progress',
                 liveRegion: true,
-                child: const CircularProgressIndicator(),
+                child: const PatientProgress(
+                  child: CircularProgressIndicator(),
+                ),
               ),
             ),
           );
-        }
-        if (snap.hasError) {
+        } else if (snap.hasError) {
           final error = snap.error;
-          return DataPreparationFailure(
+          phase = 'preparation-failed';
+          surface = DataPreparationFailure(
             onRetry: () async {
               setState(() => _ready = _prepare());
             },
@@ -283,8 +323,16 @@ class _AuthenticatedHomeState extends State<AuthenticatedHome> {
                       : null,
                 ),
           );
+        } else {
+          phase = 'app';
+          surface = const AppShell();
         }
-        return const AppShell();
+        // The app, or the failure, fades in on the page colour in place of
+        // the wait; what it replaces is gone at once.
+        return SurfaceFade(
+          identity: phase,
+          child: KeyedSubtree(key: ValueKey(phase), child: surface),
+        );
       },
     );
   }

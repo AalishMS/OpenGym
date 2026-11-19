@@ -9,7 +9,9 @@ import '../../models/split.dart' as gym;
 import '../../providers/split_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
+import '../../theme/motion.dart';
 import '../../theme/spacing.dart';
+import '../motion/state_switcher.dart';
 import 'split_dialogs.dart';
 import 'preset_browser_dialog.dart';
 
@@ -52,7 +54,6 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
     final provider = context.watch<SplitProvider>();
     final active = provider.activeSplit;
     final accent = accentColor(context);
-    final disableAnimations = MediaQuery.disableAnimationsOf(context);
     if (active == null) return const SizedBox.shrink();
 
     final availableWidth =
@@ -77,22 +78,24 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
         widget.onMenuChanged?.call(false);
       },
       menuChildren: [
-        _SplitMenu(
-          width: menuWidth,
-          provider: provider,
-          onCreate: () {
-            _closeMenu();
-            SplitDialogs.showCreate(context);
-          },
-          onManage: () {
-            _closeMenu();
-            SplitDialogs.showManage(context);
-          },
-          onBrowse: () {
-            _closeMenu();
-            PresetBrowserDialog.show(context);
-          },
-          onSelect: _selectSplit,
+        _MenuArrival(
+          child: _SplitMenu(
+            width: menuWidth,
+            provider: provider,
+            onCreate: () {
+              _closeMenu();
+              SplitDialogs.showCreate(context);
+            },
+            onManage: () {
+              _closeMenu();
+              SplitDialogs.showManage(context);
+            },
+            onBrowse: () {
+              _closeMenu();
+              PresetBrowserDialog.show(context);
+            },
+            onSelect: _selectSplit,
+          ),
         ),
       ],
       builder:
@@ -127,22 +130,12 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Flexible(
-                            child: AnimatedSwitcher(
-                              duration:
-                                  disableAnimations
-                                      ? Duration.zero
-                                      : const Duration(milliseconds: 150),
-                              transitionBuilder:
-                                  (child, animation) => FadeTransition(
-                                    opacity: animation,
-                                    child: ScaleTransition(
-                                      scale: Tween<double>(
-                                        begin: 0.98,
-                                        end: 1,
-                                      ).animate(animation),
-                                      child: child,
-                                    ),
-                                  ),
+                            // One name crosses to the next while the
+                            // space it takes eases, so the chevron glides
+                            // rather than jumps to a longer or shorter name.
+                            child: StateSwitcher(
+                              animateSize: true,
+                              alignment: AlignmentDirectional.centerStart,
                               child: _SplitName(
                                 active.name,
                                 key: ValueKey(active.id),
@@ -159,10 +152,8 @@ class _SplitSwitcherState extends State<SplitSwitcher> {
                           const SizedBox(width: AppSpacing.xs),
                           AnimatedRotation(
                             turns: controller.isOpen ? 0.5 : 0,
-                            duration:
-                                disableAnimations
-                                    ? Duration.zero
-                                    : const Duration(milliseconds: 150),
+                            duration: AppMotion.of(context, AppMotion.quick),
+                            curve: AppMotion.curve,
                             child: Icon(
                               LucideIcons.chevronDown,
                               size: 12,
@@ -336,6 +327,73 @@ class _RenderSuffixFirstRow extends RenderBox
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
       defaultHitTestChildren(result, position: position);
+}
+
+/// The menu settles out of its anchor as it opens: it fades in while it grows
+/// from [AppMotion.scale] at the corner under the split name, over
+/// [AppMotion.standard], as a dialog arrives. Its rows take taps from the
+/// first frame. Each opening is a new State, so it plays once per opening
+/// and never on a rebuild while open. Closing is immediate: the menu leaves
+/// the overlay as soon as it is dismissed, and the chevron and, after a pick,
+/// Home's content carry that change. Under reduced motion it simply appears.
+class _MenuArrival extends StatefulWidget {
+  final Widget child;
+
+  const _MenuArrival({required this.child});
+
+  @override
+  State<_MenuArrival> createState() => _MenuArrivalState();
+}
+
+class _MenuArrivalState extends State<_MenuArrival>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: AppMotion.standard,
+  );
+  late final CurvedAnimation _progress = CurvedAnimation(
+    parent: _controller,
+    curve: AppMotion.curve,
+  );
+  late final Animation<double> _scale = Tween<double>(
+    begin: AppMotion.scale,
+    end: 1,
+  ).animate(_progress);
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) return;
+    _started = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _controller.value = 1;
+    } else {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void dispose() {
+    _progress.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _progress,
+      alwaysIncludeSemantics: true,
+      child: ScaleTransition(
+        scale: _scale,
+        alignment: AlignmentDirectional.topStart.resolve(
+          Directionality.of(context),
+        ),
+        child: widget.child,
+      ),
+    );
+  }
 }
 
 class _SplitMenu extends StatelessWidget {

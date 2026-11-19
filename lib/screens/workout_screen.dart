@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/physics.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 
@@ -32,6 +33,7 @@ import '../services/workout_session_initializer.dart';
 import '../services/workout_timer_notification_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
@@ -41,6 +43,10 @@ import '../utils/workout_context.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
+import '../widgets/motion/app_modals.dart';
+import '../widgets/motion/collapsible.dart';
+import '../widgets/motion/page_switcher.dart';
+import '../widgets/motion/patient_progress.dart';
 import '../widgets/plan_title_hero.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
@@ -76,7 +82,7 @@ class WorkoutScreen extends StatefulWidget {
 }
 
 class _WorkoutScreenState extends State<WorkoutScreen>
-    with SingleTickerProviderStateMixin, AppRouteParticipant<WorkoutScreen>
+    with TickerProviderStateMixin, AppRouteParticipant<WorkoutScreen>
     implements WorkoutNavigationTarget {
   @override
   Future<void> leaveRoute() => _handleBack();
@@ -128,13 +134,31 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   bool _isNavigating = false;
   bool _isSaving = false;
   String? _saveError;
+
+  /// The last save error shown, kept while its line folds away.
+  String? _shownSaveError;
   String? _timerAction;
   bool _confirmingFinish = false;
   Timer? _ticker;
   WorkoutSessionProvider? _sessionProvider;
   bool _didShowInitialLogConfirmation = false;
-  late final AnimationController _planSwipeOffset =
-      AnimationController.unbounded(vsync: this);
+
+  /// The log's own sideways motion: following a plan swipe, settling back,
+  /// and leaving when the plan changes.
+  late final _LogMotion _log = _LogMotion(this);
+
+  /// True from the moment a plan switch starts until it fails: the log is
+  /// on its way out, so it leaves the semantics tree.
+  bool _leaving = false;
+
+  /// True once the chosen plan's workout has been pushed over this one. The
+  /// work feedback that stays in place (the progress line, a save error) is
+  /// hidden then, so none of it shows through the arriving page.
+  bool _handedOver = false;
+
+  /// Scrolls the plan tabs. A switch starts the next workout's strip where
+  /// this one stands, so the tabs hold still through it.
+  ScrollController? _planTabs;
 
   @override
   void initState() {
@@ -172,13 +196,22 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _planTabs ??= ScrollController(
+      initialScrollOffset: _PlanSwitchArrival.maybeOf(context)?.tabOffset ?? 0,
+    );
+  }
+
+  @override
   void dispose() {
     _ticker?.cancel();
     _now.dispose();
     _training.removeListener(_onTrainingChanged);
     if (_ownsTraining) _training.dispose();
     _sessionProvider?.removeListener(_reloadCurrentSession);
-    _planSwipeOffset.dispose();
+    _log.dispose();
+    _planTabs?.dispose();
     super.dispose();
   }
 
@@ -470,92 +503,76 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   );
 
   void _updatePlanSwipe(double distance) {
-    if (MediaQuery.disableAnimationsOf(context)) return;
+    if (MediaQuery.disableAnimationsOf(context) || _leaving) return;
     final plans = context.read<WorkoutPlanProvider>().plans;
     final index = _currentPlanIndex(plans);
-    final canMove = distance < 0 ? index < plans.length - 1 : index > 0;
-    // Follow the finger just enough to acknowledge the gesture without
-    // pulling the workout table far from its reading position.
-    _planSwipeOffset.value = (distance * (canMove ? 0.20 : 0.05)).clamp(
-      -28.0,
-      28.0,
+    _log.follow(
+      distance,
+      towardPlan: distance < 0 ? index < plans.length - 1 : index > 0,
     );
   }
 
-  void _settlePlanSwipe() {
+  /// Springs the log back to rest after a plan swipe that didn't switch, or
+  /// a switch whose save failed, carrying the finger's release [velocity].
+  void _settlePlanSwipe([double velocity = 0]) {
     if (!mounted) return;
+    if (_leaving) setState(() => _leaving = false);
     if (MediaQuery.disableAnimationsOf(context)) {
-      _planSwipeOffset.value = 0;
-      return;
+      _log.rest();
+    } else {
+      _log.settle(velocity);
     }
-    _planSwipeOffset.animateTo(
-      0,
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeOutCubic,
-    );
   }
 
-  Future<void> _switchPlan(WorkoutPlan plan, int index) async {
+  /// Switches to [plan], the plan at [index]: the current workout is saved,
+  /// then the chosen plan's workout replaces this one. A swipe passes the
+  /// finger's release [velocity] for the log to carry on out with; a tab tap
+  /// starts it from rest.
+  Future<void> _switchPlan(
+    WorkoutPlan plan,
+    int index, [
+    double velocity = 0,
+  ]) async {
     final currentIndex = _currentPlanIndex(
       context.read<WorkoutPlanProvider>().plans,
     );
     if (index == currentIndex) return;
+    if (_isNavigating || _timerAction != null) {
+      // Busy, so nothing switches; a log that followed the finger goes back.
+      _settlePlanSwipe(velocity);
+      return;
+    }
     final direction = index > currentIndex ? 1.0 : -1.0;
-    if (!MediaQuery.disableAnimationsOf(context)) {
-      _planSwipeOffset.animateTo(
-        -direction * 28,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOutCubic,
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    if (!reduceMotion) {
+      // The log leaves at once, before the save, so the hand's motion never
+      // stalls; the chosen plan's log comes in over it when it is pushed.
+      setState(() => _leaving = true);
+      _log.leave(
+        direction: direction,
+        velocity: velocity,
+        distance: AppMotion.swipeShift(MediaQuery.sizeOf(context).width),
       );
     }
-    final duration =
-        MediaQuery.disableAnimationsOf(context)
-            ? Duration.zero
-            : const Duration(milliseconds: 190);
-    await _saveBeforeNavigation(
-      () => Navigator.pushReplacement(
+    final replaced = ModalRoute.of(context);
+    final tabs = _planTabs;
+    await _saveBeforeNavigation(() {
+      setState(() => _handedOver = true);
+      Navigator.pushReplacement(
         context,
-        PageRouteBuilder<void>(
-          transitionDuration: duration,
-          reverseTransitionDuration: duration,
-          pageBuilder:
-              (context, animation, secondaryAnimation) =>
-                  WorkoutScreen(plan: plan, planIndex: index),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(
-              opacity: animation.drive(
-                Tween<double>(
-                  begin: 0.78,
-                  end: 1,
-                ).chain(CurveTween(curve: Curves.easeOutCubic)),
-              ),
-              child: SlideTransition(
-                position: animation.drive(
-                  Tween(
-                    begin: Offset(direction * 0.08, 0),
-                    end: Offset.zero,
-                  ).chain(CurveTween(curve: Curves.easeOutCubic)),
-                ),
-                child: child,
-              ),
-            );
-          },
+        _PlanSwitchRoute(
+          direction: direction,
+          replacing: replaced,
+          reduceMotion: reduceMotion,
+          fromIndex: currentIndex,
+          tabOffset: tabs != null && tabs.hasClients ? tabs.offset : 0,
+          builder: (_) => WorkoutScreen(plan: plan, planIndex: index),
         ),
-      ),
-      leavesScreen: true,
-    );
+      );
+    }, leavesScreen: true);
+    // A failed save pushes nothing: the log comes back.
     if (mounted && !_isNavigating) _settlePlanSwipe();
   }
-
-  Widget _animatedPlanContent(Widget child) => AnimatedBuilder(
-    animation: _planSwipeOffset,
-    builder:
-        (context, child) => Transform.translate(
-          offset: Offset(_planSwipeOffset.value, 0),
-          child: child,
-        ),
-    child: child,
-  );
 
   String get _currentWeek => _weeks[_currentWeekIndex];
   TrainingWeek get _selectedWeek => _weekById[_currentWeek]!;
@@ -681,7 +698,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     if (!mounted) return;
     while (other != null) {
       final conflict = other;
-      final switchWorkout = await showDialog<bool>(
+      final switchWorkout = await showAppDialog<bool>(
         context: context,
         builder:
             (dialogContext) => AlertDialog(
@@ -831,7 +848,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       _confirmingFinish = true;
     });
     try {
-      final confirmed = await showDialog<bool>(
+      final confirmed = await showAppDialog<bool>(
         context: context,
         builder:
             (dialogContext) => AlertDialog(
@@ -906,7 +923,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
 
   Future<bool> _confirmDiscard(WorkoutSession draft) async {
     final duration = formatDuration(draft.elapsedSeconds());
-    return await showDialog<bool>(
+    return await showAppDialog<bool>(
           context: context,
           builder:
               (dialogContext) => AlertDialog(
@@ -1571,7 +1588,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final session = _getOrCreateSession();
     final revision = _progress?.revision;
     if (revision == null) return;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppDialog<bool>(
       context: context,
       builder:
           (dialog) => AlertDialog(
@@ -1623,7 +1640,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     var saving = false;
     String? error;
     try {
-      await showModalBottomSheet<void>(
+      await showAppSheet<void>(
         context: context,
         showDragHandle: true,
         isScrollControlled: true,
@@ -1889,6 +1906,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       );
     }
     final session = _getOrCreateSession();
+    if (_saveError != null) _shownSaveError = _saveError;
     _celebratedRecords ??= _recordSetsIn(session);
     final liveRecords = _liveRecords(session);
     final accent = accentColor(context);
@@ -1898,16 +1916,40 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final currentPlanIndex = _currentPlanIndex(plans);
     final activePlan =
         currentPlanIndex >= 0 ? plans[currentPlanIndex] : widget.plan;
-    final VoidCallback? onNextPlan =
+    final ValueChanged<double>? onNextPlan =
         currentPlanIndex >= 0 && currentPlanIndex < plans.length - 1
-            ? () =>
-                _switchPlan(plans[currentPlanIndex + 1], currentPlanIndex + 1)
+            ? (velocity) => _switchPlan(
+              plans[currentPlanIndex + 1],
+              currentPlanIndex + 1,
+              velocity,
+            )
             : null;
-    final VoidCallback? onPreviousPlan =
+    final ValueChanged<double>? onPreviousPlan =
         currentPlanIndex > 0
-            ? () =>
-                _switchPlan(plans[currentPlanIndex - 1], currentPlanIndex - 1)
+            ? (velocity) => _switchPlan(
+              plans[currentPlanIndex - 1],
+              currentPlanIndex - 1,
+              velocity,
+            )
             : null;
+    // Arriving by a plan switch, this page lets the workout it replaces show
+    // through its body until it has landed, so the leaving log is seen going
+    // as this one comes in over it. The header and the bars are opaque.
+    final arrival = _PlanSwitchArrival.maybeOf(context);
+    final arriving = arrival?.arriving ?? false;
+    // Everything in the body that belongs to this plan's workout moves as
+    // one page: the notices and the log.
+    Widget page(Widget child) => _PlanLogTransition(
+      motion: _log,
+      arrival: arriving ? arrival!.animation : kAlwaysCompleteAnimation,
+      arrivingFrom:
+          arriving
+              ? arrival!.direction *
+                  AppMotion.swipeShift(MediaQuery.sizeOf(context).width)
+              : 0,
+      leaving: _leaving,
+      child: child,
+    );
     final planColor = planColorOf(activePlan.planColor, context);
     final timerBase = Theme.of(context).textTheme.bodySmall!;
     final timerStyle = AppTypography.figures(
@@ -1941,7 +1983,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
       child: AbsorbPointer(
         absorbing: _isNavigating || _timerAction != null,
         child: Scaffold(
-          backgroundColor: backgroundColor(context),
+          backgroundColor:
+              arriving ? Colors.transparent : backgroundColor(context),
           appBar: AppHeader(
             toolbarHeight: toolbarHeight,
             titleSpacing: AppSpacing.sm,
@@ -1953,20 +1996,18 @@ class _WorkoutScreenState extends State<WorkoutScreen>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // A swipe here moves the log too; the title holds still and
+                // changes in place when the plan does.
                 PlanSwipeRegion(
                   onNextPlan: onNextPlan,
                   onPreviousPlan: onPreviousPlan,
                   onDragProgress: _updatePlanSwipe,
                   onDragCancel: _settlePlanSwipe,
-                  child: _animatedPlanContent(
-                    _PlanHeader(
-                      plan: activePlan,
-                      color: planColor,
-                      heroTag:
-                          activePlan.id == widget.plan.id
-                              ? widget.heroTag
-                              : null,
-                    ),
+                  child: _PlanHeader(
+                    plan: activePlan,
+                    color: planColor,
+                    heroTag:
+                        activePlan.id == widget.plan.id ? widget.heroTag : null,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
@@ -2054,68 +2095,102 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                       ],
                 ),
             ],
-            bottom: _buildPlanTabBar(accent, plans, currentPlanIndex),
+            bottom: _buildPlanTabBar(
+              accent,
+              plans,
+              currentPlanIndex,
+              previousIndex: arriving ? arrival!.fromIndex : null,
+            ),
           ),
           bottomNavigationBar: _buildWeekNavBar(accent),
           body: Column(
             children: [
               if (_progressError)
-                TrainingProgressNotice(
-                  icon: LucideIcons.circleAlert,
-                  isError: true,
-                  message: "Progress didn't load.",
-                  actionLabel: 'Try again',
-                  onAction: _prepareEntry,
+                page(
+                  TrainingProgressNotice(
+                    icon: LucideIcons.circleAlert,
+                    isError: true,
+                    message: "Progress didn't load.",
+                    actionLabel: 'Try again',
+                    onAction: _prepareEntry,
+                  ),
                 ),
               if (!_progressError &&
                   session.isCompleted &&
                   _progress?.activeWeekId == _currentWeek)
-                _progress?.state == WorkoutProgressState.awaitingBoundary
-                    ? TrainingProgressNotice(
-                      icon: LucideIcons.flagTriangleRight,
-                      message: 'Block complete.',
-                      actionLabel: 'Choose next week',
-                      onAction: _maybeBoundaryPrompt,
-                    )
-                    : TrainingProgressNotice(
-                      icon: LucideIcons.circleCheck,
-                      message: 'Workout logged.',
-                      actionLabel: 'Continue',
-                      onAction: _continueCompleted,
-                    ),
+                page(
+                  _progress?.state == WorkoutProgressState.awaitingBoundary
+                      ? TrainingProgressNotice(
+                        icon: LucideIcons.flagTriangleRight,
+                        message: 'Block complete.',
+                        actionLabel: 'Choose next week',
+                        onAction: _maybeBoundaryPrompt,
+                      )
+                      : TrainingProgressNotice(
+                        icon: LucideIcons.circleCheck,
+                        message: 'Workout logged.',
+                        actionLabel: 'Continue',
+                        onAction: _continueCompleted,
+                      ),
+                ),
 
-              if (_isSaving || (_timerAction != null && !_confirmingFinish))
-                Padding(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  child: ActionProgress(_timerAction ?? 'Saving workout'),
+              // The log's progress line, for work in flight: saving,
+              // starting or pausing the clock, logging, changing blocks. It
+              // opens only for work still going after a beat, so a save
+              // done within a frame or two never shoves the log. It stays in
+              // place while the log moves, so a slow save before a plan
+              // switch still shows it.
+              Opacity(
+                opacity: _handedOver ? 0 : 1,
+                child: PatientProgress(
+                  fold: true,
+                  child:
+                      _isSaving || (_timerAction != null && !_confirmingFinish)
+                          ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppSpacing.sm),
+                              child: ActionProgress(
+                                _timerAction ?? 'Saving workout',
+                              ),
+                            ),
+                          )
+                          : null,
                 ),
-              if (_saveError != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Semantics(
-                          liveRegion: true,
-                          child: Text(_saveError!),
+              ),
+              // Folds open and closed rather than shoving the log; it keeps
+              // the last message while it folds away after a retry.
+              Opacity(
+                opacity: _handedOver ? 0 : 1,
+                child: Collapsible(
+                  open: _saveError != null,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.lg,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Semantics(
+                            liveRegion: true,
+                            child: Text(_shownSaveError ?? ''),
+                          ),
                         ),
-                      ),
-                      TextButton(
-                        onPressed: _isSaving ? null : _autoSave,
-                        child: const Text('Retry'),
-                      ),
-                    ],
+                        TextButton(
+                          onPressed: _isSaving ? null : _autoSave,
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
+              ),
               Expanded(
                 child: PlanSwipeRegion(
                   onNextPlan: onNextPlan,
                   onPreviousPlan: onPreviousPlan,
                   onDragProgress: _updatePlanSwipe,
                   onDragCancel: _settlePlanSwipe,
-                  child: _animatedPlanContent(
+                  child: page(
                     CustomScrollView(
                       key: ValueKey(_currentWeek),
                       physics: const BouncingScrollPhysics(
@@ -2135,13 +2210,26 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                           sliver: SliverReorderableList(
                             itemCount: session.exercises.length + 1,
                             onReorderItem: _reorderExercises,
-                            proxyDecorator: (child, index, animation) {
-                              return Material(
-                                color: surfaceColor(context),
-                                borderRadius: AppRadius.card,
-                                child: child,
-                              );
-                            },
+                            // The held exercise rises off the page onto a
+                            // raised ground as it lifts, and sinks back into
+                            // the page as it drops into place.
+                            proxyDecorator:
+                                (child, index, animation) => AnimatedBuilder(
+                                  animation: animation,
+                                  builder:
+                                      (context, child) => Material(
+                                        color: Color.lerp(
+                                          backgroundColor(context),
+                                          surfaceColor(context),
+                                          AppMotion.curve.transform(
+                                            animation.value,
+                                          ),
+                                        ),
+                                        borderRadius: AppRadius.card,
+                                        child: child,
+                                      ),
+                                  child: child,
+                                ),
                             itemBuilder: (context, index) {
                               if (index == session.exercises.length) {
                                 return TextButton.icon(
@@ -2261,8 +2349,9 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   PreferredSizeWidget? _buildPlanTabBar(
     Color accent,
     List<WorkoutPlan> plans,
-    int selectedIndex,
-  ) {
+    int selectedIndex, {
+    int? previousIndex,
+  }) {
     if (plans.isEmpty) {
       return null;
     }
@@ -2276,6 +2365,10 @@ class _WorkoutScreenState extends State<WorkoutScreen>
         height: barHeight,
         color: accent,
         selectedIndex: selectedIndex,
+        controller: _planTabs,
+        // Arriving by a switch, the underline slides over from the plan
+        // switched away from, where the replaced strip had it.
+        previousIndex: previousIndex,
         tabs: [
           for (var index = 0; index < plans.length; index++)
             UnderlineTabData(
@@ -2600,6 +2693,336 @@ class _SessionClock extends StatelessWidget {
           key: const ValueKey('workout_elapsed_time'),
           maxLines: 1,
           style: style.copyWith(color: ink),
+        ),
+      ),
+    );
+  }
+}
+
+/// The plan switch, as a trade between two pages of one book. The header,
+/// the plan tabs and the week bar hold still; only the log moves.
+///
+/// The workout being switched away from starts its log leaving the moment
+/// the switch is chosen, from wherever the finger left it and at the hand's
+/// speed ([_LogMotion.leave]), before the save that has to come first. Once
+/// that save is done, this route pushes the chosen plan's workout over it.
+/// That page is opaque where it holds still, but its body lets the replaced
+/// page show through until it has landed ([_PlanSwitchArrival]), so the old
+/// log is seen going as the new one comes in over it from the other side:
+/// [AppMotion.swipeShift] over [AppMotion.enter] on [AppMotion.curve], fading
+/// in from 30% of the way as a page trade does ([PageSwitchTransition]). The
+/// two logs are never joined, so a save that takes a frame or a fifth of a
+/// second only changes when the new log starts, never how it looks.
+///
+/// Once the switch has landed the page is an ordinary one: Back, the
+/// platform's back gestures (Android's predictive back, iOS's edge swipe) and
+/// the pop transition all come from the theme, exactly as for the workout it
+/// replaced, and it lets go of that route. Under reduced motion the switch
+/// lands at once.
+class _PlanSwitchRoute extends MaterialPageRoute<void> {
+  /// +1 when the chosen plan comes after the current one, so its log enters
+  /// from the right; -1 when it comes before.
+  final double direction;
+
+  /// The plan tab the switch left, for the underline to slide from.
+  final int fromIndex;
+
+  /// Where the replaced page's plan tabs stood scrolled.
+  final double tabOffset;
+
+  /// The workout being switched away from, until the switch has landed.
+  /// Only the push needs it; held any longer, each switch would keep the
+  /// disposed workout before it alive, and that one the one before it.
+  Route<dynamic>? _replacing;
+  final bool reduceMotion;
+
+  /// True until the switch has landed.
+  bool _switching = true;
+
+  _PlanSwitchRoute({
+    required super.builder,
+    required this.direction,
+    required this.fromIndex,
+    required this.tabOffset,
+    required Route<dynamic>? replacing,
+    required this.reduceMotion,
+  }) : _replacing = replacing;
+
+  @override
+  Duration get transitionDuration =>
+      reduceMotion ? Duration.zero : AppMotion.enter;
+
+  @override
+  Duration get reverseTransitionDuration =>
+      reduceMotion ? Duration.zero : super.reverseTransitionDuration;
+
+  // The platform's transitions would also move the outgoing workout aside;
+  // here it stays where it is while the new one arrives over it. Any other
+  // page under this one (Home) still takes part as usual.
+  @override
+  bool canTransitionFrom(TransitionRoute<dynamic> previousRoute) =>
+      previousRoute != _replacing && super.canTransitionFrom(previousRoute);
+
+  @override
+  TickerFuture didPush() {
+    final pushed = super.didPush();
+    pushed.whenCompleteOrCancel(() {
+      _switching = false;
+      _replacing = null;
+    });
+    return pushed;
+  }
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    // One tree shape before and after the switch lands, so the workout keeps
+    // its state: the platform's transition sits still while the log comes
+    // in, and the arrival sits still for everything after.
+    final switching = _switching;
+    return super.buildTransitions(
+      context,
+      switching ? kAlwaysCompleteAnimation : animation,
+      secondaryAnimation,
+      _PlanSwitchArrival(
+        animation: switching ? animation : kAlwaysCompleteAnimation,
+        arriving: switching,
+        direction: direction,
+        fromIndex: fromIndex,
+        tabOffset: tabOffset,
+        child: child,
+      ),
+    );
+  }
+}
+
+/// What a workout arriving by a plan switch needs from its route: how far
+/// its log has come in, from which side, and where the replaced page's plan
+/// tabs stood. Only [arriving] changes for the page, once, when it lands.
+class _PlanSwitchArrival extends InheritedWidget {
+  /// The arrival, 0 to 1 over [AppMotion.enter]; complete once landed.
+  final Animation<double> animation;
+
+  /// True until the switch has landed.
+  final bool arriving;
+  final double direction;
+  final int fromIndex;
+  final double tabOffset;
+
+  const _PlanSwitchArrival({
+    required this.animation,
+    required this.arriving,
+    required this.direction,
+    required this.fromIndex,
+    required this.tabOffset,
+    required super.child,
+  });
+
+  static _PlanSwitchArrival? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<_PlanSwitchArrival>();
+
+  // Rebuilt on every frame of the push with the same animation, which the
+  // log follows by itself; the page only rebuilds when it lands.
+  @override
+  bool updateShouldNotify(_PlanSwitchArrival oldWidget) =>
+      arriving != oldWidget.arriving || animation != oldWidget.animation;
+}
+
+/// How faint the log gets as a swipe carries it toward another plan: half,
+/// so it reads as a page being moved aside, still legible if let go.
+const double _swipeFadeFloor = 0.5;
+
+/// The share of the width at which a swipe has faded the log to the floor.
+const double _swipeFadeReach = 0.4;
+
+/// How far the log moves for each pixel the finger drags past the first or
+/// last plan, where there is nothing to go to.
+const double _edgeFollow = 0.05;
+
+/// The workout log's own sideways motion among the plans, in logical pixels:
+/// following a plan swipe one to one and fading as it goes, rubber-banding
+/// at the first and last plan, springing back when let go, and leaving when
+/// the plan changes. [_PlanLogTransition] applies it.
+class _LogMotion {
+  _LogMotion(TickerProvider vsync)
+    : offset = AnimationController.unbounded(vsync: vsync),
+      leaving = AnimationController(vsync: vsync, duration: AppMotion.enter);
+
+  /// How far the log has moved sideways.
+  final AnimationController offset;
+
+  /// How far through leaving the log is, 0 to 1 over the length of the
+  /// trade; it clears out in the first part ([PageSwitchTransition.leavingFade]).
+  final AnimationController leaving;
+
+  late final Listenable listenable = Listenable.merge([offset, leaving]);
+
+  /// How far the log moves for each pixel the finger drags.
+  double _follow = 1;
+
+  /// Whether the log is travelling toward another plan, and so fades.
+  bool _fades = false;
+
+  /// The spring's natural rate. A critically damped spring thrown toward its
+  /// end faster than this many times the distance overshoots it once.
+  static final double _springRate = math.sqrt(
+    AppMotion.settle.stiffness / AppMotion.settle.mass,
+  );
+
+  /// A tenth of a pixel is rest; the spring's default tolerance would keep
+  /// ticking through invisible fractions of one.
+  static const Tolerance _rest = Tolerance(distance: 0.1, velocity: 1);
+
+  /// The log's opacity for a page [width] wide.
+  double opacity(double width) {
+    var opacity = 1 - PageSwitchTransition.leavingFade.transform(leaving.value);
+    if (_fades && width > 0) {
+      final travelled = offset.value.abs() / (width * _swipeFadeReach);
+      opacity *= 1 - (1 - _swipeFadeFloor) * math.min(travelled, 1);
+    }
+    return opacity;
+  }
+
+  /// Follows a drag [distance] pixels from where it began. [towardPlan] says
+  /// there is a plan to go to that way: the log then moves with the finger
+  /// and fades. Past the first or last plan it barely moves, so the edge
+  /// reads as an edge.
+  void follow(double distance, {required bool towardPlan}) {
+    _fades = towardPlan;
+    _follow = towardPlan ? 1 : _edgeFollow;
+    final moved = distance * _follow;
+    offset.value =
+        towardPlan ? moved : moved.clamp(-AppMotion.shift, AppMotion.shift);
+  }
+
+  /// Springs back to rest, carrying the finger's release [velocity] so a
+  /// flick and a slow let-go settle differently, as the hand did. Critically
+  /// damped, so it never overshoots; the opacity comes back with it.
+  void settle(double velocity) {
+    if (leaving.value > 0) {
+      leaving.animateBack(
+        0,
+        duration: AppMotion.standard,
+        curve: AppMotion.curve,
+      );
+    }
+    final from = offset.value;
+    if (from == 0 && velocity == 0) {
+      offset.value = 0;
+      return;
+    }
+    // Content held at the end of its travel had stopped following the
+    // finger, so it has no speed of its own away from rest.
+    var speed = velocity * _follow;
+    if (!_fades && from.abs() >= AppMotion.shift && speed.sign == from.sign) {
+      speed = 0;
+    }
+    offset
+        .animateWith(
+          SpringSimulation(AppMotion.settle, from, 0, speed, tolerance: _rest),
+        )
+        .whenComplete(() => offset.value = 0);
+  }
+
+  /// Leaves for the plan [direction] away (+1 the next), carrying on from
+  /// wherever it is: by [distance] further, on the same spring as a settle
+  /// so the finger's [velocity] carries it out, while it fades away within
+  /// the first part of the trade.
+  void leave({
+    required double direction,
+    required double velocity,
+    required double distance,
+  }) {
+    _fades = true;
+    _follow = 1;
+    final from = offset.value;
+    // Only speed already carrying the log out goes with it; a flick back
+    // that still switched starts it from rest.
+    final speed = velocity * direction < 0 ? velocity : 0.0;
+    // Reaching further than a hard flick would overshoot keeps the log
+    // going one way.
+    final reach = math.max(distance, speed.abs() / _springRate);
+    offset.animateWith(
+      SpringSimulation(
+        AppMotion.settle,
+        from,
+        from - direction * reach,
+        speed,
+        tolerance: _rest,
+      ),
+    );
+    leaving.forward();
+  }
+
+  /// At rest at once, for reduced motion.
+  void rest() {
+    offset.value = 0;
+    leaving.value = 0;
+  }
+
+  void dispose() {
+    offset.dispose();
+    leaving.dispose();
+  }
+}
+
+/// Moves one part of a workout page (its log, or a notice above it) as the
+/// page moves among the plans: its own [motion], and, while the page arrives
+/// by a plan switch, coming in from [arrivingFrom] pixels aside and fading in
+/// from 30% of the way. Only the transform and opacity change per frame; the
+/// child is built once and passed through.
+///
+/// The arriving log is laid out, tappable and announced from its first
+/// frame. A [leaving] log leaves the semantics tree; the page stops taking
+/// taps then too, as it does for any navigation.
+class _PlanLogTransition extends StatelessWidget {
+  final _LogMotion motion;
+  final Animation<double> arrival;
+  final double arrivingFrom;
+  final bool leaving;
+  final Widget child;
+
+  const _PlanLogTransition({
+    required this.motion,
+    required this.arrival,
+    required this.arrivingFrom,
+    required this.leaving,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    // The outer boundary keeps each frame's move from repainting the header
+    // and bars; the inner one keeps it from repainting the log, which moves
+    // as one picture while both logs are on screen.
+    return RepaintBoundary(
+      child: ExcludeSemantics(
+        excluding: leaving,
+        child: AnimatedBuilder(
+          animation: Listenable.merge([motion.listenable, arrival]),
+          child: RepaintBoundary(child: child),
+          builder: (context, child) {
+            final arrived = arrival.value;
+            return Opacity(
+              opacity:
+                  motion.opacity(width) *
+                  PageSwitchTransition.arrivingFade.transform(arrived),
+              alwaysIncludeSemantics: true,
+              child: Transform.translate(
+                offset: Offset(
+                  motion.offset.value +
+                      arrivingFrom * (1 - AppMotion.curve.transform(arrived)),
+                  0,
+                ),
+                child: child,
+              ),
+            );
+          },
         ),
       ),
     );

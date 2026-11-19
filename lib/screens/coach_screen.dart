@@ -8,11 +8,16 @@ import '../providers/update_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../theme/app_theme.dart';
 import '../theme/breakpoints.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../widgets/app_header.dart';
 import '../widgets/coach/coach_chat_entry.dart';
 import '../widgets/coach/coach_status_bar.dart';
+import '../widgets/motion/collapsible.dart';
+import '../widgets/motion/entrance.dart';
+import '../widgets/motion/state_switcher.dart';
+import '../widgets/own_scroll_controller.dart';
 import '../widgets/update_dialog.dart';
 import 'coach_review_screen.dart';
 
@@ -43,13 +48,26 @@ class CoachScreen extends StatefulWidget {
 
 class _CoachScreenState extends State<CoachScreen> {
   final TextEditingController _input = TextEditingController();
-  final ScrollController _scroll = ScrollController();
+
+  /// The conversation list on show. The list owns its controller
+  /// ([OwnScrollController]): a conversation that starts again while the
+  /// last is still crossing out arrives as a second list, and one controller
+  /// can't hold both.
+  ScrollController? _scroll;
   int _shownEntries = 0;
+
+  /// How many chat rows were already on screen as of the last frame: the
+  /// conversation the Coach opened with, and every row since. Only rows past
+  /// it are new, so only they arrive, and a row rebuilt as it scrolls back
+  /// into view never does.
+  int _settledRows = 0;
+  int? _settlingRows;
 
   @override
   void initState() {
     super.initState();
     final coach = context.read<CoachProvider>();
+    _settledRows = _rowCount(coach);
     coach.refreshStale();
     coach.checkConnection();
     _input.addListener(() => setState(() {}));
@@ -58,7 +76,6 @@ class _CoachScreenState extends State<CoachScreen> {
   @override
   void dispose() {
     _input.dispose();
-    _scroll.dispose();
     super.dispose();
   }
 
@@ -119,17 +136,41 @@ class _CoachScreenState extends State<CoachScreen> {
     );
   }
 
+  /// Chat rows: every entry, and the progress line while a reply is in
+  /// flight.
+  static int _rowCount(CoachProvider coach) =>
+      coach.entries.length + (coach.sending ? 1 : 0);
+
+  /// Rows built this frame see the count from before it, so every row new
+  /// in it arrives; afterwards they are settled.
+  void _settleRows(int count) {
+    if (_settlingRows == null && count == _settledRows) return;
+    final scheduled = _settlingRows != null;
+    _settlingRows = count;
+    if (scheduled) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _settledRows = _settlingRows ?? _settledRows;
+      _settlingRows = null;
+    });
+  }
+
   /// Keeps the newest message in view as the conversation grows.
   void _followConversation(int count) {
     if (count == _shownEntries) return;
     _shownEntries = count;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients) return;
-      _scroll.animateTo(
-        _scroll.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-      );
+      // Only the conversation on show: none while the welcome shows, and
+      // never one on its way out.
+      final scroll = _scroll;
+      if (!mounted || scroll == null || !scroll.hasClients) return;
+      if (context.read<CoachProvider>().isEmpty) return;
+      final end = scroll.position.maxScrollExtent;
+      final duration = AppMotion.of(context, AppMotion.enter);
+      if (duration == Duration.zero) {
+        scroll.jumpTo(end);
+      } else {
+        scroll.animateTo(end, duration: duration, curve: AppMotion.curve);
+      }
     });
   }
 
@@ -143,6 +184,52 @@ class _CoachScreenState extends State<CoachScreen> {
     return opensTurn ? AppSpacing.xxl : AppSpacing.md;
   }
 
+  /// One chat row. Each row is a place in the conversation whose content can
+  /// cross to the next: the progress line hands over to the reply in the
+  /// same place, and a failure to the progress line when it is tried again.
+  /// A row new to the screen (a question just sent, and the progress line
+  /// under it) also fades and lifts into place, once. A row that crosses
+  /// from what was there doesn't, so nothing fades twice.
+  Widget _buildRow(
+    CoachProvider coach,
+    int index, {
+    required int settledRows,
+    required bool busy,
+  }) {
+    final arrives = index >= settledRows;
+    final Widget content;
+    final Key key;
+    if (index == coach.entries.length) {
+      key = const ValueKey('coach-thinking');
+      content = const _Thinking();
+    } else {
+      final entry = coach.entries[index];
+      // A question sent again (Try again) is the same line in the same
+      // place, so it holds still rather than crossing to itself.
+      key =
+          entry.role == CoachEntryRole.user
+              ? ValueKey(('coach-question', index, entry.text))
+              : ObjectKey(entry);
+      content = CoachChatEntry(
+        entry: entry,
+        onReview: () => _review(entry),
+        onAskAgain: busy ? null : () => coach.askAgain(entry),
+        onRetry:
+            busy || !coach.canRetry(entry) ? null : () => coach.retry(entry),
+        onCheckUpdates: _checkUpdates,
+        onSignIn: coach.signInAgain,
+      );
+    }
+    return StateSwitcher(
+      child: Entrance(
+        key: key,
+        animate: arrives,
+        index: arrives ? index - settledRows : 0,
+        child: content,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final coach = context.watch<CoachProvider>();
@@ -152,7 +239,9 @@ class _CoachScreenState extends State<CoachScreen> {
     final quota = coach.quota;
     final locked = coach.limitReached;
     final busy = coach.sending || locked;
-    _followConversation(coach.entries.length + (coach.sending ? 1 : 0));
+    final rows = _rowCount(coach);
+    _settleRows(rows);
+    _followConversation(rows);
 
     return Scaffold(
       backgroundColor: backgroundColor(context),
@@ -191,56 +280,62 @@ class _CoachScreenState extends State<CoachScreen> {
                   ),
                   child: Column(
                     children: [
-                      if (coach.connectionNotice) const _ConnectionNotice(),
+                      Collapsible(
+                        open: coach.connectionNotice,
+                        child: const _ConnectionNotice(),
+                      ),
                       Expanded(
-                        child:
-                            coach.isEmpty
-                                ? _EmptyState(
-                                  splitName: splitName,
-                                  planCount: planCount,
-                                  onSuggestion: busy ? null : _send,
-                                )
-                                : ListView.builder(
-                                  controller: _scroll,
-                                  padding: const EdgeInsets.fromLTRB(
-                                    AppSpacing.lg,
-                                    AppSpacing.xl,
-                                    AppSpacing.lg,
-                                    AppSpacing.lg,
+                        // The welcome gives way to the conversation, and
+                        // comes back if the conversation starts over.
+                        child: StateSwitcher(
+                          child:
+                              coach.isEmpty
+                                  ? _EmptyState(
+                                    key: const ValueKey('coach-welcome'),
+                                    splitName: splitName,
+                                    planCount: planCount,
+                                    onSuggestion: busy ? null : _send,
+                                  )
+                                  : OwnScrollController(
+                                    key: const ValueKey('coach-chat'),
+                                    onAttach: (scroll) => _scroll = scroll,
+                                    onDetach: (scroll) {
+                                      if (identical(_scroll, scroll)) {
+                                        _scroll = null;
+                                      }
+                                    },
+                                    builder:
+                                        (context, scroll) => ListView.builder(
+                                          controller: scroll,
+                                          padding: const EdgeInsets.fromLTRB(
+                                            AppSpacing.lg,
+                                            AppSpacing.xl,
+                                            AppSpacing.lg,
+                                            AppSpacing.lg,
+                                          ),
+                                          itemCount: rows,
+                                          itemBuilder:
+                                              (context, index) => Padding(
+                                                padding: EdgeInsets.only(
+                                                  top: _gapAbove(coach, index),
+                                                ),
+                                                // Read as each row is built,
+                                                // not when the list was: a row
+                                                // built lazily later, as it
+                                                // scrolls back into view, is
+                                                // settled by then. Rows built in
+                                                // the frame of a change still see
+                                                // the count from before it.
+                                                child: _buildRow(
+                                                  coach,
+                                                  index,
+                                                  settledRows: _settledRows,
+                                                  busy: busy,
+                                                ),
+                                              ),
+                                        ),
                                   ),
-                                  itemCount:
-                                      coach.entries.length +
-                                      (coach.sending ? 1 : 0),
-                                  itemBuilder: (context, index) {
-                                    final gap = EdgeInsets.only(
-                                      top: _gapAbove(coach, index),
-                                    );
-                                    if (index == coach.entries.length) {
-                                      return Padding(
-                                        padding: gap,
-                                        child: const _Thinking(),
-                                      );
-                                    }
-                                    final entry = coach.entries[index];
-                                    return Padding(
-                                      padding: gap,
-                                      child: CoachChatEntry(
-                                        entry: entry,
-                                        onReview: () => _review(entry),
-                                        onAskAgain:
-                                            busy
-                                                ? null
-                                                : () => coach.askAgain(entry),
-                                        onRetry:
-                                            busy || !coach.canRetry(entry)
-                                                ? null
-                                                : () => coach.retry(entry),
-                                        onCheckUpdates: _checkUpdates,
-                                        onSignIn: coach.signInAgain,
-                                      ),
-                                    );
-                                  },
-                                ),
+                        ),
                       ),
                       _InputBar(
                         controller: _input,
@@ -304,6 +399,7 @@ class _EmptyState extends StatelessWidget {
   final ValueChanged<String>? onSuggestion;
 
   const _EmptyState({
+    super.key,
     required this.splitName,
     required this.planCount,
     required this.onSuggestion,
@@ -534,9 +630,21 @@ class _InputBar extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           SizedBox.square(
             dimension: 48,
-            child: Material(
-              color: enabled ? fill : controlFillColor(context),
-              borderRadius: AppRadius.button,
+            // The ground eases between quiet and the accent as the message
+            // empties and fills, while the arrow crosses with it, or to the
+            // progress ring while sending.
+            child: TweenAnimationBuilder<Color?>(
+              tween: ColorTween(
+                end: enabled ? fill : controlFillColor(context),
+              ),
+              duration: AppMotion.of(context, AppMotion.quick),
+              curve: AppMotion.curve,
+              builder:
+                  (context, ground, child) => Material(
+                    color: ground,
+                    borderRadius: AppRadius.button,
+                    child: child,
+                  ),
               child: InkWell(
                 key: const ValueKey('coach-send'),
                 onTap: onSend,
@@ -546,21 +654,28 @@ class _InputBar extends StatelessWidget {
                   enabled: enabled,
                   label: sending ? 'Sending' : 'Send',
                   child: Center(
-                    child:
-                        sending
-                            ? SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: secondary,
+                    child: StateSwitcher(
+                      alignment: Alignment.center,
+                      child:
+                          sending
+                              ? SizedBox.square(
+                                key: const ValueKey('sending'),
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: secondary,
+                                ),
+                              )
+                              : Icon(
+                                LucideIcons.arrowUp,
+                                key: ValueKey(enabled),
+                                size: 20,
+                                color:
+                                    enabled
+                                        ? onAccentColor(context)
+                                        : secondary,
                               ),
-                            )
-                            : Icon(
-                              LucideIcons.arrowUp,
-                              size: 20,
-                              color:
-                                  enabled ? onAccentColor(context) : secondary,
-                            ),
+                    ),
                   ),
                 ),
               ),

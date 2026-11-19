@@ -15,9 +15,11 @@ import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/theme/motion.dart';
 import 'package:gymapp/widgets/underline_tab_strip.dart';
 import 'package:gymapp/widgets/workout/training_block_strip.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
+import 'package:gymapp/widgets/workout/set_entry_table.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
@@ -271,32 +273,58 @@ void main() {
     expect(selectedWeek(tester), 1);
   });
 
-  testWidgets('plan transitions slide in the swipe direction', (tester) async {
+  /// How far [plan]'s log has moved sideways, and how visible it is.
+  (double, double) logOf(WidgetTester tester, String plan) {
+    final log = find.ancestor(
+      of: find.text('$plan exercise 0'),
+      matching: find.byType(CustomScrollView),
+    );
+    final offset =
+        tester
+            .widget<Transform>(
+              find.ancestor(of: log, matching: find.byType(Transform)).first,
+            )
+            .transform
+            .storage[12];
+    final opacity =
+        tester
+            .widget<Opacity>(
+              find.ancestor(of: log, matching: find.byType(Opacity)).first,
+            )
+            .opacity;
+    return (offset, opacity);
+  }
+
+  testWidgets('plan transitions trade logs in the swipe direction', (
+    tester,
+  ) async {
     await open(tester);
     for (final dx in [-160.0, 160.0]) {
+      final from = dx < 0 ? 'Pull' : 'Legs';
+      final to = dx < 0 ? 'Legs' : 'Pull';
       await tester.drag(find.byType(CustomScrollView), Offset(dx, 0));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 60));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 140));
       final title =
           find
-              .descendant(
-                of: find.byType(AppBar),
-                matching: find.text(dx < 0 ? 'Legs' : 'Pull'),
-              )
+              .descendant(of: find.byType(AppBar), matching: find.text(to))
               .last;
       final route = ModalRoute.of(tester.element(title))!;
-      expect(route.transitionDuration, const Duration(milliseconds: 190));
       expect(route.animation!.value, inExclusiveRange(0, 1));
-      final slide = tester.widget<SlideTransition>(
-        find.ancestor(of: title, matching: find.byType(SlideTransition)).first,
-      );
-      expect(slide.position.value.dx.sign, dx < 0 ? 1 : -1);
-      expect(slide.position.value.dx.abs(), lessThan(0.08));
-      final fade = tester.widget<FadeTransition>(
-        find.ancestor(of: title, matching: find.byType(FadeTransition)).first,
-      );
-      expect(fade.opacity.value, inExclusiveRange(0.78, 1));
+      // The old log went on the way the finger went, and has cleared out.
+      final (leaving, leavingOpacity) = logOf(tester, from);
+      expect(leaving.sign, dx.sign);
+      expect(leavingOpacity, 0);
+      // The new one comes in from the side the finger came from, fading in.
+      final (arriving, arrivingOpacity) = logOf(tester, to);
+      expect(arriving.sign, -dx.sign);
+      expect(arriving.abs(), lessThan(AppMotion.swipeShift(600)));
+      expect(arrivingOpacity, inExclusiveRange(0, 1));
+      await pumpWithStorage(tester);
       await tester.pumpAndSettle();
+      expect(currentPlan(tester), to);
+      expect(logOf(tester, to), (0.0, 1.0));
       expect(tester.takeException(), isNull);
     }
   });
@@ -306,22 +334,54 @@ void main() {
   ) async {
     await open(tester);
     final gesture = await tester.startGesture(const Offset(300, 450));
+    await gesture.moveBy(const Offset(-20, 0));
     await gesture.moveBy(const Offset(-80, 0));
     await tester.pump();
-    final bodyTransform = tester.widget<Transform>(
-      find
-          .ancestor(
-            of: find.byType(CustomScrollView),
-            matching: find.byType(Transform),
-          )
-          .first,
-    );
-    expect(bodyTransform.transform.storage[12], inInclusiveRange(-28, -1));
+    final (offset, opacity) = logOf(tester, 'Pull');
+    expect(offset, -80);
+    expect(opacity, inExclusiveRange(0.5, 1));
     expect(currentPlan(tester), 'Pull');
     await gesture.up();
+    await pumpWithStorage(tester);
     await tester.pumpAndSettle();
     expect(currentPlan(tester), 'Legs');
   });
+
+  testWidgets(
+    'a switch with the keypad open saves what was typed and closes the keypad',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final sessions = _Sessions();
+      await open(tester, sessions: sessions);
+      await tester.tap(
+        find.descendant(
+          of: find.byType(ExerciseCard).first,
+          matching: find.text('Add set'),
+        ),
+      );
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(find.bySemanticsLabel('Set 1 Kg').first);
+      await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel('Hide keypad'), findsOneWidget);
+      await tester.tap(find.text('5').last);
+      await tester.pump();
+      // Swiped on the log above the open keypad.
+      await tester.dragFrom(const Offset(300, 250), const Offset(-160, 0));
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+      expect(currentPlan(tester), 'Legs');
+      final saved = sessions.writes.lastWhere(
+        (write) => write.planId == 'Pull',
+      );
+      expect(saved.exercises.first.sets.single.weight, 5);
+      expect(find.bySemanticsLabel('Hide keypad'), findsNothing);
+      expect(SetEntryTable.keyboardHeight.value, 0);
+      expect(find.byType(WorkoutScreen), findsOneWidget);
+      semantics.dispose();
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('reduced motion switches plans immediately', (tester) async {
     await open(tester, reduceMotion: true);

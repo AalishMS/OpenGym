@@ -266,6 +266,32 @@ void main() {
     }
   });
 
+  testWidgets(
+    'a list back while the last is still leaving scrolls on its own',
+    (tester) async {
+      final provider = _Sessions([
+        session(id: 'a', name: 'Push Day', date: DateTime(2026, 9, 1)),
+      ]);
+      await tester.pumpWidget(host(provider));
+      await tester.pump();
+      final field = find.byKey(const ValueKey('history-search-field'));
+      // A typo empties the results, and a quick backspace brings them back
+      // before the first list has finished leaving.
+      await tester.enterText(field, 'Pushx');
+      await tester.pump();
+      await tester.enterText(field, 'Push');
+      await tester.pump();
+      final lists = tester.widgetList<ListView>(find.byType(ListView)).toList();
+      expect(lists, hasLength(2));
+      // Each list owns its controller: one controller holding both positions
+      // throws wherever its single position is read (the desktop scrollbar).
+      expect(lists.map((list) => list.controller!.positions.length), [1, 1]);
+      await tester.pumpAndSettle();
+      expect(find.byType(ListView), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
   testWidgets('journal search clears and split changes reset the query', (
     tester,
   ) async {
@@ -282,7 +308,8 @@ void main() {
     await tester.pump();
     expect(find.text('No matching workouts'), findsOneWidget);
     await tester.tap(find.text('Clear search'));
-    await tester.pump();
+    // The ledger crosses back in place of the empty state.
+    await tester.pumpAndSettle();
     expect(find.text('Push Day'), findsOneWidget);
 
     await tester.enterText(

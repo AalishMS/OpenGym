@@ -6,8 +6,12 @@ import '../providers/update_provider.dart';
 import '../services/update_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import 'app_button.dart';
+import 'motion/app_modals.dart';
+import 'motion/collapsible.dart';
+import 'motion/state_switcher.dart';
 
 typedef ReleasePageLauncher = Future<bool> Function(Uri uri);
 
@@ -20,7 +24,7 @@ Future<void> showUpdateDialog(
   BuildContext context, {
   ReleasePageLauncher? openRelease,
 }) {
-  return showDialog<void>(
+  return showAppDialog<void>(
     context: context,
     // Downloading is cancellable from inside the dialog, so a stray tap on the
     // barrier must not orphan a download the user can no longer see.
@@ -36,7 +40,7 @@ Future<void> showWhatsNewDialog(
   ReleaseInfo release, {
   ReleasePageLauncher? openRelease,
 }) {
-  return showDialog<void>(
+  return showAppDialog<void>(
     context: context,
     routeSettings: const RouteSettings(name: '/whats-new'),
     builder: (_) => WhatsNewDialog(release: release, openRelease: openRelease),
@@ -162,16 +166,27 @@ class UpdateDialog extends StatelessWidget {
                 status: status,
                 silent: updates.installsSilently,
               ),
-              if (failed) ...[
-                const SizedBox(height: 20),
-                _FailureMessage(
-                  message:
-                      updates.error ?? 'The update could not be installed.',
-                ),
-              ] else ...[
-                const SizedBox(height: 24),
-                _Highlights(changelog: release.changelog),
-              ],
+              // Each phase crosses to the next in place, and the dialog eases
+              // to its new height rather than jumping.
+              StateSwitcher(
+                animateSize: true,
+                child:
+                    failed
+                        ? Padding(
+                          key: const ValueKey('failed'),
+                          padding: const EdgeInsets.only(top: 20),
+                          child: _FailureMessage(
+                            message:
+                                updates.error ??
+                                'The update could not be installed.',
+                          ),
+                        )
+                        : Padding(
+                          key: const ValueKey('highlights'),
+                          padding: const EdgeInsets.only(top: 24),
+                          child: _Highlights(changelog: release.changelog),
+                        ),
+              ),
               const SizedBox(height: 20),
               Semantics(
                 link: true,
@@ -184,18 +199,34 @@ class UpdateDialog extends StatelessWidget {
                   ),
                 ),
               ),
-              if (status == UpdateStatus.downloading ||
-                  status == UpdateStatus.installing) ...[
-                const SizedBox(height: 20),
-                _Progress(
-                  status: status,
-                  progress: updates.progress,
-                  waitingForNetwork: updates.isWaitingForNetwork,
-                  silent: updates.installsSilently,
+              Collapsible(
+                open:
+                    status == UpdateStatus.downloading ||
+                    status == UpdateStatus.installing,
+                child: StateSwitcher(
+                  animateSize: true,
+                  child: Padding(
+                    key: ValueKey(status == UpdateStatus.installing),
+                    padding: const EdgeInsets.only(top: 20),
+                    child: _Progress(
+                      status: status,
+                      progress: updates.progress,
+                      waitingForNetwork: updates.isWaitingForNetwork,
+                      silent: updates.installsSilently,
+                    ),
+                  ),
                 ),
-              ],
-              const SizedBox(height: 20),
-              _Actions(updates: updates, showError: _showError),
+              ),
+              StateSwitcher(
+                animateSize: true,
+                child: KeyedSubtree(
+                  key: ValueKey(_Actions.phaseOf(status)),
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 20),
+                    child: _Actions(updates: updates, showError: _showError),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -226,7 +257,10 @@ class _ReleaseHeader extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
+        // The marker's colour settles with the copy beside it.
+        AnimatedContainer(
+          duration: AppMotion.of(context, AppMotion.quick),
+          curve: AppMotion.curve,
           width: 4,
           height: 76,
           decoration: BoxDecoration(
@@ -239,28 +273,45 @@ class _ReleaseHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                failed
-                    ? 'Update needs attention'
-                    : downloaded
-                    ? 'Ready to install'
-                    : 'A new build is ready',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: failed ? error : textPrimaryColor(context),
+              StateSwitcher(
+                animateSize: true,
+                child: Column(
+                  key: ValueKey(
+                    failed
+                        ? 'failed'
+                        : downloaded
+                        ? 'downloaded'
+                        : 'offer',
+                  ),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      failed
+                          ? 'Update needs attention'
+                          : downloaded
+                          ? 'Ready to install'
+                          : 'A new build is ready',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.headlineSmall?.copyWith(
+                        color: failed ? error : textPrimaryColor(context),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      failed
+                          ? 'Nothing was changed. You can retry when ready.'
+                          : downloaded
+                          ? silent
+                              ? 'The update is downloaded. OpenGym will close for '
+                                  'a moment to install it.'
+                              : 'The update is downloaded. Android will ask you to '
+                                  'confirm the install.'
+                          : 'Update OpenGym to get the latest improvements.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                failed
-                    ? 'Nothing was changed. You can retry when ready.'
-                    : downloaded
-                    ? silent
-                        ? 'The update is downloaded. OpenGym will close for '
-                            'a moment to install it.'
-                        : 'The update is downloaded. Android will ask you to '
-                            'confirm the install.'
-                    : 'Update OpenGym to get the latest improvements.',
-                style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
               Wrap(
@@ -452,6 +503,15 @@ class _Progress extends StatelessWidget {
 
 class _Actions extends StatelessWidget {
   const _Actions({required this.updates, required this.showError});
+
+  /// The set of buttons [status] shows; a new set crosses in, while a label
+  /// changing within the offer (Update now, Install update, Try again)
+  /// changes in place.
+  static String phaseOf(UpdateStatus status) => switch (status) {
+    UpdateStatus.installing => 'none',
+    UpdateStatus.downloading => 'download',
+    _ => 'offer',
+  };
 
   final UpdateProvider updates;
   final void Function(BuildContext context, String message) showError;

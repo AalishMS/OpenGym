@@ -59,7 +59,8 @@ void main() {
     await tester.pump();
     expect(updates.startCount, 1);
     await tester.tap(find.text('Cancel download'));
-    await tester.pump();
+    // Let the download buttons finish crossing back to the offer.
+    await tester.pumpAndSettle();
     expect(updates.cancelCount, 1);
     await tester.tap(find.text('Later'));
     await tester.pumpAndSettle();

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import 'raised_card.dart';
@@ -187,7 +188,6 @@ class FloatingNoticeHost extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     return SafeArea(
       bottom: false,
       child: Align(
@@ -201,34 +201,36 @@ class FloatingNoticeHost extends StatelessWidget {
               AppSpacing.md,
               0,
             ),
+            // It arrives and leaves on a sheet's timing: it drops in over
+            // [AppMotion.enter] and gives way over [AppMotion.standard].
             child: AnimatedSwitcher(
-              duration:
-                  reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 320),
-              reverseDuration:
-                  reduceMotion
-                      ? Duration.zero
-                      : const Duration(milliseconds: 200),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
+              duration: AppMotion.of(context, AppMotion.enter),
+              reverseDuration: AppMotion.of(context, AppMotion.standard),
+              switchInCurve: AppMotion.curve,
+              switchOutCurve: AppMotion.exit,
               layoutBuilder:
                   (current, previous) => Stack(
                     alignment: Alignment.topCenter,
                     children: [...previous, if (current != null) current],
                   ),
               transitionBuilder:
-                  (child, animation) => FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween(
-                        begin: const Offset(0, -0.35),
-                        end: Offset.zero,
-                      ).animate(animation),
-                      child: ScaleTransition(
-                        scale: Tween(begin: 0.96, end: 1.0).animate(animation),
-                        alignment: Alignment.topCenter,
-                        child: child,
+                  (child, animation) => _NoticeTransition(
+                    animation: animation,
+                    child: FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween(
+                          begin: const Offset(0, -0.35),
+                          end: Offset.zero,
+                        ).animate(animation),
+                        child: ScaleTransition(
+                          scale: Tween(
+                            begin: AppMotion.scale,
+                            end: 1.0,
+                          ).animate(animation),
+                          alignment: Alignment.topCenter,
+                          child: child,
+                        ),
                       ),
                     ),
                   ),
@@ -237,6 +239,24 @@ class FloatingNoticeHost extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// A notice on its way out, replaced or closed, takes no taps and says nothing
+/// to screen readers, so its close button can't be pressed twice and a stale
+/// message isn't read out over the new one.
+class _NoticeTransition extends StatusTransitionWidget {
+  final Widget child;
+
+  const _NoticeTransition({required super.animation, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final leaving = !animation.isForwardOrCompleted;
+    return IgnorePointer(
+      ignoring: leaving,
+      child: ExcludeSemantics(excluding: leaving, child: child),
     );
   }
 }

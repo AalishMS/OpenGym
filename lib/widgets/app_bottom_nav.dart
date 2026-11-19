@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../theme/app_theme.dart';
+import '../theme/motion.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import 'guided_tour.dart';
+import 'nav_selection.dart';
 
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
@@ -35,30 +37,29 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final accent = accentColor(context);
     final textSecondary = textSecondaryColor(context);
+    final label = Theme.of(context).textTheme.labelSmall;
 
-    final reduceMotion = MediaQuery.disableAnimationsOf(context);
     final slots = _labels.length;
     final selected = currentIndex.clamp(0, slots - 1);
+    // Built once here, so the selection's frames don't rebuild them.
+    final destinations = [
+      for (var i = 0; i < slots; i++)
+        NavigationDestination(
+          icon: NavBadge(visible: badgedIndex == i, child: Icon(_icons[i])),
+          label: _labels[i],
+        ),
+    ];
 
     final bar = NavigationBarTheme(
       data: NavigationBarThemeData(
         height: 68,
         backgroundColor: backgroundColor(context),
         indicatorColor: Colors.transparent,
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          final selected = states.contains(WidgetState.selected);
-          return Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: selected ? accent : textSecondary,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-          );
-        }),
-        iconTheme: WidgetStateProperty.resolveWith((states) {
-          final selected = states.contains(WidgetState.selected);
-          return IconThemeData(
-            size: 22,
-            color: selected ? accent : textSecondary,
-          );
-        }),
+        // Colour and weight come from each destination's [NavSelection],
+        // which eases the colour in step with the rule; the bar itself would
+        // snap it.
+        labelTextStyle: const WidgetStatePropertyAll(TextStyle()),
+        iconTheme: const WidgetStatePropertyAll(IconThemeData(size: 22)),
       ),
       child: NavigationBar(
         selectedIndex: currentIndex,
@@ -75,14 +76,22 @@ class AppBottomNav extends StatelessWidget {
                 vertical: -AppSpacing.xs,
               ),
               borderRadius: AppRadius.button,
-              child: NavigationDestination(
-                icon: Badge(
-                  isLabelVisible: badgedIndex == i,
-                  smallSize: 7,
-                  backgroundColor: accentFillColor(context),
-                  child: Icon(_icons[i]),
-                ),
-                label: _labels[i],
+              child: NavSelection(
+                selected: i == selected,
+                builder: (context, t) {
+                  final color = Color.lerp(textSecondary, accent, t);
+                  return IconTheme.merge(
+                    data: IconThemeData(color: color),
+                    child: DefaultTextStyle.merge(
+                      style: label?.copyWith(
+                        color: color,
+                        fontWeight:
+                            i == selected ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                      child: destinations[i],
+                    ),
+                  );
+                },
               ),
             ),
         ],
@@ -106,11 +115,8 @@ class AppBottomNav extends StatelessWidget {
             child: IgnorePointer(
               child: AnimatedAlign(
                 key: const ValueKey('bottom-nav-indicator'),
-                duration:
-                    reduceMotion
-                        ? Duration.zero
-                        : const Duration(milliseconds: 220),
-                curve: Curves.easeOutCubic,
+                duration: AppMotion.of(context, AppMotion.standard),
+                curve: AppMotion.curve,
                 alignment: AlignmentDirectional(
                   slots == 1 ? 0 : -1 + 2 * selected / (slots - 1),
                   0,

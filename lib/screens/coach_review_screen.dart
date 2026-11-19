@@ -13,6 +13,8 @@ import '../theme/spacing.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_header.dart';
 import '../widgets/coach/coach_diff_card.dart';
+import '../widgets/motion/collapsible.dart';
+import '../widgets/motion/state_switcher.dart';
 import '../widgets/workout/training_block_dialogs.dart';
 
 /// The diff for one proposal. Every change has a checkbox, so the user can
@@ -256,7 +258,7 @@ class _ReviewHeader extends StatelessWidget {
   }
 }
 
-class _ReviewBar extends StatelessWidget {
+class _ReviewBar extends StatefulWidget {
   final bool applying;
   final String applyLabel;
 
@@ -276,8 +278,24 @@ class _ReviewBar extends StatelessWidget {
   });
 
   @override
+  State<_ReviewBar> createState() => _ReviewBarState();
+}
+
+class _ReviewBarState extends State<_ReviewBar> {
+  /// The last message shown, kept so it can fold away rather than vanish.
+  String? _message;
+  bool _isProblem = false;
+
+  @override
   Widget build(BuildContext context) {
-    final message = this.message;
+    final showing = widget.message != null;
+    if (showing) {
+      _message = widget.message;
+      _isProblem = widget.isProblem;
+    }
+    final message = _message;
+    final isProblem = _isProblem;
+    final applying = widget.applying;
     final messageColor =
         isProblem ? errorColor(context) : textSecondaryColor(context);
     return Container(
@@ -295,37 +313,53 @@ class _ReviewBar extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (message != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                  child: Semantics(
-                    liveRegion: true,
-                    child: Row(
-                      children: [
-                        if (isProblem) ...[
-                          Icon(
-                            LucideIcons.circleAlert,
-                            size: 16,
-                            color: messageColor,
+              // Why Apply is off opens over the buttons rather than pushing
+              // them, and one reason crosses to the next. Folding away, it
+              // is no longer read out.
+              Collapsible(
+                open: showing,
+                child: StateSwitcher(
+                  animateSize: true,
+                  child:
+                      message == null
+                          ? const SizedBox.shrink()
+                          : Padding(
+                            key: ValueKey(message),
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.sm,
+                            ),
+                            child: Semantics(
+                              liveRegion: true,
+                              child: Row(
+                                children: [
+                                  if (isProblem) ...[
+                                    Icon(
+                                      LucideIcons.circleAlert,
+                                      size: 16,
+                                      color: messageColor,
+                                    ),
+                                    const SizedBox(width: AppSpacing.sm),
+                                  ],
+                                  Expanded(
+                                    child: Text(
+                                      message,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(color: messageColor),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           ),
-                          const SizedBox(width: AppSpacing.sm),
-                        ],
-                        Expanded(
-                          child: Text(
-                            message,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: messageColor),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
+              ),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: onDiscard,
+                      onPressed: widget.onDiscard,
                       child: const Text('Discard'),
                     ),
                   ),
@@ -333,11 +367,11 @@ class _ReviewBar extends StatelessWidget {
                   Expanded(
                     child: ElevatedButton(
                       key: const ValueKey('coach-apply'),
-                      onPressed: onApply,
+                      onPressed: widget.onApply,
                       child:
                           applying
                               ? const ActionProgress('Applying')
-                              : Text(applyLabel),
+                              : Text(widget.applyLabel),
                     ),
                   ),
                 ],
