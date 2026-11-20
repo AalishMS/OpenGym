@@ -1,17 +1,14 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import '../../data/plan_colors.dart';
 import '../../models/workout_plan.dart';
 import '../../theme/app_theme.dart';
-import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 import '../../utils/plan_stats.dart';
 import '../raised_card.dart';
+import 'plan_marker.dart';
 
 /// One plan in the Plans list.
 ///
@@ -20,13 +17,17 @@ import '../raised_card.dart';
 /// grid let the preview run to three lines or none, which is what made one card
 /// look nothing like its neighbour.
 ///
-/// The plan's colour is spent on one thing, the numbered badge, which also
-/// shows the plan's place in the split's rotation.
+/// The plan's colour is spent on one thing, the numbered [PlanMarker] it
+/// shares with Home's rows, which also shows the plan's place in the split's
+/// rotation.
 class PlanCard extends StatelessWidget {
   final WorkoutPlan plan;
 
-  /// Index into `WorkoutPlanProvider.plans`; shown one-based on the badge.
+  /// Index into `WorkoutPlanProvider.plans`; shown one-based on the marker.
   final int index;
+
+  /// How many plans the rotation holds, for the marker's spoken `of N`.
+  final int? count;
   final PlanStat? stat;
   final VoidCallback onOpen;
   final VoidCallback onShowActions;
@@ -41,6 +42,7 @@ class PlanCard extends StatelessWidget {
     required this.stat,
     required this.onOpen,
     required this.onShowActions,
+    this.count,
     this.reorderHandle,
     this.now,
     super.key,
@@ -79,7 +81,7 @@ class PlanCard extends StatelessWidget {
                 // The grip leads and the … menu trails, so the two targets sit
                 // at opposite ends of the card instead of side by side.
                 if (reorderHandle != null) reorderHandle!,
-                _PlanBadge(plan: plan, number: index + 1),
+                PlanMarker(plan: plan, number: index + 1, count: count),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Column(
@@ -99,7 +101,7 @@ class PlanCard extends StatelessWidget {
                       Text(
                         exerciseNames.isEmpty
                             ? 'No exercises yet'
-                            : exerciseNames.join('  ·  '),
+                            : exerciseNames.join(' · '),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: textTheme.bodySmall?.copyWith(
@@ -159,54 +161,13 @@ class PlanVolumeSummary extends StatelessWidget {
         children: [
           TextSpan(text: '$exercises', style: figure),
           TextSpan(text: exercises == 1 ? ' exercise' : ' exercises'),
-          const TextSpan(text: '  ·  '),
+          const TextSpan(text: ' · '),
           TextSpan(text: '$sets', style: figure),
           TextSpan(text: sets == 1 ? ' set' : ' sets'),
         ],
       ),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-    );
-  }
-}
-
-/// The plan's colour as a rounded square holding its place in the rotation.
-class _PlanBadge extends StatelessWidget {
-  final WorkoutPlan plan;
-  final int number;
-
-  const _PlanBadge({required this.plan, required this.number});
-
-  static const double _side = 40;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = planColorOf(plan.planColor, context);
-    // Grows with the text inside it, but only so far: past 1.5x the badge
-    // would crowd the name it sits beside.
-    final side = math.min(
-      MediaQuery.textScalerOf(context).scale(_side),
-      _side * 1.5,
-    );
-
-    return Semantics(
-      label: '${titleCase(plan.name)} plan marker',
-      child: Container(
-        width: side,
-        height: side,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(color: color, borderRadius: AppRadius.button),
-        child: ExcludeSemantics(
-          child: Text(
-            number.toString().padLeft(2, '0'),
-            style: AppTypography.trainingData(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: onColor(color),
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

@@ -84,6 +84,7 @@ class _PlanGridState extends State<PlanGrid>
             key: ValueKey(widget.plans[index].id),
             plan: widget.plans[index],
             index: index,
+            count: widget.plans.length,
             stat: widget.stats[index],
             canDrag: widget.plans.length > 1,
             onOpen: () => widget.onOpen(index),
@@ -98,6 +99,7 @@ class _PlanGridState extends State<PlanGrid>
 class _DraggablePlanCard extends StatefulWidget {
   final WorkoutPlan plan;
   final int index;
+  final int count;
   final PlanStat? stat;
   final bool canDrag;
   final VoidCallback onOpen;
@@ -107,6 +109,7 @@ class _DraggablePlanCard extends StatefulWidget {
   const _DraggablePlanCard({
     required this.plan,
     required this.index,
+    required this.count,
     required this.stat,
     required this.canDrag,
     required this.onOpen,
@@ -145,6 +148,7 @@ class _DraggablePlanCardState extends State<_DraggablePlanCard> {
     Widget card(Widget? handle) => PlanCard(
       plan: widget.plan,
       index: widget.index,
+      count: widget.count,
       stat: widget.stat,
       onOpen: widget.onOpen,
       onShowActions: widget.onShowActions,

@@ -644,7 +644,7 @@ signature:
   controls and cards rounder, and sheets and dialogs — whatever floats over a
   scrim — the roundest. Pills are fully round.
 - Elevation reads as light. Pages sit on the background; the few things that
-  stand forward (the workout launcher, the next plan on Home, preset cards,
+  stand forward (the workout launcher, preset cards,
   the Workout details readout and exercises, dashboard panels) are *raised*:
   white with a soft two-layer shadow in light mode, and in dark mode a lifted
   fill with a hairline edge, since a shadow has nothing to fall on
@@ -728,11 +728,17 @@ signature:
   exercise heads its count column *Time* and shows holds as `45 s`, or `1:30`
   from 90 seconds up; its summary gives the longest hold. Set notes,
   including ones that say "PR", always show as notes.
-- A plan's menu (long press, or *Plan actions* in Manage) is a modal bottom
-  sheet with a drag handle, not a dialog. *Delete plan* is always the last
-  row, set apart by a rule and the error colour. In Manage, the drag grip
-  leads each card and *Plan actions* trails it, so the two targets sit at
-  opposite ends. Entering Manage folds the next workout and the week away so
+- A plan's menu (long press, *…* on a row, or *Plan actions* in Manage) is a
+  modal bottom sheet with a drag handle, not a dialog. *Edit plan* leads,
+  then *Duplicate plan* and *Change color*, and *Delete plan* is always the
+  last row, set apart by a rule and the error colour. *Change color* opens a
+  dialog holding the plan editor's own palette (`PlanColorPicker`), each
+  swatch named for its colour to screen readers; it closes on Save with no
+  snackbar, since the marker's new colour is the confirmation. In Manage, the
+  drag grip leads each card and *Plan actions* trails it, so the two targets
+  sit at opposite ends, and a tap on a card opens its menu rather than a
+  workout: Manage arranges plans, and a grab that misses the grip changes
+  nothing. Entering Manage folds the next workout and the week away so
   the plans rise to the top, while the rows cross to cards and *Manage* to
   *Done*; leaving unfolds them. Manage cleared by the app (another tab,
   reselecting Home, the tour) settles at once. Grid cards slide to their new
@@ -964,16 +970,48 @@ signature:
   `blockStatistics`. See [statistics design](docs/statistics-design.md) for
   references.
 - Home's weekly strip gives each day a full 48dp target without gaps, so all
-  seven fit a 390dp phone; bars are inset inside their targets. A bar first
+  seven fit a 390dp phone; each bar is a 16dp capsule centred in its target,
+  so the strip reads as a chart rather than a row of tiles. A bar first
   appears at its height and grows or shrinks over `long` only when its day
   changes while Home is in view: a workout finished on the workout page, or
   another split's week, is simply there. Today is marked by its bold letter and a small accent
   dot under it, the same dot the workout uses for the week being trained now.
-- Home labels the rotation bar with “Workout N of M”. The same workout
-  numbers appear in the plan list's coloured markers. Muscle groups sit on
-  their own line in the launcher; exercise, set, and duration values wrap as
-  whole phrases. The weekly summary keeps its “This week” label and Stats
-  navigation affordance even before the first workout is logged.
+  The seven days are always drawn. An empty week is only the letters and
+  today's dot, with the bars' slot closed so four of five plans still fit a
+  phone; it opens as the first day is trained.
+- Home's launcher is the one raised card on the page, and it is not itself a
+  button: *Start workout* (or *Resume workout*) is its single target. Its
+  first line reads “Next up · Workout N of M” with *Last done …* at the end,
+  over the rotation bar; the same workout numbers appear in the plan list's
+  markers. Muscle groups sit on their own line; exercise, set, and duration
+  values are dot-separated phrases (`PhraseLine`) that wrap only between
+  phrases, so a count never parts from its unit. Each phrase is measured
+  against the whole line before its dot; the dot follows only when both
+  fit, so it never squeezes a phrase into breaking mid-word. The weekly summary keeps its
+  “This week” label (set like *Your plans*) and Stats navigation affordance
+  even before the first workout is logged.
+- Plans on Home are flat rows on the page, ruled by hairlines; none rises
+  into a second card. Each leads with its marker (`PlanMarker`): the plan's
+  own resolved colour holding its number in `figures`, the same mark Manage's
+  cards and the colour picker show, so the colour picked is the colour seen.
+  The details line starts with where the plan stands: *Next* in accent ink,
+  *In progress* while its workout is under way (the launcher then offers to
+  resume that plan, and no other row claims to be next), or a success check
+  and *Done* for a plan trained since Monday, so the list reads as the week's
+  to-do list. A play glyph before *…* says what a tap on the row does: it
+  opens that plan's workout, or for the row *In progress*, the live session
+  itself, as *Resume workout* does, even when that session sits in an
+  earlier week than the plan would open now. Past 150% text the glyph gives
+  its width to the name and details. Screen readers hear the marker as “Workout N of
+  M” and the plan's name once.
+- Home's column stops at 680dp. Header, launcher, week and plans share that
+  measure, each padded inside the cap, and so one left edge, so a tablet or the desktop rail centres a phone-
+  and-a-half column instead of stretching Start the width of the screen. At
+  large text on a phone the wordmark scales down to its 40% share of the
+  header rather than being clipped.
+- Plan names are shown with the first letter of each word raised
+  (`titleCase`) and everything else as typed, so `PPL`, `RDL focus` and
+  `(heavy week)` read `PPL`, `RDL Focus` and `(Heavy Week)`.
 - Familiar labels and icons make actions understandable outside a technical
   audience.
 - Pressed, focused, disabled, loading, empty, and error states should feel like

@@ -11,6 +11,7 @@ import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/home_screen.dart';
 import 'package:gymapp/screens/plan_editor_screen.dart';
+import 'package:gymapp/screens/history_screen.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
@@ -19,6 +20,10 @@ import 'package:gymapp/utils/format.dart';
 import 'package:gymapp/utils/plan_stats.dart';
 import 'package:gymapp/utils/training_block_identity.dart';
 import 'package:gymapp/widgets/home/home_plan_row.dart';
+import 'package:gymapp/widgets/home/plan_marker.dart';
+import 'package:gymapp/widgets/home/up_next_card.dart';
+import 'package:gymapp/widgets/app_wordmark.dart';
+import 'package:gymapp/widgets/raised_card.dart';
 import 'package:gymapp/widgets/home/training_snapshot.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
 import 'package:gymapp/widgets/workout/training_block_strip.dart';
@@ -415,11 +420,7 @@ void main() {
 
     final homeContext = tester.element(find.byType(HomeScreen));
     final expectedHomeColor = planColorOf(plan.planColor, homeContext);
-    final homeMarker = find.byWidgetPredicate(
-      (widget) =>
-          widget is Semantics &&
-          widget.properties.label == 'Push Day plan marker',
-    );
+    final homeMarker = find.byType(PlanMarker);
     expect(homeMarker, findsOneWidget);
     final homeMarkerContainer = tester.widget<Container>(
       find.descendant(of: homeMarker, matching: find.byType(Container)),
@@ -429,6 +430,17 @@ void main() {
       expectedHomeColor,
     );
 
+    // Manage arranges plans; the workout opens from the ordinary row.
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+    final rowMarker = tester.widget<Container>(
+      find.descendant(
+        of: find.byType(PlanMarker),
+        matching: find.byType(Container),
+      ),
+    );
+    expect((rowMarker.decoration! as BoxDecoration).color, expectedHomeColor);
+    await tester.ensureVisible(find.text('Push Day').last);
     await tester.tap(find.text('Push Day').last);
     await tester.pumpAndSettle();
 
@@ -799,7 +811,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Change color'));
     await tester.pumpAndSettle();
-    final choices = find.bySemanticsLabel(RegExp(r'^Plan color \d+$'));
+    final choices = find.bySemanticsLabel(
+      RegExp('^(${kPlanColorNames.join('|')})\$'),
+    );
     expect(choices, findsWidgets);
     for (final choice in choices.evaluate()) {
       expect(
@@ -812,9 +826,9 @@ void main() {
       );
     }
     expect(
-      tester.getSemantics(find.bySemanticsLabel('Plan color 1')),
+      tester.getSemantics(find.bySemanticsLabel('Rose')),
       matchesSemantics(
-        label: 'Plan color 1',
+        label: 'Rose',
         isButton: true,
         hasTapAction: true,
         hasFocusAction: true,
@@ -937,7 +951,13 @@ void main() {
         find.byKey(const ValueKey('weekly-training-link')),
         findsOneWidget,
       );
-      expect(find.byKey(const ValueKey('training-day-0')), findsNothing);
+      // The week keeps its frame, and today its mark, before anything is
+      // logged; the bars' slot stays closed to the baseline until then.
+      expect(find.byKey(const ValueKey('training-day-0')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('training-day-today-dot')),
+        findsOneWidget,
+      );
       final fourth = find.byWidgetPredicate(
         (widget) => widget is HomePlanRow && widget.plan.id == 'plan-4',
       );
@@ -963,18 +983,21 @@ void main() {
     expect(find.text('Next up'), findsOneWidget);
     expect(find.textContaining('Workout 3 of 3'), findsOneWidget);
 
-    for (final label in ['Next up', 'Leg Day', 'Start workout']) {
-      await tester.tap(find.text(label).first);
+    // The card is not a button: Start is its one target.
+    for (final label in ['Next up', 'Leg Day']) {
+      await tester.tap(find.text(label).first, warnIfMissed: false);
       await tester.pumpAndSettle();
-      final workout = tester.widget<WorkoutScreen>(find.byType(WorkoutScreen));
-      expect(workout.plan.name, 'Leg Day');
-      expect(workout.planIndex, 2);
-      Navigator.of(tester.element(find.byType(WorkoutScreen))).pop();
-      await tester.pumpAndSettle();
-      // Each tap opens exactly one screen, including the nested button.
-      expect(find.byType(HomeScreen), findsOneWidget);
-      expect(find.byType(WorkoutScreen), findsNothing);
+      expect(find.byType(WorkoutScreen), findsNothing, reason: label);
     }
+    await tester.tap(find.text('Start workout'));
+    await tester.pumpAndSettle();
+    final workout = tester.widget<WorkoutScreen>(find.byType(WorkoutScreen));
+    expect(workout.plan.name, 'Leg Day');
+    expect(workout.planIndex, 2);
+    Navigator.of(tester.element(find.byType(WorkoutScreen))).pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.byType(WorkoutScreen), findsNothing);
   });
 
   testWidgets(
@@ -995,7 +1018,7 @@ void main() {
           (widget) =>
               widget is Semantics &&
               (widget.properties.label ?? '').contains(
-                '1 workouts, 0 sets, today',
+                '1 workout, 0 sets, today',
               ),
         ),
         findsOneWidget,
@@ -1061,7 +1084,7 @@ void main() {
         find.byWidgetPredicate(
           (widget) =>
               widget is Semantics &&
-              widget.properties.label == 'Wednesday: 1 workouts, 1 sets, today',
+              widget.properties.label == 'Wednesday: 1 workout, 1 set, today',
         ),
         findsOneWidget,
       );
@@ -1227,6 +1250,207 @@ void main() {
       final after = DateTime(2026, 3, 30);
       expect(formatDaysAgo(DateTime(2026, 3, 29), now: after), 'Yesterday');
     });
+  });
+
+  group('titleCase', () {
+    test('raises the first letter of each word and keeps the rest', () {
+      expect(titleCase('push day'), 'Push Day');
+      expect(titleCase('PPL plan'), 'PPL Plan');
+      expect(titleCase('RDL focus'), 'RDL Focus');
+      expect(titleCase('upper body (heavy week)'), 'Upper Body (Heavy Week)');
+      expect(titleCase('5x5 day'), '5x5 Day');
+      expect(titleCase('  spaced   out  '), 'Spaced Out');
+    });
+  });
+
+  test('countOf is singular only for one', () {
+    expect(countOf(1, 'set'), '1 set');
+    expect(countOf(0, 'set'), '0 sets');
+    expect(countOf(3, 'exercise'), '3 exercises');
+  });
+
+  testWidgets('a tap in Manage opens the plan actions, not a workout', (
+    tester,
+  ) async {
+    await pumpHome(tester, plans: rotationPlans());
+    await tester.tap(find.text('Manage'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pull Day').last);
+    await tester.pumpAndSettle();
+    expect(find.byType(WorkoutScreen), findsNothing);
+    expect(find.byType(BottomSheet), findsOneWidget);
+    expect(find.text('Edit plan'), findsOneWidget);
+  });
+
+  testWidgets('rows are flat and say which plan is next and which are done', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await pumpHome(
+      tester,
+      size: const Size(390, 1400),
+      plans: rotationPlans(),
+      sessions: [pullSession(DateTime.now())],
+    );
+    HomePlanRow row(String name) => tester.widget<HomePlanRow>(
+      find.byWidgetPredicate(
+        (widget) => widget is HomePlanRow && widget.plan.name == name,
+      ),
+    );
+    expect(row('Push Day').status, HomePlanStatus.none);
+    expect(row('Pull Day').status, HomePlanStatus.done);
+    expect(row('Leg Day').status, HomePlanStatus.next);
+    expect(find.bySemanticsLabel(RegExp('Done this week')), findsOneWidget);
+    // The launcher is the one raised card; no row lifts into a second.
+    for (final card in tester.widgetList<RaisedCard>(
+      find.descendant(
+        of: find.byType(HomePlanRow),
+        matching: find.byType(RaisedCard),
+      ),
+    )) {
+      expect(card.raised, isFalse);
+    }
+    semantics.dispose();
+  });
+
+  testWidgets('large text wraps between phrases and keeps the brand whole', (
+    tester,
+  ) async {
+    // The test font's glyphs are square and wide, so 150% here stands in
+    // for the 200% a real phone reaches before a phrase outgrows a line.
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 1600);
+    addTearDown(tester.view.reset);
+    await pumpHome(
+      tester,
+      size: const Size(390, 1600),
+      textScale: 1.5,
+      plans: rotationPlans(),
+    );
+    final push = find.byWidgetPredicate(
+      (widget) => widget is HomePlanRow && widget.plan.name == 'Push Day',
+    );
+    final sets = find.descendant(
+      of: push,
+      matching: find.textContaining(' set'),
+    );
+    final dot = find.descendant(of: push, matching: find.text(' · ')).first;
+    // The set count is its own phrase on one line, never split from its unit
+    // across a break the way one run of text wrapped.
+    expect(sets, findsOneWidget);
+    expect(
+      tester.getSize(sets).height,
+      closeTo(tester.getSize(dot).height, 0.5),
+    );
+    // The wordmark shrinks to its share of the header rather than clipping.
+    final brand = find.ancestor(
+      of: find.byType(AppWordmark),
+      matching: find.byType(FittedBox),
+    );
+    expect(brand, findsOneWidget);
+    expect(tester.getSize(brand).width, lessThanOrEqualTo(390 * 0.4));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the play glyph gives way to the details at large text', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 1400);
+    addTearDown(tester.view.reset);
+    Finder glyph() => find.descendant(
+      of: find.byType(HomePlanRow),
+      matching: find.byIcon(LucideIcons.play),
+    );
+    await pumpHome(tester, size: const Size(390, 1400), plans: rotationPlans());
+    expect(glyph(), findsNWidgets(3));
+    await pumpHome(
+      tester,
+      size: const Size(390, 1400),
+      textScale: 2,
+      plans: rotationPlans(),
+    );
+    expect(find.byType(HomePlanRow), findsNWidgets(3));
+    expect(glyph(), findsNothing);
+  });
+
+  testWidgets('a tablet keeps Home to a readable column', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(820, 1180);
+    addTearDown(tester.view.reset);
+    await pumpHome(tester, size: const Size(820, 1180), plans: rotationPlans());
+    final card = tester.getRect(find.byType(UpNextCard));
+    expect(card.width, lessThanOrEqualTo(680));
+    expect(card.center.dx, closeTo(410, 1));
+    // The header is capped the same way, so the wordmark lines up with the
+    // launcher instead of sitting a padding's width to its left.
+    expect(
+      tester.getTopLeft(find.byType(AppWordmark)).dx,
+      closeTo(card.left, 1),
+    );
+  });
+
+  testWidgets('the in-progress row opens the live workout, as Resume does', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 1400);
+    addTearDown(tester.view.reset);
+    final plans = rotationPlans();
+    final now = DateTime.now();
+    // Paused twenty minutes ago, so it is live without a ticking clock.
+    final live = WorkoutSession(
+      id: 'live-pull',
+      planId: plans[1].id,
+      planName: plans[1].name,
+      date: now.subtract(const Duration(minutes: 20)),
+      startedAt: now.subtract(const Duration(minutes: 20)),
+      durationSeconds: 600,
+      isCompleted: false,
+      exercises: const [],
+    );
+    await pumpHome(
+      tester,
+      size: const Size(390, 1400),
+      plans: plans,
+      sessions: [live],
+    );
+    await tester.pumpAndSettle();
+
+    Finder openedScreen() {
+      final workout = find.byType(WorkoutScreen);
+      return workout.evaluate().isNotEmpty
+          ? workout
+          : find.byType(WorkoutDetailsScreen);
+    }
+
+    String opened() {
+      final screen = tester.widget(openedScreen());
+      return screen is WorkoutScreen
+          ? 'workout:${screen.destination?.navigationKey}'
+          : 'details:${(screen as WorkoutDetailsScreen).sessionIdentity}';
+    }
+
+    Future<void> back() async {
+      Navigator.of(tester.element(openedScreen())).pop();
+      await tester.pumpAndSettle();
+    }
+
+    await tester.tap(find.text('Resume workout'));
+    await tester.pumpAndSettle();
+    final viaResume = opened();
+    expect(viaResume, contains('live-pull'));
+    await back();
+
+    final row = find.byWidgetPredicate(
+      (widget) =>
+          widget is HomePlanRow && widget.status == HomePlanStatus.inProgress,
+    );
+    expect(tester.widget<HomePlanRow>(row).plan.id, plans[1].id);
+    await tester.tap(find.descendant(of: row, matching: find.text('Pull Day')));
+    await tester.pumpAndSettle();
+    expect(opened(), viaResume);
+    await back();
   });
 }
 

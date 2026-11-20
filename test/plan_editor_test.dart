@@ -206,15 +206,17 @@ void main() {
     await pumpEditor(tester);
     await tester.tap(find.byTooltip('Change color'));
     await tester.pumpAndSettle();
-    final swatch = find.bySemanticsLabel('Plan color 1');
+    final swatch = find.bySemanticsLabel('Rose');
     expect(swatch, findsOneWidget);
     expect(
       tester.getSemantics(swatch),
       matchesSemantics(
-        label: 'Plan color 1',
+        label: 'Rose',
         isSelected: true,
         isButton: true,
         hasTapAction: true,
+        hasFocusAction: true,
+        isFocusable: true,
         hasSelectedState: true,
       ),
     );
@@ -436,12 +438,14 @@ void main() {
     await tester.tap(find.byTooltip('Change color'));
     await tester.pumpAndSettle();
     expect(
-      tester.getSemantics(find.bySemanticsLabel('Plan color 3')),
+      tester.getSemantics(find.bySemanticsLabel('Orange')),
       matchesSemantics(
-        label: 'Plan color 3',
+        label: 'Orange',
         isSelected: true,
         isButton: true,
         hasTapAction: true,
+        hasFocusAction: true,
+        isFocusable: true,
         hasSelectedState: true,
       ),
     );

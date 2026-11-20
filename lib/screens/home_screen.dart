@@ -14,11 +14,11 @@ import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../services/hive_service.dart';
 import '../theme/app_theme.dart';
-import '../theme/breakpoints.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../utils/plan_stats.dart';
+import '../utils/statistics_format.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_wordmark.dart';
@@ -32,6 +32,7 @@ import '../widgets/motion/collapsible.dart';
 import '../widgets/motion/state_switcher.dart';
 import '../widgets/motion/surface_fade.dart';
 import '../widgets/persistence_dialog.dart';
+import '../widgets/plan_color_picker.dart';
 import '../widgets/splits/preset_browser_dialog.dart';
 import '../widgets/splits/split_switcher.dart';
 import '../widgets/workout/training_block_actions.dart';
@@ -129,7 +130,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final accent = accentColor(context);
     final bg = backgroundColor(context);
     // Capture the layer for this pop: closing the menu synchronously must not
     // let another callback from the same Back also leave Manage.
@@ -193,7 +193,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                   : _buildPlanSection(
                                     context,
                                     provider,
-                                    accent,
                                     splitId,
                                   ),
                         ),
@@ -209,17 +208,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildHeader(BuildContext context) {
     final splitProvider = context.watch<SplitProvider?>();
+    // Capped first and padded inside the cap, as the plan list is, so the
+    // wordmark and the launcher share a left edge once the cap applies.
     return Padding(
       padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: AppSpacing.lg,
-          vertical: AppSpacing.md,
-        ),
-        child: _CappedWidth(
+      child: _CappedWidth(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.lg,
+            vertical: AppSpacing.md,
+          ),
           child: LayoutBuilder(
             // The title reads as a path; only the split name yields to the
-            // trailing Coach action. Cap the brand at large text on a phone.
+            // trailing Coach action. At large text on a phone the brand
+            // shrinks to its share of the row rather than being cut mid-word.
             builder:
                 (context, constraints) => Row(
                   children: [
@@ -227,10 +229,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       constraints: BoxConstraints(
                         maxWidth: constraints.maxWidth * 0.4,
                       ),
-                      child: const AppWordmark(
-                        fontSize: 17,
-                        maxLines: 1,
-                        overflow: TextOverflow.clip,
+                      child: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: AlignmentDirectional.centerStart,
+                        child: AppWordmark(fontSize: 17, maxLines: 1),
                       ),
                     ),
                     if (splitProvider?.activeSplit != null) ...[
@@ -318,7 +320,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 key: widget.tutorialPlanKey,
                 width: double.infinity,
                 child: AppButton.primary(
-                  label: 'Create plan',
+                  label: 'New plan',
                   onPressed: () {
                     Navigator.push(
                       context,
@@ -346,7 +348,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildPlanSection(
     BuildContext context,
     WorkoutPlanProvider provider,
-    Color accent,
     String? splitId,
   ) {
     final plans = provider.plans;
@@ -363,12 +364,14 @@ class _HomeScreenState extends State<HomeScreen> {
             calendarDaysBetween(stat.lastTrained!, today) >= 0)
           stat.planIndex,
     };
+    // Only durations worth showing count: a workout started and finished
+    // within a minute never ran its timer and would drag the estimate down.
     final timedSessions =
         sessions
             .where(
               (session) =>
                   session.isCompleted &&
-                  (session.durationSeconds ?? 0) > 0 &&
+                  knownDurationSeconds(session.durationSeconds) != null &&
                   (session.planId != null && plans[nextIndex].id != null
                       ? session.planId == plans[nextIndex].id
                       : session.planName.toLowerCase() ==
@@ -387,65 +390,85 @@ class _HomeScreenState extends State<HomeScreen> {
                 .round()
                 .clamp(1, 99999);
 
-    void actions(int index) => _showPlanOptions(
-      context,
-      plans[index],
-      index,
-      accent,
-      statsByIndex[index],
+    void actions(int index) =>
+        _showPlanOptions(context, plans[index], index, statsByIndex[index]);
+
+    // Built once per Home build and reused by the builder below, so a session
+    // write (a set logged mid-workout) doesn't recount the week.
+    final snapshot = TrainingSnapshot(
+      // Another split's week is not this week changing, so its bars are
+      // simply there instead of growing out of the last split's.
+      key: ValueKey(splitId),
+      plans: plans,
+      sessions: sessions,
+      onOpenWeeklyTraining: widget.onOpenWeeklyTraining,
+      onOpenLastWorkout: widget.onOpenLastWorkout,
     );
 
-    return _CappedWidth(
-      child: ListView(
-        controller: widget.tutorialScrollController,
-        padding: const EdgeInsets.fromLTRB(
-          AppSpacing.lg,
-          AppSpacing.sm,
-          AppSpacing.lg,
-          AppSpacing.xl,
-        ),
-        children: [
-          // Manage folds the week's summary away so the plans rise to the
-          // top, and unfolds it on Done.
-          Collapsible(
-            key: ValueKey('summary-$_manageReset'),
-            open: !_managing,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Session writes do not all pass through the provider
-                // (finishing a workout, sync), so follow the box for the
-                // in-progress state.
-                ValueListenableBuilder(
-                  valueListenable: HiveService.sessionsListenable(),
-                  builder: (context, _, _) {
-                    final live = HiveService.getLiveSession();
-                    final liveIndex =
-                        live?.planId == null
-                            ? -1
-                            : plans.indexWhere(
-                              (plan) => plan.id == live!.planId,
-                            );
-                    final inProgress = liveIndex >= 0;
-                    final index = inProgress ? liveIndex : nextIndex;
-                    return UpNextCard(
+    // Session writes do not all pass through the provider (finishing a
+    // workout, sync), so follow the box for the in-progress state. The card
+    // and the plan list read it together: the plan the card offers to resume
+    // is the one the list marks, and no other plan claims to be next.
+    return ValueListenableBuilder(
+      valueListenable: HiveService.sessionsListenable(),
+      builder: (context, _, _) {
+        final live = HiveService.getLiveSession();
+        final liveIndex =
+            live?.planId == null
+                ? -1
+                : plans.indexWhere((plan) => plan.id == live!.planId);
+        final inProgress = liveIndex >= 0;
+        final upNext = inProgress ? liveIndex : nextIndex;
+        // The live session itself, not the plan's current week: a paused
+        // workout can sit in an earlier week than the one the plan would open
+        // now. Resume and the row marked *In progress* both open it.
+        void resume() => openWorkoutDestination(
+          context,
+          WorkoutDestination.session(live!.id!),
+          requireIncomplete: true,
+          heroTag: UpNextCard.heroTagFor(plans[liveIndex]),
+        );
+
+        HomePlanStatus statusOf(int index) {
+          if (index == upNext) {
+            return inProgress ? HomePlanStatus.inProgress : HomePlanStatus.next;
+          }
+          return trainedDays.contains(index)
+              ? HomePlanStatus.done
+              : HomePlanStatus.none;
+        }
+
+        return _CappedWidth(
+          child: ListView(
+            controller: widget.tutorialScrollController,
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.sm,
+              AppSpacing.lg,
+              AppSpacing.xl,
+            ),
+            children: [
+              // Manage folds the week's summary away so the plans rise to
+              // the top, and unfolds it on Done.
+              Collapsible(
+                key: ValueKey('summary-$_manageReset'),
+                open: !_managing,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    UpNextCard(
                       tutorialStartKey: widget.tutorialStartKey,
-                      plan: plans[index],
-                      day: index + 1,
+                      plan: plans[upNext],
+                      day: upNext + 1,
                       dayCount: plans.length,
-                      stat: statsByIndex[index],
+                      stat: statsByIndex[upNext],
                       trainedDays: trainedDays,
                       durationMinutes: inProgress ? null : durationMinutes,
                       inProgress: inProgress,
                       onStart:
                           inProgress
-                              ? () => openWorkoutDestination(
-                                context,
-                                WorkoutDestination.session(live!.id!),
-                                requireIncomplete: true,
-                                heroTag: UpNextCard.heroTagFor(plans[index]),
-                              )
+                              ? resume
                               : () => _openWorkout(
                                 context,
                                 plans[nextIndex],
@@ -454,116 +477,119 @@ class _HomeScreenState extends State<HomeScreen> {
                                   plans[nextIndex],
                                 ),
                               ),
-                    );
-                  },
-                ),
-                const SizedBox(height: AppSpacing.sm),
-                TrainingSnapshot(
-                  // Another split's week is not this week changing, so
-                  // its bars are simply there instead of growing out of
-                  // the last split's.
-                  key: ValueKey(splitId),
-                  plans: plans,
-                  sessions: sessions,
-                  onOpenWeeklyTraining: widget.onOpenWeeklyTraining,
-                  onOpenLastWorkout: widget.onOpenLastWorkout,
-                ),
-                const SizedBox(height: AppSpacing.sm),
-              ],
-            ),
-          ),
-          Row(
-            children: [
-              Expanded(
-                child: _SectionHeading(
-                  title: 'Your plans',
-                  count: plans.length,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    snapshot,
+                    const SizedBox(height: AppSpacing.sm),
+                  ],
                 ),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              TextButton(
-                onPressed: () => setState(() => _managing = !_managing),
-                child: StateSwitcher(
-                  key: ValueKey('manage-label-$_manageReset'),
-                  animateSize: true,
-                  alignment: Alignment.center,
-                  child: Text(
-                    _managing ? 'Done' : 'Manage',
-                    key: ValueKey(_managing),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SectionHeading(
+                      title: 'Your plans',
+                      count: plans.length,
+                    ),
                   ),
+                  const SizedBox(width: AppSpacing.sm),
+                  TextButton(
+                    onPressed: () => setState(() => _managing = !_managing),
+                    child: StateSwitcher(
+                      key: ValueKey('manage-label-$_manageReset'),
+                      animateSize: true,
+                      alignment: Alignment.center,
+                      child: Text(
+                        _managing ? 'Done' : 'Manage',
+                        key: ValueKey(_managing),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              // The quiet rows and Manage's cards with their grips cross in
+              // place, in step with the summary folding above them.
+              StateSwitcher(
+                key: ValueKey('plans-$_manageReset'),
+                animateSize: true,
+                child:
+                    _managing
+                        ? Column(
+                          key: const ValueKey('plan-grid'),
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const SizedBox(height: AppSpacing.sm),
+                            // Manage is for arranging plans: a tap opens the
+                            // plan's actions, never a workout, so a grab that
+                            // misses the grip changes nothing.
+                            PlanGrid(
+                              plans: plans,
+                              stats: statsByIndex,
+                              onOpen: actions,
+                              onShowActions: actions,
+                              onMove:
+                                  (fromId, toId) =>
+                                      _movePlan(context, fromId, toId),
+                            ),
+                          ],
+                        )
+                        : Column(
+                          key: const ValueKey('plan-rows'),
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Divider(height: 1, color: hairlineColor(context)),
+                            for (
+                              var index = 0;
+                              index < plans.length;
+                              index++
+                            ) ...[
+                              if (index > 0)
+                                Divider(
+                                  height: 1,
+                                  color: hairlineColor(context),
+                                ),
+                              HomePlanRow(
+                                key: ValueKey(plans[index].id),
+                                plan: plans[index],
+                                workoutNumber: index + 1,
+                                workoutCount: plans.length,
+                                status: statusOf(index),
+                                onOpen:
+                                    index == liveIndex
+                                        ? resume
+                                        : () => _openWorkout(
+                                          context,
+                                          plans[index],
+                                          index,
+                                        ),
+                                onShowActions: () => actions(index),
+                              ),
+                            ],
+                          ],
+                        ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Align(
+                alignment: AlignmentDirectional.centerStart,
+                child: TextButton.icon(
+                  key: widget.tutorialPlanKey,
+                  icon: const Icon(LucideIcons.plus, size: 18),
+                  label: const Text('New plan'),
+                  onPressed:
+                      () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PlanEditorScreen.create(),
+                        ),
+                      ),
                 ),
               ),
             ],
           ),
-          // The quiet rows and Manage's cards with their grips cross in
-          // place, in step with the summary folding above them.
-          StateSwitcher(
-            key: ValueKey('plans-$_manageReset'),
-            animateSize: true,
-            child:
-                _managing
-                    ? Column(
-                      key: const ValueKey('plan-grid'),
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SizedBox(height: AppSpacing.sm),
-                        PlanGrid(
-                          plans: plans,
-                          stats: statsByIndex,
-                          onOpen:
-                              (index) =>
-                                  _openWorkout(context, plans[index], index),
-                          onShowActions: actions,
-                          onMove:
-                              (fromId, toId) =>
-                                  _movePlan(context, fromId, toId),
-                        ),
-                      ],
-                    )
-                    : Column(
-                      key: const ValueKey('plan-rows'),
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Divider(height: 1, color: hairlineColor(context)),
-                        for (var index = 0; index < plans.length; index++) ...[
-                          HomePlanRow(
-                            workoutNumber: index + 1,
-                            key: ValueKey(plans[index].id),
-                            plan: plans[index],
-                            isNext: index == nextIndex,
-                            onOpen:
-                                () =>
-                                    _openWorkout(context, plans[index], index),
-                            onShowActions: () => actions(index),
-                          ),
-                          if (index < plans.length - 1 &&
-                              index != nextIndex &&
-                              index + 1 != nextIndex)
-                            Divider(height: 1, color: hairlineColor(context)),
-                        ],
-                      ],
-                    ),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: TextButton.icon(
-              key: widget.tutorialPlanKey,
-              icon: const Icon(LucideIcons.plus, size: 18),
-              label: const Text('New plan'),
-              onPressed:
-                  () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const PlanEditorScreen.create(),
-                    ),
-                  ),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -611,18 +637,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   /// `4 exercises · last trained yesterday`, for the plan menu's header.
   String _planSummary(WorkoutPlan plan, PlanStat? stat) {
-    final count = plan.exercises.length;
-    final exercises = count == 1 ? '1 exercise' : '$count exercises';
+    final exercises = countOf(plan.exercises.length, 'exercise');
     final last = stat?.lastTrained;
-    if (last == null) return '$exercises  ·  not trained yet';
-    return '$exercises  ·  last trained ${formatDaysAgo(last).toLowerCase()}';
+    if (last == null) return '$exercises · not trained yet';
+    return '$exercises · last trained ${formatDaysAgo(last).toLowerCase()}';
   }
 
   void _showPlanOptions(
     BuildContext context,
     WorkoutPlan plan,
     int index,
-    Color accent,
     PlanStat? stat,
   ) {
     if (_mutatingPlan) return;
@@ -699,21 +723,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   Divider(height: 1, thickness: 1, color: border),
                   _PlanActionRow(
-                    icon: LucideIcons.paintbrush,
-                    label: 'Change color',
+                    icon: LucideIcons.pencil,
+                    label: 'Edit plan',
                     color: textPrimary,
-                    // Shows the current value without opening the picker.
-                    trailing: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: BoxDecoration(
-                        color: planColor,
-                        borderRadius: AppRadius.badge,
-                      ),
-                    ),
                     onTap: () {
                       Navigator.pop(ctx);
-                      _showColorPickerDialog(context, plan, index, accent);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PlanEditorScreen.edit(plan),
+                        ),
+                      );
                     },
                   ),
                   _PlanActionRow(
@@ -774,11 +794,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                       final provider = context.read<WorkoutPlanProvider>();
                       _persistPlanAction(
-                        title: 'Copy plan',
+                        title: 'Duplicate plan',
                         action: 'Duplicate',
-                        progress: 'Copying plan',
+                        progress: 'Duplicating plan',
                         message: 'Creating a copy of “${plan.name}”.',
-                        success: 'Plan copied',
+                        success: 'Plan duplicated',
                         startImmediately: true,
                         persist:
                             () => provider.addPlan(
@@ -789,17 +809,21 @@ class _HomeScreenState extends State<HomeScreen> {
                     },
                   ),
                   _PlanActionRow(
-                    icon: LucideIcons.pencil,
-                    label: 'Edit plan',
+                    icon: LucideIcons.paintbrush,
+                    label: 'Change color',
                     color: textPrimary,
+                    // Shows the current value without opening the picker.
+                    trailing: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: BoxDecoration(
+                        color: planColor,
+                        borderRadius: AppRadius.badge,
+                      ),
+                    ),
                     onTap: () {
                       Navigator.pop(ctx);
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => PlanEditorScreen.edit(plan),
-                        ),
-                      );
+                      _showColorPickerDialog(context, plan);
                     },
                   ),
                   if (index > 0)
@@ -852,19 +876,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showColorPickerDialog(
-    BuildContext context,
-    WorkoutPlan plan,
-    int planIndex,
-    Color accent,
-  ) {
+  /// The plan's colour, picked from the same palette as the plan editor.
+  /// The dialog closes on save; the new colour on the plan's marker is the
+  /// confirmation, so no snackbar repeats it.
+  void _showColorPickerDialog(BuildContext context, WorkoutPlan plan) {
     if (_mutatingPlan) return;
     int? selectedColor = plan.planColor;
     bool saving = false;
     bool saved = false;
     String? saveError;
-    final surface = surfaceColor(context);
-    final textSecondary = textSecondaryColor(context);
 
     showAppDialog(
       context: context,
@@ -872,164 +892,106 @@ class _HomeScreenState extends State<HomeScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
+            Future<void> save() async {
+              if (saving || saved || _mutatingPlan) return;
+              _mutatingPlan = true;
+              setDialogState(() {
+                saving = true;
+                saveError = null;
+              });
+              final updated = plan.copyWith(planColor: selectedColor);
+              try {
+                await context.read<WorkoutPlanProvider>().updatePlan(updated);
+                if (!ctx.mounted) return;
+                setDialogState(() {
+                  saving = false;
+                  saved = true;
+                });
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (ctx.mounted) Navigator.pop(ctx);
+                });
+              } catch (error) {
+                debugPrint('Failed to save plan color: $error');
+                if (ctx.mounted) {
+                  setDialogState(() {
+                    saving = false;
+                    saveError =
+                        'Could not save the color. Your selection is still '
+                        'here. Try again.';
+                  });
+                }
+              } finally {
+                _mutatingPlan = false;
+              }
+            }
+
+            // A plain Dialog rather than an AlertDialog: the palette lays its
+            // swatches out to the width it is given, which an AlertDialog's
+            // intrinsic sizing can't ask of it. The title takes the dialog
+            // theme's style, so it reads like every other dialog's.
             return PopScope(
               canPop: !saving,
               child: Dialog(
-                backgroundColor: surface,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '${titleCase(plan.name)} color',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Select plan color',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: textSecondary),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 10,
-                        children: List.generate(kPlanColors.length, (slot) {
-                          final colorValue = kPlanColors[slot];
-                          // The chip shows the tone this slot resolves to in the
-                          // current mode, so what you tap is what gets painted.
-                          // Selection is matched by slot, not by value, so a plan
-                          // saved before the palette change still highlights.
-                          final color = planSwatch(slot, context);
-                          final isSelected =
-                              selectedColor != null &&
-                              planSlotOf(selectedColor!) == slot;
-                          return Semantics(
-                            label: 'Plan color ${slot + 1}',
-                            button: true,
-                            selected: isSelected,
-                            child: InkWell(
-                              onTap:
-                                  saving
-                                      ? null
-                                      : () => setDialogState(
-                                        () => selectedColor = colorValue,
-                                      ),
-                              borderRadius: AppRadius.control,
-                              child: Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: color,
-                                  border: Border.all(
-                                    color:
-                                        isSelected
-                                            ? accent
-                                            : Colors.transparent,
-                                    width: 2,
-                                  ),
-                                  borderRadius: AppRadius.control,
-                                ),
-                                child:
-                                    isSelected
-                                        ? Icon(
-                                          LucideIcons.check,
-                                          size: 18,
-                                          color: onColor(color),
-                                        )
-                                        : null,
-                              ),
-                            ),
-                          );
-                        }),
-                      ),
-                      const SizedBox(height: 20),
-                      if (saveError != null)
-                        Semantics(
-                          liveRegion: true,
-                          child: Text(
-                            saveError!,
-                            style: TextStyle(color: errorColor(ctx)),
-                          ),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 344),
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.lg,
+                      AppSpacing.xl,
+                      AppSpacing.lg,
+                      AppSpacing.lg,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          '${titleCase(plan.name)} color',
+                          style: DialogTheme.of(ctx).titleTextStyle,
                         ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          AppButton.text(
-                            label: 'Cancel',
-                            onPressed:
-                                saving || saved
-                                    ? null
-                                    : () => Navigator.pop(ctx),
-                          ),
-                          const SizedBox(width: 8),
-                          AppButton.primary(
-                            label: 'Save',
-                            onPressed:
-                                saving || saved
-                                    ? null
-                                    : () async {
-                                      if (saving || saved || _mutatingPlan) {
-                                        return;
-                                      }
-                                      _mutatingPlan = true;
-                                      setDialogState(() {
-                                        saving = true;
-                                        saveError = null;
-                                      });
-                                      final updated = plan.copyWith(
-                                        planColor: selectedColor,
-                                      );
-                                      try {
-                                        await context
-                                            .read<WorkoutPlanProvider>()
-                                            .updatePlan(updated);
-                                        if (!ctx.mounted) return;
-                                        setDialogState(() {
-                                          saving = false;
-                                          saved = true;
-                                        });
-                                        WidgetsBinding.instance
-                                            .addPostFrameCallback((_) {
-                                              if (ctx.mounted) {
-                                                Navigator.pop(ctx);
-                                              }
-                                            });
-                                        if (context.mounted) {
-                                          ScaffoldMessenger.of(
-                                            context,
-                                          ).showSnackBar(
-                                            const SnackBar(
-                                              content: Text('Plan color saved'),
-                                            ),
-                                          );
-                                        }
-                                      } catch (error) {
-                                        debugPrint(
-                                          'Failed to save plan color: $error',
-                                        );
-                                        if (ctx.mounted) {
-                                          setDialogState(() {
-                                            saving = false;
-                                            saveError =
-                                                'Could not save the color. Your selection is still here. Try again.';
-                                          });
-                                        }
-                                      } finally {
-                                        _mutatingPlan = false;
-                                      }
-                                    },
-                            child:
-                                saving
-                                    ? const ActionProgress('Saving color')
-                                    : null,
+                        const SizedBox(height: AppSpacing.lg),
+                        PlanColorPicker(
+                          selectedColor: selectedColor,
+                          enabled: !saving && !saved,
+                          onChanged:
+                              (value) =>
+                                  setDialogState(() => selectedColor = value),
+                        ),
+                        if (saveError != null) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Semantics(
+                            liveRegion: true,
+                            child: Text(
+                              saveError!,
+                              style: TextStyle(color: errorColor(ctx)),
+                            ),
                           ),
                         ],
-                      ),
-                    ],
+                        const SizedBox(height: AppSpacing.xl),
+                        Wrap(
+                          alignment: WrapAlignment.end,
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.sm,
+                          children: [
+                            AppButton.text(
+                              label: 'Cancel',
+                              onPressed:
+                                  saving || saved
+                                      ? null
+                                      : () => Navigator.pop(ctx),
+                            ),
+                            AppButton.primary(
+                              label: 'Save',
+                              onPressed: saving || saved ? null : save,
+                              child:
+                                  saving
+                                      ? const ActionProgress('Saving color')
+                                      : null,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1041,23 +1003,25 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// Centres its child and caps it at [Breakpoints.expanded].
+/// Centres its child and caps it at a phone-and-a-half measure.
 ///
-/// Without a cap an ultra-wide monitor stretched the plans a hand-span across
-/// the desk. Header, up-next card, and plans all sit in the same capped
-/// measure, so they share one left edge; only the header's ground and its
-/// rule still run full-bleed, because a rule is screen furniture rather than
-/// content.
+/// Home is one column of a launcher, a week and a list. Capped only at the
+/// desktop width, a tablet stretched the Start button the width of the screen
+/// and set each plan's actions a hand-span from its name, so the column stops
+/// where a list still reads as one. Header, up-next card, and plans all sit in
+/// the same capped measure, so they share one left edge.
 class _CappedWidth extends StatelessWidget {
   final Widget child;
 
   const _CappedWidth({required this.child});
 
+  static const double _measure = 680;
+
   @override
   Widget build(BuildContext context) {
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: Breakpoints.expanded),
+        constraints: const BoxConstraints(maxWidth: _measure),
         child: child,
       ),
     );

@@ -88,29 +88,29 @@ void main() {
       final harness = (await tester.runAsync(_createHarness))!;
       addTearDown(harness.dispose);
       await tester.pumpWidget(harness.host(const HomeScreen()));
-      expect(homeOpacity(tester, find.text('Ppl Plan').first), 1);
+      expect(homeOpacity(tester, find.text('PPL Plan').first), 1);
 
       await chooseSplit(tester, 'UL');
       await tester.pump();
       // The old split's plans are gone at once, not leaving alongside.
-      expect(find.text('Ppl Plan', skipOffstage: false), findsNothing);
-      expect(find.text('Ul Plan'), findsWidgets);
-      expect(find.text('Ul Plan').first.hitTestable(), findsOneWidget);
+      expect(find.text('PPL Plan', skipOffstage: false), findsNothing);
+      expect(find.text('UL Plan'), findsWidgets);
+      expect(find.text('UL Plan').first.hitTestable(), findsOneWidget);
 
       await tester.pump(const Duration(milliseconds: 60));
-      final midway = homeOpacity(tester, find.text('Ul Plan').first);
+      final midway = homeOpacity(tester, find.text('UL Plan').first);
       expect(midway, greaterThan(0));
       expect(midway, lessThan(1));
 
       await tester.pump(AppMotion.standard);
-      expect(homeOpacity(tester, find.text('Ul Plan').first), 1);
+      expect(homeOpacity(tester, find.text('UL Plan').first), 1);
       await tester.pumpAndSettle();
 
       // A rebuild with the same split replays nothing.
       harness.splits.loadSplits();
       harness.plans.loadPlans();
       await tester.pump();
-      expect(homeOpacity(tester, find.text('Ul Plan').first), 1);
+      expect(homeOpacity(tester, find.text('UL Plan').first), 1);
       expect(tester.binding.hasScheduledFrame, isFalse);
     });
 
@@ -124,11 +124,11 @@ void main() {
       await tester.pump();
       // A fade from zero would spend this frame on the bare page.
       expect(
-        homeOpacity(tester, find.text('Ul Plan').first),
+        homeOpacity(tester, find.text('UL Plan').first),
         closeTo(SurfaceFade.floor, 1e-6),
       );
       await tester.pump(AppMotion.quick);
-      expect(homeOpacity(tester, find.text('Ul Plan').first), 1);
+      expect(homeOpacity(tester, find.text('UL Plan').first), 1);
       await tester.pumpAndSettle();
     });
 
@@ -141,7 +141,7 @@ void main() {
 
       await chooseSplit(tester, 'UL');
       await tester.pump();
-      expect(homeOpacity(tester, find.text('Ul Plan').first), 1);
+      expect(homeOpacity(tester, find.text('UL Plan').first), 1);
     });
 
     testWidgets('a split changed while another tab shows simply lands', (
@@ -153,7 +153,7 @@ void main() {
 
       await tester.runAsync(() => harness.splits.setActiveSplit('ul'));
       await tester.pump();
-      expect(homeOpacity(tester, find.text('Ul Plan').first), 1);
+      expect(homeOpacity(tester, find.text('UL Plan').first), 1);
     });
 
     testWidgets('a split changed under a page plays nothing on the way back', (
@@ -172,11 +172,11 @@ void main() {
       navigator.pop();
       await tester.pump();
       expect(
-        homeOpacity(tester, find.text('Ul Plan', skipOffstage: false).first),
+        homeOpacity(tester, find.text('UL Plan', skipOffstage: false).first),
         1,
       );
       await tester.pump(const Duration(milliseconds: 60));
-      expect(homeOpacity(tester, find.text('Ul Plan').first), 1);
+      expect(homeOpacity(tester, find.text('UL Plan').first), 1);
       await tester.pumpAndSettle();
     });
   });

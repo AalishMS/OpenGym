@@ -158,7 +158,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           body:
               hasPlans
                   ? 'Use New plan to group your exercises into a workout you can repeat. You can also choose a ready-made routine from the split menu.'
-                  : 'Tap Create plan to pick your exercises, or use Choose a split below for a ready-made routine.',
+                  : 'Tap New plan to pick your exercises, or use Choose a split below for a ready-made routine.',
           scrollController: _homeScrollController,
           scrollToEnd: hasPlans,
         ),

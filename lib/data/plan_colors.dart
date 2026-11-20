@@ -26,6 +26,22 @@ const double _step = 2 * math.pi / _slots;
 Color planSeed(int index) =>
     colorFromOklch(_seedLightness, _seedChroma, (index % _slots) * _step);
 
+/// What each slot is called aloud, so a screen reader names the colour a
+/// swatch paints rather than its place in the palette. Slot hues step 36°
+/// around OKLCh from 0°, which is where these names fall.
+const List<String> kPlanColorNames = [
+  'Rose',
+  'Red',
+  'Orange',
+  'Olive',
+  'Green',
+  'Teal',
+  'Cyan',
+  'Blue',
+  'Violet',
+  'Purple',
+];
+
 /// The ten seeds as ARGB ints — the values a plan persists.
 ///
 /// A plan stores a colour *value*, not a slot index (`WorkoutPlan.planColor`),

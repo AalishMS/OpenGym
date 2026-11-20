@@ -12,6 +12,11 @@ import '../../theme/spacing.dart';
 import '../../utils/format.dart';
 
 /// Completed sets by calendar day, with a dot under today's letter.
+///
+/// The seven days are always drawn, so the week keeps its frame and today
+/// stays marked before anything is logged. An empty week is just the day
+/// letters; the bars' slot opens once a day has training, so a week not yet
+/// started costs the plans below no more than a line.
 class TrainingSnapshot extends StatelessWidget {
   final List<WorkoutPlan> plans;
   final List<WorkoutSession> sessions;
@@ -71,8 +76,7 @@ class TrainingSnapshot extends StatelessWidget {
     final summary =
         workouts == 0
             ? '0 workouts'
-            : '$workouts ${workouts == 1 ? 'workout' : 'workouts'} · '
-                '$sets ${sets == 1 ? 'set' : 'sets'}';
+            : '${countOf(workouts, 'workout')} · ${countOf(sets, 'set')}';
     final summaryLink = Semantics(
       button: onOpenWeeklyTraining != null,
       label: 'This week: $summary. View weekly training statistics',
@@ -94,10 +98,12 @@ class TrainingSnapshot extends StatelessWidget {
                     spacing: AppSpacing.md,
                     runSpacing: AppSpacing.xs,
                     children: [
+                      // Set like its sibling heading, *Your plans*.
                       Text(
                         'This week',
-                        style: textTheme.labelLarge?.copyWith(
+                        style: textTheme.titleMedium?.copyWith(
                           color: textPrimaryColor(context),
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       Text(
@@ -117,17 +123,13 @@ class TrainingSnapshot extends StatelessWidget {
         ),
       ),
     );
-    if (workouts == 0) {
-      return Material(type: MaterialType.transparency, child: summaryLink);
-    }
-
     return Material(
       type: MaterialType.transparency,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           summaryLink,
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: AppSpacing.sm),
           Semantics(
             label: 'Completed sets by day. Today is marked with a dot.',
             // Seven contiguous, equal targets always share the card width, so
@@ -141,14 +143,18 @@ class TrainingSnapshot extends StatelessWidget {
                   Expanded(
                     child: Semantics(
                       label:
-                          '${names[index]}: ${dailyWorkouts[index]} workouts, '
-                          '${dailySets[index]} sets${index == todayIndex ? ', today' : ''}',
+                          '${names[index]}: '
+                          '${countOf(dailyWorkouts[index], 'workout')}, '
+                          '${countOf(dailySets[index], 'set')}'
+                          '${index == todayIndex ? ', today' : ''}',
                       button:
                           latestByDay[index] != null &&
                           onOpenLastWorkout != null,
                       child: Tooltip(
                         message:
-                            '${names[index]} · ${dailyWorkouts[index]} workouts · ${dailySets[index]} sets',
+                            '${names[index]} · '
+                            '${countOf(dailyWorkouts[index], 'workout')} · '
+                            '${countOf(dailySets[index], 'set')}',
                         child: InkWell(
                           key: ValueKey('training-day-$index'),
                           onTap:
@@ -163,6 +169,7 @@ class TrainingSnapshot extends StatelessWidget {
                               letter: letters[index],
                               trained: dailyWorkouts[index] > 0,
                               today: index == todayIndex,
+                              emptyWeek: workouts == 0,
                               share:
                                   maxSets == 0 ? 0 : dailySets[index] / maxSets,
                             ),
@@ -195,36 +202,53 @@ class _DayColumn extends StatelessWidget {
   final bool today;
   final double share;
 
+  /// Nothing logged this week: the bars' slot is closed, leaving the letter
+  /// and today's dot, and opens (as the bars grow) once a day has training.
+  final bool emptyWeek;
+
   const _DayColumn({
     required this.letter,
     required this.trained,
     required this.today,
     required this.share,
+    required this.emptyWeek,
   });
+
+  static const double _barWidth = 16;
+  static const double _baseline = 5;
+
+  /// The bars' height, and the gap between them and the letter.
+  static const double _slot = 52 + AppSpacing.sm;
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     // Read here so the bar also rebuilds as Home is covered and uncovered.
     final seen = TickerMode.valuesOf(context).enabled;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-      child: Column(
-        children: [
-          SizedBox(
-            height: 52,
+    final duration =
+        seen ? AppMotion.of(context, AppMotion.long) : Duration.zero;
+    // A narrow bar centred in its 48dp target, so the strip reads as a
+    // chart rather than a row of tiles.
+    return Column(
+      children: [
+        TweenAnimationBuilder<double>(
+          tween: Tween(end: emptyWeek ? 0 : _slot),
+          duration: duration,
+          curve: AppMotion.curve,
+          builder:
+              (context, slot, child) =>
+                  ClipRect(child: SizedBox(height: slot, child: child)),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
             child: Align(
               alignment: Alignment.bottomCenter,
               child: TweenAnimationBuilder<double>(
-                tween: Tween(end: trained ? 14 + 38 * share : 5),
-                duration:
-                    seen
-                        ? AppMotion.of(context, AppMotion.long)
-                        : Duration.zero,
+                tween: Tween(end: trained ? 14 + 38 * share : _baseline),
+                duration: duration,
                 curve: AppMotion.curve,
                 builder:
                     (context, height, _) => Container(
-                      width: double.infinity,
+                      width: _barWidth,
                       height: height,
                       decoration: BoxDecoration(
                         color:
@@ -239,34 +263,31 @@ class _DayColumn extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            letter,
-            style: textTheme.labelSmall?.copyWith(
-              color:
-                  today
-                      ? textPrimaryColor(context)
-                      : textSecondaryColor(context),
-              fontWeight: today ? FontWeight.w700 : null,
-            ),
+        ),
+        Text(
+          letter,
+          style: textTheme.labelSmall?.copyWith(
+            color:
+                today ? textPrimaryColor(context) : textSecondaryColor(context),
+            fontWeight: today ? FontWeight.w700 : null,
           ),
-          const SizedBox(height: AppSpacing.xxs),
-          SizedBox(
-            height: 4,
-            child:
-                today
-                    ? DecoratedBox(
-                      key: const ValueKey('training-day-today-dot'),
-                      decoration: BoxDecoration(
-                        color: accentColor(context),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const SizedBox(width: 4, height: 4),
-                    )
-                    : null,
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        SizedBox(
+          height: 4,
+          child:
+              today
+                  ? DecoratedBox(
+                    key: const ValueKey('training-day-today-dot'),
+                    decoration: BoxDecoration(
+                      color: accentColor(context),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const SizedBox(width: 4, height: 4),
+                  )
+                  : null,
+        ),
+      ],
     );
   }
 }

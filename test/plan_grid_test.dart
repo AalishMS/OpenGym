@@ -233,7 +233,7 @@ void main() {
     );
     final grip = tester.getRect(find.byTooltip('Drag to reorder Push'));
     final badge = tester.getRect(
-      find.descendant(of: card('Push'), matching: find.text('01')),
+      find.descendant(of: card('Push'), matching: find.text('1')),
     );
     final actions = tester.getRect(
       find.descendant(

@@ -75,8 +75,8 @@ void main() {
     expect(switcherContent.color, isNull);
     expect(switcherContent.decoration, isNull);
     // Up next and the plan row both name the active split's plan.
-    expect(find.text('Ppl Plan'), findsWidgets);
-    expect(find.text('Ul Plan'), findsNothing);
+    expect(find.text('PPL Plan'), findsWidgets);
+    expect(find.text('UL Plan'), findsNothing);
     expect(
       tester
           .getSize(find.byKey(const ValueKey('split-switcher-button')))
@@ -100,8 +100,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('UL'), findsOneWidget);
     expect(find.text('[UL]'), findsNothing);
-    expect(find.text('Ppl Plan'), findsNothing);
-    expect(find.text('Ul Plan'), findsWidgets);
+    expect(find.text('PPL Plan'), findsNothing);
+    expect(find.text('UL Plan'), findsWidgets);
     expect(harness.sessions.sessions.single.splitId, 'ul');
     semantics.dispose();
   });
