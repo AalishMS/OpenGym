@@ -28,6 +28,7 @@ import '../services/exercise_rename_service.dart';
 import '../services/hive_service.dart';
 import '../services/statistics_analytics_service.dart';
 import '../services/sync_service.dart';
+import '../services/tutorial_preferences.dart';
 import '../services/workout_progression_service.dart';
 import '../services/workout_session_initializer.dart';
 import '../services/workout_timer_notification_service.dart';
@@ -50,6 +51,7 @@ import '../widgets/motion/patient_progress.dart';
 import '../widgets/plan_title_hero.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
+import '../widgets/workout/exercise_reorder.dart';
 import '../widgets/workout/plan_swipe_region.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../widgets/workout/training_block_dialogs.dart';
@@ -1310,6 +1312,42 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     _autoSave();
   }
 
+  /// Move up or Move down from an exercise's menu. Someone reaching for these
+  /// is looking for a way to reorder, so the first time, say that the name
+  /// can be held and dragged instead.
+  void _moveExercise(int oldIndex, int newIndex) {
+    _reorderExercises(oldIndex, newIndex);
+    unawaited(_offerReorderTip());
+  }
+
+  Future<void> _offerReorderTip() async {
+    try {
+      if (!await TutorialPreferences.takeExerciseReorderTip()) return;
+    } catch (error) {
+      debugPrint('Could not read the reorder tip preference: $error');
+      return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tip: hold an exercise\'s name and drag it to reorder.',
+          ),
+        ),
+      );
+  }
+
+  /// An exercise dragged into a new place, by holding its name.
+  void _dragExercise(int oldIndex, int newIndex) {
+    _reorderExercises(oldIndex, newIndex);
+    TutorialPreferences.markExerciseReorderLearned().catchError(
+      (Object error) =>
+          debugPrint('Could not save the reorder tip preference: $error'),
+    );
+  }
+
   Future<void> _prepareEntry() async {
     if (_weeks.isEmpty) return;
     try {
@@ -2185,143 +2223,138 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                 ),
               ),
               Expanded(
-                child: PlanSwipeRegion(
-                  onNextPlan: onNextPlan,
-                  onPreviousPlan: onPreviousPlan,
-                  onDragProgress: _updatePlanSwipe,
-                  onDragCancel: _settlePlanSwipe,
-                  child: page(
-                    CustomScrollView(
-                      key: ValueKey(_currentWeek),
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
+                child: ExerciseReorderScope(
+                  items: [
+                    for (final exercise in session.exercises)
+                      ExerciseReorderItem(
+                        name: exercise.name,
+                        detail: switch (exercise.sets.length) {
+                          0 => 'No sets',
+                          1 => '1 set',
+                          final count => '$count sets',
+                        },
                       ),
-                      slivers: [
-                        // One gutter keeps the exercise tables aligned as a log.
-                        // No top inset, and the first exercise drops its own:
-                        // its title sits snug under the plan tabs' rule.
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(
-                            AppSpacing.lg,
-                            0,
-                            AppSpacing.lg,
-                            AppSpacing.sm,
-                          ),
-                          sliver: SliverReorderableList(
-                            itemCount: session.exercises.length + 1,
-                            onReorderItem: _reorderExercises,
-                            // The held exercise rises off the page onto a
-                            // raised ground as it lifts, and sinks back into
-                            // the page as it drops into place.
-                            proxyDecorator:
-                                (child, index, animation) => AnimatedBuilder(
-                                  animation: animation,
-                                  builder:
-                                      (context, child) => Material(
-                                        color: Color.lerp(
-                                          backgroundColor(context),
-                                          surfaceColor(context),
-                                          AppMotion.curve.transform(
-                                            animation.value,
-                                          ),
-                                        ),
-                                        borderRadius: AppRadius.card,
-                                        child: child,
-                                      ),
-                                  child: child,
-                                ),
-                            itemBuilder: (context, index) {
-                              if (index == session.exercises.length) {
-                                return TextButton.icon(
-                                  key: const ValueKey('add_exercise_button'),
-                                  onPressed: _addEmptyExercise,
-                                  icon: const Icon(LucideIcons.plus, size: 18),
-                                  label: const Text('Add exercise'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: accent,
-                                    minimumSize: const Size.fromHeight(48),
-                                    shape: const RoundedRectangleBorder(
-                                      borderRadius: AppRadius.button,
+                  ],
+                  onReorder: _dragExercise,
+                  child: PlanSwipeRegion(
+                    onNextPlan: onNextPlan,
+                    onPreviousPlan: onPreviousPlan,
+                    onDragProgress: _updatePlanSwipe,
+                    onDragCancel: _settlePlanSwipe,
+                    child: page(
+                      CustomScrollView(
+                        key: ValueKey(_currentWeek),
+                        physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
+                        slivers: [
+                          // One gutter keeps the exercise tables aligned as a log.
+                          // No top inset, and the first exercise drops its own:
+                          // its title sits snug under the plan tabs' rule.
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.lg,
+                              0,
+                              AppSpacing.lg,
+                              AppSpacing.sm,
+                            ),
+                            // Holding an exercise's name moves it, through
+                            // the ExerciseReorderScope around the log.
+                            sliver: SliverList.builder(
+                              itemCount: session.exercises.length + 1,
+                              itemBuilder: (context, index) {
+                                if (index == session.exercises.length) {
+                                  return TextButton.icon(
+                                    key: const ValueKey('add_exercise_button'),
+                                    onPressed: _addEmptyExercise,
+                                    icon: const Icon(
+                                      LucideIcons.plus,
+                                      size: 18,
                                     ),
+                                    label: const Text('Add exercise'),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: accent,
+                                      minimumSize: const Size.fromHeight(48),
+                                      shape: const RoundedRectangleBorder(
+                                        borderRadius: AppRadius.button,
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                final exercise = session.exercises[index];
+
+                                return Container(
+                                  // Numeric edits replace the exercise snapshot;
+                                  // retain the row and its active keypad across them.
+                                  key: ValueKey((
+                                    _currentWeek,
+                                    index,
+                                    exercise.name,
+                                  )),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: hairlineColor(context),
+                                      ),
+                                    ),
+                                  ),
+                                  child: ExerciseCard(
+                                    exercise: exercise,
+                                    exerciseIndex: index,
+                                    first: index == 0,
+                                    reorderable: true,
+                                    onMoveUp:
+                                        index > 0
+                                            ? () =>
+                                                _moveExercise(index, index - 1)
+                                            : null,
+                                    onMoveDown:
+                                        index < session.exercises.length - 1
+                                            ? () =>
+                                                _moveExercise(index, index + 1)
+                                            : null,
+                                    accent: accent,
+                                    previousSets: _previousFor(
+                                      ExerciseCatalog.identity(
+                                        exercise.name,
+                                        exercise.exerciseId,
+                                      ),
+                                    ),
+                                    onSetChanged: _changeSetValues,
+                                    onSetRpeChanged: _changeSetRpe,
+                                    recordSetIndexes:
+                                        liveRecords[index] ?? const <int>{},
+                                    onEntryFinished: () {
+                                      if (!mounted) return;
+                                      _celebrateNewRecords();
+                                      _autoSave();
+                                    },
+                                    onAddSet: (i) => _addSet(i),
+                                    onDeleteSet:
+                                        (i, setIndex) =>
+                                            _deleteSet(i, setIndex),
+                                    onAddNote: _addExerciseNote,
+                                    onRename: _showExerciseRenameDialog,
+                                    onReplace:
+                                        session.isCompleted
+                                            ? null
+                                            : _replaceExercise,
+                                    onDeleteExercise: _deleteExercise,
                                   ),
                                 );
-                              }
-
-                              final exercise = session.exercises[index];
-
-                              return Container(
-                                // Numeric edits replace the exercise snapshot;
-                                // retain the row and its active keypad across them.
-                                key: ValueKey((
-                                  _currentWeek,
-                                  index,
-                                  exercise.name,
-                                )),
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    bottom: BorderSide(
-                                      color: hairlineColor(context),
-                                    ),
-                                  ),
-                                ),
-                                child: ExerciseCard(
-                                  exercise: exercise,
-                                  exerciseIndex: index,
-                                  first: index == 0,
-                                  reorderable: true,
-                                  onMoveUp:
-                                      index > 0
-                                          ? () => _reorderExercises(
-                                            index,
-                                            index - 1,
-                                          )
-                                          : null,
-                                  onMoveDown:
-                                      index < session.exercises.length - 1
-                                          ? () => _reorderExercises(
-                                            index,
-                                            index + 1,
-                                          )
-                                          : null,
-                                  accent: accent,
-                                  previousSets: _previousFor(
-                                    ExerciseCatalog.identity(
-                                      exercise.name,
-                                      exercise.exerciseId,
-                                    ),
-                                  ),
-                                  onSetChanged: _changeSetValues,
-                                  onSetRpeChanged: _changeSetRpe,
-                                  recordSetIndexes:
-                                      liveRecords[index] ?? const <int>{},
-                                  onEntryFinished: () {
-                                    if (!mounted) return;
-                                    _celebrateNewRecords();
-                                    _autoSave();
-                                  },
-                                  onAddSet: (i) => _addSet(i),
-                                  onDeleteSet:
-                                      (i, setIndex) => _deleteSet(i, setIndex),
-                                  onAddNote: _addExerciseNote,
-                                  onRename: _showExerciseRenameDialog,
-                                  onReplace:
-                                      session.isCompleted
-                                          ? null
-                                          : _replaceExercise,
-                                  onDeleteExercise: _deleteExercise,
-                                ),
-                              );
-                            },
+                              },
+                            ),
                           ),
-                        ),
-                        ValueListenableBuilder<double>(
-                          valueListenable: SetEntryTable.keyboardHeight,
-                          builder:
-                              (context, height, _) => SliverToBoxAdapter(
-                                child: SizedBox(height: height),
-                              ),
-                        ),
-                      ],
+                          ValueListenableBuilder<double>(
+                            valueListenable: SetEntryTable.keyboardHeight,
+                            builder:
+                                (context, height, _) => SliverToBoxAdapter(
+                                  child: SizedBox(height: height),
+                                ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

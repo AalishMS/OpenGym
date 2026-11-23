@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/data/plan_colors.dart';
@@ -525,32 +526,39 @@ void main() {
     await tester.tap(find.text('Push Day').last);
     await tester.pumpAndSettle();
 
-    final handle = find.byTooltip('Hold to reorder Bench Press');
-    expect(handle, findsOneWidget);
-    final dragItems = find.byWidgetPredicate(
-      (widget) =>
-          widget is Container && widget.key is ValueKey<(String, int, String)>,
-    );
-    expect(dragItems, findsWidgets);
+    // Holding an exercise's name folds the log to one row per exercise.
+    final folded = find.byKey(const ValueKey('exercise-reorder'));
+    Future<void> hold(String name, Offset by) async {
+      await tester.ensureVisible(find.text(name));
+      await tester.pumpAndSettle();
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text(name)),
+      );
+      await tester.pump(kLongPressTimeout + const Duration(milliseconds: 20));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(folded, findsOneWidget);
+      await gesture.moveBy(by);
+      // Long enough for the rows to scroll if the list runs off screen.
+      for (var frame = 0; frame < 60; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+      await gesture.up();
+      await pumpWithStorage(tester);
+      await tester.pumpAndSettle();
+      expect(folded, findsNothing);
+    }
 
-    final gesture = await tester.startGesture(tester.getCenter(handle));
-    await tester.pump(const Duration(milliseconds: 600));
-    await gesture.moveTo(
-      tester.getCenter(dragItems.at(1)) + const Offset(0, 32),
-    );
-    await tester.pump(const Duration(milliseconds: 300));
-    await gesture.up();
-    await pumpWithStorage(tester);
+    // One row down.
+    await hold('Bench Press', const Offset(0, 60));
     final reordered = tester.widgetList<ExerciseCard>(
       find.byType(ExerciseCard),
     );
     expect(reordered.first.exercise.name, 'Overhead Press');
+    // The log is scrolled so the moved exercise sits where it was dropped.
+    expect(find.text('Bench Press').hitTestable(), findsOneWidget);
 
-    // The final slot follows the non-draggable Add exercise tile.
-    tester
-        .widget<SliverReorderableList>(find.byType(SliverReorderableList))
-        .onReorderItem!(0, plan.exercises.length);
-    await pumpWithStorage(tester);
+    // Pushed past the end, it takes the last place.
+    await hold('Overhead Press', const Offset(0, 800));
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -1000));
     await tester.pumpAndSettle();
     final endOrder = tester.widgetList<ExerciseCard>(find.byType(ExerciseCard));

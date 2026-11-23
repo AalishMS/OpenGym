@@ -789,14 +789,24 @@ signature:
   only once it has lasted 300ms, and the line folds open and away rather
   than shoving the log down and back; its label is in the tree from the
   start but is announced only once shown. A failed save's message and Retry
-  fold open the same way. A held exercise rises from the page onto the
-  raised ground as it lifts and sinks back as it drops. Changing week, the
+  fold open the same way. Holding an exercise's name picks it up to move:
+  the log folds to one short row per exercise, each travelling from its
+  card's title, and the held row rises onto the raised ground under the
+  finger. Rows of one height step aside one place at a time as it passes,
+  and pushing it against the top or bottom scrolls them at a pace that grows
+  with the push; a row picked up near an edge scrolls nothing until it is
+  pushed further that way. Let go, the log is scrolled so the exercise sits
+  where it was dropped, and every row travels back onto its title as the
+  cards return. There is no handle on the cards: a tap on a name says *Hold
+  and drag to reorder*, and the first *Move up* or *Move down* from an
+  exercise's menu mentions the drag once in a snackbar. Changing week, the
   header's timer controls and the clock change in place without motion.
   Under reduced motion every change is immediate: the log doesn't follow a
   swipe, and a switch lands at once.
 - Haptics are named for the moment (`lib/utils/haptics.dart`): a selection
-  tick when the main tab changes or a plan is dropped into a new place, a
-  light impact when a plan card is picked up to drag, a medium impact when
+  tick when the main tab changes or a plan or exercise is dropped into a new
+  place, a light impact when a plan card or exercise is picked up to drag, a
+  medium impact when
   the workout clock starts, a heavy one for a new record or a logged workout.
   Keypad keys keep their own selection clicks.
 - Create and Edit plan share the workout log's open exercise sections, hairline
@@ -1064,8 +1074,8 @@ exist. The rules that follow from that:
   follows a swipe: the workout's log is carried by the finger one to one, so
   when it switches plan the logs trade over a quarter of the width
   (`AppMotion.swipeShift`), the distance the hand began. A plan card picked up to
-  drag lifts to 1.025 under a deepening shadow, the one scale above full
-  size. A record badge earned just now is the one mark that pops in from
+  drag, or an exercise held to be moved, lifts to 1.025 under a deepening
+  shadow, the one scale above full size. A record badge earned just now is the one mark that pops in from
   nothing: it pops only as it is earned, never when the log opens with it or
   a card scrolls back into view. Staggering is rare: first
   appearance only, a handful of items at most, 40ms apart, and never replayed

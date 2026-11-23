@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +19,7 @@ import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
+import 'package:gymapp/theme/motion.dart';
 import 'package:gymapp/utils/training_block_identity.dart';
 import 'package:gymapp/widgets/workout/exercise_card.dart';
 import 'package:gymapp/widgets/workout/training_block_strip.dart';
@@ -128,7 +130,11 @@ void main() {
     await harness.close();
   });
 
-  Future<void> seed({bool completed = false, bool started = false}) async {
+  Future<void> seed({
+    bool completed = false,
+    bool started = false,
+    List<Exercise>? log,
+  }) async {
     final box = Hive.box<WorkoutSession>(HiveService.sessionsBox);
     await box.clear();
     for (final week in [5, 6]) {
@@ -141,7 +147,7 @@ void main() {
         isCompleted: week == 5 || completed,
         startedAt: week == 6 && started ? DateTime(2026, 9, 6) : null,
         durationSeconds: 0,
-        exercises: exercises,
+        exercises: log ?? exercises,
       );
       await box.put(session.id, session);
     }
@@ -406,6 +412,7 @@ void main() {
   workoutTest('exercise menu moves an exercise without requiring a drag', (
     tester,
   ) async {
+    SharedPreferences.setMockInitialValues({});
     await tester.runAsync(() => seed());
     await tester.pumpWidget(host());
     await tester.pumpAndSettle();
@@ -418,6 +425,187 @@ void main() {
     final order = tester.widgetList<ExerciseCard>(find.byType(ExerciseCard));
     expect(order.first.exercise.name, 'Incline dumbbell press');
     expect(order.elementAt(1).exercise.name, 'Bench press');
+
+    // Moving from the menu is when someone is looking for a way to reorder,
+    // so the first time it mentions the drag. Only the first time.
+    const tip = "Tip: hold an exercise's name and drag it to reorder.";
+    expect(find.text(tip), findsOneWidget);
+    ScaffoldMessenger.of(
+      tester.element(find.byType(WorkoutScreen)),
+    ).removeCurrentSnackBar();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Exercise actions for Bench press'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Move down'));
+    await pumpWithStorage(tester);
+    expect(
+      HiveService.getSessionById('week-6')!.exercises.last.name,
+      'Bench press',
+    );
+    expect(find.text(tip), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  List<String> savedOrder() =>
+      HiveService.getSessionById(
+        'week-6',
+      )!.exercises.map((exercise) => exercise.name).toList();
+
+  Future<TestGesture> pickUp(WidgetTester tester, String name) async {
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text(name)),
+    );
+    await tester.pump(kLongPressTimeout + const Duration(milliseconds: 20));
+    await tester.pump(AppMotion.standard);
+    return gesture;
+  }
+
+  workoutTest('holding an exercise name folds the log to drag it into place', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({});
+    await tester.runAsync(() => seed());
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+    final folded = find.byKey(const ValueKey('exercise-reorder'));
+    expect(folded, findsNothing);
+
+    final gesture = await pickUp(tester, 'Bench press');
+    expect(folded, findsOneWidget);
+    // Every exercise is one row of the same short height, however many sets
+    // its card holds, so each step of the drag is the same distance.
+    Rect row(String name) =>
+        tester.getRect(find.descendant(of: folded, matching: find.text(name)));
+    final incline = row('Incline dumbbell press');
+    final overhead = row('Overhead press');
+    final step = overhead.top - incline.top;
+    expect(step, inInclusiveRange(56, 64));
+    expect(row('Bench press').top, lessThan(incline.top));
+
+    // Two rows down, in small moves as a finger makes them.
+    for (var moved = 0.0; moved < step * 2 + 4; moved += 10) {
+      await gesture.moveBy(const Offset(0, 10));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await tester.pump(AppMotion.standard);
+    // The others stepped up to make room.
+    expect(
+      row('Incline dumbbell press').top,
+      moreOrLessEquals(incline.top - step, epsilon: 1),
+    );
+    expect(
+      row('Overhead press').top,
+      moreOrLessEquals(overhead.top - step, epsilon: 1),
+    );
+
+    await gesture.up();
+    await pumpWithStorage(tester);
+    await tester.pumpAndSettle();
+    expect(folded, findsNothing);
+    expect(savedOrder(), [
+      'Incline dumbbell press',
+      'Overhead press',
+      'Bench press',
+    ]);
+    // The log comes back with the moved exercise in view.
+    expect(find.text('Bench press').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  final longLog = [
+    for (var number = 1; number <= 12; number++)
+      Exercise(name: 'Movement $number', sets: [gym.Set(weight: 20, reps: 10)]),
+  ];
+
+  workoutTest('an exercise held still keeps its place', (tester) async {
+    await tester.runAsync(() => seed(log: longLog));
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+    // A title at the top of the log: the rows above it start out of view, and
+    // nothing may scroll them in until the finger moves.
+    await tester.scrollUntilVisible(
+      find.text('Movement 5'),
+      300,
+      scrollable: find.descendant(
+        of: find.byType(CustomScrollView),
+        matching: find.byType(Scrollable),
+      ),
+    );
+    Scrollable.ensureVisible(tester.element(find.text('Movement 5')));
+    await tester.pumpAndSettle();
+
+    final gesture = await pickUp(tester, 'Movement 5');
+    final folded = find.byKey(const ValueKey('exercise-reorder'));
+    expect(folded, findsOneWidget);
+    Rect row(String name) =>
+        tester.getRect(find.descendant(of: folded, matching: find.text(name)));
+    final held = row('Movement 5');
+    final above = row('Movement 4');
+    expect(held.top - tester.getRect(folded).top, lessThan(56));
+    expect(above.top, lessThan(tester.getRect(folded).top));
+    // A held finger wanders a little.
+    for (final wander in [3.0, -3.0, -3.0, 3.0]) {
+      await gesture.moveBy(Offset(0, wander));
+      for (var frame = 0; frame < 15; frame++) {
+        await tester.pump(const Duration(milliseconds: 16));
+      }
+    }
+    expect(row('Movement 5'), held);
+    expect(row('Movement 4'), above);
+    await gesture.up();
+    await pumpWithStorage(tester);
+    await tester.pumpAndSettle();
+    expect(folded, findsNothing);
+    expect(savedOrder(), [for (final exercise in longLog) exercise.name]);
+    expect(writes, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('pushing a held exercise to the edge scrolls a long workout', (
+    tester,
+  ) async {
+    await tester.runAsync(() => seed(log: longLog));
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+
+    final gesture = await pickUp(tester, 'Movement 1');
+    final folded = find.byKey(const ValueKey('exercise-reorder'));
+    final last = find.descendant(
+      of: folded,
+      matching: find.text('Movement 12'),
+    );
+    final screen = tester.view.physicalSize / tester.view.devicePixelRatio;
+    expect(tester.getRect(last).top, greaterThan(screen.height));
+    // Held past the bottom edge, the rows scroll until the last is in view,
+    // then stop.
+    await gesture.moveBy(Offset(0, screen.height));
+    for (var frame = 0; frame < 120; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    expect(tester.getRect(last).bottom, lessThanOrEqualTo(screen.height));
+    expect(tester.binding.hasScheduledFrame, isFalse);
+
+    await gesture.up();
+    await pumpWithStorage(tester);
+    await tester.pumpAndSettle();
+    expect(folded, findsNothing);
+    expect(savedOrder().first, 'Movement 2');
+    expect(savedOrder().last, 'Movement 1');
+    // The log scrolled to the far end, where the exercise landed.
+    expect(find.text('Movement 1').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('a tap on an exercise name says how to reorder', (tester) async {
+    await tester.runAsync(() => seed());
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bench press'));
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Hold and drag to reorder'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(find.text('Hold and drag to reorder'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

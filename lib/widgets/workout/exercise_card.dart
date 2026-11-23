@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/weight_units.dart';
+import 'exercise_reorder.dart';
 import 'set_entry_table.dart';
 
 enum _ExerciseAction { note, rename, replace, moveUp, moveDown, deleteExercise }
@@ -129,15 +130,7 @@ class ExerciseCard extends StatelessWidget {
             SetEntryHeading(
               title:
                   reorderable && !readOnly
-                      ? ReorderableDelayedDragStartListener(
-                        index: exerciseIndex,
-                        child: Tooltip(
-                          message: 'Hold to reorder ${exercise.name}',
-                          // Reordering owns the long press, not the tooltip.
-                          triggerMode: TooltipTriggerMode.manual,
-                          child: title,
-                        ),
-                      )
+                      ? ExerciseReorderHold(index: exerciseIndex, child: title)
                       : title,
               action: PopupMenuButton<_ExerciseAction>(
                 tooltip: 'Exercise actions for ${exercise.name}',
