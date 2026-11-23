@@ -789,16 +789,19 @@ signature:
   only once it has lasted 300ms, and the line folds open and away rather
   than shoving the log down and back; its label is in the tree from the
   start but is announced only once shown. A failed save's message and Retry
-  fold open the same way. Holding an exercise's name picks it up to move:
-  the log folds to one short row per exercise, each travelling from its
-  card's title, and the held row rises onto the raised ground under the
-  finger. Rows of one height step aside one place at a time as it passes,
+  fold open the same way. Holding an exercise's name or its note picks it
+  up to move: the log folds to one short row per exercise, each travelling
+  from its card's title, and the held row rises onto the raised ground from
+  the name. Each row is numbered by its place, the numbers opening a column
+  before the names as the log folds; a row that changes place rolls its
+  number to the new one (`RollingFigure`). Rows of one height step aside one
+  place at a time as it passes,
   and pushing it against the top or bottom scrolls them at a pace that grows
   with the push; a row picked up near an edge scrolls nothing until it is
   pushed further that way. Let go, the log is scrolled so the exercise sits
   where it was dropped, and every row travels back onto its title as the
-  cards return. There is no handle on the cards: a tap on a name says *Hold
-  and drag to reorder*, and the first *Move up* or *Move down* from an
+  cards return, the numbers folding away. There is no handle on the cards: a
+  tap on a name or note says *Hold and drag to reorder*, and the first *Move up* or *Move down* from an
   exercise's menu mentions the drag once in a snackbar. Changing week, the
   header's timer controls and the clock change in place without motion.
   Under reduced motion every change is immediate: the log doesn't follow a

@@ -481,6 +481,20 @@ void main() {
     final step = overhead.top - incline.top;
     expect(step, inInclusiveRange(56, 64));
     expect(row('Bench press').top, lessThan(incline.top));
+    // Each row is numbered by its place, the number before the name.
+    Rect number(String place) =>
+        tester.getRect(find.descendant(of: folded, matching: find.text(place)));
+    void numbered(String name, String place) {
+      expect(
+        number(place).center.dy,
+        moreOrLessEquals(row(name).center.dy, epsilon: 1),
+      );
+      expect(number(place).right, lessThanOrEqualTo(row(name).left));
+    }
+
+    numbered('Bench press', '1.');
+    numbered('Incline dumbbell press', '2.');
+    numbered('Overhead press', '3.');
 
     // Two rows down, in small moves as a finger makes them.
     for (var moved = 0.0; moved < step * 2 + 4; moved += 10) {
@@ -497,6 +511,11 @@ void main() {
       row('Overhead press').top,
       moreOrLessEquals(overhead.top - step, epsilon: 1),
     );
+    // Every number rolled to the row's new place.
+    await tester.pump(AppMotion.enter);
+    numbered('Incline dumbbell press', '1.');
+    numbered('Overhead press', '2.');
+    numbered('Bench press', '3.');
 
     await gesture.up();
     await pumpWithStorage(tester);
@@ -509,6 +528,51 @@ void main() {
     ]);
     // The log comes back with the moved exercise in view.
     expect(find.text('Bench press').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('holding an exercise note picks the exercise up too', (
+    tester,
+  ) async {
+    await tester.runAsync(
+      () => seed(
+        log: [
+          Exercise(
+            name: exercises.first.name,
+            sets: exercises.first.sets,
+            note: 'Pause on the chest',
+          ),
+          ...exercises.skip(1),
+        ],
+      ),
+    );
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+    final folded = find.byKey(const ValueKey('exercise-reorder'));
+
+    final gesture = await pickUp(tester, 'Pause on the chest');
+    expect(folded, findsOneWidget);
+    // The row still rises from the name, just above the note.
+    final held = tester.getRect(
+      find.descendant(of: folded, matching: find.text('Bench press')),
+    );
+    final note = tester.getRect(find.text('Pause on the chest'));
+    expect(held.bottom, lessThanOrEqualTo(note.top + 8));
+    expect(held.top, greaterThan(note.top - 80));
+
+    for (var moved = 0; moved < 130; moved += 10) {
+      await gesture.moveBy(const Offset(0, 10));
+      await tester.pump(const Duration(milliseconds: 16));
+    }
+    await gesture.up();
+    await pumpWithStorage(tester);
+    await tester.pumpAndSettle();
+    expect(folded, findsNothing);
+    expect(savedOrder(), [
+      'Incline dumbbell press',
+      'Overhead press',
+      'Bench press',
+    ]);
     expect(tester.takeException(), isNull);
   });
 

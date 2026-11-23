@@ -103,6 +103,17 @@ class ExerciseCard extends StatelessWidget {
     }
   }
 
+  /// The name and the note pick the exercise up to move when held. The row
+  /// that rises always starts from the name, the [anchor].
+  Widget _reorderHold({required Widget child, bool anchor = true}) =>
+      reorderable && !readOnly
+          ? ExerciseReorderHold(
+            index: exerciseIndex,
+            anchor: anchor,
+            child: child,
+          )
+          : child;
+
   @override
   Widget build(BuildContext context) {
     final weightUnit = SettingsProvider.unitOf(context);
@@ -128,10 +139,7 @@ class ExerciseCard extends StatelessWidget {
             title
           else
             SetEntryHeading(
-              title:
-                  reorderable && !readOnly
-                      ? ExerciseReorderHold(index: exerciseIndex, child: title)
-                      : title,
+              title: _reorderHold(child: title),
               action: PopupMenuButton<_ExerciseAction>(
                 tooltip: 'Exercise actions for ${exercise.name}',
                 icon: Icon(
@@ -185,11 +193,17 @@ class ExerciseCard extends StatelessWidget {
               ),
             ),
           if (exercise.note?.trim().isNotEmpty ?? false)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: Text(
-                exercise.note!,
-                style: Theme.of(context).textTheme.bodySmall,
+            _reorderHold(
+              anchor: false,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    exercise.note!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
               ),
             ),
           if (exercise.sets.isEmpty)

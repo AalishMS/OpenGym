@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../../theme/app_theme.dart';
+import '../../theme/app_typography.dart';
 import '../../theme/motion.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/haptics.dart';
+import '../rolling_figure.dart';
 import 'set_entry_table.dart';
 
 /// An exercise as the folded log shows it while one is being moved.
@@ -162,8 +164,9 @@ class _ExerciseReorderScopeState extends State<ExerciseReorderScope>
 
   double get _extent => context.size?.height ?? 0;
 
-  void _register(_ExerciseReorderHoldState hold, int index) =>
-      _holds[index] = hold;
+  void _register(_ExerciseReorderHoldState hold, int index) {
+    if (hold.widget.anchor) _holds[index] = hold;
+  }
 
   void _unregister(_ExerciseReorderHoldState hold, int index) {
     if (_holds[index] == hold) _holds.remove(index);
@@ -181,7 +184,9 @@ class _ExerciseReorderScopeState extends State<ExerciseReorderScope>
     if (_phase != _Phase.idle || widget.items.length < 2) return;
     final from = hold.widget.index;
     final box = context.findRenderObject() as RenderBox?;
-    final title = hold.context.findRenderObject() as RenderBox?;
+    // Held by its note or its name, the row rises from the name.
+    final title =
+        (_holds[from] ?? hold).context.findRenderObject() as RenderBox?;
     if (from >= widget.items.length ||
         box == null ||
         title == null ||
@@ -482,6 +487,19 @@ class _ExerciseReorderScopeState extends State<ExerciseReorderScope>
     final duration = AppMotion.of(context, AppMotion.standard);
     final page = backgroundColor(context);
     final hairline = hairlineColor(context);
+    // Complete, so the column is measured with what the figure inherits.
+    final number = DefaultTextStyle.of(
+      context,
+    ).style.merge(_numberStyle(context));
+    // Wide enough for the longest number, so the names line up.
+    final measure = TextPainter(
+      text: TextSpan(text: '${_items.length}.', style: number),
+      textScaler: MediaQuery.textScalerOf(context),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    final numberWidth = measure.width.ceilToDouble() + AppSpacing.sm;
+    measure.dispose();
     return AnimatedBuilder(
       animation: Listenable.merge([_folded, _lift, _place]),
       builder: (context, _) {
@@ -489,6 +507,17 @@ class _ExerciseReorderScopeState extends State<ExerciseReorderScope>
         final placing = _phase == _Phase.placing;
         final folding = AppMotion.move.transform(_folded.value);
         final landing = AppMotion.move.transform(_place.value);
+        // The numbers open a column before the names as the log folds, and
+        // close it as the names land back on their titles.
+        final numbered = placing ? 1 - landing : folding;
+        Widget content(ExerciseReorderItem item, int place) => _RowContent(
+          item: item,
+          place: place,
+          numberStyle: number,
+          numberWidth: numberWidth,
+          numbered: numbered,
+          detailOpacity: shown,
+        );
         // A row at rest in the list, or on its way between the list and a
         // title in the log.
         double travel(double resting, double? away) {
@@ -539,10 +568,7 @@ class _ExerciseReorderScopeState extends State<ExerciseReorderScope>
                           ),
                         ),
                       ),
-                      child: _RowContent(
-                        item: _items[index],
-                        detailOpacity: shown,
-                      ),
+                      child: content(_items[index], _slotOf(index) + 1),
                     ),
                   ),
               Positioned(
@@ -554,9 +580,8 @@ class _ExerciseReorderScopeState extends State<ExerciseReorderScope>
                 right: _inset - AppSpacing.sm,
                 height: _row,
                 child: _HeldRow(
-                  item: _items[_from],
                   lift: _lifted.value,
-                  shown: shown,
+                  child: content(_items[_from], _to + 1),
                 ),
               ),
             ],
@@ -565,6 +590,16 @@ class _ExerciseReorderScopeState extends State<ExerciseReorderScope>
       },
     );
   }
+}
+
+TextStyle _numberStyle(BuildContext context) {
+  final name = Theme.of(context).textTheme.titleLarge!;
+  return AppTypography.figures(
+    fontSize: name.fontSize,
+    fontWeight: name.fontWeight,
+    height: name.height,
+    color: textSecondaryColor(context),
+  );
 }
 
 class _ReorderScopeMarker extends InheritedWidget {
@@ -584,18 +619,23 @@ class _ReorderScopeMarker extends InheritedWidget {
       state != oldWidget.state || enabled != oldWidget.enabled;
 }
 
-/// An exercise's name, which picks the exercise at [index] up when held
-/// inside an [ExerciseReorderScope].
+/// Part of an exercise, its name or its note, which picks the exercise at
+/// [index] up when held inside an [ExerciseReorderScope].
 ///
-/// There is no handle to show the gesture: a tap on the name explains it, and
-/// moving an exercise from its menu mentions it once.
+/// There is no handle to show the gesture: a tap explains it, and moving an
+/// exercise from its menu mentions it once.
 class ExerciseReorderHold extends StatefulWidget {
   final int index;
+
+  /// Whether this is the exercise's name, which the folded row rises from
+  /// and lands back on. Its other parts pick it up too, from the name.
+  final bool anchor;
   final Widget child;
 
   const ExerciseReorderHold({
     super.key,
     required this.index,
+    this.anchor = true,
     required this.child,
   });
 
@@ -623,7 +663,9 @@ class _ExerciseReorderHoldState extends State<ExerciseReorderHold> {
   @override
   void didUpdateWidget(ExerciseReorderHold oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.index == widget.index) return;
+    if (oldWidget.index == widget.index && oldWidget.anchor == widget.anchor) {
+      return;
+    }
     _scope?._unregister(this, oldWidget.index);
     _scope?._register(this, widget.index);
   }
@@ -659,20 +701,60 @@ class _ExerciseReorderHoldState extends State<ExerciseReorderHold> {
   }
 }
 
-/// A folded exercise: its name, and its detail at the trailing edge.
+/// A folded exercise: its place in the order, its name, and its detail at
+/// the trailing edge.
 class _RowContent extends StatelessWidget {
   final ExerciseReorderItem item;
 
-  /// The detail's opacity, so the held row can show it only while folded.
+  /// The place it will take, counting from 1. It rolls to a new number as
+  /// the row moves.
+  final int place;
+  final TextStyle numberStyle;
+  final double numberWidth;
+
+  /// How far the number column has opened: 0 puts the name where its title
+  /// is in the log.
+  final double numbered;
+
+  /// The detail's opacity, so it shows only while the log is folded.
   final double detailOpacity;
 
-  const _RowContent({required this.item, this.detailOpacity = 1});
+  const _RowContent({
+    required this.item,
+    required this.place,
+    required this.numberStyle,
+    required this.numberWidth,
+    required this.numbered,
+    required this.detailOpacity,
+  });
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     return Row(
       children: [
+        ClipRect(
+          child: SizedBox(
+            width: numberWidth * numbered,
+            child: OverflowBox(
+              alignment: AlignmentDirectional.centerStart,
+              minWidth: numberWidth,
+              maxWidth: numberWidth,
+              child: Opacity(
+                opacity: numbered,
+                child: Padding(
+                  padding: const EdgeInsetsDirectional.only(end: AppSpacing.sm),
+                  child: RollingFigure(
+                    '$place.',
+                    style: numberStyle,
+                    maxLines: 1,
+                    alignment: AlignmentDirectional.centerEnd,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
         Expanded(
           child: Text(
             item.name,
@@ -699,15 +781,11 @@ class _RowContent extends StatelessWidget {
 /// The exercise being moved. It starts as its title in the log, rises onto
 /// the raised ground as it lifts, and sinks back into the page as it lands.
 class _HeldRow extends StatelessWidget {
-  final ExerciseReorderItem item;
-
   /// 0 resting in the page, 1 lifted.
   final double lift;
+  final Widget child;
 
-  /// How far the folded rows have come in.
-  final double shown;
-
-  const _HeldRow({required this.item, required this.lift, required this.shown});
+  const _HeldRow({required this.lift, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -741,7 +819,7 @@ class _HeldRow extends StatelessWidget {
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-          child: _RowContent(item: item, detailOpacity: shown),
+          child: child,
         ),
       ),
     );
