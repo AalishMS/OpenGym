@@ -43,7 +43,7 @@ workspaces, and workout progress.
 
 The gallery covers workout planning, logging, history, statistics, and settings.
 Every capture comes from the current web build loaded with the app's built-in
-sample data (three training blocks of history across five plans); no personal
+sample data (six weeks across two training blocks and four plans); no personal
 account data is shown.
 
 <table>
