@@ -15,6 +15,7 @@ import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/models/split.dart' as gym;
 import 'package:gymapp/providers/split_provider.dart';
+import 'package:gymapp/providers/training_block_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/providers/settings_provider.dart';
@@ -67,9 +68,14 @@ void main() {
     WorkoutSessionProvider? sessionProvider,
     SettingsProvider? settingsProvider,
     UpdateProvider? updateProvider,
+    TrainingBlockProvider? trainingProvider,
   }) {
     return MultiProvider(
       providers: [
+        if (trainingProvider != null)
+          ChangeNotifierProvider<TrainingBlockProvider>.value(
+            value: trainingProvider,
+          ),
         if (screen is SettingsScreen)
           ChangeNotifierProvider<SplitProvider>(
             create: (_) => SplitProvider(userIdProvider: () => null),
@@ -727,6 +733,8 @@ void main() {
     var sampleCalls = 0;
     var signOutCalls = 0;
     final settings = SettingsProvider();
+    final training = _CountingTraining();
+    addTearDown(training.dispose);
     await tester.pumpWidget(
       host(
         SettingsScreen(
@@ -739,14 +747,19 @@ void main() {
         ),
         size: const Size(390, 4000),
         settingsProvider: settings,
+        trainingProvider: training,
       ),
     );
     await tester.pump();
+    final reloadsBefore = training.reloads;
     await tester.ensureVisible(find.text('Load sample data'));
     await tester.tap(find.text('Load sample data'));
     await tester.pump();
     await tester.tap(find.text('Load'));
     await tester.pumpAndSettle();
+    // Stats reads blocks from this provider, so new sample blocks must show
+    // without an app restart.
+    expect(training.reloads, reloadsBefore + 1);
     await tester.ensureVisible(find.text('Clear current split data'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Clear current split data'));
@@ -764,6 +777,7 @@ void main() {
     await tester.pump();
     expect(sampleCalls, 1);
     expect(clearCalls, 1);
+    expect(training.reloads, reloadsBefore + 2);
     expect(signOutCalls, 1);
   });
 
@@ -883,6 +897,19 @@ void main() {
       expectNoOverflow(tester, 'settings $brightness');
     }
   });
+}
+
+class _CountingTraining extends TrainingBlockProvider {
+  int reloads = 0;
+
+  _CountingTraining()
+    : super(splitIdProvider: () => 'current', ownerId: () => null);
+
+  @override
+  void reload() {
+    reloads++;
+    super.reload();
+  }
 }
 
 class _Plans extends WorkoutPlanProvider {

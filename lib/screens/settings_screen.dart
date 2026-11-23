@@ -14,6 +14,7 @@ import '../widgets/motion/state_switcher.dart';
 import 'exercise_management_screen.dart';
 import '../services/exercise_catalog.dart';
 import '../providers/settings_provider.dart';
+import '../providers/training_block_provider.dart';
 import '../providers/update_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
@@ -898,6 +899,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final splitId = context.read<SplitProvider>().activeSplitId;
     final plans = context.read<WorkoutPlanProvider>();
     final sessions = context.read<WorkoutSessionProvider>();
+    final training = context.read<TrainingBlockProvider?>();
     _confirmMutation(
       title: 'Load sample data?',
       message:
@@ -916,6 +918,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         } finally {
           plans.loadPlans();
           sessions.loadSessions();
+          training?.reload();
         }
       },
     );
@@ -999,6 +1002,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final settings = context.read<SettingsProvider>();
       final plans = context.read<WorkoutPlanProvider>();
       final sessions = context.read<WorkoutSessionProvider>();
+      final training = context.read<TrainingBlockProvider?>();
       final splits = context.read<SplitProvider>();
       setState(() => _busyAction = null);
       await _confirmMutation(
@@ -1033,6 +1037,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             splits.loadSplits();
             plans.loadPlans();
             sessions.loadSessions();
+            training?.reload();
           }
         },
       );
@@ -1057,6 +1062,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     final plans = context.read<WorkoutPlanProvider>();
     final sessions = context.read<WorkoutSessionProvider>();
+    final training = context.read<TrainingBlockProvider?>();
     _confirmMutation(
       title: 'Clear split data?',
       message:
@@ -1073,6 +1079,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         } finally {
           plans.loadPlans();
           sessions.loadSessions();
+          training?.reload();
         }
       },
     );
