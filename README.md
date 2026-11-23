@@ -42,18 +42,19 @@ workspaces, and workout progress.
 ## Screenshots
 
 The gallery covers workout planning, logging, history, statistics, and settings.
-Statistics captures come from the current web build with example training history;
-no personal account data is shown.
+Every capture comes from the current web build loaded with the app's built-in
+sample data (three training blocks of history across five plans); no personal
+account data is shown.
 
 <table>
   <tr>
     <td align="center">
       <strong>Workout plans</strong><br>
-      <img src="screenshots/home.png" width="300" alt="OpenGym workout plans screen">
+      <img src="screenshots/home.png" width="300" alt="OpenGym Home with the next workout and colour-coded plans">
     </td>
     <td align="center">
       <strong>Workout logging</strong><br>
-      <img src="screenshots/workout.png" width="300" alt="OpenGym active workout screen">
+      <img src="screenshots/workout.png" width="300" alt="OpenGym active workout with previous sets beside the current ones">
     </td>
     <td align="center">
       <strong>Fast set entry</strong><br>
@@ -67,17 +68,17 @@ no personal account data is shown.
     </td>
     <td align="center">
       <strong>Statistics overview</strong><br>
-      <img src="screenshots/statistics.png" width="300" alt="OpenGym statistics Overview with weekly volume and training calendar">
+      <img src="screenshots/statistics.png" width="300" alt="OpenGym statistics Overview with weekly weight lifted and training rhythm">
     </td>
     <td align="center">
       <strong>Block progress</strong><br>
-      <img src="screenshots/statistics_2.png" width="300" alt="OpenGym training block workload and progress">
+      <img src="screenshots/statistics_2.png" width="300" alt="OpenGym volume compared across training blocks">
     </td>
   </tr>
   <tr>
     <td align="center">
       <strong>Exercise progress</strong><br>
-      <img src="screenshots/statistics_3.png" width="300" alt="OpenGym exercise progress chart">
+      <img src="screenshots/statistics_3.png" width="300" alt="OpenGym estimated one-rep max trend for an exercise">
     </td>
     <td align="center">
       <strong>Appearance and preferences</strong><br>
@@ -108,7 +109,7 @@ no personal account data is shown.
   <tr>
     <td align="center">
       <strong>Plans</strong><br>
-      <img src="screenshots/home_dark.png" width="200" alt="OpenGym workout plans screen in dark mode">
+      <img src="screenshots/home_dark.png" width="200" alt="OpenGym Home in dark mode">
     </td>
     <td align="center">
       <strong>Workout</strong><br>
