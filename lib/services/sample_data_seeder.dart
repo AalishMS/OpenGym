@@ -85,69 +85,59 @@ class SampleDataset {
 }
 
 class SampleDataSeeder {
-  /// A five-day week: Push, Pull, Legs, rest, Upper, Full body, rest.
+  /// A four-day upper/lower week: Upper A, Lower A, rest, Upper B, rest,
+  /// Lower B, rest. B days sometimes slide a day when life gets in the way.
   static const _plans = [
-    _PlanSpec('Push Day', 0, 18, [
-      _Lift('Bench Press', 4, 5, 60, 2.5, 2.5),
+    _PlanSpec('Upper A', 0, 18, [
+      _Lift('Bench Press', 4, 5, 62.5, 2.5, 2.5),
+      _Lift('Barbell Row', 4, 6, 57.5, 2.5, 2.5),
       _Lift('Overhead Press', 3, 6, 37.5, 1.25, 1.25),
-      _Lift('Incline Dumbbell Press', 3, 8, 22, 1, 2),
-      _Lift('Lateral Raise', 3, 12, 8, 0.5, 1),
+      _Lift('Lat Pulldown', 3, 8, 50, 2.5, 2.5),
       _Lift('Tricep Pushdown', 3, 10, 25, 1.25, 2.5),
     ]),
-    _PlanSpec('Pull Day', 1, 18, [
-      _Lift('Deadlift', 3, 4, 110, 2.5, 2.5),
-      _Lift('Lat Pulldown', 3, 8, 50, 1.25, 2.5),
-      _Lift('Seated Cable Row', 3, 8, 45, 1.25, 2.5),
-      _Lift('Face Pull', 3, 12, 15, 0.75, 2.5),
-      _Lift('Bicep Curl', 3, 8, 10, 0.6, 2),
-    ]),
-    _PlanSpec('Leg Day', 2, 18, [
+    _PlanSpec('Lower A', 1, 18, altDay: 2, [
       _Lift('Squat', 4, 5, 80, 2.5, 2.5),
       _Lift('Romanian Deadlift', 3, 6, 70, 2.5, 2.5),
-      _Lift('Leg Press', 3, 10, 140, 5, 5),
+      _Lift('Leg Press', 3, 8, 140, 5, 5),
       _Lift('Leg Curl', 3, 10, 35, 1.25, 2.5),
-      _Lift('Calf Raise', 4, 12, 60, 2.5, 5),
+      _Lift('Calf Raise', 4, 10, 60, 2.5, 5),
     ]),
-    _PlanSpec('Upper Body', 4, 18, altDay: 3, [
-      _Lift('Incline Bench Press', 4, 6, 50, 2.5, 2.5),
-      _Lift('Barbell Row', 4, 6, 60, 2.5, 2.5),
-      _Lift('Dumbbell Shoulder Press', 3, 8, 18, 0.75, 2),
-      _Lift('Cable Fly', 3, 10, 12.5, 0.75, 2.5),
-      _Lift('Hammer Curl', 3, 8, 12, 0.6, 2),
-      _Lift('Overhead Tricep Extension', 3, 10, 20, 1, 2.5),
+    _PlanSpec('Upper B', 3, 18, altDay: 4, [
+      _Lift('Incline Dumbbell Press', 4, 6, 22, 1, 2),
+      _Lift('Seated Cable Row', 3, 8, 45, 2.5, 2.5),
+      _Lift('Dumbbell Shoulder Press', 3, 8, 18, 1, 2),
+      _Lift('Lateral Raise', 3, 12, 8, 0.5, 1),
+      _Lift('Bicep Curl', 3, 8, 10, 0.75, 2),
     ]),
-    _PlanSpec('Full Body', 5, 10, altDay: 6, [
-      _Lift('Front Squat', 3, 5, 60, 2.5, 2.5),
-      _Lift('Dumbbell Press', 3, 8, 26, 1, 2),
+    _PlanSpec('Lower B', 5, 10, altDay: 6, [
+      _Lift('Deadlift', 3, 4, 110, 5, 2.5),
+      _Lift('Bulgarian Split Squat', 3, 8, 14, 1, 2),
       _Lift('Hip Thrust', 3, 8, 90, 5, 5),
-      _Lift('T-Bar Row', 3, 8, 40, 2.5, 2.5),
+      _Lift('Leg Extension', 3, 10, 40, 2.5, 2.5),
       _Lift('Cable Ab Crunch', 3, 12, 30, 1.25, 2.5),
     ]),
   ];
 
-  /// Rep bonuses fall as loads climb, so estimated 1RMs rise block on block.
+  /// Reps drop and loads jump between blocks, so estimated 1RMs rise.
   static const _blocks = [
-    _BlockSpec('Foundation', 4, 3, 0),
-    _BlockSpec('Hypertrophy', 5, 2, 2),
-    _BlockSpec('Strength', 5, 0, 8),
+    _BlockSpec('Hypertrophy', 4, 3, 0),
+    _BlockSpec('Strength', 5, 0, 4),
   ];
 
-  /// Calendar weeks, oldest first, as (block index, week number). `null` is a
-  /// week off between blocks. The last entry is the current calendar week.
-  static const _calendar = <(int, int)?>[
+  /// Calendar weeks, oldest first, as (block index, week number). The last
+  /// entry is the current calendar week.
+  static const _calendar = <(int, int)>[
     (0, 1), (0, 2), (0, 3), (0, 4), //
-    (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), //
-    null,
-    (2, 1), (2, 2), (2, 3),
+    (1, 1), (1, 2), (1, 3),
   ];
 
-  /// Today is the third day of the current calendar week: Push and Pull are
-  /// done, Legs is next, so plans sit on different weeks of the block.
-  static const _today = 2;
+  /// Today is the first day of the current calendar week, before Upper A:
+  /// the Hypertrophy block is done and two Strength weeks are logged.
+  static const _today = 0;
 
   /// Missed workouts, as (plan, block index, week). Logging is what advances a
   /// plan, so a missed deload simply never gets logged.
-  static const _missed = {('Full Body', 0, 4)};
+  static const _missed = {('Lower B', 0, 4)};
 
   static const _deloadFactor = 0.85;
 
@@ -205,10 +195,10 @@ class SampleDataSeeder {
     SyncService.instance.scheduleSync();
   }
 
-  /// Builds roughly three months of training ending at [now]: a Foundation
-  /// block with a deload, a Hypertrophy block with a deload, a week off, and
-  /// the current Strength block in progress. Values are deterministic; only
-  /// IDs and dates (relative to [now]) differ between calls.
+  /// Builds six weeks of training ending at [now]: a finished Hypertrophy
+  /// block with a deload, then two weeks of the current Strength block.
+  /// Values are deterministic; only IDs and dates (relative to [now]) differ
+  /// between calls.
   static SampleDataset buildDataset({
     required String splitId,
     required String? ownerId,
@@ -228,9 +218,7 @@ class SampleDataSeeder {
 
     // Sessions, oldest first.
     final logged = <(int, int, String, WorkoutSession)>[];
-    for (final (index, slot) in _calendar.indexed) {
-      if (slot == null) continue;
-      final (blockIndex, week) = slot;
+    for (final (index, (blockIndex, week)) in _calendar.indexed) {
       final block = _blocks[blockIndex];
       for (final plan in _plans) {
         if (_missed.contains((plan.name, blockIndex, week))) continue;
@@ -294,7 +282,7 @@ class SampleDataSeeder {
     final blocks = <TrainingBlock>[];
     final weeks = <TrainingWeek>[];
     for (final (blockIndex, spec) in _blocks.indexed) {
-      final firstWeek = _calendar.indexWhere((c) => c?.$1 == blockIndex);
+      final firstWeek = _calendar.indexWhere((c) => c.$1 == blockIndex);
       final created = day(firstWeek, -1, 20);
       final block = TrainingBlock(
         id: uuid.v4(),
@@ -489,14 +477,14 @@ class SampleDataSeeder {
 
     if (block.isDeload(week)) {
       note(0, 0, 'Deload week: lighter, one set fewer');
-    } else if (blockIndex == 0 && week == 1 && plan == 'Push Day') {
+    } else if (blockIndex == 0 && week == 1 && plan == 'Upper A') {
       note(0, 0, 'First session of the program, easy start');
-    } else if (blockIndex == 1 && week == 3 && plan == 'Pull Day') {
+    } else if (blockIndex == 0 && week == 2 && plan == 'Lower A') {
+      note(0, 0, 'Wider stance, depth felt better');
+    } else if (blockIndex == 1 && week == 1 && plan == 'Upper A') {
+      note(0, 0, 'New block: heavier, fewer reps');
+    } else if (blockIndex == 1 && week == 2 && plan == 'Lower B') {
       note(0, exercises[0].sets.length - 1, 'Grip went on the last rep');
-    } else if (blockIndex == 2 && week == 1 && plan == 'Push Day') {
-      note(0, 0, 'Back after a week off, felt fresh');
-    } else if (blockIndex == 2 && week == 2 && plan == 'Leg Day') {
-      note(0, 0, 'Belt on, moved well');
     }
   }
 

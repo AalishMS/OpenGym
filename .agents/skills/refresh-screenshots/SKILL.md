@@ -29,7 +29,7 @@ Use the shared browser tools available in the session. In T3 Code, call `preview
 
 Open **Settings → Load sample data → Load** and wait for **Sample data refreshed**. Load once for the capture batch, then preserve that dataset while navigating and changing themes. Do not substitute hand-painted values, modified DOM labels, hardcoded screen fixtures, or old PNGs.
 
-The seeder in `lib/services/sample_data_seeder.dart` should provide several populated blocks, gradual progress, and history for all five plans. Verify what the current build actually shows:
+The seeder in `lib/services/sample_data_seeder.dart` should provide two populated blocks (a finished Hypertrophy block and two weeks of Strength), gradual progress, and history for all four plans. Verify what the current build actually shows:
 
 - Home has plans and recent training; History has plausible sessions and dates.
 - Open a plan's current week with recorded history. Workout **Previous** must show real weights × reps for the visible exercises. Previous follows structural plan/exercise/set slots: an arbitrary first week or new plan can legitimately have no history and makes a poor showcase.

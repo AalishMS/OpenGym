@@ -113,7 +113,7 @@ void main() {
           HiveService.getAllTrainingWeeksRaw()
               .where((w) => w.splitId == splitId && w.deletedAt == null)
               .toList();
-      expect(weeks.map((w) => w.number).toSet(), {1, 2, 3, 4, 5});
+      expect(weeks.map((w) => w.number).toSet(), {1, 2, 3, 4});
       expect(weeks.map((w) => w.id), isNot(contains(before)));
       expect(
         HiveService.getSessions().every(

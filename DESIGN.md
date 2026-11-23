@@ -916,10 +916,10 @@ signature:
   update never changes how the app looks. `main` settles this before the first
   frame (`SettingsProvider.resolveStoredThemeMode`), using the first-run intro
   flag as the sign of an earlier install, and stores the answer.
-  The sample is about three months of a five-day week (Push, Pull, Legs,
-  Upper, Full body): Foundation and Hypertrophy blocks ending in deloads, a
-  week off, then a Strength block in progress where the plans sit on
-  different lazily allocated weeks, so every plan has Previous sets.
+  The sample is six weeks of a four-day upper/lower week (Upper A, Lower A,
+  Upper B, Lower B): a finished four-week Hypertrophy block ending in a
+  deload, then two weeks of a five-week Strength block. Today is the start of
+  Strength week 3, lazily allocated, so every plan has Previous sets.
 - Stats uses four persistent views: Overview, Strength, Blocks, and Records.
   Charts and figures sit directly on the page, without a vertical feed of
   panels. Overview pairs a weekly volume timeline with the selected week's

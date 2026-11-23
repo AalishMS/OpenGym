@@ -47,12 +47,14 @@ void main() {
     }
 
     test('logs every plan in every block on a realistic schedule', () {
-      expect(data.plans, hasLength(5));
-      expect(data.blocks.map((b) => b.position), [0, 1, 2]);
+      expect(data.plans, hasLength(4));
+      expect(data.blocks.map((b) => b.name), ['Hypertrophy', 'Strength']);
+      expect(data.blocks.map((b) => b.position), [0, 1]);
       for (final plan in data.plans) {
         final logs = data.sessions.where((s) => s.planId == plan.id).toList();
-        expect(logs.length, greaterThanOrEqualTo(10), reason: plan.name);
-        expect(logs.map(blockOf).toSet(), {0, 1, 2}, reason: plan.name);
+        // Four Hypertrophy weeks and two Strength weeks, one missed deload.
+        expect(logs.length, inInclusiveRange(5, 6), reason: plan.name);
+        expect(logs.map(blockOf).toSet(), {0, 1}, reason: plan.name);
         logs.sort((a, b) => a.date.compareTo(b.date));
         for (var i = 1; i < logs.length; i++) {
           final gap = _day(logs[i].date).difference(_day(logs[i - 1].date));
@@ -62,14 +64,15 @@ void main() {
       final days = data.sessions.map((s) => _day(s.date)).toList();
       expect(days.toSet(), hasLength(days.length), reason: 'one per day');
       expect(data.sessions.every((s) => s.date.isBefore(now)), isTrue);
-      expect(
-        _day(
-          data.sessions
-              .map((s) => s.date)
-              .reduce((a, b) => a.isAfter(b) ? a : b),
-        ),
-        _day(now).subtract(const Duration(days: 1)),
-      );
+      // Six finished weeks: the latest workout was a day or two ago.
+      final latest = data.sessions
+          .map((s) => s.date)
+          .reduce((a, b) => a.isAfter(b) ? a : b);
+      expect(_day(now).difference(_day(latest)).inDays, inInclusiveRange(1, 2));
+      final earliest = data.sessions
+          .map((s) => s.date)
+          .reduce((a, b) => a.isBefore(b) ? a : b);
+      expect(_day(now).difference(_day(earliest)).inDays, 42);
       // Calendar order follows block and week order.
       final ordered = [...data.sessions]
         ..sort((a, b) => a.date.compareTo(b.date));
@@ -127,7 +130,6 @@ void main() {
               .map((s) => _topWeight(s, exercise))
               .reduce((a, b) => a > b ? a : b);
           expect(best(1), greaterThan(best(0)), reason: exercise);
-          expect(best(2), greaterThan(best(1)), reason: exercise);
           final working = logs.where((s) => !deload(s)).toList();
           for (var i = 1; i < working.length; i++) {
             final before = _topWeight(working[i - 1], exercise);
@@ -171,7 +173,7 @@ void main() {
       );
     });
 
-    test('plans advance independently through lazily allocated weeks', () {
+    test('every plan is ready for the lazily allocated Strength week 3', () {
       final current = data.blocks.last;
       final allocated =
           data.weeks.where((w) => w.blockId == current.id).toList();
@@ -198,7 +200,7 @@ void main() {
           isEmpty,
         );
       }
-      expect(actives.length, greaterThan(1));
+      expect(actives, {3});
       final highest = allocated
           .map((w) => w.number)
           .reduce((a, b) => a > b ? a : b);
@@ -275,8 +277,8 @@ void main() {
           for (final b in blocks) ...HiveService.weeksForBlock(splitId, b.id),
         ];
         // Re-seeding leaves exactly one live sample.
-        expect(plans, hasLength(5));
-        expect(blocks, hasLength(3));
+        expect(plans, hasLength(4));
+        expect(blocks, hasLength(2));
         expect(
           sessions.map((s) => s.planId).toSet(),
           plans.map((p) => p.id).toSet(),
@@ -298,7 +300,7 @@ void main() {
         final progress = HiveService.getAllWorkoutProgressRaw().where(
           (p) => p.splitId == splitId && p.deletedAt == null,
         );
-        expect(progress, hasLength(5));
+        expect(progress, hasLength(4));
         for (final plan in plans) {
           final p = progress.singleWhere((p) => p.planId == plan.id);
           final active = weeks.singleWhere((w) => w.id == p.activeWeekId);
@@ -339,14 +341,10 @@ void main() {
               b.id: HiveService.weeksForBlock(splitId, b.id),
           },
         );
-        expect(stats.every((b) => b.workouts >= 10), isTrue);
+        expect(stats.map((b) => b.workouts), [15, 8]);
         expect(stats.every((b) => b.records > 0), isTrue);
         expect(stats.last.weeks.where((w) => w.weekId == null), isNotEmpty);
-        expect(stats.map((b) => b.block.name), [
-          'Foundation',
-          'Hypertrophy',
-          'Strength',
-        ]);
+        expect(stats.map((b) => b.block.name), ['Hypertrophy', 'Strength']);
         expect(
           blocks.every((TrainingBlock b) => b.plannedWeekCount != null),
           isTrue,
