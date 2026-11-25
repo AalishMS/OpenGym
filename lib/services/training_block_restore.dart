@@ -505,6 +505,11 @@ class TrainingBlockRestore {
         prefs.setBool('auto_fill_last', settings['autoFillLast'] as bool),
       );
     }
+    if (settings.containsKey('weekStartsOn')) {
+      await written(
+        prefs.setInt('week_starts_on', settings['weekStartsOn'] as int),
+      );
+    }
     await checkpoint(payload, 'settings');
     await HiveService.flushAllWorkoutData();
     HiveService.readTrainingGraph(ownerId: owner).validate();
@@ -545,6 +550,12 @@ class TrainingBlockRestore {
     }
     if (values.containsKey('autoFillLast') && values['autoFillLast'] is! bool) {
       throw const FormatException('Invalid backup auto-fill setting.');
+    }
+    if (values.containsKey('weekStartsOn') &&
+        (values['weekStartsOn'] is! int ||
+            (values['weekStartsOn'] as int) < DateTime.monday ||
+            (values['weekStartsOn'] as int) > DateTime.sunday)) {
+      throw const FormatException('Invalid backup week start.');
     }
   }
 }

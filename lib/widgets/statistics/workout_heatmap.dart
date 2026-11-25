@@ -6,6 +6,7 @@ import '../../models/workout_session.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
+import '../../utils/format.dart';
 
 /// Recent training days, one column per week and one square per day.
 ///
@@ -21,6 +22,10 @@ class WorkoutHeatmap extends StatelessWidget {
   final DateTime? now;
   final bool compact;
 
+  /// The weekday the top row holds (`DateTime.monday` … `DateTime.sunday`),
+  /// the user's *Week starts on* setting.
+  final int firstDayOfWeek;
+
   static const minWeeks = 12;
   static const maxWeeks = 52;
 
@@ -29,6 +34,7 @@ class WorkoutHeatmap extends StatelessWidget {
     required this.sessions,
     this.now,
     this.compact = false,
+    this.firstDayOfWeek = DateTime.monday,
   });
 
   @override
@@ -39,6 +45,7 @@ class WorkoutHeatmap extends StatelessWidget {
           now: now,
           width: constraints.maxWidth,
           compact: compact,
+          firstDayOfWeek: firstDayOfWeek,
         ),
   );
 }
@@ -48,15 +55,15 @@ class _HeatmapGrid extends StatelessWidget {
   final DateTime? now;
   final double width;
   final bool compact;
+  final int firstDayOfWeek;
 
   const _HeatmapGrid({
     required this.sessions,
     required this.now,
     required this.width,
     required this.compact,
+    required this.firstDayOfWeek,
   });
-
-  static const _dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
   static const _months = [
     'Jan',
     'Feb',
@@ -103,7 +110,7 @@ class _HeatmapGrid extends StatelessWidget {
 
     final end = _calendarDate(now ?? DateTime.now());
     final start = end.subtract(
-      Duration(days: (weeks - 1) * 7 + end.weekday - DateTime.monday),
+      Duration(days: (weeks - 1) * 7 + (end.weekday - firstDayOfWeek) % 7),
     );
     final counts = <DateTime, int>{};
     for (final session in sessions) {
@@ -141,11 +148,13 @@ class _HeatmapGrid extends StatelessWidget {
               padding: EdgeInsets.only(top: headerHeight),
               child: Column(
                 children: [
-                  for (final label in _dayLabels)
+                  for (final weekday in weekdaysFrom(firstDayOfWeek))
                     SizedBox(
                       height: step,
                       width: labelWidth,
-                      child: Center(child: Text(label, style: style)),
+                      child: Center(
+                        child: Text(weekdayLetter(weekday), style: style),
+                      ),
                     ),
                 ],
               ),

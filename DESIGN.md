@@ -103,7 +103,7 @@ Provider is the only app-wide state pattern.
 | `WorkoutPlanProvider` | Workout plan list and plan CRUD for the active split |
 | `WorkoutSessionProvider` | Completed-session list and session mutations for the active split |
 | `TrainingBlockProvider` | Split structure, per-plan progress and session indexes |
-| `SettingsProvider` | Theme mode, accent color, units, start from last week's sets |
+| `SettingsProvider` | Theme mode, accent color, units, week start, start from last week's sets |
 | `UpdateProvider` | Self-update from GitHub Releases: checks at launch and on resume, Wi-Fi prefetch, snoozed prompt, session install |
 
 Providers mutate data through `HiveService` (`SplitProvider` goes through
@@ -924,6 +924,17 @@ signature:
   ±5/±2.5 in pounds (reps keep ±1). Values keep full precision in storage and
   are rounded only for display; retyping the figure a cell showed keeps the
   stored kilograms exactly, so opening a pounds cell never drifts a value.
+- Settings → Workout → *Week starts on* (Monday / Sunday / Saturday, Monday by
+  default) sets `SettingsProvider.weekStartsOn` (a `DateTime` weekday, stored
+  as `week_starts_on`, backed up as `weekStartsOn`, optional so older backups
+  still import). It decides every calendar week the app shows: Home's week
+  strip (its letters start on that day), its totals and the plans' *Done*
+  marks, the workout summary's weekly count, Stats' periods, weekly bars and
+  heatmap rows, and the desktop dashboard. Every week goes through
+  `startOfWeek(date, firstDay:)` in `lib/utils/format.dart`, whose `firstDay`
+  has no default, and widgets read the day with `SettingsProvider.weekStartOf`.
+  It does not touch the rotation: *Next up* is always the plan after the last
+  one trained, so rest days need no setting.
 - Appearance defaults to *System* on a new installation. An installation from
   before that default whose user never picked a theme keeps *Light*, so an
   update never changes how the app looks. `main` settles this before the first
@@ -1021,7 +1032,8 @@ signature:
   The details line starts with where the plan stands: *Next* in accent ink,
   *In progress* while its workout is under way (the launcher then offers to
   resume that plan, and no other row claims to be next), or a success check
-  and *Done* for a plan trained since Monday, so the list reads as the week's
+  and *Done* for a plan trained since the week began (Monday unless Settings
+  says otherwise), so the list reads as the week's
   to-do list. A play glyph before *…* says what a tap on the row does: it
   opens that plan's workout, or for the row *In progress*, the live session
   itself, as *Resume workout* does, even when that session sits in an

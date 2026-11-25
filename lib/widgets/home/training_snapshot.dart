@@ -13,6 +13,9 @@ import '../../utils/format.dart';
 
 /// Completed sets by calendar day, with a dot under today's letter.
 ///
+/// The week starts on [firstDayOfWeek], so a training week that runs Sunday
+/// to Friday reads left to right as the user trains it.
+///
 /// The seven days are always drawn, so the week keeps its frame and today
 /// stays marked before anything is logged. An empty week is just the day
 /// letters; the bars' slot opens once a day has training, so a week not yet
@@ -24,19 +27,24 @@ class TrainingSnapshot extends StatelessWidget {
   final ValueChanged<WorkoutSession>? onOpenLastWorkout;
   final DateTime? now;
 
+  /// The weekday the strip starts on (`DateTime.monday` … `DateTime.sunday`),
+  /// the user's *Week starts on* setting.
+  final int firstDayOfWeek;
+
   const TrainingSnapshot({
     required this.plans,
     required this.sessions,
     this.onOpenWeeklyTraining,
     this.onOpenLastWorkout,
     this.now,
+    this.firstDayOfWeek = DateTime.monday,
     super.key,
   });
 
   @override
   Widget build(BuildContext context) {
     final today = now ?? DateTime.now();
-    final weekStart = startOfWeek(today);
+    final weekStart = startOfWeek(today, firstDay: firstDayOfWeek);
     final todayIndex = calendarDaysBetween(weekStart, today);
     final dailySets = List<int>.filled(7, 0);
     final dailyWorkouts = List<int>.filled(7, 0);
@@ -61,16 +69,8 @@ class TrainingSnapshot extends StatelessWidget {
     final maxSets = dailySets.reduce(math.max);
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
-    const letters = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-    const names = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ];
+    final weekdays = weekdaysFrom(firstDayOfWeek);
+    final names = [for (final day in weekdays) kWeekdayNames[day - 1]];
 
     // Keep the same summary and navigation affordance before the first log.
     final summary =
@@ -166,7 +166,7 @@ class TrainingSnapshot extends StatelessWidget {
                           borderRadius: AppRadius.control,
                           child: ExcludeSemantics(
                             child: _DayColumn(
-                              letter: letters[index],
+                              letter: weekdayLetter(weekdays[index]),
                               trained: dailyWorkouts[index] > 0,
                               today: index == todayIndex,
                               emptyWeek: workouts == 0,

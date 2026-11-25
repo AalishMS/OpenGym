@@ -9,6 +9,7 @@ import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/navigation/workout_destination.dart';
+import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/home_screen.dart';
@@ -76,9 +77,12 @@ void main() {
     List<WorkoutPlan> plans = const [],
     List<WorkoutSession> sessions = const [],
     List<NavigatorObserver> observers = const [],
+    SettingsProvider? settings,
   }) {
     return MultiProvider(
       providers: [
+        if (settings != null)
+          ChangeNotifierProvider<SettingsProvider>.value(value: settings),
         ChangeNotifierProvider<WorkoutPlanProvider>(
           create: (_) => _PlanProvider(plans),
         ),
@@ -140,6 +144,7 @@ void main() {
     List<WorkoutPlan> plans = const [],
     List<WorkoutSession> sessions = const [],
     List<NavigatorObserver> observers = const [],
+    SettingsProvider? settings,
   }) async {
     if (plans.isNotEmpty || sessions.isNotEmpty) {
       await tester.runAsync(() async {
@@ -160,6 +165,7 @@ void main() {
         plans: plans,
         sessions: sessions,
         observers: observers,
+        settings: settings,
       ),
     );
   }
@@ -1062,7 +1068,10 @@ void main() {
       }
     }
     expect(
-      find.semantics.byLabel('Start workout').evaluate().single
+      find.semantics
+          .byLabel('Start workout')
+          .evaluate()
+          .single
           .getSemanticsData()
           .hasAction(SemanticsAction.tap),
       isTrue,
@@ -1137,6 +1146,65 @@ void main() {
       expect(find.text('Next'), findsOneWidget);
     },
   );
+
+  testWidgets('this week starts on the day chosen in Settings', (tester) async {
+    final now = DateTime.now();
+    final yesterday = DateTime(now.year, now.month, now.day - 1, 12);
+
+    // A week that started yesterday holds yesterday's Pull Day; one that
+    // starts today does not. Neither depends on which weekday the test runs.
+    for (final (firstDay, workouts, done) in [
+      (yesterday.weekday, '1 workout · 0 sets', findsOneWidget),
+      (now.weekday, '0 workouts', findsNothing),
+    ]) {
+      SharedPreferences.setMockInitialValues({'week_starts_on': firstDay});
+      final settings = SettingsProvider();
+      await tester.runAsync(settings.reload);
+      await pumpHome(
+        tester,
+        plans: rotationPlans(),
+        sessions: [pullSession(yesterday)],
+        settings: settings,
+      );
+
+      expect(find.text(workouts), findsOneWidget, reason: '$firstDay');
+      // The strip's first day is the chosen one.
+      expect(
+        find.ancestor(
+          of: find.byKey(const ValueKey('training-day-0')),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Semantics &&
+                (widget.properties.label ?? '').startsWith(
+                  '${kWeekdayNames[firstDay - 1]}: ',
+                ),
+          ),
+        ),
+        findsOneWidget,
+        reason: '$firstDay',
+      );
+      await tester.scrollUntilVisible(
+        find.text('Pull Day'),
+        150,
+        scrollable: find.byWidgetPredicate(
+          (widget) =>
+              widget is Scrollable &&
+              widget.axisDirection == AxisDirection.down,
+        ),
+      );
+      expect(
+        find.descendant(
+          of: find.ancestor(
+            of: find.text('Pull Day'),
+            matching: find.byType(HomePlanRow),
+          ),
+          matching: find.text('Done'),
+        ),
+        done,
+        reason: '$firstDay',
+      );
+    }
+  });
 
   testWidgets(
     'snapshot counts performed sets and excludes drafts and other weeks',

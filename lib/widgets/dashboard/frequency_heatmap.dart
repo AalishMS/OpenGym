@@ -4,6 +4,7 @@ import '../../models/workout_session.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../../utils/format.dart';
 
 /// GitHub-style contribution grid: one column per week, one square per day.
 ///
@@ -15,9 +16,15 @@ import '../../theme/spacing.dart';
 class FrequencyHeatmap extends StatelessWidget {
   final List<WorkoutSession> sessions;
 
-  const FrequencyHeatmap({required this.sessions, super.key});
+  /// The weekday the top row holds (`DateTime.monday` … `DateTime.sunday`),
+  /// the user's *Week starts on* setting.
+  final int firstDayOfWeek;
 
-  static const _dayLabels = ['M', '', 'W', '', 'F', '', 'S'];
+  const FrequencyHeatmap({
+    required this.sessions,
+    this.firstDayOfWeek = DateTime.monday,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -35,8 +42,10 @@ class FrequencyHeatmap extends StatelessWidget {
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    // Last column is the week containing today; walk back to its Monday.
-    final lastMonday = today.subtract(Duration(days: today.weekday - 1));
+    // Last column is the week containing today; walk back to its first day.
+    final lastWeekStart = startOfWeek(today, firstDay: firstDayOfWeek);
+    // Every other row is named, from the first, so the column stays legible.
+    final weekdays = weekdaysFrom(firstDayOfWeek);
 
     const labelWidth = 14.0;
     const cellSize = 12.0;
@@ -58,11 +67,11 @@ class FrequencyHeatmap extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final label in _dayLabels)
+                  for (var row = 0; row < 7; row++)
                     SizedBox(
                       height: cellSize + gap,
                       child: Text(
-                        label,
+                        row.isEven ? weekdayLetter(weekdays[row]) : '',
                         style: GoogleFonts.jetBrainsMono(
                           fontSize: 8,
                           height: 1.4,
@@ -83,9 +92,11 @@ class FrequencyHeatmap extends StatelessWidget {
                       children: [
                         for (int d = 0; d < 7; d++)
                           _cell(
-                            date: lastMonday
-                                .subtract(Duration(days: w * 7))
-                                .add(Duration(days: d)),
+                            date: DateTime(
+                              lastWeekStart.year,
+                              lastWeekStart.month,
+                              lastWeekStart.day - w * 7 + d,
+                            ),
                             today: today,
                             counts: counts,
                             steps: steps,

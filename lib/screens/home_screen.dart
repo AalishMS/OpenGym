@@ -9,6 +9,7 @@ import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
 import '../navigation/open_workout.dart';
 import '../navigation/workout_destination.dart';
+import '../providers/settings_provider.dart';
 import '../providers/split_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
@@ -355,7 +356,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final statsByIndex = {for (final stat in stats) stat.planIndex: stat};
     final nextIndex = PlanStat.nextInRotation(stats, plans.length);
     final today = DateTime.now();
-    final weekStart = startOfWeek(today);
+    final firstDayOfWeek = SettingsProvider.weekStartOf(context);
+    final weekStart = startOfWeek(today, firstDay: firstDayOfWeek);
     final trainedDays = {
       for (final stat in stats)
         if (stat.lastTrained != null &&
@@ -376,6 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
       sessions: sessions,
       onOpenWeeklyTraining: widget.onOpenWeeklyTraining,
       onOpenLastWorkout: widget.onOpenLastWorkout,
+      firstDayOfWeek: firstDayOfWeek,
     );
 
     // Session writes do not all pass through the provider (finishing a
