@@ -992,12 +992,23 @@ signature:
   The seven days are always drawn. An empty week is only the letters and
   today's dot, with the bars' slot closed so four of five plans still fit a
   phone; it opens as the first day is trained.
-- Home's launcher is the one raised card on the page, and it is not itself a
-  button: *Start workout* (or *Resume workout*) is its single target. Its
-  first line reads “Next up · Workout N of M” with *Last done …* at the end,
-  over the rotation bar; the same workout numbers appear in the plan list's
-  markers. Muscle groups sit on their own line; exercise, set, and duration
-  values are dot-separated phrases (`PhraseLine`) that wrap only between
+- Home's launcher is the one raised card on the page. A tap anywhere on it
+  does what *Start workout* (or *Resume workout*) does, but only for a
+  pointer: the button stays its single target for a screen reader or a
+  keyboard, so the action is met once. It opens with the plan's own marker
+  (`PlanMarker`, the mark its row in the list below carries) beside *Next
+  up* (or *In progress*) and the rotation bar, the status on the marker's
+  top edge and the bar on its bottom, so the three read as one mark. The bar draws one segment per plan in that plan's
+  colour, and the plan on offer stands taller (6dp against 2dp, thin enough
+  that five colours stay quieter than the name); height is its only
+  emphasis, so it holds when plans share a colour or have none. The bar
+  shows place in the rotation, not what was trained this week: the list's
+  *Done* marks say that. The marker speaks “Workout N of M”, so the place
+  is not also written out. The plan's name has the card's full width
+  beneath, over the muscle groups it trains, in the picker's order (a plan
+  of only custom exercises has no such line). Exercise and set counts are
+  not repeated here: each plan's row in the list carries its own. Counts
+  anywhere are dot-separated phrases (`PhraseLine`) that wrap only between
   phrases, so a count never parts from its unit. Each phrase is measured
   against the whole line before its dot; the dot follows only when both
   fit, so it never squeezes a phrase into breaking mid-word. The weekly summary keeps its

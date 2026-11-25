@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/models/exercise.dart';
@@ -37,6 +38,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'support/hive_test_harness.dart';
 import 'support/pump_with_storage.dart';
 import 'support/test_fonts.dart';
+
+/// The launcher's own plan mark: which workout it offers, and out of how many.
+PlanMarker upNextMarker(WidgetTester tester) => tester.widget<PlanMarker>(
+  find.descendant(
+    of: find.byType(UpNextCard),
+    matching: find.byType(PlanMarker),
+  ),
+);
 
 void main() {
   final hiveHarness = HiveTestHarness();
@@ -434,13 +443,23 @@ void main() {
     // Manage arranges plans; the workout opens from the ordinary row.
     await tester.tap(find.text('Done'));
     await tester.pumpAndSettle();
-    final rowMarker = tester.widget<Container>(
-      find.descendant(
-        of: find.byType(PlanMarker),
-        matching: find.byType(Container),
-      ),
-    );
-    expect((rowMarker.decoration! as BoxDecoration).color, expectedHomeColor);
+    // The launcher and the row below it draw the same mark.
+    for (final host in [UpNextCard, HomePlanRow]) {
+      final marker = tester.widget<Container>(
+        find.descendant(
+          of: find.descendant(
+            of: find.byType(host),
+            matching: find.byType(PlanMarker),
+          ),
+          matching: find.byType(Container),
+        ),
+      );
+      expect(
+        (marker.decoration! as BoxDecoration).color,
+        expectedHomeColor,
+        reason: '$host',
+      );
+    }
     await tester.ensureVisible(find.text('Push Day').last);
     await tester.tap(find.text('Push Day').last);
     await tester.pumpAndSettle();
@@ -928,7 +947,7 @@ void main() {
     );
     await pumpHome(tester, plans: plans, sessions: [draft]);
 
-    expect(find.textContaining('Workout 1 of 3'), findsOneWidget);
+    expect(upNextMarker(tester).number, 1);
     expect(find.text('0 workouts'), findsOneWidget);
     expect(find.byIcon(LucideIcons.check), findsNothing);
   });
@@ -982,30 +1001,105 @@ void main() {
     tester,
   ) async {
     final yesterday = DateTime.now().subtract(const Duration(days: 1));
-    await pumpHome(
-      tester,
-      plans: rotationPlans(),
-      sessions: [pullSession(yesterday)],
-    );
+    final plans = rotationPlans();
+    await pumpHome(tester, plans: plans, sessions: [pullSession(yesterday)]);
 
     expect(find.text('Next up'), findsOneWidget);
-    expect(find.textContaining('Workout 3 of 3'), findsOneWidget);
+    expect(upNextMarker(tester).number, 3);
+    expect(upNextMarker(tester).count, 3);
 
-    // The card is not a button: Start is its one target.
-    for (final label in ['Next up', 'Leg Day']) {
-      await tester.tap(find.text(label).first, warnIfMissed: false);
-      await tester.pumpAndSettle();
-      expect(find.byType(WorkoutScreen), findsNothing, reason: label);
+    // Under the name the card says what the workout trains; the counts
+    // stay on the plan's row.
+    Finder inCard(Pattern text) => find.descendant(
+      of: find.byType(UpNextCard),
+      matching: find.textContaining(text),
+    );
+    expect(inCard(RegExp(r'^Chest, Shoulders$')), findsOneWidget);
+    expect(inCard('exercises'), findsNothing);
+    expect(inCard('sets'), findsNothing);
+
+    // The bar draws every plan in its own colour; the one on offer only
+    // stands taller.
+    final card = tester.element(find.byType(UpNextCard));
+    for (var index = 0; index < plans.length; index++) {
+      final segment = find.byKey(ValueKey('rotation-segment-$index'));
+      expect(
+        (tester.widget<Container>(segment).decoration! as BoxDecoration).color,
+        planColorOf(plans[index].planColor, card),
+        reason: 'segment $index',
+      );
+      expect(
+        tester.getSize(segment).height,
+        index == 2 ? 6 : 2,
+        reason: 'segment $index',
+      );
     }
-    await tester.tap(find.text('Start workout'));
-    await tester.pumpAndSettle();
-    final workout = tester.widget<WorkoutScreen>(find.byType(WorkoutScreen));
-    expect(workout.plan.name, 'Leg Day');
-    expect(workout.planIndex, 2);
-    Navigator.of(tester.element(find.byType(WorkoutScreen))).pop();
-    await tester.pumpAndSettle();
-    expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.byType(WorkoutScreen), findsNothing);
+    // Status, bar and marker lock together: one top edge, one bottom edge.
+    final marker = tester.getRect(
+      find.descendant(
+        of: find.byType(UpNextCard),
+        matching: find.byType(PlanMarker),
+      ),
+    );
+    expect(tester.getRect(find.text('Next up')).top, closeTo(marker.top, 0.01));
+    expect(
+      tester.getRect(find.byKey(const ValueKey('rotation-segment-2'))).bottom,
+      closeTo(marker.bottom, 0.01),
+    );
+
+    // A screen reader and a keyboard meet the action once, on Start: the
+    // card's own tap is for a pointer only.
+    final semantics = tester.ensureSemantics();
+    for (final label in ['Next up', 'Chest, Shoulders']) {
+      final nodes = find.semantics.byLabel(RegExp(label)).evaluate();
+      expect(nodes, isNotEmpty, reason: label);
+      for (final node in nodes) {
+        expect(
+          node.getSemanticsData().hasAction(SemanticsAction.tap),
+          isFalse,
+          reason: label,
+        );
+      }
+    }
+    expect(
+      find.semantics.byLabel('Start workout').evaluate().single
+          .getSemanticsData()
+          .hasAction(SemanticsAction.tap),
+      isTrue,
+    );
+    semantics.dispose();
+    final focusable = FocusManager.instance.rootScope.descendants.where(
+      (node) =>
+          node.canRequestFocus &&
+          node.context?.findAncestorWidgetOfExactType<UpNextCard>() != null,
+    );
+    expect(focusable, hasLength(1));
+
+    // A tap anywhere on the card does what Start does; Start itself opens
+    // the workout once.
+    for (final target in [
+      find.descendant(
+        of: find.byType(UpNextCard),
+        matching: find.text('Next up'),
+      ),
+      find.descendant(
+        of: find.byType(UpNextCard),
+        matching: find.text('Leg Day'),
+      ),
+      find.text('Start workout'),
+    ]) {
+      await tester.tap(target);
+      await tester.pumpAndSettle();
+      final opened = find.byType(WorkoutScreen, skipOffstage: false);
+      expect(opened, findsOneWidget, reason: '$target');
+      final workout = tester.widget<WorkoutScreen>(opened);
+      expect(workout.plan.name, 'Leg Day');
+      expect(workout.planIndex, 2);
+      Navigator.of(tester.element(opened)).pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(WorkoutScreen), findsNothing);
+    }
   });
 
   testWidgets(
