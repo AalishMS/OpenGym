@@ -117,14 +117,12 @@ class ExerciseCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final weightUnit = SettingsProvider.unitOf(context);
+    final name = ExerciseCatalog.label(exercise.name, exercise.exerciseId);
     final title = Semantics(
       header: true,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Text(
-          exercise.name,
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
+        child: Text(name, style: Theme.of(context).textTheme.titleLarge),
       ),
     );
     return Padding(
@@ -141,7 +139,7 @@ class ExerciseCard extends StatelessWidget {
             SetEntryHeading(
               title: _reorderHold(child: title),
               action: PopupMenuButton<_ExerciseAction>(
-                tooltip: 'Exercise actions for ${exercise.name}',
+                tooltip: 'Exercise actions for $name',
                 icon: Icon(
                   LucideIcons.ellipsis,
                   size: 20,

@@ -150,21 +150,36 @@ only `updatedAt` and `dirty`: it is keyed by `userId` and is never deleted.
 
 Hive adapters are generated in `*.g.dart`; those files are not edited by hand.
 Plans are shared prescription templates across all blocks. A saved destination
-always wins over initialization. The first week of the first block uses targets.
-Week 1 of a later block copies Week 1 of the immediately preceding live block
-for the same plan. Every later week copies the preceding supplied week's
-completed values within its own block. Missing sources use current targets.
-Exercises match by canonical exercise ID and occurrence; current order/guidance wins,
-set values/RPE/count are deep-copied, and past set notes are not inherited.
-Untouched previews never create logs. Previous-set references instead follow
-earlier structural slots; plan-editor Last and analytics remain date-based.
-The copying above is Settings → Workout → *Start from last week's sets*, on by
-default (stored as `auto_fill_last`, backed up as `autoFillLast`). Off, a week
-with no saved data opens with the plan's current targets instead; saved drafts
-and logs are never changed, and the Previous column still shows the earlier
-logged sets. Discarding a draft rebuilds the week exactly as a fresh open would,
-under the same setting. The logger builds new weeks from the plan as currently
-saved, not the copy it was opened with.
+always wins over initialization. A week with no saved data starts from the
+plan's most recent logged workout before it (`WorkoutSessionInitializer`,
+`lastSession`): the same exercises in the same order, including any added,
+removed, replaced or reordered in that workout. The very first week of a plan,
+with nothing logged before it, takes the plan as it is. Plan edits made since
+that workout still arrive, because every workout records the plan lineup it was
+built from (`WorkoutSession.planExerciseIds`, canonical IDs in plan order): an
+exercise the plan gained since is inserted after its neighbour in the plan, one
+it lost since is dropped, and if the plan's own order changed since, the plan's
+order wins while the workout's own additions stay after the exercise they
+followed. Changes the plan did not touch keep the workout's version, so an
+exercise removed in the workout stays removed. A workout written before
+lineups were recorded counts the plan as unchanged since. Exercises match by
+canonical ID and occurrence. The plan's guidance note wins where it has one; an
+exercise it gives none for keeps its note. Set values come from the inheritance
+source: Week 1 of a later block copies Week 1 of the immediately preceding live
+block for the same plan, and every later week copies the preceding supplied
+week's completed values within its own block. An exercise that source lacks
+takes the plan's targets, or, if the plan does not have it, the last workout's
+sets. Values, RPE and set count are deep-copied; past set notes are not
+inherited. Untouched previews never create logs. Previous-set references
+instead follow earlier structural slots; plan-editor Last and analytics remain
+date-based. The copying of set values is Settings → Workout → *Start from last
+week's sets*, on by default (stored as `auto_fill_last`, backed up as
+`autoFillLast`). Off, the lineup still carries over, a plan exercise opens with
+the plan's current targets and any other with as many blank sets as it had
+last time; saved drafts and logs are never changed, and the Previous column
+still shows the earlier logged sets. Discarding a draft rebuilds the week
+exactly as a fresh open would, under the same setting. The logger builds new
+weeks from the plan as currently saved, not the copy it was opened with.
 
 ### Exercise identity
 
@@ -172,31 +187,34 @@ Occurrences are identified by their stable catalog `exerciseId`, never by the
 name snapshot they carry (see [exercise identity](docs/exercises.md)). Plan
 templates, workout initialization, Previous values, history, Stats, records and
 timed measurement all resolve `ExerciseCatalog.identity(name, exerciseId)`, so
-an occurrence keeps its history whatever it is called. The workout's exercise
+an occurrence keeps its history whatever it is called. A movement has one name,
+its catalog name: plans, workouts, history, Home and Stats show
+`ExerciseCatalog.label(name, exerciseId)`, and the stored snapshot is only the
+fallback for a movement the catalog does not know yet. The workout's exercise
 menu is Exercise note, Rename exercise, Replace exercise (drafts only), Move
 up/down, and Delete exercise last.
 
-- *Rename exercise* changes the occurrence's label and keeps its ID, so
-  history, Previous values, records and measurement stay together. It saves
-  names without surrounding or repeated whitespace. *Also rename in plans and
-  past workouts*, checked by default, shows how many plans and workouts in the
-  split contain the same movement. Checked, `ExerciseRenameService` rewrites
-  the label of every live plan and workout occurrence in the split that
-  resolves to the same canonical ID. It keeps each `exerciseId`, filling a
-  legacy null with the resolved identity, and leaves sets, notes and targets
-  alone. Writes run under the sync gate, mark changed rows dirty with a fresh
-  `updatedAt`, and schedule a sync; other splits and tombstones are untouched.
-  An owned custom catalog movement is also relabelled through
-  `ExerciseCatalog.rename`, so the picker and Stats agree. Bundled labels are
-  permanent. Renaming never merges identities: when the new name already
-  belongs to another movement, the dialog says the histories stay separate and
-  points to Settings → Manage exercises, where merging is explicit.
+- *Rename exercise* opens the one rename dialog, shared with Settings →
+  Manage exercises (`showExerciseRenameDialog`). It renames the movement for
+  the whole account, bundled movements included, by writing one catalog row
+  (`ExerciseRenameService.rename`): the ID is kept and no plan or workout is
+  rewritten, so history, Previous values, records and measurement stay
+  together, and the new name shows everywhere at once. It saves names without
+  surrounding or repeated whitespace, and keeps the old name as a search
+  alias. The dialog says the name changes everywhere and how many plans and
+  workouts use the movement. When the typed name already belongs to another
+  movement, the two are the same movement: the dialog says so, explains that
+  merging combines their history and can't be undone, and its action becomes
+  *Merge* (`ExerciseRenameService.merge`), which redirects this movement into
+  that one. There is no "this workout only" rename; a different movement in
+  one workout is *Replace exercise*.
 - *Replace exercise* opens the library in single-choice mode and swaps the
-  chosen movement, with its catalog ID, into this workout only. It keeps the
+  chosen movement, with its catalog ID, into this workout. It keeps the
   set count. Weight and reps come from that movement's latest logged
   performance in the split, or weight 0 with the same reps when there is none.
   RPE, set notes and the exercise note are cleared. Movements already in the
-  workout show as *Added* and can't be chosen.
+  workout show as *Added* and can't be chosen. Like any lineup change, the
+  next week carries the replacement over.
 - Built-in movements carry a kind in `ExerciseLibrary` (weighted, bodyweight
   or timed), keyed by their permanent ID. `ExerciseCatalog.kindOf`/`isTimed`
   resolve an occurrence's canonical ID, so a renamed hold still stores
@@ -251,8 +269,11 @@ Exercise definitions are shared across splits within one account. Bundled IDs
 are permanent; custom entries are reusable offline. Names and reviewed aliases
 support search, while statistics, records, initialization and previous sets use
 IDs. Legacy names migrate conservatively with the same recoverable graph flow.
-Settings → Manage exercises offers custom renaming and confirmed merging.
-Merges retain original logs and resolve redirects instead of deleting sets.
+Settings → Manage exercises lists the movements the account trains (custom or
+used in a plan or workout) first, each with how many workouts and plans use
+it, and offers the shared rename dialog for any movement and a confirmed merge
+into another. Merges retain original logs and resolve redirects instead of
+deleting sets.
 See [exercise identity](docs/exercises.md) for migration, conflict, and backup
 behavior.
 

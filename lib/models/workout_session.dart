@@ -60,6 +60,14 @@ class WorkoutSession extends HiveObject {
   @HiveField(16)
   final Map<String, dynamic>? completionTransition;
 
+  /// The plan's exercise identities, in plan order, when this workout was
+  /// built. The next week starts from this workout, and compares the plan
+  /// against this lineup to tell an edit made in the plan since (which it
+  /// follows) from a change made in this workout (which it keeps). Null on
+  /// workouts built before it existed or not built from a plan.
+  @HiveField(17)
+  final List<String>? planExerciseIds;
+
   WorkoutSession({
     required this.date,
     required this.planName,
@@ -78,6 +86,7 @@ class WorkoutSession extends HiveObject {
     this.durationSeconds,
     this.trainingWeekId,
     this.completionTransition,
+    this.planExerciseIds,
   });
 
   bool get isTimerRunning => !isCompleted && timerStartedAt != null;
@@ -109,6 +118,7 @@ class WorkoutSession extends HiveObject {
     'startedAt': startedAt?.toIso8601String(),
     'timerStartedAt': timerStartedAt?.toIso8601String(),
     'durationSeconds': durationSeconds,
+    if (planExerciseIds != null) 'planExerciseIds': planExerciseIds,
   };
 
   factory WorkoutSession.fromJson(Map<String, dynamic> json) {
@@ -156,6 +166,12 @@ class WorkoutSession extends HiveObject {
               ? null
               : DateTime.parse(json['timerStartedAt'] as String),
       durationSeconds: json['durationSeconds'] as int?,
+      planExerciseIds: switch (json['planExerciseIds']) {
+        null => null,
+        final List<dynamic> ids when ids.every((id) => id is String) =>
+          List<String>.unmodifiable(ids),
+        _ => throw const FormatException('Invalid plan exercise IDs.'),
+      },
     );
   }
 
@@ -177,6 +193,7 @@ class WorkoutSession extends HiveObject {
     Object? startedAt = _notProvided,
     Object? timerStartedAt = _notProvided,
     Object? durationSeconds = _notProvided,
+    Object? planExerciseIds = _notProvided,
   }) {
     return WorkoutSession(
       trainingWeekId:
@@ -218,6 +235,10 @@ class WorkoutSession extends HiveObject {
           identical(durationSeconds, _notProvided)
               ? this.durationSeconds
               : durationSeconds as int?,
+      planExerciseIds:
+          identical(planExerciseIds, _notProvided)
+              ? this.planExerciseIds
+              : planExerciseIds as List<String>?,
     );
   }
 }

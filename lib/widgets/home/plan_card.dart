@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../models/workout_plan.dart';
+import '../../services/exercise_catalog.dart';
 import '../../providers/settings_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
@@ -54,7 +55,10 @@ class PlanCard extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final textPrimary = textPrimaryColor(context);
     final textSecondary = textSecondaryColor(context);
-    final exerciseNames = plan.exercises.map((e) => e.name).toList();
+    final exerciseNames =
+        plan.exercises
+            .map((e) => ExerciseCatalog.label(e.name, e.exerciseId))
+            .toList();
 
     return Container(
       // Clips the ink splash to the rounded corners.

@@ -18,18 +18,38 @@ exercise reuses an exact unambiguous catalog match, and suggests similar
 movements for explicit selection. Suggestions never establish identity. For
 example, `DB Bench Press` is a reviewed alias of `Dumbbell Press`, but `DB Press`
 is ambiguous and stays separate until the user chooses a movement or merges it.
-Flat, incline, and shoulder presses have different IDs. Catalog custom names can
-be renamed in Settings; their previous names remain search aliases. Existing
-plan and log snapshots are retained, while the picker and statistics use catalog
-labels.
+Flat, incline, and shoulder presses have different IDs.
 
-In the workout, *Rename exercise* changes only an occurrence's snapshot and
-keeps its ID. Its optional *Also rename in plans and past workouts* step
-(`ExerciseRenameService`) relabels every live occurrence in the split that
-resolves to the same canonical ID. It keeps or fills in each `exerciseId` and
-relabels an owned custom definition through `ExerciseCatalog.rename`. A rename
-never merges two IDs, even when the new label belongs to another movement.
-*Replace exercise* stores the chosen movement's catalog ID.
+## One name per movement
+
+A movement's name is its catalog name. Every plan, workout, log, Home card and
+chart shows `ExerciseCatalog.label(name, exerciseId)`: the catalog name of the
+occurrence's canonical identity, falling back to the stored snapshot only for a
+movement the catalog does not know yet. Snapshots are still written (new
+occurrences take the current catalog name) and kept for backups, legacy
+identity resolution and older app versions, but they are never what decides a
+label.
+
+Renaming is therefore one catalog write, the same from a workout's *Rename
+exercise* and from Settings → Manage exercises (`showExerciseRenameDialog` →
+`ExerciseRenameService.rename` → `ExerciseCatalog.rename`). The ID is kept, no
+plan or workout row is rewritten, and the previous name becomes a search alias.
+Bundled movements can be renamed too: the account stores a copy of the bundled
+entry under the same permanent ID, which also inherits any alias the library
+gains later. A name another movement already goes by (its name or an alias,
+`ExerciseCatalog.nameOwner`) is refused by the catalog; the dialog offers to
+merge into that movement instead. A movement the catalog has not seen is
+recorded under its current name before being renamed.
+
+Older app versions could only rename a bundled movement by rewriting the
+snapshots in one split's plans and workouts. `ExerciseNameAdoption` keeps
+those names once per account during local preparation: each bundled movement
+whose plans call it something else (the most recently saved plan wins; the
+latest workout when no plan has it) takes that name, stamped with the epoch so
+any deliberate rename on any device wins. It skips movements already renamed or merged,
+custom movements (every older rename already updated their catalog name),
+names another movement goes by, and the old name of a movement merged into it.
+It waits until the account has a plan on the device.
 
 How a movement is measured follows its ID as well: `ExerciseLibrary` gives each
 bundled ID a kind (weighted, bodyweight or timed), and `ExerciseCatalog.kindOf`
@@ -52,8 +72,10 @@ migration. Training normalization writes an owner-scoped safety artifact before
 linking legacy rows. Custom definitions and redirects are included in graph
 recovery snapshots. An interrupted migration can run again with the same IDs.
 
-Settings → Manage exercises lets the user select a source and destination, then
-confirm a merge. The source stores `mergedIntoId`; no plan or workout sets are
+Settings → Manage exercises lists the movements the account trains first, with
+their usage, and lets the user merge one into another after a confirmation
+that says it can't be undone; renaming to another movement's name offers the
+same merge. The source stores `mergedIntoId`; no plan or workout sets are
 rewritten or removed. Every identity consumer resolves redirect chains, so
 older backups and late uploads also combine. Catalog rows are delivered
 individually, so a redirect may arrive before its custom target. That unresolved

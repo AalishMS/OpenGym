@@ -370,7 +370,14 @@ void main() {
         const ExerciseDefinition(id: customId, name: 'DB Press'),
       );
       await ExerciseCatalog.merge(customId, pressId);
-      final input = graph([session('DB Press', 20, 1, exerciseId: customId)]);
+      final input = graph([
+        session(
+          'DB Press',
+          20,
+          1,
+          exerciseId: customId,
+        ).copyWith(planExerciseIds: const [customId, pressId]),
+      ]);
       final exported = BackupService.exportData(
         splits: input.splits,
         activeSplitId: 'split',
@@ -391,6 +398,8 @@ void main() {
       expect(d.mergedIntoId, pressId);
       expect(imported.sessions!.single.exercises.single.exerciseId, d.id);
       expect(imported.sessions!.single.exercises.single.sets.single.weight, 20);
+      // The plan lineup a workout was built from moves with its IDs.
+      expect(imported.sessions!.single.planExerciseIds, [d.id, pressId]);
       parsed['exerciseDefinitions'] = [];
       expect(
         BackupService.importData(jsonEncode(parsed), userId: null).success,

@@ -33,7 +33,7 @@ void main() {
     name: 'Push day',
     exercises: [
       ExerciseTemplate(
-        name: 'Bench press',
+        name: 'Bench Press',
         sets: 3,
         setTargets: [
           SetTemplate(weight: 100.25, reps: 8),
@@ -169,7 +169,7 @@ void main() {
           addTearDown(tester.view.reset);
           final semantics = tester.ensureSemantics();
           final exercise = Exercise(
-            name: 'Bench press',
+            name: 'Bench Press',
             sets: [gym.Set(weight: 999.99, reps: 999, rpe: 10, note: 'PR')],
           );
           final session = WorkoutSession(
@@ -356,8 +356,8 @@ void main() {
           await tester.pumpAndSettle();
           // Editors open with their tables visible; collapse to inspect the
           // prescription preview before reopening it for target-size checks.
-          await tester.ensureVisible(find.text('Bench press'));
-          await tester.tap(find.text('Bench press'));
+          await tester.ensureVisible(find.text('Bench Press'));
+          await tester.tap(find.text('Bench Press'));
           await tester.pumpAndSettle();
           final summary = find.byWidgetPredicate(
             (widget) =>
@@ -371,7 +371,7 @@ void main() {
           expect(paragraph.didExceedMaxLines, isFalse);
           expect(paragraph.getTransformTo(null).storage[0], closeTo(1, .001));
           await snapshot(tester, '${label}_prescription');
-          await tester.tap(find.text('Bench press'));
+          await tester.tap(find.text('Bench Press'));
           await tester.pumpAndSettle();
           target(tester, find.bySemanticsLabel('Set 1 Kg'));
           target(tester, find.bySemanticsLabel('Set 1 Reps'));

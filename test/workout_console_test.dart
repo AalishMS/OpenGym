@@ -43,11 +43,6 @@ void main() {
     tester.view.physicalSize = const Size(320, 640);
     addTearDown(tester.view.reset);
     for (final show in <void Function(BuildContext)>[
-      (context) => WorkoutDialogs.showRenameExerciseDialog(
-        context,
-        currentName: 'Bench Press',
-        onRename: (_) {},
-      ),
       (context) => WorkoutDialogs.showAddSetDialog(context, onAdd: (_) {}),
       (context) => WorkoutDialogs.showEditSetDialog(
         context,

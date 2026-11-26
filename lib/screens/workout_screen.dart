@@ -24,7 +24,6 @@ import '../providers/training_block_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../repositories/training_block_repository.dart';
-import '../services/exercise_rename_service.dart';
 import '../services/hive_service.dart';
 import '../services/statistics_analytics_service.dart';
 import '../services/sync_service.dart';
@@ -44,6 +43,7 @@ import '../utils/workout_context.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
+import '../widgets/exercise_rename_dialog.dart';
 import '../widgets/motion/app_modals.dart';
 import '../widgets/motion/collapsible.dart';
 import '../widgets/motion/page_switcher.dart';
@@ -613,20 +613,26 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   }
 
   /// Builds the selected week's workout, or returns [existingSession] when it
-  /// is saved. A week with no saved data starts from the previous week's
-  /// logged sets while *Start from last week's sets* is on, and from the
-  /// plan's targets while it is off. Saved drafts and logs are never changed.
+  /// is saved. A week with no saved data carries over the exercises of this
+  /// plan's last logged workout, with the plan's edits since applied, and
+  /// starts from the previous week's logged sets while *Start from last week's
+  /// sets* is on, or from the plan's targets while it is off. Saved drafts and
+  /// logs are never changed.
   WorkoutSession _initializeSession({WorkoutSession? existingSession}) {
     final startFromLastWeek =
         context.read<SettingsProvider?>()?.autoFillLast ?? true;
+    final planId = widget.plan.id;
     return WorkoutSessionInitializer.initialize(
       plan: _livePlan,
       week: _selectedWeek,
       existingSession: existingSession,
       previousSession:
-          !startFromLastWeek || widget.plan.id == null
+          planId == null ? null : _training.source(planId, _currentWeek),
+      lastSession:
+          planId == null
               ? null
-              : _training.source(widget.plan.id!, _currentWeek),
+              : _training.previous(planId, _currentWeek).firstOrNull,
+      copySets: startFromLastWeek,
     );
   }
 
@@ -1027,103 +1033,30 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     );
   }
 
-  void _showExerciseRenameDialog(int exerciseIndex) {
+  /// Renames the movement everywhere, or merges it into the movement that
+  /// already has the typed name. Nothing in this workout is rewritten: every
+  /// occurrence shows its movement's catalog name, so the new name appears
+  /// here, in other weeks and in past logs at once.
+  Future<void> _showExerciseRenameDialog(int exerciseIndex) async {
     final session = _getOrCreateSession();
     final exercise = session.exercises[exerciseIndex];
-    final splitId = widget.plan.splitId;
-    // The occurrence keeps this identity whatever it is called, so its
-    // history, Previous values, records and measurement stay together.
-    final identity = ExerciseCatalog.identity(
-      exercise.name,
-      exercise.exerciseId,
-    );
-    WorkoutDialogs.showRenameExerciseDialog(
+    final outcome = await showExerciseRenameDialog(
       context,
-      currentName: exercise.name,
-      onRename: (name) {
-        name = ExerciseRenameService.canonicalName(name);
-        final current = _getOrCreateSession();
-        if (exerciseIndex >= current.exercises.length) return;
-        final updatedExercises = List<Exercise>.from(current.exercises);
-        updatedExercises[exerciseIndex] = current.exercises[exerciseIndex]
-            .copyWith(name: name, exerciseId: exercise.exerciseId ?? identity);
-        _updateSession(current.copyWith(exercises: updatedExercises));
-        _autoSave();
-      },
-      impactFor:
-          splitId == null
-              ? null
-              : (name) => ExerciseRenameService.impact(
-                splitId: splitId,
-                exerciseId: identity,
-                to: name,
-              ),
-      onRenameEverywhere:
-          splitId == null
-              ? null
-              : (name) => _renameExerciseEverywhere(splitId, identity, name),
+      exerciseId: ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
+      currentName: ExerciseCatalog.label(exercise.name, exercise.exerciseId),
+      userId: session.userId ?? widget.plan.userId,
     );
-  }
-
-  /// Renames movement [exerciseId] in this workout, then its labels in every
-  /// plan and workout of the split. Identities are kept, so nothing about the
-  /// movement's history changes except what it is called.
-  Future<void> _renameExerciseEverywhere(
-    String splitId,
-    String exerciseId,
-    String to,
-  ) async {
-    to = ExerciseRenameService.canonicalName(to);
-    if (ExerciseRenameService.validationMessage(to) case final message?) {
-      throw ArgumentError(message);
-    }
-    final session = _getOrCreateSession();
-    bool matches(Exercise e) =>
-        ExerciseCatalog.identity(e.name, e.exerciseId) == exerciseId;
-    // This workout first: it may hold entries that are not saved yet.
-    _updateSession(
-      session.copyWith(
-        exercises: [
-          for (final e in session.exercises)
-            matches(e)
-                ? e.copyWith(name: to, exerciseId: e.exerciseId ?? exerciseId)
-                : e,
-        ],
-      ),
-    );
-    if (!await _autoSave() || !mounted) return;
-    try {
-      await ExerciseRenameService.rename(
-        splitId: splitId,
-        exerciseId: exerciseId,
-        to: to,
-        userId: session.userId,
-      );
-    } catch (error) {
-      debugPrint('Failed to rename exercise everywhere: $error');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Renamed in this workout only. Plans and past workouts could not '
-            'be updated. Try again.',
-          ),
-        ),
-      );
-      return;
-    }
-    if (!mounted) return;
-    // Reload every reader. A completed log being edited has just been saved,
-    // so re-read it rather than keep the pre-rename copy.
-    if (session.id case final id?) {
-      if (HiveService.getSessionById(id) case final saved?) {
-        _weekSessions[_currentWeek] = saved;
-      }
-    }
-    context.read<WorkoutPlanProvider>().loadPlans();
-    context.read<WorkoutSessionProvider>().loadSessions();
-    _training.reload();
+    if (outcome == null || !mounted) return;
+    // A merge changes which history Previous values and records come from.
+    _previousSets.clear();
+    _recordCache = null;
+    _celebratedRecords = null;
     setState(() {});
+    if (outcome case ExerciseMerged(:final into)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Merged into ${into.name}')));
+    }
   }
 
   /// Swaps another movement into this workout only, keeping the set count.
@@ -1140,7 +1073,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final replacedId = key(replaced);
     final picked = await pickSingleExercise(
       context,
-      title: 'Replace ${replaced.name}',
+      title:
+          'Replace ${ExerciseCatalog.label(replaced.name, replaced.exerciseId)}',
       unavailableExerciseIds: session.exercises.map(key),
       userId: session.userId,
     );
@@ -1920,7 +1854,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final exercise = session.exercises[exerciseIndex];
     final confirmed = await WorkoutDialogs.showDeleteExerciseDialog(
       context,
-      exerciseName: exercise.name,
+      exerciseName: ExerciseCatalog.label(exercise.name, exercise.exerciseId),
     );
 
     if (confirmed && mounted) {
@@ -2227,7 +2161,10 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                   items: [
                     for (final exercise in session.exercises)
                       ExerciseReorderItem(
-                        name: exercise.name,
+                        name: ExerciseCatalog.label(
+                          exercise.name,
+                          exercise.exerciseId,
+                        ),
                         detail: switch (exercise.sets.length) {
                           0 => 'No sets',
                           1 => '1 set',

@@ -54,14 +54,14 @@ void main() {
     name: 'Push day',
     planColor: 4,
     exercises: [
-      ExerciseTemplate(name: 'Bench press', sets: 4),
-      ExerciseTemplate(name: 'Incline dumbbell press', sets: 3),
-      ExerciseTemplate(name: 'Overhead press', sets: 3),
+      ExerciseTemplate(name: 'Bench Press', sets: 4),
+      ExerciseTemplate(name: 'Incline Dumbbell Press', sets: 3),
+      ExerciseTemplate(name: 'Overhead Press', sets: 3),
     ],
   );
   final exercises = [
     Exercise(
-      name: 'Bench press',
+      name: 'Bench Press',
       sets: [
         gym.Set(weight: 70, reps: 8, rpe: 8),
         gym.Set(weight: 70, reps: 8, rpe: 8),
@@ -70,7 +70,7 @@ void main() {
       ],
     ),
     Exercise(
-      name: 'Incline dumbbell press',
+      name: 'Incline Dumbbell Press',
       sets: [
         gym.Set(weight: 32, reps: 10, rpe: 7),
         gym.Set(weight: 32, reps: 10, rpe: 8),
@@ -78,7 +78,7 @@ void main() {
       ],
     ),
     Exercise(
-      name: 'Overhead press',
+      name: 'Overhead Press',
       sets: [
         gym.Set(weight: 50, reps: 8, rpe: 7),
         gym.Set(weight: 50, reps: 8, rpe: 8),
@@ -232,7 +232,7 @@ void main() {
                 reason: 'The selected block and week must remain readable.',
               );
             }
-            expect(find.text('Bench press'), findsOneWidget);
+            expect(find.text('Bench Press'), findsOneWidget);
             final title =
                 find
                     .descendant(
@@ -254,7 +254,7 @@ void main() {
             final card = find.byType(ExerciseCard).first;
             final menu = find.descendant(
               of: card,
-              matching: find.byTooltip('Exercise actions for Bench press'),
+              matching: find.byTooltip('Exercise actions for Bench Press'),
             );
             final rpe = find.descendant(of: card, matching: find.text('RPE'));
             expect(
@@ -337,7 +337,7 @@ void main() {
               });
             }
             await tester.scrollUntilVisible(
-              find.text('Overhead press'),
+              find.text('Overhead Press'),
               300,
               scrollable: find.descendant(
                 of: find.byType(CustomScrollView),
@@ -345,7 +345,7 @@ void main() {
               ),
             );
             await tester.pumpAndSettle();
-            expect(find.text('Overhead press'), findsOneWidget);
+            expect(find.text('Overhead Press'), findsOneWidget);
             expect(tester.takeException(), isNull);
           }
         }
@@ -416,15 +416,15 @@ void main() {
     await tester.runAsync(() => seed());
     await tester.pumpWidget(host());
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Exercise actions for Bench press'));
+    await tester.tap(find.byTooltip('Exercise actions for Bench Press'));
     await tester.pumpAndSettle();
     expect(find.text('Move up'), findsNothing);
     expect(find.text('Delete set'), findsNothing);
     await tester.tap(find.text('Move down'));
     await pumpWithStorage(tester);
     final order = tester.widgetList<ExerciseCard>(find.byType(ExerciseCard));
-    expect(order.first.exercise.name, 'Incline dumbbell press');
-    expect(order.elementAt(1).exercise.name, 'Bench press');
+    expect(order.first.exercise.name, 'Incline Dumbbell Press');
+    expect(order.elementAt(1).exercise.name, 'Bench Press');
 
     // Moving from the menu is when someone is looking for a way to reorder,
     // so the first time it mentions the drag. Only the first time.
@@ -434,13 +434,13 @@ void main() {
       tester.element(find.byType(WorkoutScreen)),
     ).removeCurrentSnackBar();
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Exercise actions for Bench press'));
+    await tester.tap(find.byTooltip('Exercise actions for Bench Press'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Move down'));
     await pumpWithStorage(tester);
     expect(
       HiveService.getSessionById('week-6')!.exercises.last.name,
-      'Bench press',
+      'Bench Press',
     );
     expect(find.text(tip), findsNothing);
     expect(tester.takeException(), isNull);
@@ -470,17 +470,17 @@ void main() {
     final folded = find.byKey(const ValueKey('exercise-reorder'));
     expect(folded, findsNothing);
 
-    final gesture = await pickUp(tester, 'Bench press');
+    final gesture = await pickUp(tester, 'Bench Press');
     expect(folded, findsOneWidget);
     // Every exercise is one row of the same short height, however many sets
     // its card holds, so each step of the drag is the same distance.
     Rect row(String name) =>
         tester.getRect(find.descendant(of: folded, matching: find.text(name)));
-    final incline = row('Incline dumbbell press');
-    final overhead = row('Overhead press');
+    final incline = row('Incline Dumbbell Press');
+    final overhead = row('Overhead Press');
     final step = overhead.top - incline.top;
     expect(step, inInclusiveRange(56, 64));
-    expect(row('Bench press').top, lessThan(incline.top));
+    expect(row('Bench Press').top, lessThan(incline.top));
     // Each row is numbered by its place, the number before the name.
     Rect number(String place) =>
         tester.getRect(find.descendant(of: folded, matching: find.text(place)));
@@ -492,9 +492,9 @@ void main() {
       expect(number(place).right, lessThanOrEqualTo(row(name).left));
     }
 
-    numbered('Bench press', '1.');
-    numbered('Incline dumbbell press', '2.');
-    numbered('Overhead press', '3.');
+    numbered('Bench Press', '1.');
+    numbered('Incline Dumbbell Press', '2.');
+    numbered('Overhead Press', '3.');
 
     // Two rows down, in small moves as a finger makes them.
     for (var moved = 0.0; moved < step * 2 + 4; moved += 10) {
@@ -504,30 +504,30 @@ void main() {
     await tester.pump(AppMotion.standard);
     // The others stepped up to make room.
     expect(
-      row('Incline dumbbell press').top,
+      row('Incline Dumbbell Press').top,
       moreOrLessEquals(incline.top - step, epsilon: 1),
     );
     expect(
-      row('Overhead press').top,
+      row('Overhead Press').top,
       moreOrLessEquals(overhead.top - step, epsilon: 1),
     );
     // Every number rolled to the row's new place.
     await tester.pump(AppMotion.enter);
-    numbered('Incline dumbbell press', '1.');
-    numbered('Overhead press', '2.');
-    numbered('Bench press', '3.');
+    numbered('Incline Dumbbell Press', '1.');
+    numbered('Overhead Press', '2.');
+    numbered('Bench Press', '3.');
 
     await gesture.up();
     await pumpWithStorage(tester);
     await tester.pumpAndSettle();
     expect(folded, findsNothing);
     expect(savedOrder(), [
-      'Incline dumbbell press',
-      'Overhead press',
-      'Bench press',
+      'Incline Dumbbell Press',
+      'Overhead Press',
+      'Bench Press',
     ]);
     // The log comes back with the moved exercise in view.
-    expect(find.text('Bench press').hitTestable(), findsOneWidget);
+    expect(find.text('Bench Press').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -554,7 +554,7 @@ void main() {
     expect(folded, findsOneWidget);
     // The row still rises from the name, just above the note.
     final held = tester.getRect(
-      find.descendant(of: folded, matching: find.text('Bench press')),
+      find.descendant(of: folded, matching: find.text('Bench Press')),
     );
     final note = tester.getRect(find.text('Pause on the chest'));
     expect(held.bottom, lessThanOrEqualTo(note.top + 8));
@@ -569,9 +569,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(folded, findsNothing);
     expect(savedOrder(), [
-      'Incline dumbbell press',
-      'Overhead press',
-      'Bench press',
+      'Incline Dumbbell Press',
+      'Overhead Press',
+      'Bench Press',
     ]);
     expect(tester.takeException(), isNull);
   });
@@ -664,7 +664,7 @@ void main() {
     await tester.runAsync(() => seed());
     await tester.pumpWidget(host());
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Bench press'));
+    await tester.tap(find.text('Bench Press'));
     await tester.pump(const Duration(milliseconds: 100));
     expect(find.text('Hold and drag to reorder'), findsOneWidget);
     await tester.pump(const Duration(seconds: 2));
@@ -683,7 +683,7 @@ void main() {
       tester.view.physicalSize = Size(width, 844);
       await tester.pumpWidget(host());
       await tester.pumpAndSettle();
-      final menu = find.byTooltip('Exercise actions for Bench press');
+      final menu = find.byTooltip('Exercise actions for Bench Press');
       final rect = tester.getRect(menu);
       for (final edge in [
         rect.centerLeft + const Offset(0.1, 0),
@@ -707,15 +707,15 @@ void main() {
     expect(find.bySemanticsLabel('Start workout'), findsNothing);
     expect(find.byTooltip('Finish workout'), findsNothing);
     expect(find.text('Add set'), findsWidgets);
-    expect(find.byTooltip('Exercise actions for Bench press'), findsOneWidget);
+    expect(find.byTooltip('Exercise actions for Bench Press'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('Exercise actions for Bench press'));
+    await tester.tap(find.byTooltip('Exercise actions for Bench Press'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Move down'));
     await pumpWithStorage(tester);
     var saved = HiveService.getSessionById('week-6')!;
     expect(saved.isCompleted, isTrue);
-    expect(saved.exercises.first.name, 'Incline dumbbell press');
+    expect(saved.exercises.first.name, 'Incline Dumbbell Press');
     expect(saved.planName, plan.name);
 
     await tester.tap(find.text('Add set').first);

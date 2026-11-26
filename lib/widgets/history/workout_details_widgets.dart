@@ -388,7 +388,10 @@ class WorkoutExerciseDetails extends StatelessWidget {
                                       ? null
                                       : 'Exercise $exerciseNumber',
                               child: Text(
-                                exercise.name,
+                                ExerciseCatalog.label(
+                                  exercise.name,
+                                  exercise.exerciseId,
+                                ),
                                 style: Theme.of(context).textTheme.titleLarge,
                               ),
                             ),
