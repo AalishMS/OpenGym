@@ -173,7 +173,11 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
               maxLength: 100,
               textCapitalization: TextCapitalization.sentences,
               onChanged: (_) => setState(() => _error = null),
-              onSubmitted: (_) => _submit(),
+              // The keyboard's own action renames. A merge can't be undone,
+              // so it takes the Merge button.
+              onSubmitted: (_) {
+                if (_owner == null) _submit();
+              },
               decoration: InputDecoration(
                 labelText: 'Exercise name',
                 errorText: _error,
@@ -201,7 +205,12 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${owner.name} is already an exercise',
+                        // The match may be an alias or a former name, so
+                        // say which exercise the typed name belongs to.
+                        ExerciseCatalog.normalize(owner.name) ==
+                                ExerciseCatalog.normalize(_typed)
+                            ? '${owner.name} is already an exercise'
+                            : '$_typed is another name for ${owner.name}',
                         style: textTheme.titleSmall?.copyWith(
                           color: textPrimaryColor(context),
                         ),

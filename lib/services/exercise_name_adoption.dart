@@ -60,7 +60,8 @@ abstract final class ExerciseNameAdoption {
   }
 
   /// Gives each bundled movement the name [userId]'s plans use for it, and
-  /// returns how many were renamed.
+  /// returns how many were renamed. Throws once every movement has been
+  /// tried if any could not be saved, so [run] tries those again.
   static Future<int> adopt({required String? userId}) async {
     final overridden = {for (final d in ExerciseCatalog.stored) d.id};
     final named = <String, ({String name, DateTime at})>{};
@@ -91,7 +92,7 @@ abstract final class ExerciseNameAdoption {
       }
     }
 
-    var renamed = 0;
+    var renamed = 0, failed = 0;
     for (final MapEntry(key: id, value: (:name, at: _)) in named.entries) {
       final definition = ExerciseCatalog.getById(id);
       final wanted = ExerciseRenameService.canonicalName(name);
@@ -117,7 +118,11 @@ abstract final class ExerciseNameAdoption {
       } on Object catch (error) {
         // One movement that cannot be renamed never holds up the others.
         debugPrint('Could not keep the name $wanted for $id: $error');
+        failed++;
       }
+    }
+    if (failed > 0) {
+      throw StateError('$failed exercise names could not be kept.');
     }
     return renamed;
   }

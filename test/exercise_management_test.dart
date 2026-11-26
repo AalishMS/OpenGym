@@ -180,6 +180,38 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('the keyboard action renames but never merges', (tester) async {
+    Future<void> pressDone() async {
+      await tester.runAsync(() async {
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await SyncService.instance.runExclusiveLocalMutation(() async {});
+      });
+      await tester.pumpAndSettle();
+    }
+
+    await tester.pumpWidget(host(const ExerciseManagementScreen(userId: null)));
+    await tester.pumpAndSettle();
+    await openRename(tester, 'DB Press');
+    // An alias of Dumbbell Press rather than its name, so the note says
+    // which exercise the typed name belongs to.
+    await tester.enterText(find.byType(TextField).last, 'DB Bench Press');
+    await tester.pumpAndSettle();
+    expect(
+      find.text('DB Bench Press is another name for Dumbbell Press'),
+      findsOneWidget,
+    );
+    await pressDone();
+    expect(find.byKey(const ValueKey('rename-merge-note')), findsOneWidget);
+    expect(ExerciseCatalog.getById(customId)!.mergedIntoId, isNull);
+
+    await tester.enterText(find.byType(TextField).last, 'Flat DB press');
+    await tester.pumpAndSettle();
+    await pressDone();
+    expect(find.byKey(const ValueKey('rename-scope')), findsNothing);
+    expect(ExerciseCatalog.getById(customId)!.name, 'Flat DB press');
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('the rename dialog fits a narrow screen at large text', (
     tester,
   ) async {

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:gymapp/models/exercise.dart';
+import 'package:gymapp/models/exercise_definition.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/set_template.dart';
@@ -473,6 +474,26 @@ void main() {
       await ExerciseCatalog.clear();
       await ExerciseNameAdoption.run(userId: null);
       expect(ExerciseCatalog.getById(bench)!.name, 'Bench Press');
+    });
+
+    test('a name that could not be saved is tried again next start', () async {
+      SharedPreferences.setMockInitialValues({});
+      await seed(
+        plans: [
+          plan('p', [('Flat bench', bench), ('Comp squat', squat)]),
+        ],
+      );
+      // A row left by another account makes every catalog write fail.
+      await ExerciseCatalog.put(
+        const ExerciseDefinition(id: 'theirs', name: 'Theirs', userId: 'x'),
+      );
+      await ExerciseNameAdoption.run(userId: null);
+      expect(ExerciseCatalog.getById(bench)!.name, 'Bench Press');
+
+      await ExerciseCatalog.clear();
+      await ExerciseNameAdoption.run(userId: null);
+      expect(ExerciseCatalog.getById(bench)!.name, 'Flat bench');
+      expect(ExerciseCatalog.getById(squat)!.name, 'Comp squat');
     });
   });
 }

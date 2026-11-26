@@ -215,6 +215,32 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  workoutTest('deleting an exercise from the current week says the next week '
+      'will leave it out', (tester) async {
+    await open(tester);
+    await openMenu(tester, 'Cable Fly');
+    await tester.tap(find.text('Delete exercise'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'This will permanently delete "Cable Fly" and all its sets. '
+        'Next week will start without it too.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Delete'));
+    await pumpWithStorage(tester);
+    final draft =
+        HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
+    expect(draft.exercises.map((e) => e.name), ['Bench Press']);
+    // The plan still lists it; the draft remembers that it was dropped here.
+    expect(draft.planExerciseIds, [
+      ExerciseCatalog.identity('Bench Press'),
+      ExerciseCatalog.identity('Cable Fly'),
+    ]);
+    expect(tester.takeException(), isNull);
+  });
+
   workoutTest("renaming to another exercise's name offers a merge", (
     tester,
   ) async {

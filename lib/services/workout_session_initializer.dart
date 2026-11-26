@@ -24,6 +24,11 @@ import '../models/training_week.dart';
 /// - anything the workout changed that the plan did not keeps the workout's
 ///   version.
 ///
+/// A workout logged before lineups were recorded cannot tell those apart. Its
+/// own lineup carries over as it is, and if the plan was saved after it, an
+/// exercise only the plan has counts as added to the plan since, so a plan
+/// edit is never left out of every later week.
+///
 /// With no earlier log the plan is the lineup. Set values come from
 /// `previousSession` (the resolver's inheritance source) while `copySets` is
 /// on, then from plan targets, then from the last workout; with `copySets` off
@@ -74,7 +79,13 @@ class WorkoutSessionInitializer {
               for (final (i, key) in _occurrences(planKeys).indexed)
                 _Entry(key, template: plan.exercises[i]),
             ]
-            : _carry(last, planKeys, templates);
+            : _carry(
+              last,
+              planKeys,
+              templates,
+              planSavedSince:
+                  plan.updatedAt?.isAfter(last.updatedAt ?? last.date) ?? false,
+            );
 
     final exercises = <Exercise>[
       for (final entry in lineup)
@@ -100,19 +111,30 @@ class WorkoutSessionInitializer {
   static List<_Entry> _carry(
     WorkoutSession last,
     List<String> planKeys,
-    Map<String, ExerciseTemplate> templates,
-  ) {
+    Map<String, ExerciseTemplate> templates, {
+    required bool planSavedSince,
+  }) {
     final plan = _occurrences(planKeys);
-    // Without a recorded lineup, the plan is taken as unchanged since.
-    final base = _occurrences([
-      for (final id in last.planExerciseIds ?? planKeys)
-        ExerciseCatalog.canonicalId(id),
-    ]);
-    final carried = <_Entry>[];
     final lastKeys = _occurrences([
       for (final e in last.exercises)
         ExerciseCatalog.identity(e.name, e.exerciseId),
     ]);
+    final List<String> base;
+    if (last.planExerciseIds case final recorded?) {
+      base = _occurrences([
+        for (final id in recorded) ExerciseCatalog.canonicalId(id),
+      ]);
+    } else if (planSavedSince) {
+      // No recorded lineup, and the plan has been saved since: an exercise
+      // only the plan has may have been added to it, so it is taken as new
+      // rather than left out of every week from here on.
+      final had = lastKeys.toSet();
+      base = plan.where(had.contains).toList();
+    } else {
+      // No recorded lineup and an untouched plan: nothing changed since.
+      base = plan;
+    }
+    final carried = <_Entry>[];
     final planSet = plan.toSet(), baseSet = base.toSet();
     for (final (i, key) in lastKeys.indexed) {
       // Dropped from the plan since this workout was built.

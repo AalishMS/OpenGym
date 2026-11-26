@@ -38,8 +38,10 @@ Bundled movements can be renamed too: the account stores a copy of the bundled
 entry under the same permanent ID, which also inherits any alias the library
 gains later. A name another movement already goes by (its name or an alias,
 `ExerciseCatalog.nameOwner`) is refused by the catalog; the dialog offers to
-merge into that movement instead. A movement the catalog has not seen is
-recorded under its current name before being renamed.
+merge into that movement instead, naming the movement when the match is one
+of its aliases or former names. A merge is only ever started from the *Merge*
+button, never from the keyboard's action. A movement the catalog has not seen
+is recorded under its current name before being renamed.
 
 Older app versions could only rename a bundled movement by rewriting the
 snapshots in one split's plans and workouts. `ExerciseNameAdoption` keeps
@@ -49,7 +51,8 @@ latest workout when no plan has it) takes that name, stamped with the epoch so
 any deliberate rename on any device wins. It skips movements already renamed or merged,
 custom movements (every older rename already updated their catalog name),
 names another movement goes by, and the old name of a movement merged into it.
-It waits until the account has a plan on the device.
+It waits until the account has a plan on the device, and stays pending
+if any name could not be saved, so the next start tries those again.
 
 How a movement is measured follows its ID as well: `ExerciseLibrary` gives each
 bundled ID a kind (weighted, bodyweight or timed), and `ExerciseCatalog.kindOf`

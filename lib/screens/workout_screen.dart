@@ -590,7 +590,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
           session.id != null &&
           session.hasStarted);
 
-  /// The plan as saved now. Renaming an exercise everywhere rewrites the saved
+  /// The plan as saved now. A sync from another device can rewrite the saved
   /// plan while this screen is open, so a week opened afterwards must not be
   /// built from the copy this screen was pushed with.
   WorkoutPlan get _livePlan {
@@ -1059,7 +1059,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     }
   }
 
-  /// Swaps another movement into this workout only, keeping the set count.
+  /// Swaps another movement into this workout, keeping the set count. Like
+  /// any lineup change, the next week carries the swap over.
   ///
   /// Sets take the new movement's latest logged weights and reps in this
   /// split, or weight 0 with the replaced exercise's reps when it has none.
@@ -1855,6 +1856,7 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final confirmed = await WorkoutDialogs.showDeleteExerciseDialog(
       context,
       exerciseName: ExerciseCatalog.label(exercise.name, exercise.exerciseId),
+      carriesOver: !session.isCompleted && _activeSlot,
     );
 
     if (confirmed && mounted) {

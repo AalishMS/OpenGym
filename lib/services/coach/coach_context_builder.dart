@@ -233,14 +233,16 @@ class CoachContextBuilder {
       custom.putIfAbsent(key, () => name.trim().replaceAll(_spaces, ' '));
     }
 
+    // By the name each one goes by now, so a renamed exercise is listed once
+    // and a renamed library exercise is offered under its new name.
     for (final plan in plans) {
       for (final exercise in plan.exercises) {
-        add(exercise.name);
+        add(ExerciseCatalog.label(exercise.name, exercise.exerciseId));
       }
     }
     for (final session in sessions) {
       for (final exercise in session.exercises) {
-        add(exercise.name);
+        add(ExerciseCatalog.label(exercise.name, exercise.exerciseId));
       }
     }
     return custom.values.toList()
@@ -309,7 +311,8 @@ class CoachContextBuilder {
     'exercises': [
       for (final exercise in plan.exercises)
         {
-          'name': exercise.name,
+          // The same name its history goes by, whatever the plan stored.
+          'name': ExerciseCatalog.label(exercise.name, exercise.exerciseId),
           'sets': [for (final set in coachSetsOf(exercise)) set.toJson()],
           if (coachNote(exercise.note) != null)
             'note': coachNote(exercise.note),

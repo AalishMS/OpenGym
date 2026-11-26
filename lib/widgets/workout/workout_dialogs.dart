@@ -379,10 +379,15 @@ class WorkoutDialogs {
   static Future<bool> showDeleteExerciseDialog(
     BuildContext context, {
     required String exerciseName,
+
+    /// The workout being trained now: the next week starts from its lineup.
+    bool carriesOver = false,
   }) => _showDestructiveConfirmation(
     context,
     title: 'Delete exercise?',
-    message: 'This will permanently delete "$exerciseName" and all its sets.',
+    message:
+        'This will permanently delete "$exerciseName" and all its sets.'
+        '${carriesOver ? ' Next week will start without it too.' : ''}',
     confirmLabel: 'Delete',
   );
 

@@ -222,7 +222,7 @@ class ProposalDiff {
   static ExerciseDiff _removed(ExerciseTemplate exercise, int index) =>
       ExerciseDiff(
         kind: DiffKind.removed,
-        name: exercise.name,
+        name: ExerciseCatalog.label(exercise.name, exercise.exerciseId),
         before: coachSetsOf(exercise),
         after: const [],
         noteBefore: coachNote(exercise.note),

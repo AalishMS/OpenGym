@@ -5,6 +5,7 @@ import '../../models/coach_proposal.dart';
 import '../../providers/settings_provider.dart';
 import '../../services/coach/proposal_diff.dart';
 import '../../services/coach/proposal_selection.dart';
+import '../../services/exercise_catalog.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
@@ -286,7 +287,8 @@ class _ChangeDetails extends StatelessWidget {
       details.add(
         _BeforeAfter(
           before: [
-            for (final exercise in plan.existing!.exercises) exercise.name,
+            for (final exercise in plan.existing!.exercises)
+              ExerciseCatalog.label(exercise.name, exercise.exerciseId),
           ].join(', '),
           after: [
             for (final exercise in plan.proposed!.exercises) exercise.name,

@@ -162,7 +162,11 @@ it lost since is dropped, and if the plan's own order changed since, the plan's
 order wins while the workout's own additions stay after the exercise they
 followed. Changes the plan did not touch keep the workout's version, so an
 exercise removed in the workout stays removed. A workout written before
-lineups were recorded counts the plan as unchanged since. Exercises match by
+lineups were recorded cannot tell the two apart, so its own lineup carries
+over as it is; only if the plan was saved after that workout
+(`plan.updatedAt` later than the log's) does an exercise the plan alone has
+count as added since, which keeps a plan edit from being left out of every
+later week. Exercises match by
 canonical ID and occurrence. The plan's guidance note wins where it has one; an
 exercise it gives none for keeps its note. Set values come from the inheritance
 source: Week 1 of a later block copies Week 1 of the immediately preceding live
@@ -206,7 +210,10 @@ up/down, and Delete exercise last.
   movement, the two are the same movement: the dialog says so, explains that
   merging combines their history and can't be undone, and its action becomes
   *Merge* (`ExerciseRenameService.merge`), which redirects this movement into
-  that one. There is no "this workout only" rename; a different movement in
+  that one. A merge can't be undone, so the keyboard's own action only ever
+  renames; merging takes the *Merge* button. When the typed name is an alias
+  or former name of the other movement, the note says which movement it
+  belongs to. There is no "this workout only" rename; a different movement in
   one workout is *Replace exercise*.
 - *Replace exercise* opens the library in single-choice mode and swaps the
   chosen movement, with its catalog ID, into this workout. It keeps the
@@ -215,6 +222,9 @@ up/down, and Delete exercise last.
   RPE, set notes and the exercise note are cleared. Movements already in the
   workout show as *Added* and can't be chosen. Like any lineup change, the
   next week carries the replacement over.
+- *Delete exercise* removes the exercise and its sets from the workout. In
+  the week being trained now the confirmation adds that next week will start
+  without it too, since the plan still lists it.
 - Built-in movements carry a kind in `ExerciseLibrary` (weighted, bodyweight
   or timed), keyed by their permanent ID. `ExerciseCatalog.kindOf`/`isTimed`
   resolve an occurrence's canonical ID, so a renamed hold still stores

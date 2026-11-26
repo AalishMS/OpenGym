@@ -240,6 +240,54 @@ void main() {
       expect(names(session), ['Squat', 'Row']);
     });
 
+    test('with no recorded lineup, only a plan saved after the workout adds '
+        'the exercises the workout lacks', () {
+      // Logged by an older version: Press was either removed that day or
+      // added to the plan later, and nothing recorded says which.
+      final legacy = last([logged('Row'), logged('Squat'), logged('Curl')]);
+      WorkoutSession build(DateTime planSaved) =>
+          WorkoutSessionInitializer.initialize(
+            plan: planOf([
+              'Squat',
+              'Press',
+              'Fly',
+              'Row',
+            ]).copyWith(updatedAt: planSaved),
+            week: week,
+            previousSession: legacy,
+          );
+
+      // Saved before the workout: the plan cannot have changed since, so the
+      // workout's lineup is carried as it is.
+      expect(names(build(DateTime(2026, 1))), ['Row', 'Squat', 'Curl']);
+
+      // Saved after it: the plan's extra exercises arrive after their plan
+      // neighbour, and the workout's own order and addition stay.
+      final after = build(DateTime(2026, 3));
+      expect(names(after), ['Row', 'Squat', 'Press', 'Fly', 'Curl']);
+      expect(after.planExerciseIds, [
+        'id-Squat',
+        'id-Press',
+        'id-Fly',
+        'id-Row',
+      ]);
+
+      // A workout that did record its lineup is never second-guessed.
+      final recorded = WorkoutSessionInitializer.initialize(
+        plan: planOf([
+          'Squat',
+          'Press',
+          'Row',
+        ]).copyWith(updatedAt: DateTime(2026, 3)),
+        week: week,
+        previousSession: last(
+          [logged('Row'), logged('Squat')],
+          lineup: ['Squat', 'Press', 'Row'],
+        ),
+      );
+      expect(names(recorded), ['Row', 'Squat']);
+    });
+
     test('a plan reordered since takes the plan order, keeping additions '
         'after the exercise they followed', () {
       final session = WorkoutSessionInitializer.initialize(
