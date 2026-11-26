@@ -221,7 +221,17 @@ up/down, and Delete exercise last.
   performance in the split, or weight 0 with the same reps when there is none.
   RPE, set notes and the exercise note are cleared. Movements already in the
   workout show as *Added* and can't be chosen. Like any lineup change, the
-  next week carries the replacement over.
+  next week carries the replacement over. The plan is not changed by it:
+  once the swap is saved, *Also change the plan?* offers *Keep plan* or
+  *Change plan*. *Change plan* makes the same swap in the plan
+  (`PlanExerciseSwap`): the replacement takes the replaced exercise's place,
+  set count and effort targets, reps and weight follow the workout's rule
+  (the replacement's latest logged sets, or the same reps with no weight
+  target), and the guidance note is cleared. The draft's recorded lineup
+  gets the same swap, so the next week does not read it as a plan edit made
+  since. Nothing is asked when the plan has no such exercise to swap (it was
+  added in a workout) or already lists the replacement. Adding, deleting and
+  reordering in a workout never change the plan.
 - *Delete exercise* removes the exercise and its sets from the workout. In
   the week being trained now the confirmation adds that next week will start
   without it too, since the plan still lists it.

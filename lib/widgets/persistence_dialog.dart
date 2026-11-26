@@ -12,6 +12,7 @@ class PersistenceDialog extends StatefulWidget {
     required this.progressLabel,
     required this.failureMessage,
     required this.onPersist,
+    this.cancelLabel = 'Cancel',
     this.destructive = false,
     this.startImmediately = false,
     super.key,
@@ -23,6 +24,10 @@ class PersistenceDialog extends StatefulWidget {
   final String progressLabel;
   final String failureMessage;
   final Future<void> Function() onPersist;
+
+  /// What declining is called. Name the outcome when *Cancel* could be read
+  /// as undoing something that has already happened.
+  final String cancelLabel;
   final bool destructive;
   final bool startImmediately;
 
@@ -101,7 +106,7 @@ class _PersistenceDialogState extends State<PersistenceDialog> {
           TextButton(
             onPressed:
                 _busy || _saved ? null : () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(widget.cancelLabel),
           ),
           FilledButton(
             onPressed: _busy || _saved ? null : _persist,

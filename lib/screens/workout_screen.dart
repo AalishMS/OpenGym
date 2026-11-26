@@ -25,6 +25,7 @@ import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../repositories/training_block_repository.dart';
 import '../services/hive_service.dart';
+import '../services/plan_exercise_swap.dart';
 import '../services/statistics_analytics_service.dart';
 import '../services/sync_service.dart';
 import '../services/tutorial_preferences.dart';
@@ -48,6 +49,7 @@ import '../widgets/motion/app_modals.dart';
 import '../widgets/motion/collapsible.dart';
 import '../widgets/motion/page_switcher.dart';
 import '../widgets/motion/patient_progress.dart';
+import '../widgets/persistence_dialog.dart';
 import '../widgets/plan_title_hero.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
@@ -1060,7 +1062,9 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   }
 
   /// Swaps another movement into this workout, keeping the set count. Like
-  /// any lineup change, the next week carries the swap over.
+  /// any lineup change, the next week carries the swap over. The plan keeps
+  /// its own lineup unless the user also changes it in the prompt that
+  /// follows (see [_offerPlanSwap]).
   ///
   /// Sets take the new movement's latest logged weights and reps in this
   /// split, or weight 0 with the replaced exercise's reps when it has none.
@@ -1114,8 +1118,99 @@ class _WorkoutScreenState extends State<WorkoutScreen>
               ),
       ],
     );
+    // Which listing of the movement this was, for a plan that has it twice.
+    final occurrence =
+        current.exercises
+            .take(exerciseIndex)
+            .where((e) => key(e) == replacedId)
+            .length;
     _updateSession(current.copyWith(exercises: updated));
-    await _autoSave();
+    if (!await _autoSave() || !mounted) return;
+    await _offerPlanSwap(
+      from: replacedId,
+      fromName: ExerciseCatalog.label(replaced.name, replaced.exerciseId),
+      to: picked.exerciseId,
+      toName: picked.name,
+      occurrence: occurrence,
+      history: history,
+    );
+  }
+
+  /// After a swap in the workout, asks whether the plan should have it too.
+  ///
+  /// The workout, and the weeks that carry it over, already have the swap;
+  /// the plan keeps its own lineup unless the user says otherwise here.
+  /// Nothing is asked when the plan has no such exercise to swap (it was
+  /// added in a workout) or already lists the replacement.
+  Future<void> _offerPlanSwap({
+    required String from,
+    required String fromName,
+    required String to,
+    required String toName,
+    required int occurrence,
+    required List<gym.Set> history,
+  }) async {
+    bool applies(WorkoutPlan plan) => PlanExerciseSwap.canApply(
+      plan,
+      from: from,
+      to: to,
+      occurrence: occurrence,
+    );
+    if (widget.plan.id == null || !applies(_livePlan)) return;
+    final plans = context.read<WorkoutPlanProvider>();
+    final planName = _livePlan.name;
+    final changed = await showAppDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (_) => PersistenceDialog(
+            title: 'Also change the plan?',
+            content: Text(
+              '$toName replaced $fromName in this workout. Change it in the '
+              '$planName plan too?',
+            ),
+            cancelLabel: 'Keep plan',
+            actionLabel: 'Change plan',
+            progressLabel: 'Changing plan',
+            failureMessage:
+                'Could not change the plan. Try again or keep the plan.',
+            onPersist: () async {
+              // As saved now: a sync may have changed it while this was open.
+              final plan = _livePlan;
+              if (!applies(plan)) throw StateError('The plan changed.');
+              await plans.updatePlan(
+                PlanExerciseSwap.apply(
+                  plan,
+                  from: from,
+                  to: to,
+                  name: toName,
+                  occurrence: occurrence,
+                  history: history,
+                ),
+              );
+            },
+          ),
+    );
+    if (changed != true || !mounted) return;
+    // This workout has now seen the plan's swap. Recording it keeps the next
+    // week from reading the replacement as an exercise the plan gained since.
+    final session = _getOrCreateSession();
+    final lineup = PlanExerciseSwap.inLineup(
+      session.planExerciseIds,
+      from: from,
+      to: to,
+      occurrence: occurrence,
+    );
+    if (!session.isCompleted &&
+        lineup != null &&
+        !listEquals(lineup, session.planExerciseIds)) {
+      _updateSession(session.copyWith(planExerciseIds: lineup));
+      await _autoSave();
+      if (!mounted) return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$planName plan now has $toName')));
   }
 
   void _addSet(int exerciseIndex) {
