@@ -352,6 +352,25 @@ class ExerciseCatalog {
     await Hive.box<dynamic>(boxName).flush();
   }
 
+  /// Whether merging movement [sourceId] into [targetId] would change how
+  /// [sourceId]'s logged sets are read. A merged movement is measured like
+  /// its target ([kindOf]), so a hold joining a lift has its seconds read as
+  /// reps, and a lift joining a hold has its reps read as seconds.
+  static bool mergeChangesMeasurement(String sourceId, String targetId) =>
+      (ExerciseLibrary.kindOfId(canonicalId(sourceId)) == ExerciseKind.timed) !=
+      (ExerciseLibrary.kindOfId(canonicalId(targetId)) == ExerciseKind.timed);
+
+  /// Whether movement [sourceId] may be merged into [targetId].
+  ///
+  /// A bundled movement's measurement is known, so a merge that would change
+  /// it is refused: it could only misread what was logged, and a merge can't
+  /// be undone. A custom movement has no kind of its own and counts as a
+  /// lift whatever it really is, so it may still join a hold. That is how a
+  /// hold created by hand gets its seconds read as seconds.
+  static bool canMerge(String sourceId, String targetId) =>
+      !mergeChangesMeasurement(sourceId, targetId) ||
+      !(getById(canonicalId(sourceId))?.builtIn ?? false);
+
   /// One durable redirect makes every past/future reference resolve together.
   /// No sets or historical name snapshots are changed or removed.
   static Future<void> merge(
@@ -366,6 +385,11 @@ class ExerciseCatalog {
     }
     if (stored.any((d) => d.userId != userId)) {
       throw StateError('The exercise catalog belongs to another account.');
+    }
+    if (!canMerge(source.id, target.id)) {
+      throw const FormatException(
+        "A timed exercise and one counted in reps can't be merged.",
+      );
     }
     await put(
       source.copyWith(

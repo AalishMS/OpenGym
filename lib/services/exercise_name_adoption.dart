@@ -42,16 +42,23 @@ abstract final class ExerciseNameAdoption {
       'exercise_names_adopted_${userId ?? 'local'}';
 
   /// Runs [adopt] once for [userId]. It stays pending until the account has a
-  /// plan on this device, so a fresh install adopts after its first pull.
+  /// plan or a workout on this device, so a fresh install adopts after its
+  /// first pull.
   /// Failures are logged and retried at the next start.
   static Future<void> run({required String? userId}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (prefs.getBool(_doneKey(userId)) == true) return;
-      final hasPlans = HiveService.getAllPlansRaw().any(
-        (p) => p.userId == userId && p.deletedAt == null,
-      );
-      if (!hasPlans) return;
+      // Logs count too: an account that deleted its plans still has the
+      // names its workouts were logged under.
+      final hasTraining =
+          HiveService.getAllPlansRaw().any(
+            (p) => p.userId == userId && p.deletedAt == null,
+          ) ||
+          HiveService.getAllSessionsRaw().any(
+            (s) => s.userId == userId && s.deletedAt == null,
+          );
+      if (!hasTraining) return;
       await adopt(userId: userId);
       await prefs.setBool(_doneKey(userId), true);
     } catch (error) {

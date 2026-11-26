@@ -77,9 +77,23 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    // A sync can change the catalog while the dialog is open. What the
+    // dialog offers has to follow it: a name that was free may now belong
+    // to another exercise.
+    ExerciseCatalog.changes.addListener(_catalogChanged);
+  }
+
+  @override
   void dispose() {
+    ExerciseCatalog.changes.removeListener(_catalogChanged);
     _name.dispose();
     super.dispose();
+  }
+
+  void _catalogChanged() {
+    if (mounted && !_saving) setState(() {});
   }
 
   String get _typed => ExerciseRenameService.canonicalName(_name.text);
@@ -89,7 +103,19 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
           ? null
           : ExerciseRenameService.nameOwner(widget.exerciseId, _typed);
 
-  Future<void> _submit() async {
+  /// Why the typed name's owner can't be merged into, or null.
+  String? _blockFor(ExerciseDefinition? owner) =>
+      owner == null
+          ? null
+          : ExerciseRenameService.mergeBlock(widget.exerciseId, owner.id);
+
+  /// Renames, or merges into [offered], the exercise the dialog showed as
+  /// already having the typed name (null when it showed a plain rename).
+  ///
+  /// The action is only ever the one that was on screen. If the catalog has
+  /// changed since that frame, nothing is done and the dialog shows what it
+  /// would do now, so a button that said *Rename* never merges.
+  Future<void> _submit({required String? offered}) async {
     if (_saving) return;
     final name = _typed;
     if (ExerciseRenameService.validationMessage(name) case final message?) {
@@ -101,6 +127,10 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
       return;
     }
     final owner = _owner;
+    if (owner?.id != offered || _blockFor(owner) != null) {
+      setState(() => _error = null);
+      return;
+    }
     setState(() {
       _saving = true;
       _error = null;
@@ -152,6 +182,11 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
     final owner = _owner;
+    final block = _blockFor(owner);
+    final caution =
+        owner == null || block != null
+            ? null
+            : ExerciseRenameService.mergeCaution(widget.exerciseId, owner.id);
     final usage =
         _usage.isEmpty
             ? 'Not used in any plan or workout yet.'
@@ -176,7 +211,7 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
               // The keyboard's own action renames. A merge can't be undone,
               // so it takes the Merge button.
               onSubmitted: (_) {
-                if (_owner == null) _submit();
+                if (_owner == null) _submit(offered: null);
               },
               decoration: InputDecoration(
                 labelText: 'Exercise name',
@@ -217,10 +252,13 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
                       ),
                       const SizedBox(height: AppSpacing.xs),
                       Text(
-                        'Merge to make them one exercise called '
-                        '${owner.name}, with their history, records and '
-                        'previous sets together. All logged sets are kept. '
-                        "This can't be undone.",
+                        block ??
+                            'Merge to make them one exercise called '
+                                '${owner.name}, with their history, records '
+                                'and previous sets together. All logged sets '
+                                'are kept. '
+                                '${caution == null ? '' : '$caution '}'
+                                "This can't be undone.",
                         style: textTheme.bodySmall?.copyWith(
                           color: textPrimaryColor(context),
                         ),
@@ -238,7 +276,11 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: _saving ? null : _submit,
+            // Bound to what this frame shows, so the action is the label.
+            onPressed:
+                _saving || block != null
+                    ? null
+                    : () => _submit(offered: owner?.id),
             child:
                 _saving
                     ? ActionProgress(owner != null ? 'Merging' : 'Saving')

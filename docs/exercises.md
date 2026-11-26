@@ -51,8 +51,8 @@ latest workout when no plan has it) takes that name, stamped with the epoch so
 any deliberate rename on any device wins. It skips movements already renamed or merged,
 custom movements (every older rename already updated their catalog name),
 names another movement goes by, and the old name of a movement merged into it.
-It waits until the account has a plan on the device, and stays pending
-if any name could not be saved, so the next start tries those again.
+It waits until the account has a plan or a workout on the device, and stays
+pending if any name could not be saved, so the next start tries those again.
 
 How a movement is measured follows its ID as well: `ExerciseLibrary` gives each
 bundled ID a kind (weighted, bodyweight or timed), and `ExerciseCatalog.kindOf`
@@ -78,7 +78,12 @@ recovery snapshots. An interrupted migration can run again with the same IDs.
 Settings → Manage exercises lists the movements the account trains first, with
 their usage, and lets the user merge one into another after a confirmation
 that says it can't be undone; renaming to another movement's name offers the
-same merge. The source stores `mergedIntoId`; no plan or workout sets are
+same merge. A merged movement is measured like its target, so
+`ExerciseCatalog.canMerge` refuses a merge that would change how a bundled
+movement's sets are read (a hold into a lift, or a lift into a hold); the
+catalog write, the rename dialog and the merge picker all apply it. A custom
+movement counts as a lift whatever it is, so it may join a hold, and both
+confirmations then say its logged reps will be read as seconds. The source stores `mergedIntoId`; no plan or workout sets are
 rewritten or removed. Every identity consumer resolves redirect chains, so
 older backups and late uploads also combine. Catalog rows are delivered
 individually, so a redirect may arrive before its custom target. That unresolved

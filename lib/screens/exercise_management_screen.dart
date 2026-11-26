@@ -80,6 +80,16 @@ class _ExerciseManagementScreenState extends State<ExerciseManagementScreen> {
       builder: (_) => _MergeTargetSheet(source: source, usage: _usage),
     );
     if (target == null || !mounted) return;
+    // A timed exercise and one counted in reps would misread each other's
+    // logged sets, and a merge can't be undone.
+    if (ExerciseRenameService.mergeBlock(source.id, target.id)
+        case final block?) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(block)));
+      return;
+    }
+    final caution = ExerciseRenameService.mergeCaution(source.id, target.id);
     final saved = await showAppDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -91,7 +101,8 @@ class _ExerciseManagementScreenState extends State<ExerciseManagementScreen> {
               '${target.name}. Every plan, workout and chart shows '
               '${target.name}, and their history, records and previous sets '
               'are combined across all your splits. All logged sets are '
-              "kept. This can't be undone, so only merge the same movement.",
+              'kept. ${caution == null ? '' : '$caution '}'
+              "This can't be undone, so only merge the same movement.",
             ),
             actionLabel: 'Merge',
             progressLabel: 'Merging exercises',

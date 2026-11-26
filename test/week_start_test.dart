@@ -184,6 +184,23 @@ void main() {
         [early],
       );
     });
+
+    test('a period starts at midnight of its first day', () {
+      // Sunday 1 November 2026 is when clocks go back in North America.
+      // Counting the four weeks in 24-hour steps put the start at 1 a.m.
+      // there, which dropped a workout logged in the hour after midnight.
+      final firstHour = _session('first-hour', DateTime(2026, 11, 1, 0, 30));
+      final lastHour = _session('last-hour', DateTime(2026, 11, 28, 23, 30));
+      expect(
+        analytics.sessionsInPeriod(
+          [firstHour, lastHour],
+          StatisticsPeriod.fourWeeks,
+          now: _thursday,
+          firstDayOfWeek: DateTime.sunday,
+        ),
+        unorderedEquals([firstHour, lastHour]),
+      );
+    });
   });
 
   group('the Home week strip', () {

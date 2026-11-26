@@ -400,6 +400,52 @@ void main() {
     );
     expect(ExerciseCatalog.stored, isEmpty);
   });
+  group('merging a timed exercise with one counted in reps', () {
+    test(
+      'is refused between built-in exercises, in either direction',
+      () async {
+        expect(ExerciseCatalog.canMerge(bench, plank), isFalse);
+        expect(ExerciseCatalog.canMerge(plank, bench), isFalse);
+        expect(ExerciseCatalog.canMerge(bench, squat), isTrue);
+        expect(
+          ExerciseRenameService.mergeBlock(bench, plank),
+          "Bench Press is counted in reps and Plank is timed, so they can't be "
+          'merged.',
+        );
+        expect(
+          ExerciseRenameService.mergeBlock(plank, bench),
+          "Plank is timed and Bench Press is counted in reps, so they can't be "
+          'merged.',
+        );
+        await expectLater(
+          ExerciseRenameService.merge(sourceId: bench, targetId: plank),
+          throwsFormatException,
+        );
+        // Bench reps are still reps.
+        expect(ExerciseCatalog.canonicalId(bench), bench);
+        expect(ExerciseCatalog.isTimed('Bench Press', bench), isFalse);
+      },
+    );
+
+    test('a custom exercise may join a timed one, with a caution', () async {
+      final custom = await ExerciseCatalog.createCustom('Front hold');
+      expect(ExerciseRenameService.mergeBlock(custom.id, plank), isNull);
+      expect(
+        ExerciseRenameService.mergeCaution(custom.id, plank),
+        'Plank is timed, so the reps logged for Front hold will be read as '
+        'seconds.',
+      );
+      // Two exercises counted the same way need no caution.
+      expect(ExerciseRenameService.mergeCaution(custom.id, bench), isNull);
+
+      await ExerciseRenameService.merge(sourceId: custom.id, targetId: plank);
+      expect(ExerciseCatalog.isTimed('Front hold', custom.id), isTrue);
+      // A timed exercise can't join a custom one: its seconds would be reps.
+      final other = await ExerciseCatalog.createCustom('My hold');
+      expect(ExerciseCatalog.canMerge('builtin:side-plank', other.id), isFalse);
+    });
+  });
+
   group('names given before a movement had one name', () {
     const deadlift = 'builtin:deadlift';
 
@@ -474,6 +520,17 @@ void main() {
       await ExerciseCatalog.clear();
       await ExerciseNameAdoption.run(userId: null);
       expect(ExerciseCatalog.getById(bench)!.name, 'Bench Press');
+    });
+
+    test('an account with workouts but no plans keeps its names too', () async {
+      SharedPreferences.setMockInitialValues({});
+      await seed(
+        sessions: [
+          session('log', [('Flat bench', bench)]),
+        ],
+      );
+      await ExerciseNameAdoption.run(userId: null);
+      expect(ExerciseCatalog.getById(bench)!.name, 'Flat bench');
     });
 
     test('a name that could not be saved is tried again next start', () async {

@@ -595,14 +595,20 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   /// The plan as saved now. A sync from another device can rewrite the saved
   /// plan while this screen is open, so a week opened afterwards must not be
   /// built from the copy this screen was pushed with.
-  WorkoutPlan get _livePlan {
+  WorkoutPlan get _livePlan => _savedPlan ?? widget.plan;
+
+  /// The plan in storage, or null once it has been deleted or has left this
+  /// split. Anything that writes the plan must start from this and never
+  /// from [_livePlan]'s fallback, which would save the copy this screen was
+  /// pushed with over a deletion.
+  WorkoutPlan? get _savedPlan {
     final id = widget.plan.id;
     final saved = id == null ? null : HiveService.getPlanById(id);
     return saved != null &&
             saved.deletedAt == null &&
             saved.splitId == widget.plan.splitId
         ? saved
-        : widget.plan;
+        : null;
   }
 
   WorkoutSession _getOrCreateSession() {
@@ -1150,15 +1156,18 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     required int occurrence,
     required List<gym.Set> history,
   }) async {
-    bool applies(WorkoutPlan plan) => PlanExerciseSwap.canApply(
-      plan,
-      from: from,
-      to: to,
-      occurrence: occurrence,
-    );
-    if (widget.plan.id == null || !applies(_livePlan)) return;
+    bool applies(WorkoutPlan? plan) =>
+        plan != null &&
+        PlanExerciseSwap.canApply(
+          plan,
+          from: from,
+          to: to,
+          occurrence: occurrence,
+        );
+    final offered = _savedPlan;
+    if (offered == null || !applies(offered)) return;
     final plans = context.read<WorkoutPlanProvider>();
-    final planName = _livePlan.name;
+    final planName = offered.name;
     final changed = await showAppDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -1174,21 +1183,26 @@ class _WorkoutScreenState extends State<WorkoutScreen>
             progressLabel: 'Changing plan',
             failureMessage:
                 'Could not change the plan. Try again or keep the plan.',
-            onPersist: () async {
-              // As saved now: a sync may have changed it while this was open.
-              final plan = _livePlan;
-              if (!applies(plan)) throw StateError('The plan changed.');
-              await plans.updatePlan(
-                PlanExerciseSwap.apply(
-                  plan,
-                  from: from,
-                  to: to,
-                  name: toName,
-                  occurrence: occurrence,
-                  history: history,
-                ),
-              );
-            },
+            onPersist:
+                // Read and written under the sync gate. A sync may have
+                // changed or deleted the plan while this was open, and one
+                // landing between the check and the write would be undone.
+                () => SyncService.instance.runExclusiveLocalMutation(() async {
+                  final plan = _savedPlan;
+                  if (plan == null || !applies(plan)) {
+                    throw StateError('The plan changed.');
+                  }
+                  await plans.updatePlan(
+                    PlanExerciseSwap.apply(
+                      plan,
+                      from: from,
+                      to: to,
+                      name: toName,
+                      occurrence: occurrence,
+                      history: history,
+                    ),
+                  );
+                }),
           ),
     );
     if (changed != true || !mounted) return;

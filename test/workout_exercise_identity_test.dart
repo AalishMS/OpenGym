@@ -250,15 +250,29 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'plank');
     await tester.pump();
-    // Plank is another movement: same name means same movement, a merge.
+    // Plank is another movement, and a timed one: merging a lift into it
+    // would read every logged rep as a second, so the dialog explains why
+    // it can't and offers nothing to press.
     expect(find.byKey(const ValueKey('rename-merge-note')), findsOneWidget);
     expect(find.text('Plank is already an exercise'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Merge'), findsOneWidget);
+    expect(
+      find.text(
+        "Bench Press is counted in reps and Plank is timed, so they can't be "
+        'merged.',
+      ),
+      findsOneWidget,
+    );
     expect(find.widgetWithText(FilledButton, 'Rename'), findsNothing);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Merge'))
+          .onPressed,
+      isNull,
+    );
     await tester.tap(find.text('Cancel'));
     await pumpWithStorage(tester);
 
-    // Cancelling keeps them apart, and keeps the lift weighted.
+    // They stay apart, and the lift stays weighted.
     expect(
       ExerciseCatalog.canonicalId('builtin:bench-press'),
       isNot('builtin:plank'),
@@ -469,6 +483,31 @@ void main() {
       'builtin:squat',
       ExerciseCatalog.identity('Cable Fly'),
     ]);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('Change plan never brings back a plan deleted meanwhile', (
+    tester,
+  ) async {
+    await open(tester);
+    await replace(tester, 'Bench Press', search: 'squat', pick: 'Squat');
+    expect(find.text('Also change the plan?'), findsOneWidget);
+    // A sync deletes the plan while the question is open.
+    final deletedAt = DateTime(2026, 6, 1);
+    await tester.runAsync(() async {
+      final plan = HiveService.getPlanById('push')!..deletedAt = deletedAt;
+      await HiveService.putPlanRaw(plan);
+    });
+    await tester.tap(find.widgetWithText(FilledButton, 'Change plan'));
+    await pumpWithStorage(tester);
+
+    final plan = HiveService.getPlanById('push')!;
+    expect(plan.deletedAt, deletedAt);
+    expect(names(plan.exercises), ['Bench Press', 'Cable Fly']);
+    expect(
+      find.text('Could not change the plan. Try again or keep the plan.'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

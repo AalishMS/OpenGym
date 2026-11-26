@@ -156,9 +156,12 @@ class WorkoutSessionInitializer {
         );
     if (!reordered) {
       for (final key in added) {
-        final at = plan.indexOf(key);
-        final before = {...plan.take(at)};
-        final index = carried.lastIndexWhere((e) => before.contains(e.key));
+        // After its nearest plan neighbour still in the lineup, wherever the
+        // workout moved that neighbour to; first when none of them is left.
+        var index = -1;
+        for (var at = plan.indexOf(key) - 1; at >= 0 && index < 0; at--) {
+          index = carried.indexWhere((e) => e.key == plan[at]);
+        }
         carried.insert(index + 1, _Entry(key, template: templates[key]));
       }
       return carried;

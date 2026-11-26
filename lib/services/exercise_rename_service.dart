@@ -47,6 +47,34 @@ class ExerciseRenameService {
   static ExerciseDefinition? nameOwner(String exerciseId, String to) =>
       ExerciseCatalog.nameOwner(exerciseId, canonicalName(to));
 
+  static String _nameOf(String id) =>
+      ExerciseCatalog.getById(ExerciseCatalog.canonicalId(id))?.name ?? id;
+
+  /// Why [sourceId] can't be merged into [targetId], in words for the user,
+  /// or null when it can (see `ExerciseCatalog.canMerge`).
+  static String? mergeBlock(String sourceId, String targetId) {
+    if (ExerciseCatalog.canMerge(sourceId, targetId)) return null;
+    final timed = ExerciseCatalog.isTimed(
+      ExerciseCatalog.canonicalId(sourceId),
+    );
+    final source = _nameOf(sourceId), target = _nameOf(targetId);
+    return timed
+        ? '$source is timed and $target is counted in reps, so they '
+            "can't be merged."
+        : '$source is counted in reps and $target is timed, so they '
+            "can't be merged.";
+  }
+
+  /// What to say before merging [sourceId] into [targetId] when the merge is
+  /// allowed but changes how [sourceId]'s sets are read, or null. Only a
+  /// custom exercise joining a timed one gets here.
+  static String? mergeCaution(String sourceId, String targetId) =>
+      ExerciseCatalog.canMerge(sourceId, targetId) &&
+              ExerciseCatalog.mergeChangesMeasurement(sourceId, targetId)
+          ? '${_nameOf(targetId)} is timed, so the reps logged for '
+              '${_nameOf(sourceId)} will be read as seconds.'
+          : null;
+
   /// How many of [userId]'s live plans and workouts use [exerciseId].
   static ExerciseUsage usage(String exerciseId, {String? userId}) =>
       usageByExercise(userId: userId)[ExerciseCatalog.canonicalId(

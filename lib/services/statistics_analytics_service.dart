@@ -148,8 +148,19 @@ class StatisticsAnalyticsService {
       now ?? DateTime.now(),
       firstDay: firstDayOfWeek,
     );
-    final start = currentWeek.subtract(Duration(days: (weeks - 1) * 7));
-    final end = currentWeek.add(const Duration(days: 7));
+    // Calendar days, not 24-hour steps: across a daylight-saving change a
+    // fixed duration lands an hour off midnight and drops a workout logged
+    // in that hour.
+    final start = DateTime(
+      currentWeek.year,
+      currentWeek.month,
+      currentWeek.day - (weeks - 1) * 7,
+    );
+    final end = DateTime(
+      currentWeek.year,
+      currentWeek.month,
+      currentWeek.day + 7,
+    );
     return List.unmodifiable(
       eligible.where(
         (session) =>

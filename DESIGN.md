@@ -157,8 +157,9 @@ removed, replaced or reordered in that workout. The very first week of a plan,
 with nothing logged before it, takes the plan as it is. Plan edits made since
 that workout still arrive, because every workout records the plan lineup it was
 built from (`WorkoutSession.planExerciseIds`, canonical IDs in plan order): an
-exercise the plan gained since is inserted after its neighbour in the plan, one
-it lost since is dropped, and if the plan's own order changed since, the plan's
+exercise the plan gained since is inserted after its nearest plan neighbour
+still in the lineup (wherever the workout moved that neighbour), one it lost
+since is dropped, and if the plan's own order changed since, the plan's
 order wins while the workout's own additions stay after the exercise they
 followed. Changes the plan did not touch keep the workout's version, so an
 exercise removed in the workout stays removed. A workout written before
@@ -211,7 +212,15 @@ up/down, and Delete exercise last.
   merging combines their history and can't be undone, and its action becomes
   *Merge* (`ExerciseRenameService.merge`), which redirects this movement into
   that one. A merge can't be undone, so the keyboard's own action only ever
-  renames; merging takes the *Merge* button. When the typed name is an alias
+  renames; merging takes the *Merge* button. The dialog follows the catalog
+  while it is open (a sync can give the typed name to another movement), and
+  the button only ever does what it said when pressed: if that changed, the
+  dialog redraws and waits. A bundled hold and a bundled lift are never
+  merged, in either direction, because a merged movement is measured like
+  its target and logged reps would be read as seconds
+  (`ExerciseCatalog.canMerge`); the note says why and there is nothing to
+  press. A custom movement has no kind of its own, so it may still join a
+  hold, with a line saying its reps will be read as seconds. When the typed name is an alias
   or former name of the other movement, the note says which movement it
   belongs to. There is no "this workout only" rename; a different movement in
   one workout is *Replace exercise*.
@@ -230,7 +239,9 @@ up/down, and Delete exercise last.
   target), and the guidance note is cleared. The draft's recorded lineup
   gets the same swap, so the next week does not read it as a plan edit made
   since. Nothing is asked when the plan has no such exercise to swap (it was
-  added in a workout) or already lists the replacement. Adding, deleting and
+  added in a workout) or already lists the replacement. The plan is read and
+  written under the sync gate, from storage only: a plan deleted while the
+  question was open is left deleted and the dialog reports the failure. Adding, deleting and
   reordering in a workout never change the plan.
 - *Delete exercise* removes the exercise and its sets from the workout. In
   the week being trained now the confirmation adds that next week will start

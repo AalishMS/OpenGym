@@ -216,6 +216,32 @@ void main() {
       expect(session.exercises.first.sets.single.weight, 10);
     });
 
+    test('an exercise added to the plan follows its plan neighbour, wherever '
+        'the workout moved that neighbour', () {
+      // The workout moved Press to the top; the plan then gained Fly after
+      // Press, and Lunge after Row.
+      final session = WorkoutSessionInitializer.initialize(
+        plan: planOf(['Squat', 'Press', 'Fly', 'Row', 'Lunge']),
+        week: week,
+        previousSession: last(
+          [logged('Press'), logged('Squat'), logged('Row')],
+          lineup: ['Squat', 'Press', 'Row'],
+        ),
+      );
+      expect(names(session), ['Press', 'Fly', 'Squat', 'Row', 'Lunge']);
+
+      // Its neighbour was dropped in the workout: the one before that is next.
+      final dropped = WorkoutSessionInitializer.initialize(
+        plan: planOf(['Squat', 'Press', 'Fly', 'Row']),
+        week: week,
+        previousSession: last(
+          [logged('Row'), logged('Squat')],
+          lineup: ['Squat', 'Press', 'Row'],
+        ),
+      );
+      expect(names(dropped), ['Row', 'Squat', 'Fly']);
+    });
+
     test('an exercise dropped from the plan since is dropped', () {
       final session = WorkoutSessionInitializer.initialize(
         plan: planOf(['Squat', 'Row']),

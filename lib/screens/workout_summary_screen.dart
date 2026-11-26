@@ -153,7 +153,13 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen> {
       session.date,
       firstDay: SettingsProvider.weekStartOf(context),
     );
-    final weekEnd = weekStart.add(const Duration(days: 7));
+    // A calendar week later, which a fixed 168 hours is not across a
+    // daylight-saving change.
+    final weekEnd = DateTime(
+      weekStart.year,
+      weekStart.month,
+      weekStart.day + 7,
+    );
     final thisWeek =
         history
             .where(
