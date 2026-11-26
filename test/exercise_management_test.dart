@@ -248,6 +248,67 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('an exercise merged elsewhere while its dialog is open is not '
+      'merged on', (tester) async {
+    const bench = 'builtin:bench-press';
+    await tester.pumpWidget(host(const ExerciseManagementScreen(userId: null)));
+    await tester.pumpAndSettle();
+    await openRename(tester, 'DB Press');
+    await tester.enterText(find.byType(TextField).last, 'Dumbbell Press');
+    await tester.pumpAndSettle();
+    final merge = find.widgetWithText(FilledButton, 'Merge');
+    expect(merge, findsOneWidget);
+
+    // A sync merges DB Press into Bench Press, and Merge is pressed before
+    // the dialog has redrawn. Following the redirect would merge Bench
+    // Press, with its history, into Dumbbell Press.
+    await tester.runAsync(() async {
+      await ExerciseCatalog.merge(customId, bench);
+      await tester.tap(merge);
+      await SyncService.instance.runExclusiveLocalMutation(() async {});
+    });
+    await tester.pumpAndSettle();
+
+    expect(ExerciseCatalog.canonicalId(bench), bench);
+    expect(ExerciseCatalog.getById(bench)!.mergedIntoId, isNull);
+    // The dialog says what happened and offers nothing to press.
+    expect(find.byKey(const ValueKey('rename-moved-note')), findsOneWidget);
+    expect(find.text('DB Press is now part of Bench Press'), findsOneWidget);
+    expect(find.byKey(const ValueKey('rename-merge-note')), findsNothing);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Rename'))
+          .onPressed,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the merge confirmation refuses exercises that changed while it '
+      'was open', (tester) async {
+    const bench = 'builtin:bench-press';
+    await tester.pumpWidget(host(const ExerciseManagementScreen(userId: null)));
+    await tester.pumpAndSettle();
+    await chooseMergeTarget(tester);
+    expect(find.text('Merge into Dumbbell Press?'), findsOneWidget);
+
+    await tester.runAsync(() async {
+      await ExerciseCatalog.merge(customId, bench);
+      await tester.tap(find.widgetWithText(FilledButton, 'Merge'));
+      await SyncService.instance.runExclusiveLocalMutation(() async {});
+    });
+    await tester.pumpAndSettle();
+
+    expect(ExerciseCatalog.canonicalId(bench), bench);
+    expect(
+      find.text(
+        'These exercises changed on another device. Cancel and start again.',
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('merging into a timed exercise from the list is refused for a '
       'built-in exercise', (tester) async {
     await tester.pumpWidget(host(const ExerciseManagementScreen(userId: null)));

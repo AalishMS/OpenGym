@@ -103,6 +103,15 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
           ? null
           : ExerciseRenameService.nameOwner(widget.exerciseId, _typed);
 
+  /// The exercise this one has been merged into since the dialog opened (a
+  /// sync), or null while it is still its own exercise. Once it has moved,
+  /// a rename or merge here would change that other exercise instead, so
+  /// the dialog says so and offers nothing.
+  ExerciseDefinition? get _movedInto {
+    final now = ExerciseCatalog.canonicalId(widget.exerciseId);
+    return now == widget.exerciseId ? null : ExerciseCatalog.getById(now);
+  }
+
   /// Why the typed name's owner can't be merged into, or null.
   String? _blockFor(ExerciseDefinition? owner) =>
       owner == null
@@ -127,7 +136,9 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
       return;
     }
     final owner = _owner;
-    if (owner?.id != offered || _blockFor(owner) != null) {
+    if (_movedInto != null ||
+        owner?.id != offered ||
+        _blockFor(owner) != null) {
       setState(() => _error = null);
       return;
     }
@@ -165,7 +176,10 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
       setState(() {
         _saving = false;
         _error =
-            error is FormatException
+            // The dialog now shows what changed, which says it better.
+            error is ExerciseChangedException
+                ? null
+                : error is FormatException
                 ? error.message
                 : owner != null
                 ? 'Could not merge exercises. Try again.'
@@ -181,7 +195,8 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final secondary = textSecondaryColor(context);
-    final owner = _owner;
+    final moved = _movedInto;
+    final owner = moved == null ? _owner : null;
     final block = _blockFor(owner);
     final caution =
         owner == null || block != null
@@ -211,7 +226,9 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
               // The keyboard's own action renames. A merge can't be undone,
               // so it takes the Merge button.
               onSubmitted: (_) {
-                if (_owner == null) _submit(offered: null);
+                if (_movedInto == null && _owner == null) {
+                  _submit(offered: null);
+                }
               },
               decoration: InputDecoration(
                 labelText: 'Exercise name',
@@ -225,6 +242,40 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
               key: const ValueKey('rename-scope'),
               style: textTheme.bodySmall?.copyWith(color: secondary),
             ),
+            if (moved != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Semantics(
+                liveRegion: true,
+                child: Container(
+                  key: const ValueKey('rename-moved-note'),
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: controlFillColor(context),
+                    borderRadius: AppRadius.card,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${widget.currentName} is now part of ${moved.name}',
+                        style: textTheme.titleSmall?.copyWith(
+                          color: textPrimaryColor(context),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'They were merged on another device while this was '
+                        'open, so nothing can be saved here. Close this and '
+                        'open ${moved.name} to rename or merge it.',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: textPrimaryColor(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             if (owner != null) ...[
               const SizedBox(height: AppSpacing.md),
               Semantics(
@@ -278,7 +329,7 @@ class _ExerciseRenameDialogState extends State<_ExerciseRenameDialog> {
           FilledButton(
             // Bound to what this frame shows, so the action is the label.
             onPressed:
-                _saving || block != null
+                _saving || block != null || moved != null
                     ? null
                     : () => _submit(offered: owner?.id),
             child:

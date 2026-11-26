@@ -215,7 +215,12 @@ up/down, and Delete exercise last.
   renames; merging takes the *Merge* button. The dialog follows the catalog
   while it is open (a sync can give the typed name to another movement), and
   the button only ever does what it said when pressed: if that changed, the
-  dialog redraws and waits. A bundled hold and a bundled lift are never
+  dialog redraws and waits. If the movement being renamed has itself been
+  merged into another meanwhile, the dialog says so and offers nothing,
+  because the catalog follows redirects and would change that other movement
+  instead. `ExerciseRenameService.rename` and `.merge` check the same thing
+  under the sync gate and throw `ExerciseChangedException`, which the merge
+  confirmation in Manage exercises reports as a change on another device. A bundled hold and a bundled lift are never
   merged, in either direction, because a merged movement is measured like
   its target and logged reps would be read as seconds
   (`ExerciseCatalog.canMerge`); the note says why and there is nothing to

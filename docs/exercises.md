@@ -40,7 +40,12 @@ gains later. A name another movement already goes by (its name or an alias,
 `ExerciseCatalog.nameOwner`) is refused by the catalog; the dialog offers to
 merge into that movement instead, naming the movement when the match is one
 of its aliases or former names. A merge is only ever started from the *Merge*
-button, never from the keyboard's action. A movement the catalog has not seen
+button, never from the keyboard's action. The IDs handed to
+`ExerciseRenameService.rename` and `.merge` are the movements the user
+confirmed: under the sync gate each must still be its own movement, or an
+`ExerciseChangedException` is thrown and nothing is written. Without that,
+the catalog's redirect resolution would rename or merge whatever the
+confirmed movement had been merged into by a sync, history included. A movement the catalog has not seen
 is recorded under its current name before being renamed.
 
 Older app versions could only rename a bundled movement by rewriting the

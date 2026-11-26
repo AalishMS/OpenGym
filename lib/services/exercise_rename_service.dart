@@ -16,6 +16,18 @@ class ExerciseUsage {
   bool get isEmpty => plans == 0 && workouts == 0;
 }
 
+/// A rename or merge was confirmed for a movement that has since stopped
+/// being its own movement: a sync merged it into another while the
+/// confirmation was open. The catalog would follow that redirect and change
+/// the movement it now points to, which nobody confirmed, so nothing is
+/// written and the user has to look again.
+class ExerciseChangedException implements Exception {
+  const ExerciseChangedException();
+
+  @override
+  String toString() => 'The exercise was merged into another meanwhile.';
+}
+
 /// Renames and merges movements for the whole account.
 ///
 /// A movement has one name, kept in the catalog (see `docs/exercises.md`).
@@ -115,7 +127,9 @@ class ExerciseRenameService {
   /// does not know yet before renaming it.
   ///
   /// Throws a [FormatException] for an invalid name or one another movement
-  /// already goes by (see [nameOwner]).
+  /// already goes by (see [nameOwner]), and an [ExerciseChangedException]
+  /// when [exerciseId] has been merged into another movement since the
+  /// caller looked.
   static Future<void> rename({
     required String exerciseId,
     required String currentName,
@@ -127,23 +141,42 @@ class ExerciseRenameService {
     }
     final name = canonicalName(to);
     await SyncService.instance.runExclusiveLocalMutation(() async {
-      final id = ExerciseCatalog.canonicalId(exerciseId);
-      await ExerciseCatalog.ensure(currentName, exerciseId: id, userId: userId);
-      await ExerciseCatalog.rename(id, name, userId: userId);
+      _requireOwnMovement(exerciseId);
+      await ExerciseCatalog.ensure(
+        currentName,
+        exerciseId: exerciseId,
+        userId: userId,
+      );
+      await ExerciseCatalog.rename(exerciseId, name, userId: userId);
     });
     SyncService.instance.notifyLocalChange();
   }
 
   /// Merges movement [sourceId] into [targetId]: [sourceId] redirects there
   /// for good, so both show the target's name and share one history.
+  ///
+  /// Both IDs are the movements the user confirmed. Throws an
+  /// [ExerciseChangedException] when either has been merged into another
+  /// movement since: the catalog resolves redirects, so it would otherwise
+  /// merge whatever [sourceId] now points to, with all of its history.
   static Future<void> merge({
     required String sourceId,
     required String targetId,
     String? userId,
   }) async {
     await SyncService.instance.runExclusiveLocalMutation(() async {
+      _requireOwnMovement(sourceId);
+      _requireOwnMovement(targetId);
       await ExerciseCatalog.merge(sourceId, targetId, userId: userId);
     });
     SyncService.instance.notifyLocalChange();
+  }
+
+  /// Checked under the sync gate, so no sync lands between this and the
+  /// write it guards.
+  static void _requireOwnMovement(String id) {
+    if (ExerciseCatalog.canonicalId(id) != id) {
+      throw const ExerciseChangedException();
+    }
   }
 }

@@ -13,6 +13,7 @@ class PersistenceDialog extends StatefulWidget {
     required this.failureMessage,
     required this.onPersist,
     this.cancelLabel = 'Cancel',
+    this.failureMessageFor,
     this.destructive = false,
     this.startImmediately = false,
     super.key,
@@ -24,6 +25,10 @@ class PersistenceDialog extends StatefulWidget {
   final String progressLabel;
   final String failureMessage;
   final Future<void> Function() onPersist;
+
+  /// A message for one particular failure, or null for [failureMessage].
+  /// For a failure that trying again cannot fix.
+  final String? Function(Object error)? failureMessageFor;
 
   /// What declining is called. Name the outcome when *Cancel* could be read
   /// as undoing something that has already happened.
@@ -72,7 +77,7 @@ class _PersistenceDialogState extends State<PersistenceDialog> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = widget.failureMessage;
+        _error = widget.failureMessageFor?.call(error) ?? widget.failureMessage;
       });
     }
   }

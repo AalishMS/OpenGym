@@ -107,6 +107,14 @@ class _ExerciseManagementScreenState extends State<ExerciseManagementScreen> {
             actionLabel: 'Merge',
             progressLabel: 'Merging exercises',
             failureMessage: 'Could not merge exercises. Try again or cancel.',
+            // One of the two was merged elsewhere while this was open, so
+            // what was confirmed is no longer what would be merged.
+            failureMessageFor:
+                (error) =>
+                    error is ExerciseChangedException
+                        ? 'These exercises changed on another device. '
+                            'Cancel and start again.'
+                        : null,
             onPersist: () async {
               if (!mounted || _accountChanged()) {
                 throw StateError('The exercise account changed.');

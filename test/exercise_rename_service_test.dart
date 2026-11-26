@@ -446,6 +446,50 @@ void main() {
     });
   });
 
+  group('an exercise merged elsewhere after it was confirmed', () {
+    const press = 'builtin:dumbbell-press';
+
+    test('is not merged on: its new owner keeps its own history', () async {
+      final custom = await ExerciseCatalog.createCustom('DB Press');
+      // Confirmed here: DB Press into Dumbbell Press. A sync then lands
+      // DB Press merged into Bench Press.
+      await ExerciseCatalog.merge(custom.id, bench);
+      await expectLater(
+        ExerciseRenameService.merge(sourceId: custom.id, targetId: press),
+        throwsA(isA<ExerciseChangedException>()),
+      );
+      // Bench Press, which nobody confirmed, is still its own exercise.
+      expect(ExerciseCatalog.canonicalId(bench), bench);
+      expect(ExerciseCatalog.getById(bench)!.mergedIntoId, isNull);
+      expect(ExerciseCatalog.canonicalId(custom.id), bench);
+    });
+
+    test('is not merged into: the target named is the target used', () async {
+      final custom = await ExerciseCatalog.createCustom('DB Press');
+      // The confirmed target was itself merged away meanwhile.
+      await ExerciseCatalog.merge(press, bench);
+      await expectLater(
+        ExerciseRenameService.merge(sourceId: custom.id, targetId: press),
+        throwsA(isA<ExerciseChangedException>()),
+      );
+      expect(ExerciseCatalog.canonicalId(custom.id), custom.id);
+    });
+
+    test('is not renamed through to its new owner', () async {
+      final custom = await ExerciseCatalog.createCustom('DB Press');
+      await ExerciseCatalog.merge(custom.id, bench);
+      await expectLater(
+        ExerciseRenameService.rename(
+          exerciseId: custom.id,
+          currentName: 'DB Press',
+          to: 'Flat dumbbell press',
+        ),
+        throwsA(isA<ExerciseChangedException>()),
+      );
+      expect(ExerciseCatalog.getById(bench)!.name, 'Bench Press');
+    });
+  });
+
   group('names given before a movement had one name', () {
     const deadlift = 'builtin:deadlift';
 
