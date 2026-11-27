@@ -221,7 +221,7 @@ void main() {
       await tester.tap(find.text('Done'));
       await tester.pumpAndSettle();
       expect(allWorkouts(), findsNothing);
-      expect(find.text('Workout details'), findsNothing);
+      expect(find.text('Edit workout'), findsNothing);
     },
   );
 

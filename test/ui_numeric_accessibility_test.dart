@@ -17,7 +17,6 @@ import 'package:gymapp/screens/plan_editor_screen.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/utils/plan_stats.dart';
 import 'package:gymapp/widgets/dashboard/plan_status_tile.dart';
-import 'package:gymapp/widgets/history/workout_details_widgets.dart';
 import 'package:gymapp/widgets/home/training_snapshot.dart';
 import 'package:gymapp/widgets/workout/set_entry_table.dart';
 
@@ -198,11 +197,6 @@ void main() {
                     onDelete: (_) {},
                     onRpeChanged: (_, __) {},
                   ),
-                  WorkoutExerciseDetails(
-                    exercise: exercise,
-                    weightUnit: 'kg',
-                    recordSetIndexes: const {0},
-                  ),
                   TrainingSnapshot(
                     plans: [plan],
                     sessions: [session],
@@ -282,12 +276,7 @@ void main() {
             matching: find.byType(InkWell),
           );
           target(tester, row);
-          final saved = find.descendant(
-            of: find.byType(WorkoutExerciseDetails),
-            matching: find.text('1000.0'),
-          );
-          readable(tester, saved, scale);
-          await tester.ensureVisible(saved);
+          await tester.ensureVisible(day);
           await snapshot(tester, '${label}_saved_days');
           await tester.ensureVisible(weight);
           await snapshot(tester, '${label}_table');

@@ -18,7 +18,6 @@ import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/dashboard/progression_sparkline.dart';
 import 'package:gymapp/widgets/history/history_journal_data.dart';
 import 'package:gymapp/widgets/history/history_journal_widgets.dart';
-import 'package:gymapp/widgets/history/workout_details_widgets.dart';
 import 'package:gymapp/widgets/home/home_plan_row.dart';
 import 'package:gymapp/widgets/statistics/statistics_widgets.dart';
 import 'package:hive/hive.dart';
@@ -183,14 +182,27 @@ void main() {
       expect(find.text('Resume'), findsNothing);
       await tester.tap(find.text('View workout'));
       await tester.pumpAndSettle();
+      expect(find.text('Selected exercise'), findsOneWidget);
+      if (kind == 'deleted') {
+        // No plan to log in, so the log opens in the editor.
+        expect(
+          tester
+              .widget<EditSessionScreen>(find.byType(EditSessionScreen))
+              .session
+              .id,
+          selected.id,
+        );
+        expect(find.byType(WorkoutScreen), findsNothing);
+        return;
+      }
+      // A completed workout opens in its plan's logger, at its own week.
       expect(
         tester
-            .widget<WorkoutDetailsScreen>(find.byType(WorkoutDetailsScreen))
-            .sessionIdentity,
+            .widget<WorkoutScreen>(find.byType(WorkoutScreen))
+            .destination
+            ?.sessionId,
         selected.id,
       );
-      expect(find.text('Selected exercise'), findsOneWidget);
-      expect(find.byType(WorkoutScreen), findsNothing);
     });
   }
 
@@ -231,7 +243,7 @@ void main() {
         await tester.tap(find.text('Resume'));
         await tester.pumpAndSettle();
         if (kind == 'deleted') {
-          expect(find.byType(WorkoutDetailsScreen), findsOneWidget);
+          expect(find.byType(EditSessionScreen), findsOneWidget);
           expect(find.text('Selected exercise'), findsOneWidget);
           expect(find.text('Wrong exercise'), findsNothing);
           return;
@@ -368,38 +380,6 @@ void main() {
         isTrue,
       );
     }
-    semantics.dispose();
-  });
-
-  testWidgets('saved sets expose contextual values, units, and PRs', (
-    tester,
-  ) async {
-    final semantics = tester.ensureSemantics();
-    await pumpScreen(
-      tester,
-      Scaffold(
-        body: WorkoutExerciseDetails(
-          exercise: Exercise(
-            name: 'Bench press',
-            sets: [
-              gym.Set(weight: 100, reps: 8, rpe: 9, note: 'PR'),
-              gym.Set(weight: 105, reps: 8, rpe: 9),
-            ],
-          ),
-          weightUnit: 'lbs',
-          recordSetIndexes: const {1},
-        ),
-      ),
-    );
-    final weight = tester.getSemantics(find.bySemanticsLabel('Set 1 weight'));
-    // A note reading "PR" is only a note; the computed record set is marked.
-    expect(weight.value, '220.5 pounds');
-    expect(
-      tester.getSemantics(find.bySemanticsLabel('Set 2 weight')).value,
-      '231.5 pounds, Personal record',
-    );
-    expect(tester.getSemantics(find.bySemanticsLabel('Set 1 reps')).value, '8');
-    expect(tester.getSemantics(find.bySemanticsLabel('Set 1 RPE')).value, '9');
     semantics.dispose();
   });
 }

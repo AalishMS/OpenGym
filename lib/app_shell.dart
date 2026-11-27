@@ -31,7 +31,6 @@ import 'widgets/app_bottom_nav.dart';
 import 'widgets/app_nav_rail.dart';
 import 'widgets/coach/coach_button.dart';
 import 'widgets/guided_tour.dart';
-import 'widgets/history/history_journal_data.dart';
 import 'widgets/motion/collapsible.dart';
 import 'widgets/motion/surface_fade.dart';
 import 'widgets/update_dialog.dart';
@@ -365,15 +364,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _openingHistoryWorkout = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder:
-              (_) => WorkoutDetailsScreen(
-                sessionIdentity: historySessionIdentity(session),
-              ),
-        ),
-      );
-      _openingHistoryWorkout = false;
+      try {
+        await openLoggedWorkout(context, session);
+      } finally {
+        _openingHistoryWorkout = false;
+      }
     });
   }
 

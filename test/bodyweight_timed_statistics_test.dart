@@ -11,7 +11,6 @@ import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/services/statistics_analytics_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/utils/statistics_format.dart';
-import 'package:gymapp/widgets/history/workout_details_widgets.dart';
 import 'package:gymapp/widgets/statistics/lift_list.dart';
 import 'package:gymapp/widgets/statistics/statistics_widgets.dart';
 import 'package:gymapp/widgets/statistics/training_charts.dart';
@@ -412,46 +411,6 @@ void main() {
       theme: buildTheme(const Color(0xFF00A2FF), Brightness.light),
       home: Scaffold(body: SingleChildScrollView(child: child)),
     );
-
-    testWidgets('Workout details shows a timed exercise as time', (
-      tester,
-    ) async {
-      final session = workout('a', 1, [
-        Exercise(
-          name: 'Plank',
-          sets: [Set(weight: 0, reps: 45), Set(weight: 0, reps: 90)],
-        ),
-        Exercise(name: 'Bench Press', sets: [Set(weight: 80, reps: 5)]),
-      ]);
-      await tester.pumpWidget(
-        host(
-          Column(
-            children: [
-              WorkoutDetailsSummary(
-                statistics: analytics.sessionStatistics(session),
-                weightUnit: 'kg',
-              ),
-              for (final exercise in session.exercises)
-                WorkoutExerciseDetails(exercise: exercise, weightUnit: 'kg'),
-            ],
-          ),
-        ),
-      );
-      await tester.pump();
-      // Reps leave out the plank's seconds.
-      expect(find.bySemanticsLabel('Reps: 5'), findsOneWidget);
-      expect(find.text('Time'), findsOneWidget);
-      expect(find.text('Reps'), findsWidgets);
-      expect(find.text('45 s'), findsOneWidget);
-      expect(find.text('1:30'), findsOneWidget);
-      expect(find.text('2 sets · longest 1:30'), findsOneWidget);
-      expect(find.text('1 set · 5 reps'), findsOneWidget);
-      expect(
-        tester.getSemantics(find.text('1:30')).value,
-        '1 minute 30 seconds',
-      );
-      expect(tester.takeException(), isNull);
-    });
 
     testWidgets('record rows print values in the record\'s unit', (
       tester,

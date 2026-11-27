@@ -22,7 +22,6 @@ import 'package:gymapp/screens/history_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 import 'package:gymapp/services/workout_preset_installer.dart';
 import 'package:gymapp/theme/app_theme.dart';
-import 'package:gymapp/widgets/history/history_journal_data.dart';
 import 'package:gymapp/widgets/splits/preset_browser_dialog.dart';
 import 'package:gymapp/widgets/splits/split_dialogs.dart';
 
@@ -236,12 +235,7 @@ void main() {
                   onPressed:
                       () => Navigator.of(context).push(
                         MaterialPageRoute<void>(
-                          builder:
-                              (_) => WorkoutDetailsScreen(
-                                sessionIdentity: historySessionIdentity(
-                                  session,
-                                ),
-                              ),
+                          builder: (_) => EditSessionScreen(session: session),
                         ),
                       ),
                   child: const Text('Open workout'),
@@ -254,7 +248,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Workout actions'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await tester.tap(find.text('Delete workout'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete'));
     await tester.pump();
@@ -267,7 +261,7 @@ void main() {
     });
     await pumpWithStorage(tester);
     await tester.pumpAndSettle();
-    expect(find.text('Workout details'), findsNothing);
+    expect(find.text('Edit workout'), findsNothing);
     expect(find.text('Open workout'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

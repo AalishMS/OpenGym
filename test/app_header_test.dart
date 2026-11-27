@@ -177,10 +177,7 @@ void main() {
     'History': (const HistoryScreen(), false),
     'Stats': (const StatsScreen(), false),
     'Settings': (const SettingsScreen(), false),
-    'Workout details': (
-      WorkoutDetailsScreen(sessionIdentity: sessions.last.id!),
-      true,
-    ),
+    'Edit workout': (EditSessionScreen(session: sessions.last), true),
     'Plan editor': (const PlanEditorScreen.create(), true),
     'Workout': (
       WorkoutScreen(
@@ -214,15 +211,12 @@ void main() {
 
   testWidgets('header actions keep the accent', (tester) async {
     await tester.pumpWidget(
-      host(
-        WorkoutDetailsScreen(sessionIdentity: sessions.last.id!),
-        Brightness.light,
-      ),
+      host(EditSessionScreen(session: sessions.last), Brightness.light),
     );
     await pumpWithStorage(tester);
 
-    final edit = find.byIcon(LucideIcons.pencil);
-    expect(glyphColor(tester, edit), accentColor(tester.element(edit)));
+    final save = find.widgetWithText(TextButton, 'Save');
+    expect(glyphColor(tester, save), accentColor(tester.element(save)));
   });
 
   testWidgets('implied back buttons use the same arrow', (tester) async {

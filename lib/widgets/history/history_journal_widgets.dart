@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import '../../services/exercise_catalog.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
@@ -200,7 +199,7 @@ class HistoryWorkoutRow extends StatelessWidget {
         }
         return Semantics(
           button: true,
-          hint: 'Opens workout details',
+          hint: 'Opens the workout',
           child: InkWell(
             onTap: onTap,
             child: Column(
@@ -296,12 +295,6 @@ class _WorkoutSummary extends StatelessWidget {
     final hasSets = stats.totalSets > 0;
     final volume = formatVolumeLoad(stats.volumeLoad, weightUnit);
     final sets = '${stats.totalSets} set${stats.totalSets == 1 ? '' : 's'}';
-    final exerciseNames = [
-      for (final exercise in session.exercises)
-        if (ExerciseCatalog.label(exercise.name, exercise.exerciseId).trim()
-            case final name when name.isNotEmpty)
-          name,
-    ];
     final details = [
       workoutContext(session),
       if (duration != null) formatStatisticsDuration(duration),
@@ -358,11 +351,14 @@ class _WorkoutSummary extends StatelessWidget {
               _HistoryFigures(volume: volume, sets: sets),
             ],
           ),
-        if (exerciseNames.isNotEmpty) ...[
+        // A search that found this workout by an exercise names it, so the
+        // match explains itself. Otherwise the row stays to name and figures.
+        if (summary.matchedExercises.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sm),
           Text(
-            exerciseNames.join(', '),
-            maxLines: inlineFigures ? 3 : 2,
+            summary.matchedExercises.join(', '),
+            key: const ValueKey('history-matched-exercises'),
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
             style: textTheme.bodyMedium?.copyWith(fontSize: 13, height: 1.45),
           ),
@@ -413,7 +409,7 @@ class _HistoryFigures extends StatelessWidget {
   }
 }
 
-/// The compact record flag shared by History and Workout details.
+/// History's compact record flag.
 class HistoryRecordBadge extends StatelessWidget {
   const HistoryRecordBadge({super.key});
 

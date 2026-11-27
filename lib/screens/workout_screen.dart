@@ -1959,6 +1959,38 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     await _autoSave();
   }
 
+  /// Deletes this log from History, Stats and records, then leaves: the log
+  /// is what the screen was showing, so it returns to where it came from.
+  /// Progress is left alone, the same as deleting the log anywhere else.
+  Future<void> _deleteLoggedWorkout() async {
+    if (_timerAction != null || _isNavigating || _isSaving) return;
+    SetEntryTable.closeKeypad();
+    final session = _getOrCreateSession();
+    final id = session.id;
+    if (!session.isCompleted || id == null) return;
+    final provider = context.read<WorkoutSessionProvider>();
+    final deleted = await WorkoutDialogs.showDeleteLoggedWorkoutDialog(
+      context,
+      planName: session.planName,
+      date: session.date,
+      delete: () async {
+        // An autosave still in flight would write the log back afterwards.
+        final pending = _saveFuture;
+        if (pending != null) await pending;
+        await provider.deleteSession(id);
+      },
+    );
+    if (!deleted || !mounted) return;
+    // Edits that never saved belong to the deleted log.
+    setState(() {
+      _isNavigating = true;
+      _hasUnsavedChanges = false;
+      _draftRevision++;
+      _saveError = null;
+    });
+    Navigator.pop(context);
+  }
+
   void _deleteExercise(int exerciseIndex) async {
     final session = _getOrCreateSession();
     final exercise = session.exercises[exerciseIndex];
@@ -2167,14 +2199,24 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                   ),
                   onSelected: (value) {
                     if (value == 'time') _editWorkoutTime();
+                    if (value == 'delete') _deleteLoggedWorkout();
                   },
                   itemBuilder:
-                      (context) => const [
-                        PopupMenuItem(
+                      (context) => [
+                        const PopupMenuItem(
                           value: 'time',
                           height: 48,
                           child: Text('Edit date and duration'),
                         ),
+                        if (session.id != null)
+                          PopupMenuItem(
+                            value: 'delete',
+                            height: 48,
+                            child: Text(
+                              'Delete workout',
+                              style: TextStyle(color: errorColor(context)),
+                            ),
+                          ),
                       ],
                 ),
             ],

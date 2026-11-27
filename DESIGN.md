@@ -261,8 +261,8 @@ up/down, and Delete exercise last.
 
 Records are derived, never stored, and have one definition:
 `StatisticsAnalyticsService.recordEvents`. Stats (Records and each block's
-Records figure), the History PR pill, Workout details, live workout marks and
-the summary after logging all read it, so they cannot disagree.
+Records figure), the History PR pill, live workout marks and the summary
+after logging all read it, so they cannot disagree.
 
 - Only completed, live workouts in the split count, in date order, and only
   sets with reps above zero. Lifts match by canonical catalog ID; a movement
@@ -291,8 +291,7 @@ the summary after logging all read it, so they cannot disagree.
   only earns *longest hold*. Volume load stays weight × reps, so bodyweight
   sets add 0.
 - Each record carries the value it beat and the exercise and set index of the
-  set that broke it. Workout details marks exactly that set; a set note that
-  says "PR" is only a note.
+  set that broke it; a set note that says "PR" is only a note.
 - The logger's live PR mark is the heaviest-weight subset, judged with
   `StatisticsAnalyticsService.recordJudge` against the split's other logs (a
   logged workout being edited compares only with earlier ones). One set per
@@ -435,9 +434,12 @@ cannot log twice or advance an unrelated later visit. An already-started
 nonactive draft can finish by exact session ID without advancing progress.
 Completed logs stay editable in place in the logger, the same way a draft is:
 sets, RPE, notes, exercises and their order autosave, and the workout menu
-corrects the start date/time and duration. Edits keep the log completed, its
-plan, week and completion evidence, and never move progress; History's Edit
-workout remains for logs whose plan or week is gone. Live record marks on a
+corrects the start date/time and duration or deletes the log (back to where
+it was opened from; progress stays where it is). Edits keep the log completed,
+its plan, week and completion evidence, and never move progress. This is also
+where History opens a log: there is no separate details page. A log whose plan
+or week is gone has no logger to open in, so it opens in the Edit workout
+screen, which saves on Save and can delete it. Live record marks on a
 log compare only against workouts logged before it, and edits never buzz.
 Session writes resolve the current label from the durable week ID, so a
 structural rebase cannot make an in-progress edit restore an obsolete label.
@@ -619,9 +621,10 @@ goes.
 Back dismisses the nearest active layer before leaving its parent. Manage is a
 Home mode: Back restores normal Home, and leaving or reselecting Home clears
 Manage. Back from the History, Stats, or Settings root selects normal Home;
-Back from normal Home retains the platform's exit behavior. Pushed details
-return to their entry point, including details opened from Home's trained-day
-shortcut. The weekly-training shortcut selects Stats, whose Back returns Home.
+Back from normal Home retains the platform's exit behavior. Pushed pages
+return to their entry point, including a logged workout opened from History or
+Home's trained-day shortcut. The weekly-training shortcut selects Stats, whose
+Back returns Home.
 
 The exercise picker and preset browser have internal pages. System Back steps
 from a category or selected-exercises list to muscle groups, or from preset
@@ -633,8 +636,10 @@ Saving, deleting, or installing blocks dismissal until success or failure.
 `WorkoutDestination.active(planId)`, `.week(planId, weekId)` and
 `.session(sessionId)` carry route intent. Delivery re-fetches the exact current
 records and rejects account changes, deleted sessions and missing explicit
-slots. Exact IDs win over same-number weeks and duplicate logs. Orphan sessions
-keep the detail route and retained display labels. History, resume and native
+slots. Exact IDs win over same-number weeks and duplicate logs. A completed
+session opens its plan's logger at its own block and week
+(`openLoggedWorkout`); an orphan session opens the Edit workout screen and keeps
+its retained display labels. History, resume and native
 timer text includes block context when resolvable; optional notification text
 never becomes identity.
 
@@ -701,8 +706,8 @@ signature:
   controls and cards rounder, and sheets and dialogs — whatever floats over a
   scrim — the roundest. Pills are fully round.
 - Elevation reads as light. Pages sit on the background; the few things that
-  stand forward (the workout launcher, preset cards,
-  the Workout details readout and exercises, dashboard panels) are *raised*:
+  stand forward (the workout launcher, preset cards, the Edit workout
+  exercise cards, dashboard panels) are *raised*:
   white with a soft two-layer shadow in light mode, and in dark mode a lifted
   fill with a hairline edge, since a shadow has nothing to fall on
   (`RaisedCard`, `raisedDecoration`). Sheets, dialogs and menus are raised too,
@@ -751,14 +756,13 @@ signature:
   tooltip, including the steps back inside the exercise picker and preset
   browser. Header actions keep the accent. Plan colours stay on Home, so the
   plan editor's Save and Add exercise use the accent too.
-- A ground means tappable. Read-only values, such as the saved sets in Workout
-  details, use `ReadOnlyValue`: a bold `figures` value in the primary text
-  colour with no ground and no border. The table rows are separated by square
-  single-edge hairlines, so the values read as a record and not as editable
-  cells. Only the live set table draws boxed cells.
+- A ground means tappable. A read-only value is a bold `figures` value in the
+  primary text colour with no ground and no border, in rows separated by square
+  single-edge hairlines, so it reads as a record and not as an editable cell.
+  Only the live set table draws boxed cells.
 - Unknown data is left out rather than given a placeholder. A session
   duration that is null or under a minute counts as unknown
-  (`knownDurationSeconds`), so History and Workout details never show "0m".
+  (`knownDurationSeconds`), so History never shows "0m".
 - Don't nest a ground inside a card. History is a ruled ledger, not a stack
   of cards: each month heads its workouts with a count and volume tally over a
   strong rule, and each workout is a row on the page ground separated by
@@ -767,24 +771,16 @@ signature:
   and the rule between the two starts after the rail. A row leads with the
   workout name and PR flag, then its block, week and known duration; volume
   and set count sit right-aligned in `figures` so a month compares down the
-  page (they join the context line at large text), and the exercise names run
-  full width beneath. A session with no performed sets says *No sets logged*
-  instead of zeros. The ledger appears with the tab, without an arrival.
-  Searching folds a match count open under the field, and the results and
-  *No matching workouts* cross in place; typing more only changes what is
-  shown, and replays nothing.
-- Workout details opens with the long date, the workout name, its block and
-  week, and how many exercises set a record (accent ink). A bounded readout
-  puts Volume load and Duration large, over Exercises / Sets / Reps. Each
-  exercise is its own numbered card: the accent number sits in the set-number
-  gutter, volume trails the name (or joins the summary line when narrow), the
-  note hangs off an accent rule, and sets below in the ruled table. Sets saved
-  at zero reps stay on the record in the secondary ink. The set that broke a
-  personal record (see Personal records) carries a *PR* badge beside its
-  weight, and its weight is read aloud with ", Personal record". A timed
-  exercise heads its count column *Time* and shows holds as `45 s`, or `1:30`
-  from 90 seconds up; its summary gives the longest hold. Set notes,
-  including ones that say "PR", always show as notes.
+  page (they join the context line at large text). Exercises are left out:
+  the row is a name and figures, and the workout itself is a tap away. A
+  search that found a workout by an exercise, not by its name, names the
+  matching exercises beneath so the result explains itself. A session with no
+  performed sets says *No sets logged* instead of zeros. The ledger appears
+  with the tab, without an arrival. Searching folds a match count open under
+  the field, and the results and *No matching workouts* cross in place; typing
+  more only changes what is shown, and replays nothing. A row opens the
+  workout in its plan's logger at the block and week it was logged in, and
+  Back returns to the same place in History.
 - A plan's menu (long press, *…* on a row, or *Plan actions* in Manage) is a
   modal bottom sheet with a drag handle, not a dialog. *Edit plan* leads,
   then *Duplicate plan* and *Change color*, and *Delete plan* is always the
@@ -976,7 +972,7 @@ signature:
   through `lib/utils/weight_units.dart`. The set table and keypad, the edit-set
   and add-set dialogs, the History edit screen, the plan editor previews, the
   desktop dashboard tiles and the Coach diff card show and accept the chosen
-  unit; Stats, History, Workout details and the workout summary convert through
+  unit; Stats, History and the workout summary convert through
   `statistics_format.dart`. The keypad steps by ±2.5/±1 in kilograms and
   ±5/±2.5 in pounds (reps keep ±1). Values keep full precision in storage and
   are rounded only for display; retyping the figure a cell showed keeps the

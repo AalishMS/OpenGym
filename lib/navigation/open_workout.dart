@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/workout_session.dart';
 import '../providers/split_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../screens/history_screen.dart';
@@ -54,14 +55,14 @@ Future<void> openWorkoutDestination(
     context.read<WorkoutPlanProvider?>()?.loadPlans();
     final plan = delivered.plan;
     final session = delivered.session;
-    if (session?.isCompleted == true ||
-        plan == null ||
-        delivered.week == null) {
+    if (plan == null || delivered.week == null) {
+      // A workout whose plan or week is gone has no logger to open in, so
+      // it opens in the editor instead.
       if (session == null) return;
       unawaited(
         Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => WorkoutDetailsScreen(sessionIdentity: session.id!),
+            builder: (_) => EditSessionScreen(session: session),
           ),
         ),
       );
@@ -105,4 +106,19 @@ Future<void> openWorkoutDestination(
       },
     );
   }
+}
+
+/// Opens a logged workout where it was logged: its plan's workout screen at
+/// its block and week, where it can be edited in place. Back returns to the
+/// caller. A workout whose plan or week is gone opens in the editor.
+Future<void> openLoggedWorkout(BuildContext context, WorkoutSession session) {
+  final id = session.id;
+  if (id == null) {
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => EditSessionScreen(session: session),
+      ),
+    );
+  }
+  return openWorkoutDestination(context, WorkoutDestination.session(id));
 }

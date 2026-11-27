@@ -303,7 +303,7 @@ void main() {
     }
   });
 
-  testWidgets('populated history opens dedicated workout details', (
+  testWidgets('populated history lists workouts without their exercises', (
     tester,
   ) async {
     final session = WorkoutSession(
@@ -318,14 +318,9 @@ void main() {
     await tester.pump();
     expect(find.text('Push Day'), findsOneWidget);
     expect(find.text('1 set'), findsOneWidget);
-    expect(find.text('Bench Press'), findsOneWidget);
+    expect(find.text('Bench Press'), findsNothing);
     expect(find.byTooltip('Workout actions'), findsNothing);
-    await tester.tap(find.text('Push Day'));
-    await tester.pumpAndSettle();
-    expect(find.text('Workout details'), findsOneWidget);
-    expect(find.byTooltip('Workout actions'), findsOneWidget);
-    expect(find.text('Bench Press'), findsOneWidget);
-    expectNoOverflow(tester, 'workout details');
+    expectNoOverflow(tester, 'history');
   });
 
   testWidgets('selected exercise stays readable with long names', (
@@ -608,9 +603,7 @@ void main() {
     expect(unitTop, greaterThan(tester.getTopLeft(find.text('Workout')).dy));
     expect(
       unitTop,
-      lessThan(
-        tester.getTopLeft(find.text("Start from last week's sets")).dy,
-      ),
+      lessThan(tester.getTopLeft(find.text("Start from last week's sets")).dy),
     );
 
     final unitTrack = find.byKey(const ValueKey('weight-unit-selector'));
@@ -619,9 +612,14 @@ void main() {
     final context = tester.element(find.text('Weight unit'));
     expect(segmentThumbColor(tester, unitTrack), accentFillColor(context));
     expect(
-      tester.getSize(
-        find.ancestor(of: find.text('Pounds'), matching: find.byType(TextButton)),
-      ).height,
+      tester
+          .getSize(
+            find.ancestor(
+              of: find.text('Pounds'),
+              matching: find.byType(TextButton),
+            ),
+          )
+          .height,
       greaterThanOrEqualTo(48),
     );
 

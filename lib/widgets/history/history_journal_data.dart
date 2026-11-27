@@ -1,4 +1,5 @@
 import '../../services/exercise_catalog.dart';
+import '../../models/exercise.dart';
 import '../../models/statistics.dart';
 import '../../models/workout_session.dart';
 import '../../services/statistics_analytics_service.dart';
@@ -32,10 +33,15 @@ class HistoryWorkoutSummary {
   final SessionStatistics statistics;
   final bool hasPersonalRecord;
 
+  /// The exercises a search found this workout by, when its name didn't
+  /// match. Empty outside a search.
+  final List<String> matchedExercises;
+
   const HistoryWorkoutSummary({
     required this.session,
     required this.statistics,
     required this.hasPersonalRecord,
+    this.matchedExercises = const [],
   });
 }
 
@@ -51,16 +57,17 @@ HistoryJournalData buildHistoryJournalData(
   };
   final normalizedQuery = query.trim().toLowerCase();
   final matchingIds = ExerciseCatalog.search(query).map((d) => d.id).toSet();
+  bool exerciseMatches(Exercise exercise) =>
+      exercise.name.toLowerCase().contains(normalizedQuery) ||
+      matchingIds.contains(
+        ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
+      );
+  bool nameMatches(WorkoutSession session) =>
+      session.planName.toLowerCase().contains(normalizedQuery);
   final filtered = eligible.where((session) {
     if (normalizedQuery.isEmpty) return true;
-    if (session.planName.toLowerCase().contains(normalizedQuery)) return true;
-    return session.exercises.any(
-      (exercise) =>
-          exercise.name.toLowerCase().contains(normalizedQuery) ||
-          matchingIds.contains(
-            ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
-          ),
-    );
+    if (nameMatches(session)) return true;
+    return session.exercises.any(exerciseMatches);
   });
 
   final groups = <HistoryMonthGroup>[];
@@ -90,6 +97,14 @@ HistoryJournalData buildHistoryJournalData(
         hasPersonalRecord: recordSessions.any(
           (recordSession) => _sameSession(recordSession, session),
         ),
+        matchedExercises:
+            normalizedQuery.isEmpty || nameMatches(session)
+                ? const []
+                : List.unmodifiable([
+                  for (final exercise in session.exercises)
+                    if (exerciseMatches(exercise))
+                      ExerciseCatalog.label(exercise.name, exercise.exerciseId),
+                ]),
       ),
     );
   }
