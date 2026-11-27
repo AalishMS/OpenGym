@@ -7,10 +7,12 @@ import 'package:provider/provider.dart';
 import '../services/exercise_catalog.dart';
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
+import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
 import '../navigation/app_navigation_observer.dart';
 import '../navigation/open_workout.dart';
 import '../providers/settings_provider.dart';
+import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../theme/app_theme.dart';
 import '../theme/spacing.dart';
@@ -91,6 +93,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<WorkoutSessionProvider>();
+    // Each row's PR mark takes its plan's colour.
+    final planColors = {
+      for (final plan
+          in context.watch<WorkoutPlanProvider?>()?.plans ??
+              const <WorkoutPlan>[])
+        if (plan.id != null) plan.id!: plan.planColor,
+    };
     final journal = buildHistoryJournalData(
       provider.sessions,
       query: _query,
@@ -218,6 +227,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                         'history-row-${historySessionIdentity(session)}',
                                       ),
                                       summary: row.summary,
+                                      planColor: planColors[session.planId],
                                       showDate: row.showDate,
                                       rule: row.rule,
                                       onTap:

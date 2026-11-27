@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../data/plan_colors.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/spacing.dart';
@@ -121,17 +122,24 @@ enum HistoryRowRule {
 /// A row is two lines of text on one grid. The date is that grid's first
 /// column, set no larger than the details so the workout's name leads: the
 /// day sits on the name's baseline and the weekday on the details'. The PR
-/// mark ends the details line. A second workout on the same day leaves its
-/// date out, and the rule between the two starts after the date column.
+/// mark sits at the right, centred on the two lines, in its plan's colour.
+/// A second workout on the same day leaves its date out, and the rule
+/// between the two starts after the date column.
 class HistoryWorkoutRow extends StatelessWidget {
   final HistoryWorkoutSummary summary;
   final VoidCallback onTap;
   final bool showDate;
   final HistoryRowRule rule;
 
+  /// The workout's plan colour as stored (`WorkoutPlan.planColor`), or null
+  /// for a plan with no colour of its own or one that has been deleted; the
+  /// PR mark then takes the accent.
+  final int? planColor;
+
   const HistoryWorkoutRow({
     required this.summary,
     required this.onTap,
+    this.planColor,
     this.showDate = true,
     this.rule = HistoryRowRule.none,
     super.key,
@@ -197,7 +205,18 @@ class HistoryWorkoutRow extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
-                  child: content,
+                  child: Row(
+                    children: [
+                      Expanded(child: content),
+                      if (summary.hasPersonalRecord) ...[
+                        const SizedBox(width: AppSpacing.md),
+                        HistoryRecordMark(
+                          count: summary.recordCount,
+                          color: planColorOf(planColor, context),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
                 if (rule != HistoryRowRule.none)
                   Padding(
@@ -292,7 +311,7 @@ class _WorkoutName extends StatelessWidget {
   );
 }
 
-/// Block, week and duration, with the PR mark at the end of the line.
+/// Block, week and duration.
 class _WorkoutDetails extends StatelessWidget {
   final HistoryWorkoutSummary summary;
 
@@ -307,62 +326,54 @@ class _WorkoutDetails extends StatelessWidget {
       if (duration != null) formatStatisticsDuration(duration),
       if (summary.statistics.totalSets == 0) 'No sets logged',
     ];
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(details.join(' · '), style: _detailsStyle(context)),
-              // A search that found this workout by an exercise names it,
-              // so the match explains itself.
-              if (summary.matchedExercises.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.sm),
-                Text(
-                  summary.matchedExercises.join(', '),
-                  key: const ValueKey('history-matched-exercises'),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontSize: 13, height: 1.45),
-                ),
-              ],
-            ],
+        Text(details.join(' · '), style: _detailsStyle(context)),
+        // A search that found this workout by an exercise names it, so the
+        // match explains itself.
+        if (summary.matchedExercises.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            summary.matchedExercises.join(', '),
+            key: const ValueKey('history-matched-exercises'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontSize: 13, height: 1.45),
           ),
-        ),
-        if (summary.hasPersonalRecord) ...[
-          const SizedBox(width: AppSpacing.md),
-          HistoryRecordMark(count: summary.recordCount),
         ],
       ],
     );
   }
 }
 
-/// How many exercises set a personal record, in accent ink on no ground:
-/// most workouts in a good month carry one, so the mark stays quiet down a
-/// list, and the count still tells one row from the next.
+/// How many exercises set a personal record, as ink in the plan's colour on
+/// no ground: most workouts in a good month carry one, so the mark stays
+/// quiet down a list, and the count still tells one row from the next.
 class HistoryRecordMark extends StatelessWidget {
   final int count;
 
-  const HistoryRecordMark({required this.count, super.key});
+  /// A label colour solved for contrast, such as [planColorOf] gives.
+  final Color color;
+
+  const HistoryRecordMark({
+    required this.count,
+    required this.color,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final ink = accentColor(context);
     return Semantics(
       label: '$count personal record${count == 1 ? '' : 's'}',
       excludeSemantics: true,
       child: Row(
         key: const ValueKey('history-record-mark'),
         mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
         children: [
-          Icon(LucideIcons.trophy, size: 12, color: ink),
+          Icon(LucideIcons.trophy, size: 13, color: color),
           const SizedBox(width: AppSpacing.xs),
           Text(
             '$count PR${count == 1 ? '' : 's'}',
@@ -370,7 +381,7 @@ class HistoryRecordMark extends StatelessWidget {
               fontSize: 12,
               fontWeight: FontWeight.w700,
               height: 1.45,
-              color: ink,
+              color: color,
             ),
           ),
         ],

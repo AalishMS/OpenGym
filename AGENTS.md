@@ -146,7 +146,8 @@ import '../services/hive_service.dart';
   `textPrimaryColor`, tooltip *Back*. Pass `onPressed` for a custom leave flow
   (unsaved changes, an in-sheet step back) and `enabled: false` while saving.
   Implied back buttons get the same arrow from `backButtonIconBuilder`
-- Plan colours stay on Home. Header actions use the accent, never the plan's
+- Plan colours stay on Home, with one exception: History's PR count takes
+  its workout's plan colour. Header actions use the accent, never the plan's
   colour
 
 ### Figures

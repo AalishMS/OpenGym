@@ -755,7 +755,8 @@ signature:
 - Back is always the same neutral arrow (`AppBackButton`) with a *Back*
   tooltip, including the steps back inside the exercise picker and preset
   browser. Header actions keep the accent. Plan colours stay on Home, so the
-  plan editor's Save and Add exercise use the accent too.
+  plan editor's Save and Add exercise use the accent too. The one exception
+  is History's PR count, which takes its workout's plan colour.
 - A ground means tappable. A read-only value is a bold `figures` value in the
   primary text colour with no ground and no border, in rows separated by square
   single-edge hairlines, so it reads as a record and not as an editable cell.
@@ -772,10 +773,13 @@ signature:
   sits on the name's baseline and the weekday on the details' baseline, in
   their style. At narrow widths or large text the date moves above the row. A
   second workout on the same day leaves the date out, and the rule between
-  the two starts after the date column. The details line ends at the right
-  with the record mark: a trophy and how many exercises set a record
-  (*2 PRs*), in accent ink on no ground, because most workouts in a good
-  month carry one and a filled badge on each shouted down the list. There is
+  the two starts after the date column. The record mark sits at the right,
+  centred on the two lines: a trophy and how many exercises set a record
+  (*2 PRs*), as ink in the workout's plan colour (`planColorOf`, already
+  solved for text contrast; the accent for a plan with no colour or one that
+  was deleted) on no ground, because most workouts in a good month carry one
+  and a filled badge on each shouted down the list. A row with no record
+  gives the name the full width. There is
   no volume or set count, and no exercise list: the workout itself is a tap
   away. A search that found a workout by an
   exercise, not by its name, names the matching exercises beneath so the

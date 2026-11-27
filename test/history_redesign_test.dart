@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:hive/hive.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/set.dart';
 import 'package:gymapp/models/split.dart' as gym;
@@ -276,7 +278,7 @@ void main() {
     },
   );
 
-  testWidgets('the record mark is accent ink on no ground in every theme', (
+  testWidgets('the record mark takes its plan colour, else the accent', (
     tester,
   ) async {
     final summary =
@@ -294,28 +296,44 @@ void main() {
 
     for (final brightness in Brightness.values) {
       for (final accent in SettingsProvider.accents) {
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: buildTheme(accent.seed, brightness),
-            home: Scaffold(
-              body: HistoryWorkoutRow(summary: summary, onTap: () {}),
+        for (final stored in [null, kPlanColors[3]]) {
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: buildTheme(accent.seed, brightness),
+              home: Scaffold(
+                body: HistoryWorkoutRow(
+                  summary: summary,
+                  planColor: stored,
+                  onTap: () {},
+                ),
+              ),
             ),
-          ),
-        );
+          );
 
-        final mark = find.byKey(const ValueKey('history-record-mark'));
-        final context = tester.element(mark);
-        final variant = '${accent.name} / ${brightness.name}';
-        expect(
-          tester.widget<Text>(find.text('1 PR')).style?.color,
-          accentColor(context),
-          reason: '$variant should read as accent ink',
-        );
-        expect(
-          find.ancestor(of: mark, matching: find.byType(DecoratedBox)),
-          findsNothing,
-          reason: '$variant should have no ground',
-        );
+          final mark = find.byKey(const ValueKey('history-record-mark'));
+          final context = tester.element(mark);
+          final variant =
+              '${accent.name} / ${brightness.name} / plan colour $stored';
+          final expected =
+              stored == null
+                  ? accentColor(context)
+                  : planColorOf(stored, context);
+          expect(
+            tester.widget<Text>(find.text('1 PR')).style?.color,
+            expected,
+            reason: '$variant: label',
+          );
+          expect(
+            tester.widget<Icon>(find.byIcon(LucideIcons.trophy)).color,
+            expected,
+            reason: '$variant: trophy',
+          );
+          expect(
+            find.ancestor(of: mark, matching: find.byType(DecoratedBox)),
+            findsNothing,
+            reason: '$variant should have no ground',
+          );
+        }
       }
     }
   });
@@ -350,7 +368,7 @@ void main() {
   testWidgets(
     'a row is its name, then block, week and duration, PR at the end',
     (tester) async {
-      final summary =
+      final workouts =
           buildHistoryJournalData([
             session(
               id: 'baseline',
@@ -364,8 +382,11 @@ void main() {
               weight: 85,
               durationSeconds: 3900,
             ),
-          ]).groups.single.workouts.first;
+          ]).groups.single.workouts;
+      final summary = workouts.first;
+      final plain = workouts.last;
       expect(summary.hasPersonalRecord, isTrue);
+      expect(plain.hasPersonalRecord, isFalse);
       await tester.pumpWidget(
         MaterialApp(
           theme: buildTheme(const Color(0xFF00A2FF), Brightness.light),
@@ -388,14 +409,15 @@ void main() {
       final mark = tester.getRect(
         find.byKey(const ValueKey('history-record-mark')),
       );
-      // The name runs to the right edge, with nothing beside it.
-      expect(name.right, moreOrLessEquals(row.right));
-      // The PR mark ends the details line, at the bottom right.
-      expect(mark.top, greaterThanOrEqualTo(name.bottom));
+      // The PR mark sits at the right, centred on the name and the details.
       expect(mark.right, moreOrLessEquals(row.right));
+      expect(name.right, lessThan(mark.left));
       expect(
         mark.center.dy,
-        moreOrLessEquals(tester.getRect(details).center.dy, epsilon: 2),
+        moreOrLessEquals(
+          (name.top + tester.getRect(details).bottom) / 2,
+          epsilon: 3,
+        ),
       );
 
       // The date indexes the row: smaller than the name, on its line.
@@ -409,6 +431,19 @@ void main() {
       expect(
         tester.getRect(find.text('Fri')).center.dy,
         moreOrLessEquals(tester.getRect(details).center.dy, epsilon: 2),
+      );
+
+      // Without a record, the name runs all the way to the right.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(const Color(0xFF00A2FF), Brightness.light),
+          home: Scaffold(body: HistoryWorkoutRow(summary: plain, onTap: () {})),
+        ),
+      );
+      expect(find.byKey(const ValueKey('history-record-mark')), findsNothing);
+      expect(
+        tester.getRect(find.text('Baseline')).right,
+        moreOrLessEquals(tester.getRect(find.byType(HistoryWorkoutRow)).right),
       );
     },
   );
