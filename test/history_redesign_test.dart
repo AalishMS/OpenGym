@@ -298,11 +298,7 @@ void main() {
           MaterialApp(
             theme: buildTheme(accent.seed, brightness),
             home: Scaffold(
-              body: HistoryWorkoutRow(
-                summary: summary,
-                weightUnit: 'kg',
-                onTap: () {},
-              ),
+              body: HistoryWorkoutRow(summary: summary, onTap: () {}),
             ),
           ),
         );
@@ -329,6 +325,60 @@ void main() {
       }
     }
   });
+
+  testWidgets(
+    'a row is its name, then block, week and duration, PR at the end',
+    (tester) async {
+      final summary =
+          buildHistoryJournalData([
+            session(
+              id: 'baseline',
+              name: 'Baseline',
+              date: DateTime(2026, 9, 4),
+            ),
+            session(
+              id: 'record',
+              name: 'Heavy upper body with a long name',
+              date: DateTime(2026, 9, 11),
+              weight: 85,
+              durationSeconds: 3900,
+            ),
+          ]).groups.single.workouts.first;
+      expect(summary.hasPersonalRecord, isTrue);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(const Color(0xFF00A2FF), Brightness.light),
+          home: Scaffold(
+            body: HistoryWorkoutRow(summary: summary, onTap: () {}),
+          ),
+        ),
+      );
+
+      // No volume and no set count: the row is the workout and when it was.
+      expect(find.textContaining('kg'), findsNothing);
+      expect(find.textContaining(' t'), findsNothing);
+      expect(find.textContaining('set'), findsNothing);
+      final details = find.text('Week 4 · 1h 5m');
+      expect(details, findsOneWidget);
+
+      final row = tester.getRect(find.byType(HistoryWorkoutRow));
+      final name = tester.getRect(
+        find.text('Heavy upper body with a long name'),
+      );
+      final badge = tester.getRect(
+        find.byKey(const ValueKey('history-personal-record-pill')),
+      );
+      // The name runs to the right edge, with nothing beside it.
+      expect(name.right, moreOrLessEquals(row.right));
+      // The PR flag sits under it, at the bottom right, level with the details.
+      expect(badge.top, greaterThanOrEqualTo(name.bottom));
+      expect(badge.right, moreOrLessEquals(row.right));
+      expect(
+        badge.bottom,
+        moreOrLessEquals(tester.getRect(details).bottom, epsilon: 1),
+      );
+    },
+  );
 
   testWidgets(
     'a list back while the last is still leaving scrolls on its own',

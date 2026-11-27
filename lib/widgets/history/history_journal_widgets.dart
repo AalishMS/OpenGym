@@ -58,28 +58,15 @@ class HistorySearchField extends StatelessWidget {
   }
 }
 
-/// A month in the journal: its name, then how much training it held.
+/// A month in the journal: its name, then how many workouts it held.
 class HistoryMonthHeader extends StatelessWidget {
   final HistoryMonthGroup group;
-  final String weightUnit;
 
-  const HistoryMonthHeader({
-    required this.group,
-    this.weightUnit = 'kg',
-    super.key,
-  });
+  const HistoryMonthHeader({required this.group, super.key});
 
   @override
   Widget build(BuildContext context) {
     final count = group.workouts.length;
-    final volume = group.workouts.fold<double>(
-      0,
-      (sum, workout) => sum + workout.statistics.volumeLoad,
-    );
-    final tally = [
-      '$count workout${count == 1 ? '' : 's'}',
-      if (volume > 0) formatVolumeLoad(volume, weightUnit),
-    ].join(' · ');
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -99,7 +86,7 @@ class HistoryMonthHeader extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(bottom: AppSpacing.xxs),
               child: Text(
-                tally,
+                '$count workout${count == 1 ? '' : 's'}',
                 style: AppTypography.figures(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
@@ -131,20 +118,18 @@ enum HistoryRowRule {
 
 /// One workout in the journal, as a ruled row rather than a card.
 ///
-/// The date sits on a rail at the left, the workout in the middle, and the
-/// volume and set count in a right-aligned column so they line up down the
-/// month. A second workout on the same day leaves its date out, and the rule
-/// between the two starts after the rail.
+/// The date sits on a rail at the left. The workout's name runs the full
+/// width beside it, over its block, week and duration, with the PR flag at
+/// the bottom right. A second workout on the same day leaves its date out,
+/// and the rule between the two starts after the rail.
 class HistoryWorkoutRow extends StatelessWidget {
   final HistoryWorkoutSummary summary;
-  final String weightUnit;
   final VoidCallback onTap;
   final bool showDate;
   final HistoryRowRule rule;
 
   const HistoryWorkoutRow({
     required this.summary,
-    required this.weightUnit,
     required this.onTap,
     this.showDate = true,
     this.rule = HistoryRowRule.none,
@@ -168,11 +153,7 @@ class HistoryWorkoutRow extends StatelessWidget {
                 _HistoryDate(date: session.date, horizontal: true),
                 const SizedBox(height: AppSpacing.xs),
               ],
-              _WorkoutSummary(
-                summary: summary,
-                weightUnit: weightUnit,
-                inlineFigures: true,
-              ),
+              _WorkoutSummary(summary: summary, compact: true),
             ],
           );
         } else {
@@ -188,11 +169,7 @@ class HistoryWorkoutRow extends StatelessWidget {
               ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
-                child: _WorkoutSummary(
-                  summary: summary,
-                  weightUnit: weightUnit,
-                  inlineFigures: false,
-                ),
+                child: _WorkoutSummary(summary: summary, compact: false),
               ),
             ],
           );
@@ -273,138 +250,74 @@ class _HistoryDate extends StatelessWidget {
 
 class _WorkoutSummary extends StatelessWidget {
   final HistoryWorkoutSummary summary;
-  final String weightUnit;
 
-  /// Large text and narrow rows put the figures on the context line instead
-  /// of in their own column.
-  final bool inlineFigures;
+  /// Large text and narrow rows let the name wrap as far as it needs.
+  final bool compact;
 
-  const _WorkoutSummary({
-    required this.summary,
-    required this.weightUnit,
-    required this.inlineFigures,
-  });
+  const _WorkoutSummary({required this.summary, required this.compact});
 
   @override
   Widget build(BuildContext context) {
     final session = summary.session;
-    final stats = summary.statistics;
     final textTheme = Theme.of(context).textTheme;
-    final secondary = textSecondaryColor(context);
     final duration = knownDurationSeconds(session.durationSeconds);
-    final hasSets = stats.totalSets > 0;
-    final volume = formatVolumeLoad(stats.volumeLoad, weightUnit);
-    final sets = '${stats.totalSets} set${stats.totalSets == 1 ? '' : 's'}';
     final details = [
       workoutContext(session),
       if (duration != null) formatStatisticsDuration(duration),
-      if (!hasSets) 'No sets logged',
-      if (hasSets && inlineFigures) ...[volume, sets],
+      if (summary.statistics.totalSets == 0) 'No sets logged',
     ];
 
-    final title = Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Flexible(
-          child: Text(
-            session.planName,
-            maxLines: inlineFigures ? null : 2,
-            overflow: inlineFigures ? null : TextOverflow.ellipsis,
-            style: textTheme.titleLarge,
-          ),
-        ),
-        if (summary.hasPersonalRecord) ...[
-          const SizedBox(width: AppSpacing.sm),
-          const HistoryRecordBadge(),
-        ],
-      ],
-    );
-
-    final heading = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        title,
-        const SizedBox(height: AppSpacing.xxs),
-        Text(
-          details.join(' · '),
-          style: AppTypography.figures(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            height: 1.45,
-            color: secondary,
-          ),
-        ),
-      ],
-    );
-
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (inlineFigures || !hasSets)
-          heading
-        else
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: heading),
-              const SizedBox(width: AppSpacing.lg),
-              _HistoryFigures(volume: volume, sets: sets),
+        Text(
+          session.planName,
+          maxLines: compact ? null : 2,
+          overflow: compact ? null : TextOverflow.ellipsis,
+          style: textTheme.titleLarge,
+        ),
+        const SizedBox(height: AppSpacing.xxs),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    details.join(' · '),
+                    style: AppTypography.figures(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      height: 1.45,
+                      color: textSecondaryColor(context),
+                    ),
+                  ),
+                  // A search that found this workout by an exercise names
+                  // it, so the match explains itself.
+                  if (summary.matchedExercises.isNotEmpty) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      summary.matchedExercises.join(', '),
+                      key: const ValueKey('history-matched-exercises'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodyMedium?.copyWith(
+                        fontSize: 13,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (summary.hasPersonalRecord) ...[
+              const SizedBox(width: AppSpacing.md),
+              const HistoryRecordBadge(),
             ],
-          ),
-        // A search that found this workout by an exercise names it, so the
-        // match explains itself. Otherwise the row stays to name and figures.
-        if (summary.matchedExercises.isNotEmpty) ...[
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            summary.matchedExercises.join(', '),
-            key: const ValueKey('history-matched-exercises'),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: textTheme.bodyMedium?.copyWith(fontSize: 13, height: 1.45),
-          ),
-        ],
+          ],
+        ),
       ],
-    );
-  }
-}
-
-/// Volume over the set count, right-aligned so the figures of a month line up
-/// down the page.
-class _HistoryFigures extends StatelessWidget {
-  final String volume;
-  final String sets;
-
-  const _HistoryFigures({required this.volume, required this.sets});
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: 'Volume: $volume, $sets',
-      excludeSemantics: true,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(
-            volume,
-            style: AppTypography.figures(
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-              height: 1.35,
-              color: textPrimaryColor(context),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xxs),
-          Text(
-            sets,
-            style: AppTypography.figures(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              height: 1.45,
-              color: textSecondaryColor(context),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

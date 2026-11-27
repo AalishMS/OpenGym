@@ -764,18 +764,17 @@ signature:
   duration that is null or under a minute counts as unknown
   (`knownDurationSeconds`), so History never shows "0m".
 - Don't nest a ground inside a card. History is a ruled ledger, not a stack
-  of cards: each month heads its workouts with a count and volume tally over a
-  strong rule, and each workout is a row on the page ground separated by
-  hairlines. The date sits on a rail at the left (above the row at narrow
-  widths or large text); a second workout on the same day leaves the date out
-  and the rule between the two starts after the rail. A row leads with the
-  workout name and PR flag, then its block, week and known duration; volume
-  and set count sit right-aligned in `figures` so a month compares down the
-  page (they join the context line at large text). Exercises are left out:
-  the row is a name and figures, and the workout itself is a tap away. A
-  search that found a workout by an exercise, not by its name, names the
-  matching exercises beneath so the result explains itself. A session with no
-  performed sets says *No sets logged* instead of zeros. The ledger appears
+  of cards: each month heads its workouts with a count over a strong rule,
+  and each workout is a row on the page ground separated by hairlines. The
+  date sits on a rail at the left (above the row at narrow widths or large
+  text); a second workout on the same day leaves the date out and the rule
+  between the two starts after the rail. A row is the workout name across the
+  full width, then its block, week and known duration, with the PR flag at
+  the bottom right. There is no volume or set count, and no exercise list:
+  the workout itself is a tap away. A search that found a workout by an
+  exercise, not by its name, names the matching exercises beneath so the
+  result explains itself. A session with no performed sets says *No sets
+  logged*. The ledger appears
   with the tab, without an arrival. Searching folds a match count open under
   the field, and the results and *No matching workouts* cross in place; typing
   more only changes what is shown, and replays nothing. A row opens the

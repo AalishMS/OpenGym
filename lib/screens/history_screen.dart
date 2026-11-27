@@ -91,7 +91,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<WorkoutSessionProvider>();
-    final weightUnit = context.watch<SettingsProvider>().weightUnit;
     final journal = buildHistoryJournalData(
       provider.sessions,
       query: _query,
@@ -209,10 +208,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                         padding: EdgeInsets.only(
                                           top: index == 0 ? 0 : AppSpacing.xxl,
                                         ),
-                                        child: HistoryMonthHeader(
-                                          group: entry,
-                                          weightUnit: weightUnit,
-                                        ),
+                                        child: HistoryMonthHeader(group: entry),
                                       );
                                     }
                                     final row = entry as _JournalEntry;
@@ -222,7 +218,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                         'history-row-${historySessionIdentity(session)}',
                                       ),
                                       summary: row.summary,
-                                      weightUnit: weightUnit,
                                       showDate: row.showDate,
                                       rule: row.rule,
                                       onTap:

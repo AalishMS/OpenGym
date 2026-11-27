@@ -317,7 +317,8 @@ void main() {
     await tester.pumpWidget(host(const HistoryScreen(), sessions: [session]));
     await tester.pump();
     expect(find.text('Push Day'), findsOneWidget);
-    expect(find.text('1 set'), findsOneWidget);
+    expect(find.text('1 set'), findsNothing);
+    expect(find.textContaining('kg'), findsNothing);
     expect(find.text('Bench Press'), findsNothing);
     expect(find.byTooltip('Workout actions'), findsNothing);
     expectNoOverflow(tester, 'history');
