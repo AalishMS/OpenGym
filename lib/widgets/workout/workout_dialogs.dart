@@ -9,6 +9,8 @@ import '../../theme/app_typography.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
+import '../../utils/statistics_format.dart';
+import '../app_button.dart';
 import '../motion/app_modals.dart';
 import 'set_entry_table.dart';
 
@@ -402,6 +404,102 @@ class WorkoutDialogs {
         'Removes "$planName" from your plans. Logged sessions stay in History.',
     confirmLabel: 'Delete',
   );
+
+  /// Confirms deleting a logged workout and runs [delete] from the dialog, so
+  /// its progress and any failure show where the choice was made. Returns
+  /// true once the workout is deleted.
+  static Future<bool> showDeleteLoggedWorkoutDialog(
+    BuildContext context, {
+    required String planName,
+    required DateTime date,
+    required Future<void> Function() delete,
+  }) async {
+    var deleting = false;
+    var deleted = false;
+    String? error;
+    await showAppDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (dialogContext) => StatefulBuilder(
+            builder:
+                (context, setDialogState) => PopScope(
+                  canPop: !deleting,
+                  child: AlertDialog(
+                    title: const Text('Delete workout?'),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Delete “$planName” from ${formatStatisticsDate(date)}? '
+                          'It will be removed from History, Stats and personal '
+                          'records.',
+                        ),
+                        if (error != null) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Text(
+                            error!,
+                            key: const ValueKey('delete-workout-error'),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: errorColor(context)),
+                          ),
+                        ],
+                      ],
+                    ),
+                    actions: [
+                      AppButton.text(
+                        label: 'Cancel',
+                        onPressed:
+                            deleting
+                                ? null
+                                : () => Navigator.pop(dialogContext),
+                      ),
+                      AppButton.destructive(
+                        label: 'Delete',
+                        onPressed:
+                            deleting
+                                ? null
+                                : () async {
+                                  setDialogState(() {
+                                    deleting = true;
+                                    error = null;
+                                  });
+                                  try {
+                                    await delete();
+                                    deleted = true;
+                                    if (dialogContext.mounted) {
+                                      Navigator.pop(dialogContext);
+                                    }
+                                  } catch (exception) {
+                                    debugPrint(
+                                      'Failed to delete workout: $exception',
+                                    );
+                                    if (!dialogContext.mounted) return;
+                                    setDialogState(() {
+                                      deleting = false;
+                                      error =
+                                          'Could not delete the workout. Check your data and try again.';
+                                    });
+                                  }
+                                },
+                        child:
+                            deleting
+                                ? const SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : null,
+                      ),
+                    ],
+                  ),
+                ),
+          ),
+    );
+    return deleted;
+  }
 
   static Future<bool> showDiscardChangesDialog(BuildContext context) =>
       _showDestructiveConfirmation(

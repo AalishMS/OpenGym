@@ -173,13 +173,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('UL Plan'), findsOneWidget);
     expect(find.text('PPL Plan'), findsNothing);
-    await tester.tap(find.text('UL Plan'));
+    // Searching finds only this split's exercises.
+    final search = find.byKey(const ValueKey('history-search-field'));
+    await tester.enterText(search, 'UL Only');
     await tester.pumpAndSettle();
-    expect(find.text('Workout details'), findsOneWidget);
-    expect(find.text('UL Only'), findsOneWidget);
-
-    await tester.pageBack();
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('history-matched-exercises')))
+          .data,
+      'UL Only',
+    );
+    await tester.enterText(search, 'PPL Only');
     await tester.pumpAndSettle();
+    expect(find.text('No matching workouts'), findsOneWidget);
 
     await tester.pumpWidget(harness.host(const StatsScreen()));
     await tester.pumpAndSettle();

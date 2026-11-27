@@ -13,11 +13,14 @@ import 'package:gymapp/app_shell.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/set.dart';
+import 'package:gymapp/models/split.dart' as gym;
 import 'package:gymapp/models/workout_plan.dart';
 import 'package:gymapp/models/workout_session.dart';
+import 'package:gymapp/navigation/workout_destination.dart';
 import 'package:gymapp/screens/history_screen.dart';
 import 'package:gymapp/screens/settings_screen.dart';
 import 'package:gymapp/screens/stats_screen.dart';
+import 'package:gymapp/screens/workout_screen.dart';
 import 'package:gymapp/services/hive_service.dart';
 
 import 'package:gymapp/providers/settings_provider.dart';
@@ -26,6 +29,7 @@ import 'package:gymapp/providers/workout_plan_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 
 import 'support/hive_test_harness.dart';
+import 'support/pump_with_storage.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/theme/breakpoints.dart';
 import 'package:gymapp/widgets/app_bottom_nav.dart';
@@ -799,10 +803,20 @@ void main() {
     });
   });
 
-  testWidgets('a trained weekday opens its latest detail and returns to Home', (
+  testWidgets('a trained weekday opens its latest workout and returns Home', (
     tester,
   ) async {
-    await tester.runAsync(seedHomeTraining);
+    await tester.runAsync(() async {
+      await seedHomeTraining();
+      // Give the plan a split, block and week to log in.
+      await hiveHarness.prepareTraining([]);
+    });
+    addTearDown(
+      () => tester.runAsync(() async {
+        await HiveService.clearTrainingData();
+        await Hive.box<gym.Split>(HiveService.splitsBox).clear();
+      }),
+    );
     await tester.pumpWidget(shellHost(390));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -815,12 +829,21 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
-    expect(find.byType(WorkoutDetailsScreen), findsOneWidget);
+    await pumpWithStorage(tester);
+    // The workout it was logged in, at that log.
+    expect(
+      tester.widget<WorkoutScreen>(find.byType(WorkoutScreen)).destination,
+      isA<WorkoutDestination>().having(
+        (destination) => destination.sessionId,
+        'sessionId',
+        'shell-session',
+      ),
+    );
     expect(find.text('Bench Press'), findsWidgets);
 
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Back'));
+    await pumpWithStorage(tester);
+    expect(find.byType(WorkoutScreen), findsNothing);
     expect(find.byType(HistoryScreen), findsNothing);
     expect(find.byType(TrainingSnapshot), findsOneWidget);
     expect(

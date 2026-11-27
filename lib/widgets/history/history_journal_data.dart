@@ -1,4 +1,5 @@
 import '../../services/exercise_catalog.dart';
+import '../../models/exercise.dart';
 import '../../models/statistics.dart';
 import '../../models/workout_session.dart';
 import '../../services/statistics_analytics_service.dart';
@@ -30,13 +31,22 @@ class HistoryMonthGroup {
 class HistoryWorkoutSummary {
   final WorkoutSession session;
   final SessionStatistics statistics;
-  final bool hasPersonalRecord;
+
+  /// How many exercises set a personal record in this workout.
+  final int recordCount;
+
+  /// The exercises a search found this workout by, when its name didn't
+  /// match. Empty outside a search.
+  final List<String> matchedExercises;
 
   const HistoryWorkoutSummary({
     required this.session,
     required this.statistics,
-    required this.hasPersonalRecord,
+    this.recordCount = 0,
+    this.matchedExercises = const [],
   });
+
+  bool get hasPersonalRecord => recordCount > 0;
 }
 
 HistoryJournalData buildHistoryJournalData(
@@ -46,21 +56,20 @@ HistoryJournalData buildHistoryJournalData(
   StatisticsAnalyticsService analytics = const StatisticsAnalyticsService(),
 }) {
   final eligible = analytics.eligibleSessions(sessions, splitId: splitId);
-  final recordSessions = <WorkoutSession>{
-    for (final event in analytics.recordEvents(eligible)) event.session,
-  };
+  final records = analytics.recordEvents(eligible);
   final normalizedQuery = query.trim().toLowerCase();
   final matchingIds = ExerciseCatalog.search(query).map((d) => d.id).toSet();
+  bool exerciseMatches(Exercise exercise) =>
+      exercise.name.toLowerCase().contains(normalizedQuery) ||
+      matchingIds.contains(
+        ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
+      );
+  bool nameMatches(WorkoutSession session) =>
+      session.planName.toLowerCase().contains(normalizedQuery);
   final filtered = eligible.where((session) {
     if (normalizedQuery.isEmpty) return true;
-    if (session.planName.toLowerCase().contains(normalizedQuery)) return true;
-    return session.exercises.any(
-      (exercise) =>
-          exercise.name.toLowerCase().contains(normalizedQuery) ||
-          matchingIds.contains(
-            ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
-          ),
-    );
+    if (nameMatches(session)) return true;
+    return session.exercises.any(exerciseMatches);
   });
 
   final groups = <HistoryMonthGroup>[];
@@ -87,9 +96,18 @@ HistoryJournalData buildHistoryJournalData(
       HistoryWorkoutSummary(
         session: session,
         statistics: analytics.sessionStatistics(session),
-        hasPersonalRecord: recordSessions.any(
-          (recordSession) => _sameSession(recordSession, session),
-        ),
+        recordCount:
+            records
+                .where((event) => _sameSession(event.session, session))
+                .length,
+        matchedExercises:
+            normalizedQuery.isEmpty || nameMatches(session)
+                ? const []
+                : List.unmodifiable([
+                  for (final exercise in session.exercises)
+                    if (exerciseMatches(exercise))
+                      ExerciseCatalog.label(exercise.name, exercise.exerciseId),
+                ]),
       ),
     );
   }

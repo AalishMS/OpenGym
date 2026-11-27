@@ -1,23 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:hive/hive.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:gymapp/data/plan_colors.dart';
 import 'package:gymapp/models/exercise.dart';
 import 'package:gymapp/models/set.dart';
+import 'package:gymapp/models/split.dart' as gym;
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/providers/settings_provider.dart';
 import 'package:gymapp/providers/workout_session_provider.dart';
 import 'package:gymapp/screens/history_screen.dart';
+import 'package:gymapp/services/exercise_catalog.dart';
+import 'package:gymapp/services/hive_service.dart';
 
 import 'support/hive_test_harness.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/utils/statistics_format.dart';
 import 'package:gymapp/widgets/history/history_journal_data.dart';
 import 'package:gymapp/widgets/history/history_journal_widgets.dart';
-import 'package:gymapp/widgets/history/workout_details_widgets.dart';
-import 'package:gymapp/widgets/read_only_value.dart';
 
 void main() {
   final hiveHarness = HiveTestHarness();
@@ -26,12 +31,33 @@ void main() {
     TestWidgetsFlutterBinding.ensureInitialized();
     GoogleFonts.config.allowRuntimeFetching = false;
     SharedPreferences.setMockInitialValues({});
-    await hiveHarness.open();
+    await Supabase.initialize(
+      url: 'https://example.supabase.co',
+      publishableKey: 'test-key',
+    );
+    await hiveHarness.open(includeSplits: true);
   });
 
   tearDownAll(() async {
     await hiveHarness.close();
+    await Supabase.instance.dispose();
   });
+
+  /// Saves [sessions] where opening a workout looks them up. None has a plan
+  /// or a week, so each opens in the editor, as a workout whose plan was
+  /// deleted does.
+  Future<void> store(WidgetTester tester, List<WorkoutSession> sessions) =>
+      tester.runAsync(() async {
+        await Hive.box<WorkoutSession>(HiveService.sessionsBox).clear();
+        if (HiveService.getSplitById('a') == null) {
+          await HiveService.putSplitRaw(
+            gym.Split(id: 'a', name: 'Split A', createdAt: DateTime(2026)),
+          );
+        }
+        for (final session in sessions) {
+          await HiveService.putSessionRaw(session.copyWith());
+        }
+      });
 
   WorkoutSession session({
     required String id,
@@ -91,6 +117,30 @@ void main() {
       ),
     ),
   );
+
+  /// A History over [sessions] whose rows open their workouts.
+  Future<_Sessions> pumpHistory(
+    WidgetTester tester,
+    List<WorkoutSession> sessions, {
+    SettingsProvider? settings,
+    Size size = const Size(390, 800),
+    Brightness brightness = Brightness.light,
+    double textScale = 1,
+  }) async {
+    await store(tester, sessions);
+    final provider = _Sessions(sessions);
+    await tester.pumpWidget(
+      host(
+        provider,
+        settings: settings,
+        size: size,
+        brightness: brightness,
+        textScale: textScale,
+      ),
+    );
+    await tester.pump();
+    return provider;
+  }
 
   test('groups by month and year newest first and keeps same-day workouts', () {
     final data = buildHistoryJournalData([
@@ -161,17 +211,33 @@ void main() {
         ).groups.single.workouts.single.session.id,
         'push',
       );
+      final byExercise =
+          buildHistoryJournalData(
+            sessions,
+            query: 'pulldown',
+            splitId: 'a',
+          ).groups.single.workouts.single;
+      expect(byExercise.session.id, 'pull');
+      // Found by an exercise, so the row names it.
+      expect(byExercise.matchedExercises, [
+        ExerciseCatalog.label('Lat Pulldown', null),
+      ]);
+      // Found by its name, so nothing more needs explaining.
       expect(
         buildHistoryJournalData(
           sessions,
-          query: 'pulldown',
+          query: ' PUSH ',
           splitId: 'a',
-        ).groups.single.workouts.single.session.id,
-        'pull',
+        ).groups.single.workouts.single.matchedExercises,
+        isEmpty,
       );
+      final all = buildHistoryJournalData(sessions, splitId: 'a');
+      expect(all.eligibleSessions, hasLength(2));
       expect(
-        buildHistoryJournalData(sessions, splitId: 'a').eligibleSessions,
-        hasLength(2),
+        all.groups
+            .expand((group) => group.workouts)
+            .map((workout) => workout.matchedExercises),
+        everyElement(isEmpty),
       );
     },
   );
@@ -212,7 +278,7 @@ void main() {
     },
   );
 
-  testWidgets('personal record pill uses every solved accent pairing', (
+  testWidgets('the record mark takes its plan colour, else the accent', (
     tester,
   ) async {
     final summary =
@@ -226,45 +292,161 @@ void main() {
           ),
         ]).groups.single.workouts.first;
     expect(summary.session.id, 'accent-pr');
-    expect(summary.hasPersonalRecord, isTrue);
+    expect(summary.recordCount, 1);
 
     for (final brightness in Brightness.values) {
       for (final accent in SettingsProvider.accents) {
-        await tester.pumpWidget(
-          MaterialApp(
-            theme: buildTheme(accent.seed, brightness),
-            home: Scaffold(
-              body: HistoryWorkoutRow(
-                summary: summary,
-                weightUnit: 'kg',
-                onTap: () {},
+        for (final stored in [null, kPlanColors[3]]) {
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: buildTheme(accent.seed, brightness),
+              home: Scaffold(
+                body: HistoryWorkoutRow(
+                  summary: summary,
+                  planColor: stored,
+                  onTap: () {},
+                ),
               ),
             ),
-          ),
-        );
+          );
 
-        final pillFinder = find.byKey(
-          const ValueKey('history-personal-record-pill'),
-        );
-        final context = tester.element(pillFinder);
-        final decoration =
-            tester.widget<DecoratedBox>(pillFinder).decoration as BoxDecoration;
-        final label = tester.widget<Text>(find.text('PR'));
-        final variant = '${accent.name} / ${brightness.name}';
-
-        expect(
-          decoration.color,
-          accentFillColor(context),
-          reason: '$variant should use the accent ground',
-        );
-        expect(
-          label.style?.color,
-          onAccentColor(context),
-          reason: '$variant should use the accent foreground',
-        );
+          final mark = find.byKey(const ValueKey('history-record-mark'));
+          final context = tester.element(mark);
+          final variant =
+              '${accent.name} / ${brightness.name} / plan colour $stored';
+          final expected =
+              stored == null
+                  ? accentColor(context)
+                  : planColorOf(stored, context);
+          expect(
+            tester.widget<Text>(find.text('1 PR')).style?.color,
+            expected,
+            reason: '$variant: label',
+          );
+          expect(
+            tester.widget<Icon>(find.byIcon(LucideIcons.trophy)).color,
+            expected,
+            reason: '$variant: trophy',
+          );
+          expect(
+            find.ancestor(of: mark, matching: find.byType(DecoratedBox)),
+            findsNothing,
+            reason: '$variant should have no ground',
+          );
+        }
       }
     }
   });
+
+  test('the record mark counts the exercises that set a record', () {
+    final baseline = session(
+      id: 'baseline',
+      name: 'Baseline',
+      date: DateTime(2026, 9, 4),
+    ).copyWith(
+      exercises: [
+        Exercise(name: 'Bench Press', sets: [Set(weight: 80, reps: 5)]),
+        Exercise(name: 'Back Squat', sets: [Set(weight: 100, reps: 5)]),
+      ],
+    );
+    final both = session(
+      id: 'both',
+      name: 'Both up',
+      date: DateTime(2026, 9, 11),
+    ).copyWith(
+      exercises: [
+        Exercise(name: 'Bench Press', sets: [Set(weight: 85, reps: 5)]),
+        Exercise(name: 'Back Squat', sets: [Set(weight: 110, reps: 5)]),
+      ],
+    );
+    final workouts =
+        buildHistoryJournalData([baseline, both]).groups.single.workouts;
+    expect(workouts.map((workout) => workout.recordCount), [2, 0]);
+    expect(workouts.last.hasPersonalRecord, isFalse);
+  });
+
+  testWidgets(
+    'a row is its name, then block, week and duration, PR at the end',
+    (tester) async {
+      final workouts =
+          buildHistoryJournalData([
+            session(
+              id: 'baseline',
+              name: 'Baseline',
+              date: DateTime(2026, 9, 4),
+            ),
+            session(
+              id: 'record',
+              name: 'Heavy upper body with a long name',
+              date: DateTime(2026, 9, 11),
+              weight: 85,
+              durationSeconds: 3900,
+            ),
+          ]).groups.single.workouts;
+      final summary = workouts.first;
+      final plain = workouts.last;
+      expect(summary.hasPersonalRecord, isTrue);
+      expect(plain.hasPersonalRecord, isFalse);
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(const Color(0xFF00A2FF), Brightness.light),
+          home: Scaffold(
+            body: HistoryWorkoutRow(summary: summary, onTap: () {}),
+          ),
+        ),
+      );
+
+      // No volume and no set count: the row is the workout and when it was.
+      expect(find.textContaining('kg'), findsNothing);
+      expect(find.textContaining(' t'), findsNothing);
+      expect(find.textContaining('set'), findsNothing);
+      final details = find.text('Week 4 · 1h 5m');
+      expect(details, findsOneWidget);
+
+      final row = tester.getRect(find.byType(HistoryWorkoutRow));
+      final nameFinder = find.text('Heavy upper body with a long name');
+      final name = tester.getRect(nameFinder);
+      final mark = tester.getRect(
+        find.byKey(const ValueKey('history-record-mark')),
+      );
+      // The PR mark sits at the right, centred on the name and the details.
+      expect(mark.right, moreOrLessEquals(row.right));
+      expect(name.right, lessThan(mark.left));
+      expect(
+        mark.center.dy,
+        moreOrLessEquals(
+          (name.top + tester.getRect(details).bottom) / 2,
+          epsilon: 3,
+        ),
+      );
+
+      // The date indexes the row: smaller than the name, on its line.
+      final day = find.text('11');
+      expect(
+        tester.widget<Text>(day).style!.fontSize,
+        lessThan(tester.widget<Text>(nameFinder).style!.fontSize!),
+      );
+      final dayRect = tester.getRect(day);
+      expect(dayRect.center.dy, inInclusiveRange(name.top, name.bottom));
+      expect(
+        tester.getRect(find.text('Fri')).center.dy,
+        moreOrLessEquals(tester.getRect(details).center.dy, epsilon: 2),
+      );
+
+      // Without a record, the name runs all the way to the right.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildTheme(const Color(0xFF00A2FF), Brightness.light),
+          home: Scaffold(body: HistoryWorkoutRow(summary: plain, onTap: () {})),
+        ),
+      );
+      expect(find.byKey(const ValueKey('history-record-mark')), findsNothing);
+      expect(
+        tester.getRect(find.text('Baseline')).right,
+        moreOrLessEquals(tester.getRect(find.byType(HistoryWorkoutRow)).right),
+      );
+    },
+  );
 
   testWidgets(
     'a list back while the last is still leaving scrolls on its own',
@@ -335,22 +517,20 @@ void main() {
     expect(find.text('Pull Day'), findsOneWidget);
   });
 
-  testWidgets('journal preserves scroll position after opening details', (
+  testWidgets('journal preserves scroll position after opening a workout', (
     tester,
   ) async {
     addTearDown(tester.view.reset);
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(390, 600);
-    final provider = _Sessions([
+    await pumpHistory(tester, [
       for (var index = 0; index < 18; index++)
         session(
           id: 'scroll-$index',
           name: 'Workout $index',
           date: DateTime(2026, 9, 20 - index),
         ),
-    ]);
-    await tester.pumpWidget(host(provider, size: const Size(390, 600)));
-    await tester.pump();
+    ], size: const Size(390, 600));
 
     await tester.drag(
       find.byKey(const PageStorageKey('history-journal-list')),
@@ -361,65 +541,108 @@ void main() {
     final before = tester.widget<ListView>(listFinder).controller!.offset;
     expect(before, greaterThan(0));
 
-    await tester.tap(find.byType(HistoryWorkoutRow).first);
+    // Rows are short, so the first one built may sit above the viewport.
+    await tester.tap(find.byType(HistoryWorkoutRow).hitTestable().first);
     await tester.pumpAndSettle();
+    expect(find.byType(EditSessionScreen), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
     final after = tester.widget<ListView>(listFinder).controller!.offset;
     expect(after, moreOrLessEquals(before));
   });
 
-  testWidgets(
-    'details preserve notes, zero-rep sets, units, and return state',
-    (tester) async {
-      final provider = _Sessions([
-        session(
-          id: 'detail',
-          name: 'Mixed Case Day',
-          date: DateTime(2026, 9, 11),
-          weight: 12.25,
-          reps: 0,
-          exerciseNote: 'Keep the tempo controlled across every repetition.',
-          setNote: 'Warm-up only; stop if the shoulder feels tight.',
-        ),
-      ]);
-      final settings = _Settings('lbs');
-      await tester.pumpWidget(host(provider, settings: settings));
-      await tester.enterText(
-        find.byKey(const ValueKey('history-search-field')),
-        'Mixed',
-      );
-      await tester.tap(find.text('Mixed Case Day'));
-      await tester.pumpAndSettle();
+  testWidgets('rows leave exercises out; a search names the one it matched', (
+    tester,
+  ) async {
+    await pumpHistory(tester, [
+      session(
+        id: 'push',
+        name: 'Push Day',
+        date: DateTime(2026, 9, 12),
+        exerciseName: 'Overhead Press',
+      ),
+      session(
+        id: 'pull',
+        name: 'Pull Day',
+        date: DateTime(2026, 9, 11),
+        exerciseName: 'Lat Pulldown',
+      ),
+    ]);
+    final pulldown = ExerciseCatalog.label('Lat Pulldown', null);
+    final press = ExerciseCatalog.label('Overhead Press', null);
+    expect(find.text('Push Day'), findsOneWidget);
+    expect(find.text('Pull Day'), findsOneWidget);
+    expect(find.text(press), findsNothing);
+    expect(find.text(pulldown), findsNothing);
+    expect(
+      find.byKey(const ValueKey('history-matched-exercises')),
+      findsNothing,
+    );
 
-      expect(find.text('Workout details'), findsOneWidget);
-      expect(
-        find.byKey(const ValueKey('workout-details-readout')),
-        findsOneWidget,
-      );
-      expect(find.text('Duration'), findsNothing);
-      expect(find.text('Not recorded'), findsNothing);
-      expect(find.text('Sets'), findsOneWidget);
-      expect(find.text('0'), findsWidgets);
-      expect(find.text('Weight (lbs)'), findsOneWidget);
-      expect(find.text('27'), findsOneWidget);
-      expect(find.text('—'), findsOneWidget);
-      expect(find.textContaining('tempo controlled'), findsOneWidget);
-      expect(find.textContaining('Warm-up only'), findsOneWidget);
+    final field = find.byKey(const ValueKey('history-search-field'));
+    await tester.enterText(field, 'pulldown');
+    await tester.pumpAndSettle();
+    expect(find.text('Push Day'), findsNothing);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('history-matched-exercises')))
+          .data,
+      pulldown,
+    );
 
-      await tester.pageBack();
-      await tester.pumpAndSettle();
-      expect(
-        tester
-            .widget<TextField>(
-              find.byKey(const ValueKey('history-search-field')),
-            )
-            .controller
-            ?.text,
-        'Mixed',
-      );
-    },
-  );
+    // A match on the workout's own name needs no explaining.
+    await tester.enterText(field, 'Pull Day');
+    await tester.pumpAndSettle();
+    expect(
+      find.descendant(
+        of: find.byType(HistoryWorkoutRow),
+        matching: find.text('Pull Day'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('history-matched-exercises')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a workout opened from a search returns to the same search', (
+    tester,
+  ) async {
+    await pumpHistory(tester, [
+      session(
+        id: 'detail',
+        name: 'Mixed Case Day',
+        date: DateTime(2026, 9, 11),
+      ),
+      session(id: 'other', name: 'Other day', date: DateTime(2026, 9, 10)),
+    ]);
+    await tester.enterText(
+      find.byKey(const ValueKey('history-search-field')),
+      'Mixed',
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Mixed Case Day'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<EditSessionScreen>(find.byType(EditSessionScreen))
+          .session
+          .id,
+      'detail',
+    );
+
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const ValueKey('history-search-field')))
+          .controller
+          ?.text,
+      'Mixed',
+    );
+    expect(find.text('Other day'), findsNothing);
+  });
 
   test('a duration under a minute is unknown', () {
     expect(knownDurationSeconds(null), isNull);
@@ -473,100 +696,6 @@ void main() {
     expect(find.textContaining('0m'), findsOneWidget);
   });
 
-  testWidgets('details leave out an unknown duration and show a known one', (
-    tester,
-  ) async {
-    final provider = _Sessions([
-      session(
-        id: 'short',
-        name: 'Short day',
-        date: DateTime(2026, 9, 12),
-        durationSeconds: 30,
-      ),
-      session(
-        id: 'timed',
-        name: 'Timed day',
-        date: DateTime(2026, 9, 11),
-        durationSeconds: 1800,
-      ),
-    ]);
-    await tester.pumpWidget(host(provider));
-    await tester.tap(find.text('Short day'));
-    await tester.pumpAndSettle();
-    expect(find.text('Duration'), findsNothing);
-    expect(find.text('0m'), findsNothing);
-
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Timed day'));
-    await tester.pumpAndSettle();
-    expect(find.text('Duration'), findsOneWidget);
-    expect(find.text('30m'), findsOneWidget);
-  });
-
-  testWidgets('saved set values sit on no ground, in ruled rows', (
-    tester,
-  ) async {
-    for (final brightness in Brightness.values) {
-      await tester.pumpWidget(
-        host(
-          _Sessions([]),
-          brightness: brightness,
-          screen: Scaffold(
-            body: WorkoutExerciseDetails(
-              exercise: Exercise(
-                name: 'Bench Press',
-                sets: [
-                  Set(weight: 80, reps: 5, note: 'PR'),
-                  Set(weight: 75, reps: 6),
-                ],
-              ),
-              weightUnit: 'kg',
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      for (final value in ['80', '5', '75', '6']) {
-        final grounds = tester
-            .widgetList<Container>(
-              find.ancestor(
-                of: find.text(value),
-                matching: find.byType(Container),
-              ),
-            )
-            .map((container) => container.decoration)
-            .whereType<BoxDecoration>()
-            .where(
-              (decoration) =>
-                  decoration.color != null ||
-                  decoration.borderRadius != null ||
-                  decoration.border is Border &&
-                      (decoration.border! as Border).isUniform,
-            );
-        expect(grounds, isEmpty, reason: '$value ($brightness) has a box');
-        expect(
-          find.ancestor(
-            of: find.text(value),
-            matching: find.byType(ReadOnlyValue),
-          ),
-          findsOneWidget,
-        );
-      }
-      final rule =
-          tester
-                  .widget<Container>(
-                    find.byKey(const ValueKey('saved-set-row-1')),
-                  )
-                  .decoration!
-              as BoxDecoration;
-      expect(rule.borderRadius, isNull);
-      expect((rule.border! as Border).top.style, BorderStyle.solid);
-      expect((rule.border! as Border).bottom, BorderSide.none);
-    }
-  });
-
   testWidgets('journal date sits on the card with no ground of its own', (
     tester,
   ) async {
@@ -578,7 +707,6 @@ void main() {
 
     final date = find.byKey(const ValueKey('history-date'));
     expect(date, findsOneWidget);
-    expect(tester.widget(date), isA<Padding>());
     expect(
       find.descendant(of: date, matching: find.byType(DecoratedBox)),
       findsNothing,
@@ -591,140 +719,27 @@ void main() {
     expect(betweenCardAndDate, findsNothing);
   });
 
-  testWidgets('details mark the set that broke a record, not a PR note', (
+  testWidgets('a successful edit returns to History; a failed one keeps it', (
     tester,
   ) async {
-    final semantics = tester.ensureSemantics();
-    final provider = _Sessions([
-      session(
-        id: 'baseline',
-        name: 'Base day',
-        date: DateTime(2026, 9, 4),
-        weight: 70,
-        setNote: 'PR',
-      ),
-      session(
-        id: 'pr-attempt',
-        name: 'Strength day',
-        date: DateTime(2026, 9, 11),
-      ).copyWith(
-        exercises: [
-          Exercise(
-            name: 'Bench Press',
-            sets: [
-              Set(weight: 75, reps: 5, note: 'New PR!'),
-              Set(weight: 80, reps: 5),
-            ],
-          ),
-        ],
-      ),
-    ]);
-    await tester.pumpWidget(host(provider));
-    await tester.tap(find.text('Strength day'));
-    await tester.pumpAndSettle();
-
-    // The note is an ordinary note; the marker sits on the heavier set.
-    expect(find.text('New PR!'), findsOneWidget);
-    expect(find.text('PR'), findsOneWidget);
-    expect(find.text('1 personal record'), findsOneWidget);
-    expect(
-      tester.getCenter(find.text('PR')).dy,
-      moreOrLessEquals(tester.getCenter(find.text('80')).dy, epsilon: 1),
-    );
-    expect(
-      tester.getSemantics(find.bySemanticsLabel('Set 2 weight')).value,
-      endsWith(', Personal record'),
-    );
-    expect(
-      tester.getSemantics(find.bySemanticsLabel('Set 1 weight')).value,
-      isNot(contains('Personal record')),
-    );
-
-    // The first workout with the lift sets the baseline: its "PR" note is
-    // shown as written and nothing is marked.
-    await tester.pageBack();
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Base day'));
-    await tester.pumpAndSettle();
-    expect(find.text('PR'), findsOneWidget);
-    expect(find.bySemanticsLabel(RegExp('Set 1 note')), findsOneWidget);
-    expect(find.textContaining('personal record'), findsNothing);
-    expect(
-      tester.getSemantics(find.bySemanticsLabel('Set 1 weight')).value,
-      isNot(contains('Personal record')),
-    );
-    semantics.dispose();
-  });
-
-  testWidgets('exercise readouts exclude zero-rep sets and handle empty logs', (
-    tester,
-  ) async {
-    final exercise = Exercise(
-      name: 'Dumbbell press',
-      sets: [
-        Set(weight: 12.5, reps: 8, note: 'Pause at the bottom.'),
-        Set(weight: 20, reps: 5, rpe: 8),
-        Set(weight: 100, reps: 0),
-      ],
-    );
-    await tester.pumpWidget(
-      host(
-        _Sessions([]),
-        screen: Scaffold(
-          body: ListView(
-            children: [
-              WorkoutExerciseDetails(
-                exercise: exercise,
-                exerciseNumber: 1,
-                weightUnit: 'kg',
-              ),
-              WorkoutExerciseDetails(
-                exercise: Exercise(name: 'Unlogged exercise', sets: []),
-                exerciseNumber: 2,
-                weightUnit: 'kg',
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    expect(find.text('2 sets · 13 reps'), findsOneWidget);
-    expect(find.text('200 kg'), findsOneWidget);
-    expect(find.text('100'), findsOneWidget);
-    expect(find.text('Pause at the bottom.'), findsOneWidget);
-    expect(find.text('No sets recorded'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('successful edit refreshes details and failed edit keeps draft', (
-    tester,
-  ) async {
-    final provider = _Sessions([
+    final provider = await pumpHistory(tester, [
       session(id: 'edit', name: 'Original', date: DateTime(2026, 9, 11)),
     ]);
-    await tester.pumpWidget(host(provider));
     await tester.tap(find.text('Original'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Workout actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Edit'));
-    await tester.pumpAndSettle();
+    expect(find.text('Edit workout'), findsOneWidget);
     await tester.enterText(
       find.byKey(const ValueKey('workout-name-field')),
       'Updated',
     );
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
-    expect(find.text('Workout details'), findsOneWidget);
+    expect(find.text('Edit workout'), findsNothing);
     expect(find.text('Updated'), findsOneWidget);
     expect(find.text('Workout updated'), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
 
-    await tester.tap(find.byTooltip('Workout actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Edit'));
+    await tester.tap(find.text('Updated'));
     await tester.pumpAndSettle();
     provider.failUpdate = true;
     await tester.enterText(
@@ -752,11 +767,8 @@ void main() {
       name: 'Push',
       date: DateTime(2026, 9, 11),
     );
-    final provider = _Sessions([original]);
-    await tester.pumpWidget(host(provider));
+    final provider = await pumpHistory(tester, [original]);
     await tester.tap(find.text('Push'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Edit workout'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.byTooltip('Delete Bench Press'));
@@ -775,7 +787,7 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
     expect(provider.sessions.single.exercises, isEmpty);
-    expect(find.text('No exercises recorded'), findsOneWidget);
+    expect(find.text('Week 4 · No sets logged'), findsOneWidget);
   });
 
   testWidgets(
@@ -796,11 +808,8 @@ void main() {
           ),
         ],
       );
-      final provider = _Sessions([original]);
-      await tester.pumpWidget(host(provider));
+      final provider = await pumpHistory(tester, [original]);
       await tester.tap(find.text('Push'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Edit workout'));
       await tester.pumpAndSettle();
       expect(find.text('New PR!'), findsNothing);
       expect(find.text('PR'), findsOneWidget);
@@ -857,11 +866,8 @@ void main() {
         date: DateTime(2026, 9, 11),
         setNote: 'New PR!',
       );
-      final provider = _Sessions([original]);
-      await tester.pumpWidget(host(provider));
+      final provider = await pumpHistory(tester, [original]);
       await tester.tap(find.text('Push'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Edit workout'));
       await tester.pumpAndSettle();
       await tester.tap(find.byTooltip('Set 1 details'));
       await tester.pumpAndSettle();
@@ -999,15 +1005,14 @@ void main() {
   testWidgets('delete supports cancel, failure retry, and confirmed removal', (
     tester,
   ) async {
-    final provider = _Sessions([
+    final provider = await pumpHistory(tester, [
       session(id: 'delete', name: 'Delete Me', date: DateTime(2026, 9, 11)),
     ]);
-    await tester.pumpWidget(host(provider));
     await tester.tap(find.text('Delete Me'));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Workout actions'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await tester.tap(find.text('Delete workout'));
     await tester.pumpAndSettle();
     expect(
       find.textContaining('Delete “Delete Me” from 11 Sep 2026?'),
@@ -1015,12 +1020,12 @@ void main() {
     );
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
-    expect(find.text('Workout details'), findsOneWidget);
+    expect(find.text('Edit workout'), findsOneWidget);
 
     provider.failDelete = true;
     await tester.tap(find.byTooltip('Workout actions'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Delete'));
+    await tester.tap(find.text('Delete workout'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(OutlinedButton, 'Delete'));
     await tester.pumpAndSettle();
@@ -1033,7 +1038,7 @@ void main() {
     expect(find.text('No completed workouts'), findsOneWidget);
   });
 
-  testWidgets('journal, details, editing, and empty states do not overflow', (
+  testWidgets('journal, editing, and empty states do not overflow', (
     tester,
   ) async {
     addTearDown(tester.view.reset);
@@ -1044,34 +1049,28 @@ void main() {
         (const Size(390, 800), 2.0),
         (const Size(1000, 800), 1.0),
       ]) {
-        final provider = _Sessions([
-          session(
-            id: 'visual',
-            name: 'Long lower-body training session',
-            date: DateTime(2026, 9, 11),
-            exerciseName: 'Single-leg Romanian deadlift',
-            exerciseNote: 'Use a slow lowering phase and keep the hips level.',
-            setNote: 'Left side first, then match repetitions on the right.',
-          ),
-        ]);
         tester.view.physicalSize = scenario.$1;
-        await tester.pumpWidget(
-          host(
-            provider,
-            brightness: brightness,
-            size: scenario.$1,
-            textScale: scenario.$2,
-          ),
+        await pumpHistory(
+          tester,
+          [
+            session(
+              id: 'visual',
+              name: 'Long lower-body training session',
+              date: DateTime(2026, 9, 11),
+              exerciseName: 'Single-leg Romanian deadlift',
+              exerciseNote:
+                  'Use a slow lowering phase and keep the hips level.',
+              setNote: 'Left side first, then match repetitions on the right.',
+            ),
+          ],
+          brightness: brightness,
+          size: scenario.$1,
+          textScale: scenario.$2,
         );
-        await tester.pump();
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('Long lower-body training session'));
         await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-        await tester.tap(find.byTooltip('Workout actions'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Edit'));
-        await tester.pumpAndSettle();
+        expect(find.text('Edit workout'), findsOneWidget);
         expect(tester.takeException(), isNull);
       }
     }
@@ -1118,13 +1117,4 @@ class _Sessions extends WorkoutSessionProvider {
     _sessions.removeWhere((session) => session.id == id);
     notifyListeners();
   }
-}
-
-class _Settings extends SettingsProvider {
-  _Settings(this.unit);
-
-  final String unit;
-
-  @override
-  String get weightUnit => unit;
 }

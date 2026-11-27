@@ -1591,14 +1591,14 @@ void main() {
       final workout = find.byType(WorkoutScreen);
       return workout.evaluate().isNotEmpty
           ? workout
-          : find.byType(WorkoutDetailsScreen);
+          : find.byType(EditSessionScreen);
     }
 
     String opened() {
       final screen = tester.widget(openedScreen());
       return screen is WorkoutScreen
           ? 'workout:${screen.destination?.navigationKey}'
-          : 'details:${(screen as WorkoutDetailsScreen).sessionIdentity}';
+          : 'editor:${(screen as EditSessionScreen).session.id}';
     }
 
     Future<void> back() async {

@@ -165,7 +165,7 @@ account data is shown.
 
 ### Review progress
 
-- **History** groups sessions by month, with volume, sets, records, and editable workout details.
+- **History** groups sessions by month, with each workout's block, week, duration and records. A workout opens where it was logged, at its block and week, to review or edit.
 - **Overview** charts weekly volume and training days, with exercise filtering and exact weekly totals.
 - **Strength** tracks individual lifts across selectable periods and measures.
 - **Blocks** compares workload and strength gains across training blocks.

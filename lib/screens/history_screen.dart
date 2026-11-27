@@ -7,14 +7,13 @@ import 'package:provider/provider.dart';
 import '../services/exercise_catalog.dart';
 import '../models/exercise.dart';
 import '../models/set.dart' as gym;
-import '../models/statistics.dart';
+import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
 import '../navigation/app_navigation_observer.dart';
+import '../navigation/open_workout.dart';
 import '../providers/settings_provider.dart';
+import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
-import '../services/hive_service.dart';
-import '../services/statistics_analytics_service.dart';
-import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/spacing.dart';
 import '../utils/scroll_to_top.dart';
@@ -26,7 +25,6 @@ import '../widgets/app_button.dart';
 import '../widgets/app_header.dart';
 import '../widgets/history/history_journal_data.dart';
 import '../widgets/history/history_journal_widgets.dart';
-import '../widgets/history/workout_details_widgets.dart';
 import '../widgets/motion/app_modals.dart';
 import '../widgets/motion/collapsible.dart';
 import '../widgets/motion/state_switcher.dart';
@@ -95,7 +93,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<WorkoutSessionProvider>();
-    final weightUnit = context.watch<SettingsProvider>().weightUnit;
+    // Each row's PR mark takes its plan's colour.
+    final planColors = {
+      for (final plan
+          in context.watch<WorkoutPlanProvider?>()?.plans ??
+              const <WorkoutPlan>[])
+        if (plan.id != null) plan.id!: plan.planColor,
+    };
     final journal = buildHistoryJournalData(
       provider.sessions,
       query: _query,
@@ -213,10 +217,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                         padding: EdgeInsets.only(
                                           top: index == 0 ? 0 : AppSpacing.xxl,
                                         ),
-                                        child: HistoryMonthHeader(
-                                          group: entry,
-                                          weightUnit: weightUnit,
-                                        ),
+                                        child: HistoryMonthHeader(group: entry),
                                       );
                                     }
                                     final row = entry as _JournalEntry;
@@ -226,22 +227,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                         'history-row-${historySessionIdentity(session)}',
                                       ),
                                       summary: row.summary,
-                                      weightUnit: weightUnit,
+                                      planColor: planColors[session.planId],
                                       showDate: row.showDate,
                                       rule: row.rule,
-                                      onTap: () {
-                                        Navigator.of(context).push(
-                                          MaterialPageRoute<void>(
-                                            builder:
-                                                (_) => WorkoutDetailsScreen(
-                                                  sessionIdentity:
-                                                      historySessionIdentity(
-                                                        session,
-                                                      ),
-                                                ),
+                                      onTap:
+                                          () => openLoggedWorkout(
+                                            context,
+                                            session,
                                           ),
-                                        );
-                                      },
                                     );
                                   },
                                 ),
@@ -267,279 +260,6 @@ class _JournalEntry {
     required this.showDate,
     required this.rule,
   });
-}
-
-class WorkoutDetailsScreen extends StatelessWidget {
-  final String sessionIdentity;
-
-  const WorkoutDetailsScreen({required this.sessionIdentity, super.key});
-
-  WorkoutSession? _session(WorkoutSessionProvider provider) {
-    for (final session in provider.sessions) {
-      if (historySessionIdentity(session) == sessionIdentity) return session;
-    }
-    final saved = HiveService.getSessionById(sessionIdentity);
-    return saved != null &&
-            !saved.isCompleted &&
-            saved.deletedAt == null &&
-            saved.userId == SupabaseService.currentUserId
-        ? saved
-        : null;
-  }
-
-  /// The records [session] set, from the same split-scoped record history
-  /// as the History journal and Stats.
-  List<RecordEvent> _records(
-    WorkoutSessionProvider provider,
-    WorkoutSession session,
-  ) {
-    const analytics = StatisticsAnalyticsService();
-    final identity = historySessionIdentity(session);
-    return [
-      for (final event in analytics.recordEvents(
-        analytics.eligibleSessions(provider.sessions, splitId: session.splitId),
-      ))
-        if (historySessionIdentity(event.session) == identity) event,
-    ];
-  }
-
-  /// The sets that broke a record, by exercise index then set index.
-  static Map<int, Set<int>> _recordSets(List<RecordEvent> records) {
-    final result = <int, Set<int>>{};
-    for (final achievement in records.expand((event) => event.achievements)) {
-      final exercise = achievement.exerciseIndex;
-      final set = achievement.setIndex;
-      if (exercise != null && set != null) {
-        result.putIfAbsent(exercise, () => <int>{}).add(set);
-      }
-    }
-    return result;
-  }
-
-  Future<void> _edit(BuildContext context, WorkoutSession session) async {
-    final updated = await Navigator.of(context).push<bool>(
-      MaterialPageRoute<bool>(
-        builder: (_) => EditSessionScreen(session: session),
-      ),
-    );
-    if (!context.mounted || updated != true) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Workout updated')));
-  }
-
-  Future<void> _delete(BuildContext context, WorkoutSession session) async {
-    var deleting = false;
-    String? error;
-    await showAppDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder:
-          (dialogContext) => StatefulBuilder(
-            builder:
-                (context, setDialogState) => PopScope(
-                  canPop: !deleting,
-                  child: AlertDialog(
-                    title: const Text('Delete workout?'),
-                    content: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Delete “${session.planName}” from '
-                          '${formatStatisticsDate(session.date)}?',
-                        ),
-                        if (error != null) ...[
-                          const SizedBox(height: AppSpacing.md),
-                          Text(
-                            error!,
-                            key: const ValueKey('delete-workout-error'),
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: errorColor(context)),
-                          ),
-                        ],
-                      ],
-                    ),
-                    actions: [
-                      AppButton.text(
-                        label: 'Cancel',
-                        onPressed:
-                            deleting
-                                ? null
-                                : () => Navigator.pop(dialogContext),
-                      ),
-                      AppButton.destructive(
-                        label: 'Delete',
-                        onPressed:
-                            deleting
-                                ? null
-                                : () async {
-                                  final id = session.id;
-                                  if (id == null) {
-                                    setDialogState(
-                                      () =>
-                                          error =
-                                              'This workout cannot be deleted because its identity is missing.',
-                                    );
-                                    return;
-                                  }
-                                  setDialogState(() {
-                                    deleting = true;
-                                    error = null;
-                                  });
-                                  try {
-                                    await dialogContext
-                                        .read<WorkoutSessionProvider>()
-                                        .deleteSession(id);
-                                    if (!dialogContext.mounted) return;
-                                    Navigator.pop(dialogContext);
-                                    if (context.mounted) Navigator.pop(context);
-                                  } catch (exception) {
-                                    debugPrint(
-                                      'Failed to delete workout: $exception',
-                                    );
-                                    if (!dialogContext.mounted) return;
-                                    setDialogState(() {
-                                      deleting = false;
-                                      error =
-                                          'Could not delete the workout. Check your data and try again.';
-                                    });
-                                  }
-                                },
-                        child:
-                            deleting
-                                ? const SizedBox.square(
-                                  dimension: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                                : null,
-                      ),
-                    ],
-                  ),
-                ),
-          ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final provider = context.watch<WorkoutSessionProvider>();
-    final session = _session(provider);
-    final weightUnit = context.watch<SettingsProvider>().weightUnit;
-    final records =
-        session == null ? const <RecordEvent>[] : _records(provider, session);
-    final recordSets = _recordSets(records);
-    return Scaffold(
-      backgroundColor: backgroundColor(context),
-      appBar: AppHeader(
-        leading: AppBackButton(onPressed: () => Navigator.pop(context)),
-        title: const Text('Workout details'),
-        actions: [
-          if (session != null && session.isCompleted)
-            AppIconButton(
-              label: 'Edit workout',
-              icon: LucideIcons.pencil,
-              onPressed: () => _edit(context, session),
-            ),
-          if (session != null && session.isCompleted)
-            PopupMenuButton<String>(
-              tooltip: 'Workout actions',
-              icon: Icon(
-                LucideIcons.ellipsisVertical,
-                color: textSecondaryColor(context),
-              ),
-              onSelected: (value) {
-                if (value == 'edit') _edit(context, session);
-                if (value == 'delete') _delete(context, session);
-              },
-              itemBuilder:
-                  (context) => [
-                    const PopupMenuItem(
-                      value: 'edit',
-                      height: 48,
-                      child: Text('Edit'),
-                    ),
-                    PopupMenuItem(
-                      value: 'delete',
-                      height: 48,
-                      child: Text(
-                        'Delete',
-                        style: TextStyle(color: errorColor(context)),
-                      ),
-                    ),
-                  ],
-            ),
-        ],
-      ),
-      body:
-          session == null
-              ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.xl),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Workout no longer available',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      AppButton.text(
-                        label: 'Back',
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-              : Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 880),
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(
-                      AppSpacing.lg,
-                      AppSpacing.xl,
-                      AppSpacing.lg,
-                      AppSpacing.xxl,
-                    ),
-                    children: [
-                      WorkoutDetailsSummary(
-                        statistics: const StatisticsAnalyticsService()
-                            .sessionStatistics(session),
-                        weightUnit: weightUnit,
-                        recordCount: records.length,
-                      ),
-                      const SizedBox(height: AppSpacing.xxl),
-                      const WorkoutDetailsSectionHeader(title: 'Exercises'),
-                      const SizedBox(height: AppSpacing.md),
-                      if (session.exercises.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            vertical: AppSpacing.md,
-                          ),
-                          child: Text(
-                            'No exercises recorded',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(color: textSecondaryColor(context)),
-                          ),
-                        ),
-                      for (final (index, exercise) in session.exercises.indexed)
-                        WorkoutExerciseDetails(
-                          exercise: exercise,
-                          exerciseNumber: index + 1,
-                          weightUnit: weightUnit,
-                          recordSetIndexes: recordSets[index] ?? const {},
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-    );
-  }
 }
 
 enum _EditLeaveAction { save, discard }
@@ -700,6 +420,9 @@ class _EditSessionScreenState extends State<EditSessionScreen>
     try {
       await context.read<WorkoutSessionProvider>().upsertSession(_session);
       if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Workout updated')));
       Navigator.pop(context, true);
     } catch (exception) {
       debugPrint('Failed to update workout: $exception');
@@ -713,6 +436,24 @@ class _EditSessionScreenState extends State<EditSessionScreen>
         ),
       );
     }
+  }
+
+  /// Deletes the workout as saved, edits and all, and leaves without asking
+  /// about them.
+  Future<void> _delete() async {
+    final id = widget.session.id;
+    if (_isSaving || _isConfirmingLeave || id == null) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    SetEntryTable.closeKeypad();
+    final provider = context.read<WorkoutSessionProvider>();
+    final deleted = await WorkoutDialogs.showDeleteLoggedWorkoutDialog(
+      context,
+      planName: widget.session.planName,
+      date: widget.session.date,
+      delete: () => provider.deleteSession(id),
+    );
+    if (!deleted || !mounted) return;
+    Navigator.pop(context);
   }
 
   @override
@@ -735,7 +476,31 @@ class _EditSessionScreenState extends State<EditSessionScreen>
                       ? const ActionProgress('Saving workout')
                       : const Text('Save'),
             ),
-            const SizedBox(width: AppSpacing.sm),
+            if (widget.session.id != null && widget.session.isCompleted)
+              PopupMenuButton<String>(
+                tooltip: 'Workout actions',
+                enabled: !_isSaving,
+                icon: Icon(
+                  LucideIcons.ellipsisVertical,
+                  color: textSecondaryColor(context),
+                ),
+                onSelected: (value) {
+                  if (value == 'delete') _delete();
+                },
+                itemBuilder:
+                    (context) => [
+                      PopupMenuItem(
+                        value: 'delete',
+                        height: 48,
+                        child: Text(
+                          'Delete workout',
+                          style: TextStyle(color: errorColor(context)),
+                        ),
+                      ),
+                    ],
+              )
+            else
+              const SizedBox(width: AppSpacing.sm),
           ],
         ),
         body: Align(
