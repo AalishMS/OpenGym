@@ -149,8 +149,17 @@ class _WorkoutSummaryScreenState extends State<WorkoutSummaryScreen> {
         previous == null
             ? null
             : analytics.sessionStatistics(previous).volumeLoad;
-    final weekStart = startOfWeek(session.date);
-    final weekEnd = weekStart.add(const Duration(days: 7));
+    final weekStart = startOfWeek(
+      session.date,
+      firstDay: SettingsProvider.weekStartOf(context),
+    );
+    // A calendar week later, which a fixed 168 hours is not across a
+    // daylight-saving change.
+    final weekEnd = DateTime(
+      weekStart.year,
+      weekStart.month,
+      weekStart.day + 7,
+    );
     final thisWeek =
         history
             .where(

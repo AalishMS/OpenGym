@@ -103,7 +103,7 @@ Provider is the only app-wide state pattern.
 | `WorkoutPlanProvider` | Workout plan list and plan CRUD for the active split |
 | `WorkoutSessionProvider` | Completed-session list and session mutations for the active split |
 | `TrainingBlockProvider` | Split structure, per-plan progress and session indexes |
-| `SettingsProvider` | Theme mode, accent color, units, start from last week's sets |
+| `SettingsProvider` | Theme mode, accent color, units, week start, start from last week's sets |
 | `UpdateProvider` | Self-update from GitHub Releases: checks at launch and on resume, Wi-Fi prefetch, snoozed prompt, session install |
 
 Providers mutate data through `HiveService` (`SplitProvider` goes through
@@ -150,21 +150,41 @@ only `updatedAt` and `dirty`: it is keyed by `userId` and is never deleted.
 
 Hive adapters are generated in `*.g.dart`; those files are not edited by hand.
 Plans are shared prescription templates across all blocks. A saved destination
-always wins over initialization. The first week of the first block uses targets.
-Week 1 of a later block copies Week 1 of the immediately preceding live block
-for the same plan. Every later week copies the preceding supplied week's
-completed values within its own block. Missing sources use current targets.
-Exercises match by canonical exercise ID and occurrence; current order/guidance wins,
-set values/RPE/count are deep-copied, and past set notes are not inherited.
-Untouched previews never create logs. Previous-set references instead follow
-earlier structural slots; plan-editor Last and analytics remain date-based.
-The copying above is Settings → Workout → *Start from last week's sets*, on by
-default (stored as `auto_fill_last`, backed up as `autoFillLast`). Off, a week
-with no saved data opens with the plan's current targets instead; saved drafts
-and logs are never changed, and the Previous column still shows the earlier
-logged sets. Discarding a draft rebuilds the week exactly as a fresh open would,
-under the same setting. The logger builds new weeks from the plan as currently
-saved, not the copy it was opened with.
+always wins over initialization. A week with no saved data starts from the
+plan's most recent logged workout before it (`WorkoutSessionInitializer`,
+`lastSession`): the same exercises in the same order, including any added,
+removed, replaced or reordered in that workout. The very first week of a plan,
+with nothing logged before it, takes the plan as it is. Plan edits made since
+that workout still arrive, because every workout records the plan lineup it was
+built from (`WorkoutSession.planExerciseIds`, canonical IDs in plan order): an
+exercise the plan gained since is inserted after its nearest plan neighbour
+still in the lineup (wherever the workout moved that neighbour), one it lost
+since is dropped, and if the plan's own order changed since, the plan's
+order wins while the workout's own additions stay after the exercise they
+followed. Changes the plan did not touch keep the workout's version, so an
+exercise removed in the workout stays removed. A workout written before
+lineups were recorded cannot tell the two apart, so its own lineup carries
+over as it is; only if the plan was saved after that workout
+(`plan.updatedAt` later than the log's) does an exercise the plan alone has
+count as added since, which keeps a plan edit from being left out of every
+later week. Exercises match by
+canonical ID and occurrence. The plan's guidance note wins where it has one; an
+exercise it gives none for keeps its note. Set values come from the inheritance
+source: Week 1 of a later block copies Week 1 of the immediately preceding live
+block for the same plan, and every later week copies the preceding supplied
+week's completed values within its own block. An exercise that source lacks
+takes the plan's targets, or, if the plan does not have it, the last workout's
+sets. Values, RPE and set count are deep-copied; past set notes are not
+inherited. Untouched previews never create logs. Previous-set references
+instead follow earlier structural slots; plan-editor Last and analytics remain
+date-based. The copying of set values is Settings → Workout → *Start from last
+week's sets*, on by default (stored as `auto_fill_last`, backed up as
+`autoFillLast`). Off, the lineup still carries over, a plan exercise opens with
+the plan's current targets and any other with as many blank sets as it had
+last time; saved drafts and logs are never changed, and the Previous column
+still shows the earlier logged sets. Discarding a draft rebuilds the week
+exactly as a fresh open would, under the same setting. The logger builds new
+weeks from the plan as currently saved, not the copy it was opened with.
 
 ### Exercise identity
 
@@ -172,31 +192,65 @@ Occurrences are identified by their stable catalog `exerciseId`, never by the
 name snapshot they carry (see [exercise identity](docs/exercises.md)). Plan
 templates, workout initialization, Previous values, history, Stats, records and
 timed measurement all resolve `ExerciseCatalog.identity(name, exerciseId)`, so
-an occurrence keeps its history whatever it is called. The workout's exercise
+an occurrence keeps its history whatever it is called. A movement has one name,
+its catalog name: plans, workouts, history, Home and Stats show
+`ExerciseCatalog.label(name, exerciseId)`, and the stored snapshot is only the
+fallback for a movement the catalog does not know yet. The workout's exercise
 menu is Exercise note, Rename exercise, Replace exercise (drafts only), Move
 up/down, and Delete exercise last.
 
-- *Rename exercise* changes the occurrence's label and keeps its ID, so
-  history, Previous values, records and measurement stay together. It saves
-  names without surrounding or repeated whitespace. *Also rename in plans and
-  past workouts*, checked by default, shows how many plans and workouts in the
-  split contain the same movement. Checked, `ExerciseRenameService` rewrites
-  the label of every live plan and workout occurrence in the split that
-  resolves to the same canonical ID. It keeps each `exerciseId`, filling a
-  legacy null with the resolved identity, and leaves sets, notes and targets
-  alone. Writes run under the sync gate, mark changed rows dirty with a fresh
-  `updatedAt`, and schedule a sync; other splits and tombstones are untouched.
-  An owned custom catalog movement is also relabelled through
-  `ExerciseCatalog.rename`, so the picker and Stats agree. Bundled labels are
-  permanent. Renaming never merges identities: when the new name already
-  belongs to another movement, the dialog says the histories stay separate and
-  points to Settings → Manage exercises, where merging is explicit.
+- *Rename exercise* opens the one rename dialog, shared with Settings →
+  Manage exercises (`showExerciseRenameDialog`). It renames the movement for
+  the whole account, bundled movements included, by writing one catalog row
+  (`ExerciseRenameService.rename`): the ID is kept and no plan or workout is
+  rewritten, so history, Previous values, records and measurement stay
+  together, and the new name shows everywhere at once. It saves names without
+  surrounding or repeated whitespace, and keeps the old name as a search
+  alias. The dialog says the name changes everywhere and how many plans and
+  workouts use the movement. When the typed name already belongs to another
+  movement, the two are the same movement: the dialog says so, explains that
+  merging combines their history and can't be undone, and its action becomes
+  *Merge* (`ExerciseRenameService.merge`), which redirects this movement into
+  that one. A merge can't be undone, so the keyboard's own action only ever
+  renames; merging takes the *Merge* button. The dialog follows the catalog
+  while it is open (a sync can give the typed name to another movement), and
+  the button only ever does what it said when pressed: if that changed, the
+  dialog redraws and waits. If the movement being renamed has itself been
+  merged into another meanwhile, the dialog says so and offers nothing,
+  because the catalog follows redirects and would change that other movement
+  instead. `ExerciseRenameService.rename` and `.merge` check the same thing
+  under the sync gate and throw `ExerciseChangedException`, which the merge
+  confirmation in Manage exercises reports as a change on another device. A bundled hold and a bundled lift are never
+  merged, in either direction, because a merged movement is measured like
+  its target and logged reps would be read as seconds
+  (`ExerciseCatalog.canMerge`); the note says why and there is nothing to
+  press. A custom movement has no kind of its own, so it may still join a
+  hold, with a line saying its reps will be read as seconds. When the typed name is an alias
+  or former name of the other movement, the note says which movement it
+  belongs to. There is no "this workout only" rename; a different movement in
+  one workout is *Replace exercise*.
 - *Replace exercise* opens the library in single-choice mode and swaps the
-  chosen movement, with its catalog ID, into this workout only. It keeps the
+  chosen movement, with its catalog ID, into this workout. It keeps the
   set count. Weight and reps come from that movement's latest logged
   performance in the split, or weight 0 with the same reps when there is none.
   RPE, set notes and the exercise note are cleared. Movements already in the
-  workout show as *Added* and can't be chosen.
+  workout show as *Added* and can't be chosen. Like any lineup change, the
+  next week carries the replacement over. The plan is not changed by it:
+  once the swap is saved, *Also change the plan?* offers *Keep plan* or
+  *Change plan*. *Change plan* makes the same swap in the plan
+  (`PlanExerciseSwap`): the replacement takes the replaced exercise's place,
+  set count and effort targets, reps and weight follow the workout's rule
+  (the replacement's latest logged sets, or the same reps with no weight
+  target), and the guidance note is cleared. The draft's recorded lineup
+  gets the same swap, so the next week does not read it as a plan edit made
+  since. Nothing is asked when the plan has no such exercise to swap (it was
+  added in a workout) or already lists the replacement. The plan is read and
+  written under the sync gate, from storage only: a plan deleted while the
+  question was open is left deleted and the dialog reports the failure. Adding, deleting and
+  reordering in a workout never change the plan.
+- *Delete exercise* removes the exercise and its sets from the workout. In
+  the week being trained now the confirmation adds that next week will start
+  without it too, since the plan still lists it.
 - Built-in movements carry a kind in `ExerciseLibrary` (weighted, bodyweight
   or timed), keyed by their permanent ID. `ExerciseCatalog.kindOf`/`isTimed`
   resolve an occurrence's canonical ID, so a renamed hold still stores
@@ -251,8 +305,11 @@ Exercise definitions are shared across splits within one account. Bundled IDs
 are permanent; custom entries are reusable offline. Names and reviewed aliases
 support search, while statistics, records, initialization and previous sets use
 IDs. Legacy names migrate conservatively with the same recoverable graph flow.
-Settings → Manage exercises offers custom renaming and confirmed merging.
-Merges retain original logs and resolve redirects instead of deleting sets.
+Settings → Manage exercises lists the movements the account trains (custom or
+used in a plan or workout) first, each with how many workouts and plans use
+it, and offers the shared rename dialog for any movement and a confirmed merge
+into another. Merges retain original logs and resolve redirects instead of
+deleting sets.
 See [exercise identity](docs/exercises.md) for migration, conflict, and backup
 behavior.
 
@@ -789,14 +846,27 @@ signature:
   only once it has lasted 300ms, and the line folds open and away rather
   than shoving the log down and back; its label is in the tree from the
   start but is announced only once shown. A failed save's message and Retry
-  fold open the same way. A held exercise rises from the page onto the
-  raised ground as it lifts and sinks back as it drops. Changing week, the
+  fold open the same way. Holding an exercise's name or its note picks it
+  up to move: the log folds to one short row per exercise, each travelling
+  from its card's title, and the held row rises onto the raised ground from
+  the name. Each row is numbered by its place, the numbers opening a column
+  before the names as the log folds; a row that changes place rolls its
+  number to the new one (`RollingFigure`). Rows of one height step aside one
+  place at a time as it passes,
+  and pushing it against the top or bottom scrolls them at a pace that grows
+  with the push; a row picked up near an edge scrolls nothing until it is
+  pushed further that way. Let go, the log is scrolled so the exercise sits
+  where it was dropped, and every row travels back onto its title as the
+  cards return, the numbers folding away. There is no handle on the cards: a
+  tap on a name or note says *Hold and drag to reorder*, and the first *Move up* or *Move down* from an
+  exercise's menu mentions the drag once in a snackbar. Changing week, the
   header's timer controls and the clock change in place without motion.
   Under reduced motion every change is immediate: the log doesn't follow a
   swipe, and a switch lands at once.
 - Haptics are named for the moment (`lib/utils/haptics.dart`): a selection
-  tick when the main tab changes or a plan is dropped into a new place, a
-  light impact when a plan card is picked up to drag, a medium impact when
+  tick when the main tab changes or a plan or exercise is dropped into a new
+  place, a light impact when a plan card or exercise is picked up to drag, a
+  medium impact when
   the workout clock starts, a heavy one for a new record or a logged workout.
   Keypad keys keep their own selection clicks.
 - Create and Edit plan share the workout log's open exercise sections, hairline
@@ -911,6 +981,17 @@ signature:
   ±5/±2.5 in pounds (reps keep ±1). Values keep full precision in storage and
   are rounded only for display; retyping the figure a cell showed keeps the
   stored kilograms exactly, so opening a pounds cell never drifts a value.
+- Settings → Workout → *Week starts on* (Monday / Sunday / Saturday, Monday by
+  default) sets `SettingsProvider.weekStartsOn` (a `DateTime` weekday, stored
+  as `week_starts_on`, backed up as `weekStartsOn`, optional so older backups
+  still import). It decides every calendar week the app shows: Home's week
+  strip (its letters start on that day), its totals and the plans' *Done*
+  marks, the workout summary's weekly count, Stats' periods, weekly bars and
+  heatmap rows, and the desktop dashboard. Every week goes through
+  `startOfWeek(date, firstDay:)` in `lib/utils/format.dart`, whose `firstDay`
+  has no default, and widgets read the day with `SettingsProvider.weekStartOf`.
+  It does not touch the rotation: *Next up* is always the plan after the last
+  one trained, so rest days need no setting.
 - Appearance defaults to *System* on a new installation. An installation from
   before that default whose user never picked a theme keeps *Light*, so an
   update never changes how the app looks. `main` settles this before the first
@@ -979,12 +1060,23 @@ signature:
   The seven days are always drawn. An empty week is only the letters and
   today's dot, with the bars' slot closed so four of five plans still fit a
   phone; it opens as the first day is trained.
-- Home's launcher is the one raised card on the page, and it is not itself a
-  button: *Start workout* (or *Resume workout*) is its single target. Its
-  first line reads “Next up · Workout N of M” with *Last done …* at the end,
-  over the rotation bar; the same workout numbers appear in the plan list's
-  markers. Muscle groups sit on their own line; exercise, set, and duration
-  values are dot-separated phrases (`PhraseLine`) that wrap only between
+- Home's launcher is the one raised card on the page. A tap anywhere on it
+  does what *Start workout* (or *Resume workout*) does, but only for a
+  pointer: the button stays its single target for a screen reader or a
+  keyboard, so the action is met once. It opens with the plan's own marker
+  (`PlanMarker`, the mark its row in the list below carries) beside *Next
+  up* (or *In progress*) and the rotation bar, the status on the marker's
+  top edge and the bar on its bottom, so the three read as one mark. The bar draws one segment per plan in that plan's
+  colour, and the plan on offer stands taller (6dp against 2dp, thin enough
+  that five colours stay quieter than the name); height is its only
+  emphasis, so it holds when plans share a colour or have none. The bar
+  shows place in the rotation, not what was trained this week: the list's
+  *Done* marks say that. The marker speaks “Workout N of M”, so the place
+  is not also written out. The plan's name has the card's full width
+  beneath, over the muscle groups it trains, in the picker's order (a plan
+  of only custom exercises has no such line). Exercise and set counts are
+  not repeated here: each plan's row in the list carries its own. Counts
+  anywhere are dot-separated phrases (`PhraseLine`) that wrap only between
   phrases, so a count never parts from its unit. Each phrase is measured
   against the whole line before its dot; the dot follows only when both
   fit, so it never squeezes a phrase into breaking mid-word. The weekly summary keeps its
@@ -997,7 +1089,8 @@ signature:
   The details line starts with where the plan stands: *Next* in accent ink,
   *In progress* while its workout is under way (the launcher then offers to
   resume that plan, and no other row claims to be next), or a success check
-  and *Done* for a plan trained since Monday, so the list reads as the week's
+  and *Done* for a plan trained since the week began (Monday unless Settings
+  says otherwise), so the list reads as the week's
   to-do list. A play glyph before *…* says what a tap on the row does: it
   opens that plan's workout, or for the row *In progress*, the live session
   itself, as *Resume workout* does, even when that session sits in an
@@ -1064,8 +1157,8 @@ exist. The rules that follow from that:
   follows a swipe: the workout's log is carried by the finger one to one, so
   when it switches plan the logs trade over a quarter of the width
   (`AppMotion.swipeShift`), the distance the hand began. A plan card picked up to
-  drag lifts to 1.025 under a deepening shadow, the one scale above full
-  size. A record badge earned just now is the one mark that pops in from
+  drag, or an exercise held to be moved, lifts to 1.025 under a deepening
+  shadow, the one scale above full size. A record badge earned just now is the one mark that pops in from
   nothing: it pops only as it is earned, never when the log opens with it or
   a card scrolls back into view. Staggering is rare: first
   appearance only, a handful of items at most, 40ms apart, and never replayed

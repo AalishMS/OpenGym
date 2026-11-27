@@ -61,10 +61,35 @@ int calendarDaysBetween(DateTime from, DateTime to) =>
 DateTime _utcDate(DateTime date) =>
     DateTime.utc(date.year, date.month, date.day);
 
-/// Local midnight on the Monday of [date]'s week — the same week the
-/// dashboard heatmap draws.
-DateTime startOfWeek(DateTime date) =>
-    DateTime(date.year, date.month, date.day - (date.weekday - 1));
+/// Local midnight on the first day of [date]'s week, for weeks that start on
+/// [firstDay] (`DateTime.monday` … `DateTime.sunday`).
+///
+/// Every week the app shows (Home's strip and *Done* marks, Stats' weeks and
+/// heatmaps) starts on the user's choice in Settings, read with
+/// `SettingsProvider.weekStartOf`, so [firstDay] has no default: a caller
+/// that forgot it would quietly draw a Monday week.
+DateTime startOfWeek(DateTime date, {required int firstDay}) =>
+    DateTime(date.year, date.month, date.day - (date.weekday - firstDay) % 7);
+
+/// The seven weekdays (`DateTime.monday` … `DateTime.sunday`) in the order a
+/// week starting on [firstDay] lists them.
+List<int> weekdaysFrom(int firstDay) => [
+  for (var offset = 0; offset < 7; offset++) (firstDay - 1 + offset) % 7 + 1,
+];
+
+/// `Monday` … `Sunday`, indexed by `DateTime.weekday - 1`.
+const List<String> kWeekdayNames = [
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
+
+/// A weekday's initial (`M`, `T`, `W`, …) for day-by-day charts.
+String weekdayLetter(int weekday) => kWeekdayNames[weekday - 1][0];
 
 /// `push day` → `Push Day`, for display only; stored names keep their case.
 ///

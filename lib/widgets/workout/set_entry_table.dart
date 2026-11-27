@@ -212,6 +212,10 @@ class SetEntryTable extends StatefulWidget {
   /// Space needed at the end of a workout list to reveal its last set.
   static ValueListenable<double> get keyboardHeight => _keyboardHeight;
 
+  /// Closes the keypad if one is open, finishing its entry as a tap elsewhere
+  /// would. An exercise picked up to be moved does this.
+  static void closeKeypad() => _SetEntryTableState._activeKeyboard?._close();
+
   final List<SetEntry> sets;
   final bool isTimed;
   final void Function(int index, double weight, int reps) onChanged;

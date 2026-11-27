@@ -524,9 +524,11 @@ class TrainingBlockGraph {
       for (final p in plans)
         for (final e in p.exercises)
           if (e.exerciseId != null) e.exerciseId!,
-      for (final s in sessions)
+      for (final s in sessions) ...[
         for (final e in s.exercises)
           if (e.exerciseId != null) e.exerciseId!,
+        ...?s.planExerciseIds,
+      ],
     };
     final exerciseIds = {
       for (final id in exerciseReferences)
@@ -603,6 +605,12 @@ class TrainingBlockGraph {
               for (final e in r.exercises)
                 e.copyWith(exerciseId: exerciseReference(e.exerciseId)),
             ],
+            planExerciseIds:
+                r.planExerciseIds == null
+                    ? null
+                    : List<String>.unmodifiable(
+                      r.planExerciseIds!.map((id) => exerciseIds[id] ?? id),
+                    ),
             splitId: splitIds[r.splitId],
             planId: planReference(r.planId),
             trainingWeekId: weekIds[r.trainingWeekId],

@@ -24,10 +24,11 @@ import '../providers/training_block_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
 import '../repositories/training_block_repository.dart';
-import '../services/exercise_rename_service.dart';
 import '../services/hive_service.dart';
+import '../services/plan_exercise_swap.dart';
 import '../services/statistics_analytics_service.dart';
 import '../services/sync_service.dart';
+import '../services/tutorial_preferences.dart';
 import '../services/workout_progression_service.dart';
 import '../services/workout_session_initializer.dart';
 import '../services/workout_timer_notification_service.dart';
@@ -43,13 +44,16 @@ import '../utils/workout_context.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_header.dart';
 import '../widgets/exercise_picker_sheet.dart';
+import '../widgets/exercise_rename_dialog.dart';
 import '../widgets/motion/app_modals.dart';
 import '../widgets/motion/collapsible.dart';
 import '../widgets/motion/page_switcher.dart';
 import '../widgets/motion/patient_progress.dart';
+import '../widgets/persistence_dialog.dart';
 import '../widgets/plan_title_hero.dart';
 import '../widgets/underline_tab_strip.dart';
 import '../widgets/workout/exercise_card.dart';
+import '../widgets/workout/exercise_reorder.dart';
 import '../widgets/workout/plan_swipe_region.dart';
 import '../widgets/workout/set_entry_table.dart';
 import '../widgets/workout/training_block_dialogs.dart';
@@ -588,17 +592,23 @@ class _WorkoutScreenState extends State<WorkoutScreen>
           session.id != null &&
           session.hasStarted);
 
-  /// The plan as saved now. Renaming an exercise everywhere rewrites the saved
+  /// The plan as saved now. A sync from another device can rewrite the saved
   /// plan while this screen is open, so a week opened afterwards must not be
   /// built from the copy this screen was pushed with.
-  WorkoutPlan get _livePlan {
+  WorkoutPlan get _livePlan => _savedPlan ?? widget.plan;
+
+  /// The plan in storage, or null once it has been deleted or has left this
+  /// split. Anything that writes the plan must start from this and never
+  /// from [_livePlan]'s fallback, which would save the copy this screen was
+  /// pushed with over a deletion.
+  WorkoutPlan? get _savedPlan {
     final id = widget.plan.id;
     final saved = id == null ? null : HiveService.getPlanById(id);
     return saved != null &&
             saved.deletedAt == null &&
             saved.splitId == widget.plan.splitId
         ? saved
-        : widget.plan;
+        : null;
   }
 
   WorkoutSession _getOrCreateSession() {
@@ -611,20 +621,26 @@ class _WorkoutScreenState extends State<WorkoutScreen>
   }
 
   /// Builds the selected week's workout, or returns [existingSession] when it
-  /// is saved. A week with no saved data starts from the previous week's
-  /// logged sets while *Start from last week's sets* is on, and from the
-  /// plan's targets while it is off. Saved drafts and logs are never changed.
+  /// is saved. A week with no saved data carries over the exercises of this
+  /// plan's last logged workout, with the plan's edits since applied, and
+  /// starts from the previous week's logged sets while *Start from last week's
+  /// sets* is on, or from the plan's targets while it is off. Saved drafts and
+  /// logs are never changed.
   WorkoutSession _initializeSession({WorkoutSession? existingSession}) {
     final startFromLastWeek =
         context.read<SettingsProvider?>()?.autoFillLast ?? true;
+    final planId = widget.plan.id;
     return WorkoutSessionInitializer.initialize(
       plan: _livePlan,
       week: _selectedWeek,
       existingSession: existingSession,
       previousSession:
-          !startFromLastWeek || widget.plan.id == null
+          planId == null ? null : _training.source(planId, _currentWeek),
+      lastSession:
+          planId == null
               ? null
-              : _training.source(widget.plan.id!, _currentWeek),
+              : _training.previous(planId, _currentWeek).firstOrNull,
+      copySets: startFromLastWeek,
     );
   }
 
@@ -1025,106 +1041,36 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     );
   }
 
-  void _showExerciseRenameDialog(int exerciseIndex) {
+  /// Renames the movement everywhere, or merges it into the movement that
+  /// already has the typed name. Nothing in this workout is rewritten: every
+  /// occurrence shows its movement's catalog name, so the new name appears
+  /// here, in other weeks and in past logs at once.
+  Future<void> _showExerciseRenameDialog(int exerciseIndex) async {
     final session = _getOrCreateSession();
     final exercise = session.exercises[exerciseIndex];
-    final splitId = widget.plan.splitId;
-    // The occurrence keeps this identity whatever it is called, so its
-    // history, Previous values, records and measurement stay together.
-    final identity = ExerciseCatalog.identity(
-      exercise.name,
-      exercise.exerciseId,
-    );
-    WorkoutDialogs.showRenameExerciseDialog(
+    final outcome = await showExerciseRenameDialog(
       context,
-      currentName: exercise.name,
-      onRename: (name) {
-        name = ExerciseRenameService.canonicalName(name);
-        final current = _getOrCreateSession();
-        if (exerciseIndex >= current.exercises.length) return;
-        final updatedExercises = List<Exercise>.from(current.exercises);
-        updatedExercises[exerciseIndex] = current.exercises[exerciseIndex]
-            .copyWith(name: name, exerciseId: exercise.exerciseId ?? identity);
-        _updateSession(current.copyWith(exercises: updatedExercises));
-        _autoSave();
-      },
-      impactFor:
-          splitId == null
-              ? null
-              : (name) => ExerciseRenameService.impact(
-                splitId: splitId,
-                exerciseId: identity,
-                to: name,
-              ),
-      onRenameEverywhere:
-          splitId == null
-              ? null
-              : (name) => _renameExerciseEverywhere(splitId, identity, name),
+      exerciseId: ExerciseCatalog.identity(exercise.name, exercise.exerciseId),
+      currentName: ExerciseCatalog.label(exercise.name, exercise.exerciseId),
+      userId: session.userId ?? widget.plan.userId,
     );
-  }
-
-  /// Renames movement [exerciseId] in this workout, then its labels in every
-  /// plan and workout of the split. Identities are kept, so nothing about the
-  /// movement's history changes except what it is called.
-  Future<void> _renameExerciseEverywhere(
-    String splitId,
-    String exerciseId,
-    String to,
-  ) async {
-    to = ExerciseRenameService.canonicalName(to);
-    if (ExerciseRenameService.validationMessage(to) case final message?) {
-      throw ArgumentError(message);
-    }
-    final session = _getOrCreateSession();
-    bool matches(Exercise e) =>
-        ExerciseCatalog.identity(e.name, e.exerciseId) == exerciseId;
-    // This workout first: it may hold entries that are not saved yet.
-    _updateSession(
-      session.copyWith(
-        exercises: [
-          for (final e in session.exercises)
-            matches(e)
-                ? e.copyWith(name: to, exerciseId: e.exerciseId ?? exerciseId)
-                : e,
-        ],
-      ),
-    );
-    if (!await _autoSave() || !mounted) return;
-    try {
-      await ExerciseRenameService.rename(
-        splitId: splitId,
-        exerciseId: exerciseId,
-        to: to,
-        userId: session.userId,
-      );
-    } catch (error) {
-      debugPrint('Failed to rename exercise everywhere: $error');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Renamed in this workout only. Plans and past workouts could not '
-            'be updated. Try again.',
-          ),
-        ),
-      );
-      return;
-    }
-    if (!mounted) return;
-    // Reload every reader. A completed log being edited has just been saved,
-    // so re-read it rather than keep the pre-rename copy.
-    if (session.id case final id?) {
-      if (HiveService.getSessionById(id) case final saved?) {
-        _weekSessions[_currentWeek] = saved;
-      }
-    }
-    context.read<WorkoutPlanProvider>().loadPlans();
-    context.read<WorkoutSessionProvider>().loadSessions();
-    _training.reload();
+    if (outcome == null || !mounted) return;
+    // A merge changes which history Previous values and records come from.
+    _previousSets.clear();
+    _recordCache = null;
+    _celebratedRecords = null;
     setState(() {});
+    if (outcome case ExerciseMerged(:final into)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Merged into ${into.name}')));
+    }
   }
 
-  /// Swaps another movement into this workout only, keeping the set count.
+  /// Swaps another movement into this workout, keeping the set count. Like
+  /// any lineup change, the next week carries the swap over. The plan keeps
+  /// its own lineup unless the user also changes it in the prompt that
+  /// follows (see [_offerPlanSwap]).
   ///
   /// Sets take the new movement's latest logged weights and reps in this
   /// split, or weight 0 with the replaced exercise's reps when it has none.
@@ -1138,7 +1084,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final replacedId = key(replaced);
     final picked = await pickSingleExercise(
       context,
-      title: 'Replace ${replaced.name}',
+      title:
+          'Replace ${ExerciseCatalog.label(replaced.name, replaced.exerciseId)}',
       unavailableExerciseIds: session.exercises.map(key),
       userId: session.userId,
     );
@@ -1177,8 +1124,107 @@ class _WorkoutScreenState extends State<WorkoutScreen>
               ),
       ],
     );
+    // Which listing of the movement this was, for a plan that has it twice.
+    final occurrence =
+        current.exercises
+            .take(exerciseIndex)
+            .where((e) => key(e) == replacedId)
+            .length;
     _updateSession(current.copyWith(exercises: updated));
-    await _autoSave();
+    if (!await _autoSave() || !mounted) return;
+    await _offerPlanSwap(
+      from: replacedId,
+      fromName: ExerciseCatalog.label(replaced.name, replaced.exerciseId),
+      to: picked.exerciseId,
+      toName: picked.name,
+      occurrence: occurrence,
+      history: history,
+    );
+  }
+
+  /// After a swap in the workout, asks whether the plan should have it too.
+  ///
+  /// The workout, and the weeks that carry it over, already have the swap;
+  /// the plan keeps its own lineup unless the user says otherwise here.
+  /// Nothing is asked when the plan has no such exercise to swap (it was
+  /// added in a workout) or already lists the replacement.
+  Future<void> _offerPlanSwap({
+    required String from,
+    required String fromName,
+    required String to,
+    required String toName,
+    required int occurrence,
+    required List<gym.Set> history,
+  }) async {
+    bool applies(WorkoutPlan? plan) =>
+        plan != null &&
+        PlanExerciseSwap.canApply(
+          plan,
+          from: from,
+          to: to,
+          occurrence: occurrence,
+        );
+    final offered = _savedPlan;
+    if (offered == null || !applies(offered)) return;
+    final plans = context.read<WorkoutPlanProvider>();
+    final planName = offered.name;
+    final changed = await showAppDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder:
+          (_) => PersistenceDialog(
+            title: 'Also change the plan?',
+            content: Text(
+              '$toName replaced $fromName in this workout. Change it in the '
+              '$planName plan too?',
+            ),
+            cancelLabel: 'Keep plan',
+            actionLabel: 'Change plan',
+            progressLabel: 'Changing plan',
+            failureMessage:
+                'Could not change the plan. Try again or keep the plan.',
+            onPersist:
+                // Read and written under the sync gate. A sync may have
+                // changed or deleted the plan while this was open, and one
+                // landing between the check and the write would be undone.
+                () => SyncService.instance.runExclusiveLocalMutation(() async {
+                  final plan = _savedPlan;
+                  if (plan == null || !applies(plan)) {
+                    throw StateError('The plan changed.');
+                  }
+                  await plans.updatePlan(
+                    PlanExerciseSwap.apply(
+                      plan,
+                      from: from,
+                      to: to,
+                      name: toName,
+                      occurrence: occurrence,
+                      history: history,
+                    ),
+                  );
+                }),
+          ),
+    );
+    if (changed != true || !mounted) return;
+    // This workout has now seen the plan's swap. Recording it keeps the next
+    // week from reading the replacement as an exercise the plan gained since.
+    final session = _getOrCreateSession();
+    final lineup = PlanExerciseSwap.inLineup(
+      session.planExerciseIds,
+      from: from,
+      to: to,
+      occurrence: occurrence,
+    );
+    if (!session.isCompleted &&
+        lineup != null &&
+        !listEquals(lineup, session.planExerciseIds)) {
+      _updateSession(session.copyWith(planExerciseIds: lineup));
+      await _autoSave();
+      if (!mounted) return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('$planName plan now has $toName')));
   }
 
   void _addSet(int exerciseIndex) {
@@ -1308,6 +1354,42 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     if (oldIndex == exercises.indexOf(exercise)) return;
     _updateSession(session.copyWith(exercises: exercises));
     _autoSave();
+  }
+
+  /// Move up or Move down from an exercise's menu. Someone reaching for these
+  /// is looking for a way to reorder, so the first time, say that the name
+  /// can be held and dragged instead.
+  void _moveExercise(int oldIndex, int newIndex) {
+    _reorderExercises(oldIndex, newIndex);
+    unawaited(_offerReorderTip());
+  }
+
+  Future<void> _offerReorderTip() async {
+    try {
+      if (!await TutorialPreferences.takeExerciseReorderTip()) return;
+    } catch (error) {
+      debugPrint('Could not read the reorder tip preference: $error');
+      return;
+    }
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Tip: hold an exercise\'s name and drag it to reorder.',
+          ),
+        ),
+      );
+  }
+
+  /// An exercise dragged into a new place, by holding its name.
+  void _dragExercise(int oldIndex, int newIndex) {
+    _reorderExercises(oldIndex, newIndex);
+    TutorialPreferences.markExerciseReorderLearned().catchError(
+      (Object error) =>
+          debugPrint('Could not save the reorder tip preference: $error'),
+    );
   }
 
   Future<void> _prepareEntry() async {
@@ -1882,7 +1964,8 @@ class _WorkoutScreenState extends State<WorkoutScreen>
     final exercise = session.exercises[exerciseIndex];
     final confirmed = await WorkoutDialogs.showDeleteExerciseDialog(
       context,
-      exerciseName: exercise.name,
+      exerciseName: ExerciseCatalog.label(exercise.name, exercise.exerciseId),
+      carriesOver: !session.isCompleted && _activeSlot,
     );
 
     if (confirmed && mounted) {
@@ -2185,143 +2268,141 @@ class _WorkoutScreenState extends State<WorkoutScreen>
                 ),
               ),
               Expanded(
-                child: PlanSwipeRegion(
-                  onNextPlan: onNextPlan,
-                  onPreviousPlan: onPreviousPlan,
-                  onDragProgress: _updatePlanSwipe,
-                  onDragCancel: _settlePlanSwipe,
-                  child: page(
-                    CustomScrollView(
-                      key: ValueKey(_currentWeek),
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
+                child: ExerciseReorderScope(
+                  items: [
+                    for (final exercise in session.exercises)
+                      ExerciseReorderItem(
+                        name: ExerciseCatalog.label(
+                          exercise.name,
+                          exercise.exerciseId,
+                        ),
+                        detail: switch (exercise.sets.length) {
+                          0 => 'No sets',
+                          1 => '1 set',
+                          final count => '$count sets',
+                        },
                       ),
-                      slivers: [
-                        // One gutter keeps the exercise tables aligned as a log.
-                        // No top inset, and the first exercise drops its own:
-                        // its title sits snug under the plan tabs' rule.
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(
-                            AppSpacing.lg,
-                            0,
-                            AppSpacing.lg,
-                            AppSpacing.sm,
-                          ),
-                          sliver: SliverReorderableList(
-                            itemCount: session.exercises.length + 1,
-                            onReorderItem: _reorderExercises,
-                            // The held exercise rises off the page onto a
-                            // raised ground as it lifts, and sinks back into
-                            // the page as it drops into place.
-                            proxyDecorator:
-                                (child, index, animation) => AnimatedBuilder(
-                                  animation: animation,
-                                  builder:
-                                      (context, child) => Material(
-                                        color: Color.lerp(
-                                          backgroundColor(context),
-                                          surfaceColor(context),
-                                          AppMotion.curve.transform(
-                                            animation.value,
-                                          ),
-                                        ),
-                                        borderRadius: AppRadius.card,
-                                        child: child,
-                                      ),
-                                  child: child,
-                                ),
-                            itemBuilder: (context, index) {
-                              if (index == session.exercises.length) {
-                                return TextButton.icon(
-                                  key: const ValueKey('add_exercise_button'),
-                                  onPressed: _addEmptyExercise,
-                                  icon: const Icon(LucideIcons.plus, size: 18),
-                                  label: const Text('Add exercise'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: accent,
-                                    minimumSize: const Size.fromHeight(48),
-                                    shape: const RoundedRectangleBorder(
-                                      borderRadius: AppRadius.button,
+                  ],
+                  onReorder: _dragExercise,
+                  child: PlanSwipeRegion(
+                    onNextPlan: onNextPlan,
+                    onPreviousPlan: onPreviousPlan,
+                    onDragProgress: _updatePlanSwipe,
+                    onDragCancel: _settlePlanSwipe,
+                    child: page(
+                      CustomScrollView(
+                        key: ValueKey(_currentWeek),
+                        physics: const BouncingScrollPhysics(
+                          parent: AlwaysScrollableScrollPhysics(),
+                        ),
+                        slivers: [
+                          // One gutter keeps the exercise tables aligned as a log.
+                          // No top inset, and the first exercise drops its own:
+                          // its title sits snug under the plan tabs' rule.
+                          SliverPadding(
+                            padding: const EdgeInsets.fromLTRB(
+                              AppSpacing.lg,
+                              0,
+                              AppSpacing.lg,
+                              AppSpacing.sm,
+                            ),
+                            // Holding an exercise's name moves it, through
+                            // the ExerciseReorderScope around the log.
+                            sliver: SliverList.builder(
+                              itemCount: session.exercises.length + 1,
+                              itemBuilder: (context, index) {
+                                if (index == session.exercises.length) {
+                                  return TextButton.icon(
+                                    key: const ValueKey('add_exercise_button'),
+                                    onPressed: _addEmptyExercise,
+                                    icon: const Icon(
+                                      LucideIcons.plus,
+                                      size: 18,
                                     ),
+                                    label: const Text('Add exercise'),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: accent,
+                                      minimumSize: const Size.fromHeight(48),
+                                      shape: const RoundedRectangleBorder(
+                                        borderRadius: AppRadius.button,
+                                      ),
+                                    ),
+                                  );
+                                }
+
+                                final exercise = session.exercises[index];
+
+                                return Container(
+                                  // Numeric edits replace the exercise snapshot;
+                                  // retain the row and its active keypad across them.
+                                  key: ValueKey((
+                                    _currentWeek,
+                                    index,
+                                    exercise.name,
+                                  )),
+                                  decoration: BoxDecoration(
+                                    border: Border(
+                                      bottom: BorderSide(
+                                        color: hairlineColor(context),
+                                      ),
+                                    ),
+                                  ),
+                                  child: ExerciseCard(
+                                    exercise: exercise,
+                                    exerciseIndex: index,
+                                    first: index == 0,
+                                    reorderable: true,
+                                    onMoveUp:
+                                        index > 0
+                                            ? () =>
+                                                _moveExercise(index, index - 1)
+                                            : null,
+                                    onMoveDown:
+                                        index < session.exercises.length - 1
+                                            ? () =>
+                                                _moveExercise(index, index + 1)
+                                            : null,
+                                    accent: accent,
+                                    previousSets: _previousFor(
+                                      ExerciseCatalog.identity(
+                                        exercise.name,
+                                        exercise.exerciseId,
+                                      ),
+                                    ),
+                                    onSetChanged: _changeSetValues,
+                                    onSetRpeChanged: _changeSetRpe,
+                                    recordSetIndexes:
+                                        liveRecords[index] ?? const <int>{},
+                                    onEntryFinished: () {
+                                      if (!mounted) return;
+                                      _celebrateNewRecords();
+                                      _autoSave();
+                                    },
+                                    onAddSet: (i) => _addSet(i),
+                                    onDeleteSet:
+                                        (i, setIndex) =>
+                                            _deleteSet(i, setIndex),
+                                    onAddNote: _addExerciseNote,
+                                    onRename: _showExerciseRenameDialog,
+                                    onReplace:
+                                        session.isCompleted
+                                            ? null
+                                            : _replaceExercise,
+                                    onDeleteExercise: _deleteExercise,
                                   ),
                                 );
-                              }
-
-                              final exercise = session.exercises[index];
-
-                              return Container(
-                                // Numeric edits replace the exercise snapshot;
-                                // retain the row and its active keypad across them.
-                                key: ValueKey((
-                                  _currentWeek,
-                                  index,
-                                  exercise.name,
-                                )),
-                                decoration: BoxDecoration(
-                                  border: Border(
-                                    bottom: BorderSide(
-                                      color: hairlineColor(context),
-                                    ),
-                                  ),
-                                ),
-                                child: ExerciseCard(
-                                  exercise: exercise,
-                                  exerciseIndex: index,
-                                  first: index == 0,
-                                  reorderable: true,
-                                  onMoveUp:
-                                      index > 0
-                                          ? () => _reorderExercises(
-                                            index,
-                                            index - 1,
-                                          )
-                                          : null,
-                                  onMoveDown:
-                                      index < session.exercises.length - 1
-                                          ? () => _reorderExercises(
-                                            index,
-                                            index + 1,
-                                          )
-                                          : null,
-                                  accent: accent,
-                                  previousSets: _previousFor(
-                                    ExerciseCatalog.identity(
-                                      exercise.name,
-                                      exercise.exerciseId,
-                                    ),
-                                  ),
-                                  onSetChanged: _changeSetValues,
-                                  onSetRpeChanged: _changeSetRpe,
-                                  recordSetIndexes:
-                                      liveRecords[index] ?? const <int>{},
-                                  onEntryFinished: () {
-                                    if (!mounted) return;
-                                    _celebrateNewRecords();
-                                    _autoSave();
-                                  },
-                                  onAddSet: (i) => _addSet(i),
-                                  onDeleteSet:
-                                      (i, setIndex) => _deleteSet(i, setIndex),
-                                  onAddNote: _addExerciseNote,
-                                  onRename: _showExerciseRenameDialog,
-                                  onReplace:
-                                      session.isCompleted
-                                          ? null
-                                          : _replaceExercise,
-                                  onDeleteExercise: _deleteExercise,
-                                ),
-                              );
-                            },
+                              },
+                            ),
                           ),
-                        ),
-                        ValueListenableBuilder<double>(
-                          valueListenable: SetEntryTable.keyboardHeight,
-                          builder:
-                              (context, height, _) => SliverToBoxAdapter(
-                                child: SizedBox(height: height),
-                              ),
-                        ),
-                      ],
+                          ValueListenableBuilder<double>(
+                            valueListenable: SetEntryTable.keyboardHeight,
+                            builder:
+                                (context, height, _) => SliverToBoxAdapter(
+                                  child: SizedBox(height: height),
+                                ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),

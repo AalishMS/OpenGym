@@ -306,8 +306,13 @@ class StatsScreenState extends State<StatsScreen> {
       splitId,
       ...all,
     ], () => analytics.eligibleSessions(all, splitId: splitId));
-    // Periods and weekly charts end with the current week.
-    final thisWeek = StatisticsAnalyticsService.startOfWeek(DateTime.now());
+    // Periods and weekly charts end with the current week, which starts on
+    // the user's chosen day.
+    final firstDayOfWeek = SettingsProvider.weekStartOf(context);
+    final thisWeek = StatisticsAnalyticsService.startOfWeek(
+      DateTime.now(),
+      firstDay: firstDayOfWeek,
+    );
     _hasSections = sessions.isNotEmpty;
     if (_lastSplit != splitId) {
       _lastSplit = splitId;
@@ -340,7 +345,11 @@ class StatsScreenState extends State<StatsScreen> {
     final lifts = _lifts(
       [analytics, sessions, catalog, _period, _metric, thisWeek],
       () => analytics.liftSummaries(
-        analytics.sessionsInPeriod(sessions, _period),
+        analytics.sessionsInPeriod(
+          sessions,
+          _period,
+          firstDayOfWeek: firstDayOfWeek,
+        ),
         _metric,
       ),
     );
@@ -397,8 +406,11 @@ class StatsScreenState extends State<StatsScreen> {
           showCurrentWeek: _showCurrentWeek,
           weeks: _weekly(
             [analytics, sessions, catalog, weeklyExercise, thisWeek],
-            () =>
-                analytics.weeklyVolume(sessions, exerciseName: weeklyExercise),
+            () => analytics.weeklyVolume(
+              sessions,
+              exerciseName: weeklyExercise,
+              firstDayOfWeek: firstDayOfWeek,
+            ),
           ),
           exercise: weeklyExercise,
           exerciseLabel: directory[weeklyExercise],

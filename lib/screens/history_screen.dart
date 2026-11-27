@@ -664,7 +664,9 @@ class _EditSessionScreenState extends State<EditSessionScreen>
     final exercise = _session.exercises[index];
     final confirmed = await _confirmDelete(
       title: 'Delete exercise?',
-      message: 'Delete “${exercise.name}” and all its sets from this workout?',
+      message:
+          'Delete “${ExerciseCatalog.label(exercise.name, exercise.exerciseId)}” '
+          'and all its sets from this workout?',
     );
     if (!mounted || !confirmed || _isSaving) return;
     final exercises = List<Exercise>.from(_session.exercises)..removeAt(index);
@@ -675,7 +677,9 @@ class _EditSessionScreenState extends State<EditSessionScreen>
     final exercise = _session.exercises[exerciseIndex];
     final confirmed = await _confirmDelete(
       title: 'Delete set?',
-      message: 'Delete set ${setIndex + 1} from “${exercise.name}”?',
+      message:
+          'Delete set ${setIndex + 1} from '
+          '“${ExerciseCatalog.label(exercise.name, exercise.exerciseId)}”?',
     );
     if (!mounted || !confirmed || _isSaving) return;
     final sets = List<gym.Set>.of(exercise.sets)..removeAt(setIndex);
@@ -920,6 +924,7 @@ class _EditableExerciseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final name = ExerciseCatalog.label(exercise.name, exercise.exerciseId);
     final note = exercise.note?.trim();
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -932,12 +937,12 @@ class _EditableExerciseCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  exercise.name,
+                  name,
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
               AppIconButton(
-                label: 'Delete ${exercise.name}',
+                label: 'Delete $name',
                 icon: LucideIcons.trash2,
                 color: errorColor(context),
                 onPressed: enabled ? onRemove : null,

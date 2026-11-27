@@ -9,6 +9,7 @@ import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/weight_units.dart';
+import 'exercise_reorder.dart';
 import 'set_entry_table.dart';
 
 enum _ExerciseAction { note, rename, replace, moveUp, moveDown, deleteExercise }
@@ -102,17 +103,26 @@ class ExerciseCard extends StatelessWidget {
     }
   }
 
+  /// The name and the note pick the exercise up to move when held. The row
+  /// that rises always starts from the name, the [anchor].
+  Widget _reorderHold({required Widget child, bool anchor = true}) =>
+      reorderable && !readOnly
+          ? ExerciseReorderHold(
+            index: exerciseIndex,
+            anchor: anchor,
+            child: child,
+          )
+          : child;
+
   @override
   Widget build(BuildContext context) {
     final weightUnit = SettingsProvider.unitOf(context);
+    final name = ExerciseCatalog.label(exercise.name, exercise.exerciseId);
     final title = Semantics(
       header: true,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
-        child: Text(
-          exercise.name,
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
+        child: Text(name, style: Theme.of(context).textTheme.titleLarge),
       ),
     );
     return Padding(
@@ -127,20 +137,9 @@ class ExerciseCard extends StatelessWidget {
             title
           else
             SetEntryHeading(
-              title:
-                  reorderable && !readOnly
-                      ? ReorderableDelayedDragStartListener(
-                        index: exerciseIndex,
-                        child: Tooltip(
-                          message: 'Hold to reorder ${exercise.name}',
-                          // Reordering owns the long press, not the tooltip.
-                          triggerMode: TooltipTriggerMode.manual,
-                          child: title,
-                        ),
-                      )
-                      : title,
+              title: _reorderHold(child: title),
               action: PopupMenuButton<_ExerciseAction>(
-                tooltip: 'Exercise actions for ${exercise.name}',
+                tooltip: 'Exercise actions for $name',
                 icon: Icon(
                   LucideIcons.ellipsis,
                   size: 20,
@@ -192,11 +191,17 @@ class ExerciseCard extends StatelessWidget {
               ),
             ),
           if (exercise.note?.trim().isNotEmpty ?? false)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: Text(
-                exercise.note!,
-                style: Theme.of(context).textTheme.bodySmall,
+            _reorderHold(
+              anchor: false,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Text(
+                    exercise.note!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
               ),
             ),
           if (exercise.sets.isEmpty)

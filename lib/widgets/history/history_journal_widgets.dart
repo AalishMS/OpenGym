@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
+import '../../services/exercise_catalog.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/radii.dart';
@@ -297,7 +298,9 @@ class _WorkoutSummary extends StatelessWidget {
     final sets = '${stats.totalSets} set${stats.totalSets == 1 ? '' : 's'}';
     final exerciseNames = [
       for (final exercise in session.exercises)
-        if (exercise.name.trim().isNotEmpty) exercise.name.trim(),
+        if (ExerciseCatalog.label(exercise.name, exercise.exerciseId).trim()
+            case final name when name.isNotEmpty)
+          name,
     ];
     final details = [
       workoutContext(session),

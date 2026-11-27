@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class TutorialPreferences {
   static const String introPendingKey = 'intro_pending_v1';
   static const String tourPendingKey = 'guided_tour_pending_v1';
+  static const String exerciseReorderTipKey = 'exercise_reorder_tip_v1';
 
   /// Called before Hive migration so existing installations stay opted out.
   static Future<bool> loadIntroPending() async {
@@ -33,6 +34,23 @@ class TutorialPreferences {
   static Future<void> markTourSeen() async {
     final prefs = await SharedPreferences.getInstance();
     await _save(prefs, tourPendingKey, false);
+  }
+
+  /// Whether to mention that an exercise can be held and dragged, recording
+  /// it as mentioned. It is said once, the first time an exercise is moved
+  /// from its menu, the moment someone is looking for a way to reorder.
+  static Future<bool> takeExerciseReorderTip() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(exerciseReorderTipKey) ?? false) return false;
+    await _save(prefs, exerciseReorderTipKey, true);
+    return true;
+  }
+
+  /// Someone who has dragged an exercise needs no tip about it.
+  static Future<void> markExerciseReorderLearned() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(exerciseReorderTipKey) ?? false) return;
+    await _save(prefs, exerciseReorderTipKey, true);
   }
 
   static Future<void> _save(

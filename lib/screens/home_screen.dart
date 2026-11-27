@@ -9,6 +9,7 @@ import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
 import '../navigation/open_workout.dart';
 import '../navigation/workout_destination.dart';
+import '../providers/settings_provider.dart';
 import '../providers/split_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
@@ -18,7 +19,6 @@ import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../utils/format.dart';
 import '../utils/plan_stats.dart';
-import '../utils/statistics_format.dart';
 import '../widgets/action_progress.dart';
 import '../widgets/app_button.dart';
 import '../widgets/app_wordmark.dart';
@@ -356,7 +356,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final statsByIndex = {for (final stat in stats) stat.planIndex: stat};
     final nextIndex = PlanStat.nextInRotation(stats, plans.length);
     final today = DateTime.now();
-    final weekStart = startOfWeek(today);
+    final firstDayOfWeek = SettingsProvider.weekStartOf(context);
+    final weekStart = startOfWeek(today, firstDay: firstDayOfWeek);
     final trainedDays = {
       for (final stat in stats)
         if (stat.lastTrained != null &&
@@ -364,32 +365,6 @@ class _HomeScreenState extends State<HomeScreen> {
             calendarDaysBetween(stat.lastTrained!, today) >= 0)
           stat.planIndex,
     };
-    // Only durations worth showing count: a workout started and finished
-    // within a minute never ran its timer and would drag the estimate down.
-    final timedSessions =
-        sessions
-            .where(
-              (session) =>
-                  session.isCompleted &&
-                  knownDurationSeconds(session.durationSeconds) != null &&
-                  (session.planId != null && plans[nextIndex].id != null
-                      ? session.planId == plans[nextIndex].id
-                      : session.planName.toLowerCase() ==
-                          plans[nextIndex].name.toLowerCase()),
-            )
-            .toList();
-    final durationMinutes =
-        timedSessions.isEmpty
-            ? null
-            : (timedSessions.fold<int>(
-                      0,
-                      (sum, session) => sum + session.durationSeconds!,
-                    ) /
-                    timedSessions.length /
-                    60)
-                .round()
-                .clamp(1, 99999);
-
     void actions(int index) =>
         _showPlanOptions(context, plans[index], index, statsByIndex[index]);
 
@@ -403,6 +378,7 @@ class _HomeScreenState extends State<HomeScreen> {
       sessions: sessions,
       onOpenWeeklyTraining: widget.onOpenWeeklyTraining,
       onOpenLastWorkout: widget.onOpenLastWorkout,
+      firstDayOfWeek: firstDayOfWeek,
     );
 
     // Session writes do not all pass through the provider (finishing a
@@ -461,10 +437,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       tutorialStartKey: widget.tutorialStartKey,
                       plan: plans[upNext],
                       day: upNext + 1,
-                      dayCount: plans.length,
-                      stat: statsByIndex[upNext],
-                      trainedDays: trainedDays,
-                      durationMinutes: inProgress ? null : durationMinutes,
+                      rotation: plans,
                       inProgress: inProgress,
                       onStart:
                           inProgress

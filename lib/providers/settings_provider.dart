@@ -40,6 +40,15 @@ class SettingsProvider with ChangeNotifier {
   static const String _weightUnitKey = 'weight_unit';
   static const String _autoFillKey = 'auto_fill_last';
   static const String _coachEnabledKey = 'coach_enabled';
+  static const String _weekStartKey = 'week_starts_on';
+
+  /// The days a week can start on, as Settings offers them: Monday first,
+  /// as the app always drew it, then the two other common starts.
+  static const List<int> weekStartChoices = [
+    DateTime.monday,
+    DateTime.sunday,
+    DateTime.saturday,
+  ];
 
   /// Written by `HiveService.init` on every installation since the id-key
   /// migration, so its presence marks an installation that has run before.
@@ -72,9 +81,11 @@ class SettingsProvider with ChangeNotifier {
   String _weightUnit = kWeightUnitKg;
   bool _autoFillLast = true;
   bool _coachEnabled = false;
+  int _weekStartsOn = DateTime.monday;
 
   ThemeMode get themeMode => _themeMode;
   int get accentIndex => _accentIndex;
+
   /// `kg` or `lbs`: how weights are shown and typed. Storage is always
   /// kilograms; see `utils/weight_units.dart`.
   String get weightUnit => _weightUnit;
@@ -82,6 +93,10 @@ class SettingsProvider with ChangeNotifier {
 
   /// The AI Coach is opt-in: off until the user turns it on in Settings.
   bool get coachEnabled => _coachEnabled;
+
+  /// The weekday (`DateTime.monday` … `DateTime.sunday`) every week in the
+  /// app starts on: Home's week strip and *Done* marks, and Stats' weeks.
+  int get weekStartsOn => _weekStartsOn;
 
   /// The active accent's seed — the *only* accent value that leaves this
   /// provider, and it exists for exactly one caller: `main.dart`, which hands it
@@ -106,6 +121,18 @@ class SettingsProvider with ChangeNotifier {
       normalizeWeightUnit(
         Provider.of<SettingsProvider?>(context, listen: listen)?.weightUnit,
       );
+
+  /// The first day of the week for [context], or Monday where no provider
+  /// is in scope (isolated widget tests, previews). [listen] as for
+  /// `Provider.of`.
+  static int weekStartOf(BuildContext context, {bool listen = true}) =>
+      Provider.of<SettingsProvider?>(context, listen: listen)?.weekStartsOn ??
+      DateTime.monday;
+
+  /// Whether [value] is a weekday a week can start on, for stored and
+  /// restored settings.
+  static bool isWeekday(Object? value) =>
+      value is int && value >= DateTime.monday && value <= DateTime.sunday;
 
   Future<void> reload() => _loadSettings();
 
@@ -154,6 +181,8 @@ class SettingsProvider with ChangeNotifier {
     _weightUnit = normalizeWeightUnit(prefs.getString(_weightUnitKey));
     _autoFillLast = prefs.getBool(_autoFillKey) ?? true;
     _coachEnabled = prefs.getBool(_coachEnabledKey) ?? false;
+    final weekStart = prefs.getInt(_weekStartKey);
+    _weekStartsOn = isWeekday(weekStart) ? weekStart! : DateTime.monday;
 
     notifyListeners();
   }
@@ -185,6 +214,14 @@ class SettingsProvider with ChangeNotifier {
     _autoFillLast = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_autoFillKey, value);
+    notifyListeners();
+  }
+
+  Future<void> setWeekStartsOn(int weekday) async {
+    if (!isWeekday(weekday)) return;
+    _weekStartsOn = weekday;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_weekStartKey, weekday);
     notifyListeners();
   }
 

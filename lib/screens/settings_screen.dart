@@ -29,6 +29,7 @@ import '../theme/app_theme.dart';
 import '../theme/app_typography.dart';
 import '../theme/motion.dart';
 import '../theme/radii.dart';
+import '../utils/format.dart';
 import '../utils/scroll_to_top.dart';
 import '../utils/weight_units.dart';
 import '../widgets/app_header.dart';
@@ -279,6 +280,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         _buildAccentColorSection(context, settings),
                         const _SectionHeader(title: 'Workout'),
                         _buildWeightUnitSection(context, settings),
+                        _buildWeekStartSection(context, settings),
                         _buildSettingsTile(
                           icon: LucideIcons.dumbbell,
                           title: 'Manage exercises',
@@ -661,6 +663,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  Widget _buildWeekStartSection(
+    BuildContext context,
+    SettingsProvider settings,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Week starts on',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'The day each week begins on Home and in Stats.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 12),
+          Semantics(
+            label: 'Week starts on',
+            child: SegmentTrack<int>(
+              key: const ValueKey('week-start-selector'),
+              segments: [
+                for (final day in SettingsProvider.weekStartChoices)
+                  TrackSegment(value: day, label: kWeekdayNames[day - 1]),
+              ],
+              selected: settings.weekStartsOn,
+              onChanged:
+                  (day) => _runSettingsAction(
+                    context,
+                    () => settings.setWeekStartsOn(day),
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAccentColorSection(
     BuildContext context,
     SettingsProvider settings,
@@ -954,6 +996,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             'accentIndex': settings.accentIndex,
             'weightUnit': settings.weightUnit,
             'autoFillLast': settings.autoFillLast,
+            'weekStartsOn': settings.weekStartsOn,
           },
         );
         await Share.shareXFiles([
@@ -1090,6 +1133,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final accentIndex = settings['accentIndex'];
     final weightUnit = settings['weightUnit'];
     final autoFillLast = settings['autoFillLast'];
+    // Optional: backups from before the setting existed leave it out.
+    final weekStartsOn = settings['weekStartsOn'];
     if (themeMode is! int ||
         themeMode < 0 ||
         themeMode >= ThemeMode.values.length ||
@@ -1098,7 +1143,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         accentIndex >= SettingsProvider.accents.length ||
         weightUnit is! String ||
         (weightUnit != 'kg' && weightUnit != 'lbs') ||
-        autoFillLast is! bool) {
+        autoFillLast is! bool ||
+        (weekStartsOn != null && !SettingsProvider.isWeekday(weekStartsOn))) {
       return 'Invalid settings in backup';
     }
     return null;

@@ -2,35 +2,36 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../data/exercise_library.dart';
-import '../../services/exercise_catalog.dart';
+import '../../data/plan_colors.dart';
 import '../../models/workout_plan.dart';
+import '../../services/exercise_catalog.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/format.dart';
-import '../../utils/plan_stats.dart';
 import '../app_button.dart';
-import '../phrase_line.dart';
 import '../plan_title_hero.dart';
 import '../raised_card.dart';
+import 'plan_marker.dart';
 
 /// A workout launcher; weekly activity lives outside this card.
 ///
-/// The card itself is not a button: Start (or Resume) is the one target, so
-/// a screen reader or keyboard meets the action once, and a tap meant for the
-/// page doesn't open a workout.
+/// A tap anywhere on the card does what Start (or Resume) does. That tap is
+/// for a pointer only: the button stays the one target a screen reader or
+/// keyboard meets, so the action is announced once.
 class UpNextCard extends StatelessWidget {
   /// Shared with the workout header, so the plan name flies between them.
   static String heroTagFor(WorkoutPlan plan) =>
       'up-next-title-${plan.id ?? plan.name}';
 
   final WorkoutPlan plan;
+
+  /// One-based place of [plan] in [rotation].
   final int day;
-  final int dayCount;
-  final PlanStat? stat;
+
+  /// The split's plans in the order they are trained.
+  final List<WorkoutPlan> rotation;
   final VoidCallback onStart;
-  final Set<int> trainedDays;
-  final int? durationMinutes;
   final GlobalKey? tutorialStartKey;
 
   /// This plan's workout is already under way, so the card offers to resume
@@ -40,11 +41,8 @@ class UpNextCard extends StatelessWidget {
   const UpNextCard({
     required this.plan,
     required this.day,
-    required this.dayCount,
-    required this.stat,
+    required this.rotation,
     required this.onStart,
-    this.trainedDays = const {},
-    this.durationMinutes,
     this.tutorialStartKey,
     this.inProgress = false,
     super.key,
@@ -53,10 +51,8 @@ class UpNextCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
-    final secondary = textSecondaryColor(context);
-    // Neutral emphasis pairs with every user-selected accent.
-    final nextColor = textPrimaryColor(context);
-    final last = stat?.lastTrained;
+    // What the workout trains, in the picker's order. The counts are on the
+    // plan's own row in the list below; a custom exercise has no group.
     final groups =
         plan.exercises
             .map(
@@ -74,75 +70,55 @@ class UpNextCard extends StatelessWidget {
                 .indexOf(a)
                 .compareTo(ExerciseLibrary.categoryNames.indexOf(b)),
           );
-    final sets = plan.exercises.fold<int>(0, (sum, e) => sum + e.sets);
-    final count = plan.exercises.length;
-    final meta = [
-      countOf(count, 'exercise'),
-      countOf(sets, 'set'),
-      if (durationMinutes != null) '~$durationMinutes min',
-    ];
-    final detailStyle = textTheme.bodySmall?.copyWith(color: secondary);
 
     return RaisedCard(
+      onTap: onStart,
+      pointerOnly: true,
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: AppSpacing.md,
-              runSpacing: AppSpacing.xs,
-              children: [
-                // What this card is and where it sits in the rotation, on one
-                // line: `Next up · Workout 3 of 5`.
-                PhraseLine(
-                  style: detailStyle,
-                  phrases: [
-                    Text(
-                      inProgress ? 'In progress' : 'Next up',
-                      style: textTheme.labelLarge?.copyWith(color: nextColor),
-                    ),
-                    Text('Workout $day of $dayCount', style: detailStyle),
-                  ],
-                ),
-                if (last != null)
-                  Text(
-                    'Last done ${formatDaysAgo(last).toLowerCase()}',
-                    style: detailStyle,
-                  ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Semantics(
-              label:
-                  '${trainedDays.length} of $dayCount plans trained this week',
-              child: ExcludeSemantics(
-                child: Row(
-                  children: [
-                    for (var index = 0; index < dayCount; index++) ...[
-                      if (index > 0) const SizedBox(width: AppSpacing.xs),
-                      Expanded(
-                        child: Container(
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color:
-                                index == day - 1
-                                    ? nextColor
-                                    : trainedDays.contains(index)
-                                    ? accentFillColor(context)
-                                    : controlFillColor(context),
-                            borderRadius: AppRadius.micro,
+            // The plan's own mark, as the list below draws it, says which
+            // workout this is; the bar beside it places it in the rotation.
+            // The status sits on the marker's top edge and the bar on its
+            // bottom, so the three read as one mark.
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  PlanMarker(plan: plan, number: day, count: rotation.length),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          inProgress ? 'In progress' : 'Next up',
+                          // Without the leading above it, the caps meet the
+                          // marker's top instead of hanging below it.
+                          textHeightBehavior: const TextHeightBehavior(
+                            applyHeightToFirstAscent: false,
+                          ),
+                          style: textTheme.labelLarge?.copyWith(
+                            color: textPrimaryColor(context),
                           ),
                         ),
-                      ),
-                    ],
-                  ],
-                ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.sm),
+                          child: _RotationBar(
+                            plans: rotation,
+                            current: day - 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
             PlanTitleHero(
               tag: heroTagFor(plan),
               text: titleCase(plan.name),
@@ -158,12 +134,12 @@ class UpNextCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.xs),
               Text(
                 groups.join(', '),
-                style: textTheme.bodySmall?.copyWith(color: secondary),
+                style: textTheme.bodySmall?.copyWith(
+                  color: textSecondaryColor(context),
+                ),
               ),
             ],
-            const SizedBox(height: AppSpacing.sm),
-            PhraseLine.text(meta, style: detailStyle),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.lg),
             AppButton.primary(
               key: tutorialStartKey,
               label: inProgress ? 'Resume workout' : 'Start workout',
@@ -183,6 +159,49 @@ class UpNextCard extends StatelessWidget {
                 ],
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The split's rotation: one segment per plan, each in its plan's colour.
+///
+/// The plan on offer stands taller than the rest. Height is its only
+/// emphasis, so it still reads when two plans share a colour or have none.
+/// The marker beside the bar speaks the place aloud, so the bar is silent.
+class _RotationBar extends StatelessWidget {
+  static const double _rest = 2;
+  static const double _current = 6;
+
+  final List<WorkoutPlan> plans;
+
+  /// Zero-based index of the plan on offer.
+  final int current;
+
+  const _RotationBar({required this.plans, required this.current});
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: SizedBox(
+        height: _current,
+        child: Row(
+          children: [
+            for (var index = 0; index < plans.length; index++) ...[
+              if (index > 0) const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: Container(
+                  key: ValueKey('rotation-segment-$index'),
+                  height: index == current ? _current : _rest,
+                  decoration: BoxDecoration(
+                    color: planColorOf(plans[index].planColor, context),
+                    borderRadius: AppRadius.micro,
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -18,6 +18,7 @@ import '../models/exercise_template.dart';
 import '../models/exercise.dart';
 import '../models/set.dart';
 import '../models/set_template.dart';
+import '../utils/format.dart';
 import '../utils/split_identity.dart';
 import 'training_block_graph.dart';
 import 'training_week_choices.dart';
@@ -1260,18 +1261,14 @@ class HiveService {
     return progression;
   }
 
-  static int getWorkoutsThisWeek(String? splitId) {
-    final now = DateTime.now();
-    final startOfWeek = now.subtract(Duration(days: now.weekday - 1));
-    final startDate = DateTime(
-      startOfWeek.year,
-      startOfWeek.month,
-      startOfWeek.day,
-    );
-
+  static int getWorkoutsThisWeek(
+    String? splitId, {
+    int firstDayOfWeek = DateTime.monday,
+  }) {
+    final weekStart = startOfWeek(DateTime.now(), firstDay: firstDayOfWeek);
     return getCompletedSessions(
       splitId: splitId,
-    ).where((s) => s.date.isAfter(startDate)).length;
+    ).where((s) => !s.date.isBefore(weekStart)).length;
   }
 
   // ---------------------------------------------------------------------------

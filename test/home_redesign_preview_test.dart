@@ -48,59 +48,29 @@ void main() {
     ],
   );
 
-  testWidgets(
-    'duration uses completed timed sessions matched by plan identity',
-    (tester) async {
-      final now = DateTime.now();
-      final sessions = [
-        WorkoutSession(
-          planId: fullBody.id,
-          planName: 'Old name',
-          date: now,
-          exercises: const [],
-          durationSeconds: 1200,
-        ),
+  testWidgets('Next up names the muscle groups and estimates no time', (
+    tester,
+  ) async {
+    // Timed logs of this plan used to drive a time estimate on the card. The
+    // card now carries one line, the muscle groups, whatever the history.
+    final sessions = [
+      for (final seconds in [1200, 2400])
         WorkoutSession(
           planId: fullBody.id,
           planName: fullBody.name,
-          date: now,
+          date: DateTime.now(),
           exercises: const [],
-          durationSeconds: 2400,
+          durationSeconds: seconds,
         ),
-        WorkoutSession(
-          planId: 'different-plan',
-          planName: fullBody.name,
-          date: now,
-          exercises: const [],
-          durationSeconds: 9000,
-        ),
-        WorkoutSession(
-          planId: fullBody.id,
-          planName: fullBody.name,
-          date: now,
-          exercises: const [],
-          durationSeconds: 9000,
-          isCompleted: false,
-        ),
-        // Started and finished inside a minute: the timer never ran, so it
-        // doesn't pull the estimate down.
-        WorkoutSession(
-          planId: fullBody.id,
-          planName: fullBody.name,
-          date: now,
-          exercises: const [],
-          durationSeconds: 30,
-        ),
-      ];
-      await tester.pumpWidget(_host([fullBody], sessions, Brightness.light));
-      expect(find.textContaining('~30 min'), findsOneWidget);
-      // Muscle groups and whole training values occupy separate lines.
-      expect(find.text('Chest, Back, Shoulders, Legs'), findsOneWidget);
-      await tester.pumpWidget(_host([fullBody], const [], Brightness.light));
-      expect(find.textContaining(' min'), findsNothing);
-      expect(tester.takeException(), isNull);
-    },
-  );
+    ];
+    await tester.pumpWidget(_host([fullBody], sessions, Brightness.light));
+    expect(find.text('Chest, Back, Shoulders, Legs'), findsOneWidget);
+    expect(find.textContaining('~'), findsNothing);
+    await tester.pumpWidget(_host([fullBody], const [], Brightness.light));
+    expect(find.text('Chest, Back, Shoulders, Legs'), findsOneWidget);
+    expect(find.textContaining('~'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('reference layout renders in both themes with real activity', (
     tester,
@@ -179,7 +149,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Start workout'), findsOneWidget);
       expect(find.byType(FloatingActionButton), findsNothing);
-      expect(find.textContaining('~55 min'), findsOneWidget);
       expect(tester.takeException(), isNull);
       if (capture) {
         final render =

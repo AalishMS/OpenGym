@@ -13,6 +13,7 @@ import 'package:gymapp/services/statistics_analytics_service.dart';
 import 'package:gymapp/services/sync_service.dart';
 import 'package:gymapp/theme/app_theme.dart';
 import 'package:gymapp/widgets/exercise_picker_sheet.dart';
+import 'package:gymapp/widgets/exercise_rename_dialog.dart';
 
 import 'support/hive_test_harness.dart';
 import 'support/test_fonts.dart';
@@ -20,6 +21,7 @@ import 'support/test_fonts.dart';
 void main() {
   final storage = HiveTestHarness();
   const customId = '11111111-1111-4111-8111-111111111111';
+  const plankId = 'builtin:plank';
   setUpAll(() async {
     SharedPreferences.setMockInitialValues({});
     await loadTestFonts();
@@ -82,7 +84,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       await chooseMergeTarget(tester);
-      expect(find.text('Merge exercises?'), findsOneWidget);
+      expect(find.text('Merge into Dumbbell Press?'), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(ExerciseCatalog.getById(customId)!.mergedIntoId, isNull);
@@ -103,6 +105,21 @@ void main() {
     },
   );
 
+  Future<void> openRename(WidgetTester tester, String name) async {
+    await tester.tap(find.byTooltip('Actions for $name'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Rename'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> submit(WidgetTester tester, String label) async {
+    await tester.runAsync(() async {
+      await tester.tap(find.widgetWithText(FilledButton, label));
+      await SyncService.instance.runExclusiveLocalMutation(() async {});
+    });
+    await tester.pumpAndSettle();
+  }
+
   testWidgets(
     'custom rename retains identity and its old name as a search alias',
     (tester) async {
@@ -110,21 +127,253 @@ void main() {
         host(const ExerciseManagementScreen(userId: null)),
       );
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Actions for DB Press'));
+      await openRename(tester, 'DB Press');
+      expect(find.byKey(const ValueKey('rename-scope')), findsOneWidget);
+      await tester.enterText(find.byType(TextField).last, 'My dumbbell press');
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Rename'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextFormField), 'My dumbbell press');
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Save'));
-        await SyncService.instance.runExclusiveLocalMutation(() async {});
-      });
-      await tester.pumpAndSettle();
+      await submit(tester, 'Rename');
       expect(ExerciseCatalog.getById(customId)!.name, 'My dumbbell press');
       expect(ExerciseCatalog.findByName('DB Press')!.id, customId);
+      expect(find.text('My dumbbell press'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );
+
+  testWidgets('a bundled exercise can be renamed and keeps its ID', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(const ExerciseManagementScreen(userId: null)));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'Hip Thrust');
+    await tester.pumpAndSettle();
+    await openRename(tester, 'Hip Thrust');
+    await tester.enterText(find.byType(TextField).last, 'Glute bridge (bar)');
+    await tester.pumpAndSettle();
+    await submit(tester, 'Rename');
+    final renamed = ExerciseCatalog.getById('builtin:hip-thrust')!;
+    expect(renamed.name, 'Glute bridge (bar)');
+    expect(renamed.builtIn, isTrue);
+    expect(ExerciseCatalog.findByName('Hip Thrust')!.id, 'builtin:hip-thrust');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('renaming to another exercise\'s name offers a merge instead', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(const ExerciseManagementScreen(userId: null)));
+    await tester.pumpAndSettle();
+    await openRename(tester, 'DB Press');
+    await tester.enterText(find.byType(TextField).last, 'dumbbell press');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rename-merge-note')), findsOneWidget);
+    expect(find.text('Dumbbell Press is already an exercise'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Rename'), findsNothing);
+    // Changing the name back to a free one returns to renaming.
+    await tester.enterText(find.byType(TextField).last, 'DB press flat');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rename-merge-note')), findsNothing);
+    await tester.enterText(find.byType(TextField).last, 'Dumbbell Press');
+    await tester.pumpAndSettle();
+    await submit(tester, 'Merge');
+    expect(ExerciseCatalog.canonicalId(customId), 'builtin:dumbbell-press');
+    expect(ExerciseCatalog.label('DB Press', customId), 'Dumbbell Press');
+    expect(find.text('Merged into Dumbbell Press'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the keyboard action renames but never merges', (tester) async {
+    Future<void> pressDone() async {
+      await tester.runAsync(() async {
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await SyncService.instance.runExclusiveLocalMutation(() async {});
+      });
+      await tester.pumpAndSettle();
+    }
+
+    await tester.pumpWidget(host(const ExerciseManagementScreen(userId: null)));
+    await tester.pumpAndSettle();
+    await openRename(tester, 'DB Press');
+    // An alias of Dumbbell Press rather than its name, so the note says
+    // which exercise the typed name belongs to.
+    await tester.enterText(find.byType(TextField).last, 'DB Bench Press');
+    await tester.pumpAndSettle();
+    expect(
+      find.text('DB Bench Press is another name for Dumbbell Press'),
+      findsOneWidget,
+    );
+    await pressDone();
+    expect(find.byKey(const ValueKey('rename-merge-note')), findsOneWidget);
+    expect(ExerciseCatalog.getById(customId)!.mergedIntoId, isNull);
+
+    await tester.enterText(find.byType(TextField).last, 'Flat DB press');
+    await tester.pumpAndSettle();
+    await pressDone();
+    expect(find.byKey(const ValueKey('rename-scope')), findsNothing);
+    expect(ExerciseCatalog.getById(customId)!.name, 'Flat DB press');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a name taken while the dialog is open is not merged by Rename', (
+    tester,
+  ) async {
+    await tester.pumpWidget(host(const ExerciseManagementScreen(userId: null)));
+    await tester.pumpAndSettle();
+    await openRename(tester, 'DB Press');
+    await tester.enterText(find.byType(TextField).last, 'Hammer press');
+    await tester.pumpAndSettle();
+    final rename = find.widgetWithText(FilledButton, 'Rename');
+    expect(rename, findsOneWidget);
+
+    // A sync delivers another exercise with that name, and the button is
+    // pressed before the dialog has redrawn: it still says Rename.
+    await tester.runAsync(() async {
+      await ExerciseCatalog.put(
+        const ExerciseDefinition(
+          id: '22222222-2222-4222-8222-222222222222',
+          name: 'Hammer press',
+        ),
+      );
+      await tester.tap(rename);
+      await SyncService.instance.runExclusiveLocalMutation(() async {});
+    });
+    await tester.pumpAndSettle();
+
+    final unchanged = ExerciseCatalog.getById(customId)!;
+    expect(unchanged.mergedIntoId, isNull);
+    expect(unchanged.name, 'DB Press');
+    // The dialog now shows what pressing would do, and waits to be asked.
+    expect(find.text('Hammer press is already an exercise'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Merge'), findsOneWidget);
+    expect(rename, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an exercise merged elsewhere while its dialog is open is not '
+      'merged on', (tester) async {
+    const bench = 'builtin:bench-press';
+    await tester.pumpWidget(host(const ExerciseManagementScreen(userId: null)));
+    await tester.pumpAndSettle();
+    await openRename(tester, 'DB Press');
+    await tester.enterText(find.byType(TextField).last, 'Dumbbell Press');
+    await tester.pumpAndSettle();
+    final merge = find.widgetWithText(FilledButton, 'Merge');
+    expect(merge, findsOneWidget);
+
+    // A sync merges DB Press into Bench Press, and Merge is pressed before
+    // the dialog has redrawn. Following the redirect would merge Bench
+    // Press, with its history, into Dumbbell Press.
+    await tester.runAsync(() async {
+      await ExerciseCatalog.merge(customId, bench);
+      await tester.tap(merge);
+      await SyncService.instance.runExclusiveLocalMutation(() async {});
+    });
+    await tester.pumpAndSettle();
+
+    expect(ExerciseCatalog.canonicalId(bench), bench);
+    expect(ExerciseCatalog.getById(bench)!.mergedIntoId, isNull);
+    // The dialog says what happened and offers nothing to press.
+    expect(find.byKey(const ValueKey('rename-moved-note')), findsOneWidget);
+    expect(find.text('DB Press is now part of Bench Press'), findsOneWidget);
+    expect(find.byKey(const ValueKey('rename-merge-note')), findsNothing);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Rename'))
+          .onPressed,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the merge confirmation refuses exercises that changed while it '
+      'was open', (tester) async {
+    const bench = 'builtin:bench-press';
+    await tester.pumpWidget(host(const ExerciseManagementScreen(userId: null)));
+    await tester.pumpAndSettle();
+    await chooseMergeTarget(tester);
+    expect(find.text('Merge into Dumbbell Press?'), findsOneWidget);
+
+    await tester.runAsync(() async {
+      await ExerciseCatalog.merge(customId, bench);
+      await tester.tap(find.widgetWithText(FilledButton, 'Merge'));
+      await SyncService.instance.runExclusiveLocalMutation(() async {});
+    });
+    await tester.pumpAndSettle();
+
+    expect(ExerciseCatalog.canonicalId(bench), bench);
+    expect(
+      find.text(
+        'These exercises changed on another device. Cancel and start again.',
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('merging into a timed exercise from the list is refused for a '
+      'built-in exercise', (tester) async {
+    await tester.pumpWidget(host(const ExerciseManagementScreen(userId: null)));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, 'Hip Thrust');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Actions for Hip Thrust'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Merge into another exercise'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, 'Plank');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Plank').last);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Merge into Plank?'), findsNothing);
+    expect(
+      find.text(
+        "Hip Thrust is counted in reps and Plank is timed, so they can't be "
+        'merged.',
+      ),
+      findsOneWidget,
+    );
+    expect(ExerciseCatalog.canonicalId('builtin:hip-thrust'), isNot(plankId));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the rename dialog fits a narrow screen at large text', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(320, 640);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildTheme(const Color(0xFF7C5CFF), Brightness.dark),
+        builder:
+            (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(2)),
+              child: child!,
+            ),
+        home: Builder(
+          builder:
+              (context) => TextButton(
+                onPressed:
+                    () => showExerciseRenameDialog(
+                      context,
+                      exerciseId: customId,
+                      currentName: 'DB Press',
+                      userId: null,
+                    ),
+                child: const Text('Open'),
+              ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Dumbbell Press');
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('rename-merge-note')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
     'ambiguous abbreviations suggest movements without automatically combining them',

@@ -58,6 +58,7 @@ class _CountingAnalytics extends StatisticsAnalyticsService {
     String? exerciseName,
     String? splitId,
     DateTime? now,
+    int firstDayOfWeek = DateTime.monday,
   }) {
     _count('weeklyVolume');
     return super.weeklyVolume(
@@ -65,6 +66,7 @@ class _CountingAnalytics extends StatisticsAnalyticsService {
       exerciseName: exerciseName,
       splitId: splitId,
       now: now,
+      firstDayOfWeek: firstDayOfWeek,
     );
   }
 

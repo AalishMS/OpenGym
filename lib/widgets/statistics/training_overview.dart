@@ -6,7 +6,7 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../../services/exercise_catalog.dart';
 import '../../models/statistics.dart';
 import '../../models/workout_session.dart';
-import '../../services/statistics_analytics_service.dart';
+import '../../providers/settings_provider.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/motion.dart';
@@ -78,11 +78,18 @@ class _TrainingOverviewState extends State<TrainingOverview> {
     final current = index == weeks.length - 1;
     final previous = index > 0 ? weeks[index - 1].volumeLoad : 0.0;
     final change = previous > 0 ? (week.volumeLoad / previous - 1) * 100 : null;
-    final weekSessions = widget.sessions.where(
-      (session) =>
-          StatisticsAnalyticsService.startOfWeek(session.date) ==
-          week.weekStart,
+    // The week's own seven days, so the strip agrees with its bar whichever
+    // day the weeks start on.
+    final weekStart = week.weekStart;
+    final weekEnd = DateTime(
+      weekStart.year,
+      weekStart.month,
+      weekStart.day + 7,
     );
+    final weekSessions = widget.sessions.where((session) {
+      final date = session.date.toLocal();
+      return !date.isBefore(weekStart) && date.isBefore(weekEnd);
+    });
     var workouts = 0;
     var sets = 0;
     var reps = 0;
@@ -356,7 +363,11 @@ class _TrainingOverviewState extends State<TrainingOverview> {
         const SizedBox(height: AppSpacing.lg),
         Divider(color: hairlineColor(context), height: 1),
         const SizedBox(height: AppSpacing.lg),
-        WorkoutHeatmap(sessions: widget.sessions, compact: true),
+        WorkoutHeatmap(
+          sessions: widget.sessions,
+          compact: true,
+          firstDayOfWeek: SettingsProvider.weekStartOf(context),
+        ),
       ],
     );
   }

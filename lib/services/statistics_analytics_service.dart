@@ -4,6 +4,7 @@ import '../models/statistics.dart';
 import '../models/training_block.dart';
 import '../models/training_week.dart';
 import '../models/workout_session.dart';
+import '../utils/format.dart' as format;
 
 class StatisticsAnalyticsService {
   const StatisticsAnalyticsService();
@@ -15,8 +16,12 @@ class StatisticsAnalyticsService {
     String? exerciseName,
     String? splitId,
     DateTime? now,
+    int firstDayOfWeek = DateTime.monday,
   }) {
-    final current = startOfWeek(now ?? DateTime.now());
+    final current = startOfWeek(
+      now ?? DateTime.now(),
+      firstDay: firstDayOfWeek,
+    );
     final end = DateTime(current.year, current.month, current.day + 7);
     final totals = <DateTime, double>{};
     final wanted =
@@ -42,7 +47,7 @@ class StatisticsAnalyticsService {
       }
       if (!performed) continue;
       totals.update(
-        startOfWeek(session.date),
+        startOfWeek(session.date, firstDay: firstDayOfWeek),
         (value) => value + volume,
         ifAbsent: () => volume,
       );
@@ -134,13 +139,28 @@ class StatisticsAnalyticsService {
     StatisticsPeriod period, {
     DateTime? now,
     String? splitId,
+    int firstDayOfWeek = DateTime.monday,
   }) {
     final eligible = eligibleSessions(sessions, splitId: splitId);
     final weeks = period.weekCount;
     if (weeks == null) return eligible;
-    final currentWeek = startOfWeek(now ?? DateTime.now());
-    final start = currentWeek.subtract(Duration(days: (weeks - 1) * 7));
-    final end = currentWeek.add(const Duration(days: 7));
+    final currentWeek = startOfWeek(
+      now ?? DateTime.now(),
+      firstDay: firstDayOfWeek,
+    );
+    // Calendar days, not 24-hour steps: across a daylight-saving change a
+    // fixed duration lands an hour off midnight and drops a workout logged
+    // in that hour.
+    final start = DateTime(
+      currentWeek.year,
+      currentWeek.month,
+      currentWeek.day - (weeks - 1) * 7,
+    );
+    final end = DateTime(
+      currentWeek.year,
+      currentWeek.month,
+      currentWeek.day + 7,
+    );
     return List.unmodifiable(
       eligible.where(
         (session) =>
@@ -576,11 +596,12 @@ class StatisticsAnalyticsService {
     return List.unmodifiable(summaries);
   }
 
-  static DateTime startOfWeek(DateTime date) {
-    final local = date.toLocal();
-    final day = DateTime(local.year, local.month, local.day);
-    return day.subtract(Duration(days: day.weekday - DateTime.monday));
-  }
+  /// Local midnight on the first day of [date]'s week, for weeks that start
+  /// on [firstDay] (`DateTime.monday` … `DateTime.sunday`).
+  static DateTime startOfWeek(
+    DateTime date, {
+    int firstDay = DateTime.monday,
+  }) => format.startOfWeek(date.toLocal(), firstDay: firstDay);
 }
 
 /// Bests from a fixed history (see [StatisticsAnalyticsService.recordJudge]).

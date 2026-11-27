@@ -812,30 +812,42 @@ void main() {
     tester,
   ) async {
     await open(tester);
-    final context = tester.element(find.text('Pull exercise 0'));
-    final page = backgroundColor(context);
-    final raised = surfaceColor(context);
+    final raised = surfaceColor(tester.element(find.text('Pull exercise 0')));
+    final folded = find.byKey(const ValueKey('exercise-reorder'));
     Color? ground() =>
-        tester
-            .widget<Material>(
-              find
-                  .ancestor(
-                    of: find.text('Pull exercise 0'),
-                    matching: find.byType(Material),
-                  )
-                  .first,
-            )
+        (tester
+                    .widget<DecoratedBox>(
+                      find
+                          .ancestor(
+                            of: find.descendant(
+                              of: folded,
+                              matching: find.text('Pull exercise 0'),
+                            ),
+                            matching: find.byType(DecoratedBox),
+                          )
+                          .first,
+                    )
+                    .decoration
+                as BoxDecoration)
             .color;
     final gesture = await tester.startGesture(
       tester.getCenter(find.text('Pull exercise 0')),
     );
     await tester.pump(kLongPressTimeout + const Duration(milliseconds: 50));
     await tester.pump();
-    expect(ground(), page);
+    // Picked up, it is still the title on the page.
+    expect(ground()!.a, 0);
     await tester.pump(const Duration(milliseconds: 400));
     expect(ground(), raised);
     await gesture.up();
+    await tester.pump();
+    await tester.pump();
+    await tester.pump(AppMotion.quick);
+    final sinking = ground()!.a;
+    expect(sinking, greaterThan(0));
+    expect(sinking, lessThan(raised.a));
     await tester.pumpAndSettle();
+    expect(folded, findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

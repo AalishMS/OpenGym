@@ -43,9 +43,27 @@ class ExerciseCatalog {
       _cachedBox = box;
       _invalidate();
     }
-    return _definitions ??= {
-      for (final d in ExerciseLibrary.definitions) d.id: d,
-      for (final d in stored) d.id: d,
+    if (_definitions case final cached?) return cached;
+    final library = {for (final d in ExerciseLibrary.definitions) d.id: d};
+    return _definitions = {
+      ...library,
+      for (final d in stored)
+        d.id: switch (library[d.id]) {
+          // An account's renamed or merged copy of a bundled movement keeps
+          // finding it by every name the library knows it by, including any
+          // an app update has added since the copy was made.
+          final bundled? when d.builtIn => d.copyWith(
+            aliases:
+                {
+                  ...d.aliases,
+                  ...[
+                    bundled.name,
+                    ...bundled.aliases,
+                  ].where((a) => normalize(a) != normalize(d.name)),
+                }.toList(),
+          ),
+          _ => d,
+        },
     };
   }
 
@@ -147,6 +165,29 @@ class ExerciseCatalog {
 
   static String displayName(String id, String fallback) =>
       getById(canonicalId(id))?.name ?? fallback;
+
+  /// What to call an occurrence in a plan or workout: its movement's current
+  /// catalog name, so a rename or merge shows everywhere at once. The stored
+  /// name snapshot is only the fallback for a movement the catalog does not
+  /// know (yet).
+  static String label(String name, [String? exerciseId]) =>
+      displayName(identity(name, exerciseId), name);
+
+  /// The movement other than [id] that already goes by [name], if any.
+  /// Renaming [id] to that name would mean they are the same movement, which
+  /// is a merge.
+  static ExerciseDefinition? nameOwner(String id, String name) {
+    final key = normalize(name);
+    final self = canonicalId(id);
+    for (final d in all) {
+      final owner = canonicalId(d.id);
+      if (owner == self) continue;
+      if ([d.name, ...d.aliases].any((a) => normalize(a) == key)) {
+        return getById(owner);
+      }
+    }
+    return null;
+  }
 
   static List<ExerciseDefinition> get active =>
       all.where((d) => canonicalId(d.id) == d.id).toList()
@@ -264,12 +305,23 @@ class ExerciseCatalog {
     return id;
   }
 
-  static Future<void> rename(String id, String name, {String? userId}) async {
+  /// Renames movement [id] for this account. The ID is kept, so its history,
+  /// records and measurement are untouched, and its previous name stays a
+  /// search alias. A bundled movement gets an account copy carrying the new
+  /// name. A name another movement already goes by is refused: that is a
+  /// [merge].
+  static Future<void> rename(
+    String id,
+    String name, {
+    String? userId,
+    DateTime? updatedAt,
+  }) async {
     final current = getById(id);
     final trimmed = name.trim().replaceAll(RegExp(r'\s+'), ' ');
     if (current == null ||
-        current.builtIn ||
-        current.userId != userId ||
+        // A library entry has no owner until the account copies it.
+        (current.userId != userId &&
+            !(current.builtIn && current.userId == null)) ||
         current.mergedIntoId != null ||
         stored.any((d) => d.userId != userId)) {
       throw StateError('The exercise changed.');
@@ -277,24 +329,47 @@ class ExerciseCatalog {
     if (trimmed.isEmpty || trimmed.length > 100) {
       throw const FormatException('Use an exercise name of 1–100 characters.');
     }
-    if (all.any(
-      (d) =>
-          canonicalId(d.id) != id &&
-          [d.name, ...d.aliases].any((a) => normalize(a) == normalize(trimmed)),
-    )) {
+    if (trimmed == current.name) return;
+    if (nameOwner(id, trimmed) != null) {
       throw const FormatException(
         'This exercise already exists. Use Merge instead.',
       );
     }
+    final key = normalize(trimmed);
     await put(
       current.copyWith(
         name: trimmed,
-        aliases: {...current.aliases, current.name}.toList(),
-        updatedAt: DateTime.now(),
+        aliases:
+            {
+              ...current.aliases,
+              current.name,
+            }.where((a) => normalize(a) != key).toList(),
+        userId: userId,
+        updatedAt: updatedAt ?? DateTime.now(),
         dirty: true,
       ),
     );
+    await Hive.box<dynamic>(boxName).flush();
   }
+
+  /// Whether merging movement [sourceId] into [targetId] would change how
+  /// [sourceId]'s logged sets are read. A merged movement is measured like
+  /// its target ([kindOf]), so a hold joining a lift has its seconds read as
+  /// reps, and a lift joining a hold has its reps read as seconds.
+  static bool mergeChangesMeasurement(String sourceId, String targetId) =>
+      (ExerciseLibrary.kindOfId(canonicalId(sourceId)) == ExerciseKind.timed) !=
+      (ExerciseLibrary.kindOfId(canonicalId(targetId)) == ExerciseKind.timed);
+
+  /// Whether movement [sourceId] may be merged into [targetId].
+  ///
+  /// A bundled movement's measurement is known, so a merge that would change
+  /// it is refused: it could only misread what was logged, and a merge can't
+  /// be undone. A custom movement has no kind of its own and counts as a
+  /// lift whatever it really is, so it may still join a hold. That is how a
+  /// hold created by hand gets its seconds read as seconds.
+  static bool canMerge(String sourceId, String targetId) =>
+      !mergeChangesMeasurement(sourceId, targetId) ||
+      !(getById(canonicalId(sourceId))?.builtIn ?? false);
 
   /// One durable redirect makes every past/future reference resolve together.
   /// No sets or historical name snapshots are changed or removed.
@@ -310,6 +385,11 @@ class ExerciseCatalog {
     }
     if (stored.any((d) => d.userId != userId)) {
       throw StateError('The exercise catalog belongs to another account.');
+    }
+    if (!canMerge(source.id, target.id)) {
+      throw const FormatException(
+        "A timed exercise and one counted in reps can't be merged.",
+      );
     }
     await put(
       source.copyWith(

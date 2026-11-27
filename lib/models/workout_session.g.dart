@@ -34,13 +34,14 @@ class WorkoutSessionAdapter extends TypeAdapter<WorkoutSession> {
       durationSeconds: fields[14] as int?,
       trainingWeekId: fields[15] as String?,
       completionTransition: (fields[16] as Map?)?.cast<String, dynamic>(),
+      planExerciseIds: (fields[17] as List?)?.cast<String>(),
     );
   }
 
   @override
   void write(BinaryWriter writer, WorkoutSession obj) {
     writer
-      ..writeByte(17)
+      ..writeByte(18)
       ..writeByte(0)
       ..write(obj.date)
       ..writeByte(1)
@@ -74,7 +75,9 @@ class WorkoutSessionAdapter extends TypeAdapter<WorkoutSession> {
       ..writeByte(15)
       ..write(obj.trainingWeekId)
       ..writeByte(16)
-      ..write(obj.completionTransition);
+      ..write(obj.completionTransition)
+      ..writeByte(17)
+      ..write(obj.planExerciseIds);
   }
 
   @override

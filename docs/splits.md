@@ -46,7 +46,9 @@ all weeks upfront. A four-week block starts with Week 1. Logging Push creates
 or reuses its next slot and reveals it only for Push; Pull remains unchanged.
 Each later week inherits that workout's preceding completed week within the
 block. A new block's Week 1 retains matching Week 1 inheritance from the
-preceding block.
+preceding block. Set values follow that inheritance; the exercises themselves
+carry over from the workout's most recent log, with plan edits made since
+applied (see DESIGN.md).
 
 Only logging advances progress. After the intended final week, the next
 ordinary entry offers the existing boundary choices; dismissal keeps the result

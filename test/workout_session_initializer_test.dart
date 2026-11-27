@@ -55,7 +55,7 @@ void main() {
   );
 
   test(
-    'explicit inheritance matches normalized duplicate occurrences in current template order',
+    'a workout built before lineups were recorded carries over as it was',
     () {
       final current = plan.copyWith(
         id: 'plan',
@@ -86,7 +86,11 @@ void main() {
             note: 'Old cue',
             sets: [gym.Set(reps: 9, weight: 90, rpe: 8, note: 'Old note')],
           ),
-          Exercise(name: 'Removed', sets: [gym.Set(reps: 4, weight: 40)]),
+          Exercise(
+            name: 'Added there',
+            note: 'Its own note',
+            sets: [gym.Set(reps: 4, weight: 40)],
+          ),
           Exercise(name: 'Squat', sets: [gym.Set(reps: 6, weight: 60)]),
         ],
       );
@@ -102,13 +106,20 @@ void main() {
         week: week,
         previousSession: source,
       );
-      expect(
-        session.exercises.map((e) => e.name),
-        current.exercises.map((e) => e.name),
-      );
-      expect(session.exercises.map((e) => e.sets.first.weight), [90, 20, 60]);
+      // With no recorded lineup the plan counts as unchanged since, so the
+      // workout's own lineup wins: its addition stays, the plan exercise it
+      // dropped stays dropped, and repeats match by occurrence.
+      expect(session.exercises.map((e) => e.name), [
+        'Squat',
+        'Added there',
+        'Squat',
+      ]);
+      expect(session.exercises.map((e) => e.sets.first.weight), [90, 40, 60]);
+      // Plan guidance wins; an exercise it says nothing about keeps its note.
       expect(session.exercises.first.note, 'Current cue');
+      expect(session.exercises[1].note, 'Its own note');
       expect(session.exercises.first.sets.single.note, isNull);
+      expect(session.planExerciseIds, hasLength(3));
       session.exercises.first.sets[0] = gym.Set(reps: 1, weight: 1);
       expect(source.exercises.first.sets.single.weight, 90);
       expect(
@@ -124,6 +135,265 @@ void main() {
       );
     },
   );
+
+  group('carry-over from the last workout', () {
+    final week = TrainingWeek(
+      id: 'week-3',
+      splitId: 'split-a',
+      blockId: 'block',
+      number: 3,
+      createdAt: DateTime(2026),
+    );
+    ExerciseTemplate template(String name, {int sets = 1, double w = 10}) =>
+        ExerciseTemplate(
+          name: name,
+          exerciseId: 'id-$name',
+          sets: sets,
+          setTargets: [
+            for (var i = 0; i < sets; i++) SetTemplate(reps: 5, weight: w),
+          ],
+        );
+    WorkoutPlan planOf(List<String> names) => WorkoutPlan(
+      id: 'plan',
+      name: 'Strength',
+      splitId: 'split-a',
+      exercises: [for (final n in names) template(n)],
+    );
+    Exercise logged(String name, {double w = 50, int sets = 1}) => Exercise(
+      name: name,
+      exerciseId: 'id-$name',
+      sets: [for (var i = 0; i < sets; i++) gym.Set(reps: 8, weight: w)],
+    );
+    WorkoutSession last(List<Exercise> exercises, {List<String>? lineup}) =>
+        WorkoutSession(
+          id: 'last',
+          planId: 'plan',
+          splitId: 'split-a',
+          planName: 'Strength',
+          date: DateTime(2026, 2),
+          exercises: exercises,
+          planExerciseIds: lineup?.map((n) => 'id-$n').toList(),
+        );
+    List<String> names(WorkoutSession s) => [
+      for (final e in s.exercises) e.exerciseId!.substring(3),
+    ];
+
+    test('replacements, additions, removals and order carry over', () {
+      final session = WorkoutSessionInitializer.initialize(
+        plan: planOf(['Squat', 'Press', 'Row']),
+        week: week,
+        previousSession: last(
+          [
+            logged('Row', w: 70),
+            logged('Squat', w: 100),
+            logged('Dips', w: 0),
+            logged('Curl', w: 15),
+          ],
+          lineup: ['Squat', 'Press', 'Row'],
+        ),
+      );
+      expect(names(session), ['Row', 'Squat', 'Dips', 'Curl']);
+      expect(session.exercises.map((e) => e.sets.single.weight), [
+        70,
+        100,
+        0,
+        15,
+      ]);
+      expect(session.planExerciseIds, ['id-Squat', 'id-Press', 'id-Row']);
+    });
+
+    test('an exercise added to the plan since arrives after its neighbour', () {
+      final session = WorkoutSessionInitializer.initialize(
+        plan: planOf(['Lunge', 'Squat', 'Press', 'Fly', 'Row']),
+        week: week,
+        previousSession: last(
+          [logged('Squat'), logged('Curl'), logged('Press'), logged('Row')],
+          lineup: ['Squat', 'Press', 'Row'],
+        ),
+      );
+      expect(names(session), ['Lunge', 'Squat', 'Curl', 'Press', 'Fly', 'Row']);
+      // A plan addition has no logged sets yet, so it opens with its targets.
+      expect(session.exercises.first.sets.single.weight, 10);
+    });
+
+    test('an exercise added to the plan follows its plan neighbour, wherever '
+        'the workout moved that neighbour', () {
+      // The workout moved Press to the top; the plan then gained Fly after
+      // Press, and Lunge after Row.
+      final session = WorkoutSessionInitializer.initialize(
+        plan: planOf(['Squat', 'Press', 'Fly', 'Row', 'Lunge']),
+        week: week,
+        previousSession: last(
+          [logged('Press'), logged('Squat'), logged('Row')],
+          lineup: ['Squat', 'Press', 'Row'],
+        ),
+      );
+      expect(names(session), ['Press', 'Fly', 'Squat', 'Row', 'Lunge']);
+
+      // Its neighbour was dropped in the workout: the one before that is next.
+      final dropped = WorkoutSessionInitializer.initialize(
+        plan: planOf(['Squat', 'Press', 'Fly', 'Row']),
+        week: week,
+        previousSession: last(
+          [logged('Row'), logged('Squat')],
+          lineup: ['Squat', 'Press', 'Row'],
+        ),
+      );
+      expect(names(dropped), ['Row', 'Squat', 'Fly']);
+    });
+
+    test('an exercise dropped from the plan since is dropped', () {
+      final session = WorkoutSessionInitializer.initialize(
+        plan: planOf(['Squat', 'Row']),
+        week: week,
+        previousSession: last(
+          [logged('Squat'), logged('Press'), logged('Curl'), logged('Row')],
+          lineup: ['Squat', 'Press', 'Row'],
+        ),
+      );
+      expect(names(session), ['Squat', 'Curl', 'Row']);
+    });
+
+    test('a plan exercise removed in the workout stays removed', () {
+      final session = WorkoutSessionInitializer.initialize(
+        plan: planOf(['Squat', 'Press', 'Row']),
+        week: week,
+        previousSession: last(
+          [logged('Squat'), logged('Row')],
+          lineup: ['Squat', 'Press', 'Row'],
+        ),
+      );
+      expect(names(session), ['Squat', 'Row']);
+    });
+
+    test('with no recorded lineup, only a plan saved after the workout adds '
+        'the exercises the workout lacks', () {
+      // Logged by an older version: Press was either removed that day or
+      // added to the plan later, and nothing recorded says which.
+      final legacy = last([logged('Row'), logged('Squat'), logged('Curl')]);
+      WorkoutSession build(DateTime planSaved) =>
+          WorkoutSessionInitializer.initialize(
+            plan: planOf([
+              'Squat',
+              'Press',
+              'Fly',
+              'Row',
+            ]).copyWith(updatedAt: planSaved),
+            week: week,
+            previousSession: legacy,
+          );
+
+      // Saved before the workout: the plan cannot have changed since, so the
+      // workout's lineup is carried as it is.
+      expect(names(build(DateTime(2026, 1))), ['Row', 'Squat', 'Curl']);
+
+      // Saved after it: the plan's extra exercises arrive after their plan
+      // neighbour, and the workout's own order and addition stay.
+      final after = build(DateTime(2026, 3));
+      expect(names(after), ['Row', 'Squat', 'Press', 'Fly', 'Curl']);
+      expect(after.planExerciseIds, [
+        'id-Squat',
+        'id-Press',
+        'id-Fly',
+        'id-Row',
+      ]);
+
+      // A workout that did record its lineup is never second-guessed.
+      final recorded = WorkoutSessionInitializer.initialize(
+        plan: planOf([
+          'Squat',
+          'Press',
+          'Row',
+        ]).copyWith(updatedAt: DateTime(2026, 3)),
+        week: week,
+        previousSession: last(
+          [logged('Row'), logged('Squat')],
+          lineup: ['Squat', 'Press', 'Row'],
+        ),
+      );
+      expect(names(recorded), ['Row', 'Squat']);
+    });
+
+    test('a plan reordered since takes the plan order, keeping additions '
+        'after the exercise they followed', () {
+      final session = WorkoutSessionInitializer.initialize(
+        plan: planOf(['Row', 'Press', 'Squat']),
+        week: week,
+        previousSession: last(
+          [
+            logged('Curl'),
+            logged('Squat'),
+            logged('Dips'),
+            logged('Press'),
+            logged('Row'),
+          ],
+          lineup: ['Squat', 'Press', 'Row'],
+        ),
+      );
+      expect(names(session), ['Curl', 'Row', 'Press', 'Squat', 'Dips']);
+    });
+
+    test('a new block keeps the latest lineup but restarts from its sets', () {
+      final blockStart = last(
+        [logged('Squat', w: 80), logged('Press', w: 40)],
+        lineup: ['Squat', 'Press'],
+      );
+      final latest = WorkoutSession(
+        id: 'latest',
+        planId: 'plan',
+        splitId: 'split-a',
+        planName: 'Strength',
+        date: DateTime(2026, 3),
+        exercises: [logged('Squat', w: 120), logged('Dips', w: 10)],
+        planExerciseIds: const ['id-Squat', 'id-Press'],
+      );
+      final session = WorkoutSessionInitializer.initialize(
+        plan: planOf(['Squat', 'Press']),
+        week: week,
+        previousSession: blockStart,
+        lastSession: latest,
+      );
+      expect(names(session), ['Squat', 'Dips']);
+      // Week 1's sets where it has them, the last workout's otherwise.
+      expect(session.exercises.map((e) => e.sets.single.weight), [80, 10]);
+    });
+
+    test('without last week\'s sets, plan exercises use targets and the '
+        'rest open blank', () {
+      final session = WorkoutSessionInitializer.initialize(
+        plan: planOf(['Squat']),
+        week: week,
+        previousSession: last(
+          [logged('Squat', w: 100), logged('Dips', w: 20, sets: 3)],
+          lineup: ['Squat'],
+        ),
+        copySets: false,
+      );
+      expect(names(session), ['Squat', 'Dips']);
+      expect(session.exercises.first.sets.single.weight, 10);
+      expect(session.exercises.last.sets, hasLength(3));
+      expect(
+        session.exercises.last.sets.map((s) => (s.reps, s.weight)),
+        everyElement((0, 0.0)),
+      );
+    });
+
+    test('an unfinished or deleted workout is not carried over', () {
+      for (final source in [
+        last([logged('Dips')]).copyWith(isCompleted: false),
+        last([logged('Dips')]).copyWith(deletedAt: DateTime(2026)),
+        last([logged('Dips')]).copyWith(planId: 'other'),
+      ]) {
+        final session = WorkoutSessionInitializer.initialize(
+          plan: planOf(['Squat']),
+          week: week,
+          previousSession: source,
+          lastSession: source,
+        );
+        expect(names(session), ['Squat']);
+      }
+    });
+  });
 
   test('Week 1 receives every prescribed set including decimal weights', () {
     final session = WorkoutSessionInitializer.initialize(

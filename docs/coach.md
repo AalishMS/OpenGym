@@ -148,6 +148,11 @@ exercises. The validator and the applier both work against that snapshot.
   are part of the plan the Coach may rewrite.
 - **`customExercises`** lists names used in this split's plans or sessions that
   aren't in the library. The Coach can keep these in existing plans.
+- **One name per exercise.** Plan exercises, the history summary and
+  `customExercises` all use the exercise's current catalog name
+  (`ExerciseCatalog.label`), not the name stored on the plan or log. A renamed
+  exercise therefore reads as one exercise, and a renamed library exercise is
+  listed in `customExercises` under its new name so the model can use it.
 
 ## Response contract (model output)
 

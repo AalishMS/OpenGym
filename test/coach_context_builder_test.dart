@@ -6,8 +6,10 @@ import 'package:gymapp/models/exercise_template.dart';
 import 'package:gymapp/models/split.dart';
 import 'package:gymapp/models/workout_session.dart';
 import 'package:gymapp/services/coach/coach_context_builder.dart';
+import 'package:gymapp/services/exercise_catalog.dart';
 
 import 'support/coach_fixtures.dart';
+import 'support/hive_test_harness.dart';
 
 final DateTime now = DateTime(2026, 10, 9, 18);
 DateTime daysAgo(int days) => DateTime(now.year, now.month, now.day - days, 9);
@@ -99,6 +101,30 @@ void main() {
       ]);
       expect(context.json['customExercises'], [
         'Cable Woodchop',
+        'Landmine Press',
+      ]);
+    });
+
+    test('a renamed exercise goes by its new name in plans and history, '
+        'whatever the plan stored', () async {
+      final harness = HiveTestHarness();
+      await harness.open();
+      addTearDown(harness.close);
+      await ExerciseCatalog.rename('builtin:bench-press', 'Flat bench');
+
+      final context = build(
+        sessions: [
+          session(daysAgo(3), {
+            'Bench Press': [(5, 80)],
+          }),
+        ],
+      );
+      final plans = context.json['plans'] as List;
+      expect(plans[0]['exercises'][0]['name'], 'Flat bench');
+      expect((context.json['exercises'] as List).single['name'], 'Flat bench');
+      // No longer a library name, so it is offered as one of the user's own.
+      expect(context.snapshot.customExercises, [
+        'Flat bench',
         'Landmine Press',
       ]);
     });

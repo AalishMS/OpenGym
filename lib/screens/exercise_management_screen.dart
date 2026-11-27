@@ -3,17 +3,22 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 
-import '../services/supabase_service.dart';
 import '../models/exercise_definition.dart';
 import '../services/exercise_catalog.dart';
+import '../services/exercise_rename_service.dart';
+import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/radii.dart';
 import '../theme/spacing.dart';
 import '../widgets/app_header.dart';
+import '../widgets/exercise_rename_dialog.dart';
 import '../widgets/motion/app_modals.dart';
 import '../widgets/persistence_dialog.dart';
 
+/// The account's exercise library: rename any movement, and merge two
+/// entries for the same movement. Movements you train come first, each with
+/// how much of your training uses it, so duplicates are easy to spot.
 class ExerciseManagementScreen extends StatefulWidget {
   final String? userId;
   const ExerciseManagementScreen({super.key, required this.userId});
@@ -26,13 +31,15 @@ class ExerciseManagementScreen extends StatefulWidget {
 class _ExerciseManagementScreenState extends State<ExerciseManagementScreen> {
   String _query = '';
   late final StreamSubscription<void> _changes;
+  late Map<String, ExerciseUsage> _usage = _readUsage();
+
+  Map<String, ExerciseUsage> _readUsage() =>
+      ExerciseRenameService.usageByExercise(userId: widget.userId);
 
   @override
   void initState() {
     super.initState();
-    _changes = SyncService.instance.changes.listen((_) {
-      if (mounted) setState(() {});
-    });
+    _changes = SyncService.instance.changes.listen((_) => _refresh());
   }
 
   @override
@@ -41,138 +48,101 @@ class _ExerciseManagementScreenState extends State<ExerciseManagementScreen> {
     super.dispose();
   }
 
+  void _refresh() {
+    if (mounted) setState(() => _usage = _readUsage());
+  }
+
+  bool _accountChanged() =>
+      SupabaseService.isConfigured &&
+      SupabaseService.currentUserId != widget.userId;
+
+  Future<void> _rename(ExerciseDefinition exercise) async {
+    final outcome = await showExerciseRenameDialog(
+      context,
+      exerciseId: exercise.id,
+      currentName: exercise.name,
+      userId: widget.userId,
+    );
+    if (outcome == null || !mounted) return;
+    _refresh();
+    if (outcome case ExerciseMerged(:final into)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Merged into ${into.name}')));
+    }
+  }
+
   Future<void> _merge(ExerciseDefinition source) async {
     final target = await showAppSheet<ExerciseDefinition>(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: AppRadius.sheet),
-      builder: (_) => _MergeTargetSheet(source: source),
+      builder: (_) => _MergeTargetSheet(source: source, usage: _usage),
     );
     if (target == null || !mounted) return;
+    // A timed exercise and one counted in reps would misread each other's
+    // logged sets, and a merge can't be undone.
+    if (ExerciseRenameService.mergeBlock(source.id, target.id)
+        case final block?) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(block)));
+      return;
+    }
+    final caution = ExerciseRenameService.mergeCaution(source.id, target.id);
     final saved = await showAppDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder:
           (_) => PersistenceDialog(
-            title: 'Merge exercises?',
+            title: 'Merge into ${target.name}?',
             content: Text(
-              '“${source.name}” will use “${target.name}” for statistics, records, '
-              'and previous sets across all your splits. All logged sets and their '
-              'original names will be kept. Only merge these if they are the same movement.',
+              '${source.name} and ${target.name} become one exercise called '
+              '${target.name}. Every plan, workout and chart shows '
+              '${target.name}, and their history, records and previous sets '
+              'are combined across all your splits. All logged sets are '
+              'kept. ${caution == null ? '' : '$caution '}'
+              "This can't be undone, so only merge the same movement.",
             ),
             actionLabel: 'Merge',
             progressLabel: 'Merging exercises',
             failureMessage: 'Could not merge exercises. Try again or cancel.',
-            onPersist:
-                () => SyncService.instance.runExclusiveLocalMutation(() async {
-                  if (!mounted ||
-                      SupabaseService.currentUserId != widget.userId) {
-                    throw StateError('The exercise account changed.');
-                  }
-                  await ExerciseCatalog.merge(
-                    source.id,
-                    target.id,
-                    userId: widget.userId,
-                  );
-                }),
+            // One of the two was merged elsewhere while this was open, so
+            // what was confirmed is no longer what would be merged.
+            failureMessageFor:
+                (error) =>
+                    error is ExerciseChangedException
+                        ? 'These exercises changed on another device. '
+                            'Cancel and start again.'
+                        : null,
+            onPersist: () async {
+              if (!mounted || _accountChanged()) {
+                throw StateError('The exercise account changed.');
+              }
+              await ExerciseRenameService.merge(
+                sourceId: source.id,
+                targetId: target.id,
+                userId: widget.userId,
+              );
+            },
           ),
     );
     if (!mounted || saved != true) return;
-    SyncService.instance.notifyLocalChange();
-    setState(() {});
+    _refresh();
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('Merged into ${target.name}')));
   }
 
-  Future<void> _rename(ExerciseDefinition exercise) async {
-    String input = exercise.name;
-    String? error;
-    bool saving = false;
-    await showAppDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder:
-          (dialogContext) => StatefulBuilder(
-            builder:
-                (context, update) => PopScope(
-                  canPop: !saving,
-                  child: AlertDialog(
-                    title: const Text('Rename exercise'),
-                    content: TextFormField(
-                      initialValue: exercise.name,
-                      onChanged: (value) => input = value,
-                      enabled: !saving,
-                      autofocus: true,
-                      maxLength: 100,
-                      decoration: InputDecoration(
-                        labelText: 'Exercise name',
-                        errorText: error,
-                      ),
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed:
-                            saving ? null : () => Navigator.pop(dialogContext),
-                        child: const Text('Cancel'),
-                      ),
-                      TextButton(
-                        onPressed:
-                            saving
-                                ? null
-                                : () async {
-                                  update(() => saving = true);
-                                  try {
-                                    await SyncService.instance
-                                        .runExclusiveLocalMutation(() async {
-                                          if (!mounted ||
-                                              SupabaseService.currentUserId !=
-                                                  widget.userId) {
-                                            throw StateError(
-                                              'The exercise account changed.',
-                                            );
-                                          }
-                                          await ExerciseCatalog.rename(
-                                            exercise.id,
-                                            input,
-                                            userId: widget.userId,
-                                          );
-                                        });
-                                    SyncService.instance.notifyLocalChange();
-                                    if (!dialogContext.mounted || !mounted) {
-                                      return;
-                                    }
-                                    Navigator.pop(dialogContext);
-                                    setState(() {});
-                                  } catch (failure) {
-                                    debugPrint(
-                                      'Could not rename exercise: $failure',
-                                    );
-                                    if (dialogContext.mounted) {
-                                      update(() {
-                                        saving = false;
-                                        error =
-                                            failure is FormatException
-                                                ? failure.message.toString()
-                                                : 'Could not rename exercise. Try again.';
-                                      });
-                                    }
-                                  }
-                                },
-                        child: Text(saving ? 'Saving…' : 'Save'),
-                      ),
-                    ],
-                  ),
-                ),
-          ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    bool trained(ExerciseDefinition d) =>
+        !d.builtIn || !(_usage[d.id]?.isEmpty ?? true);
     final exercises = ExerciseCatalog.search(_query)..sort((a, b) {
-      final customFirst = (a.builtIn ? 1 : 0).compareTo(b.builtIn ? 1 : 0);
-      return customFirst == 0 ? a.name.compareTo(b.name) : customFirst;
+      final first = (trained(a) ? 0 : 1).compareTo(trained(b) ? 0 : 1);
+      return first == 0
+          ? a.name.toLowerCase().compareTo(b.name.toLowerCase())
+          : first;
     });
     return Scaffold(
       appBar: const AppHeader(title: Text('Manage exercises')),
@@ -185,7 +155,10 @@ class _ExerciseManagementScreenState extends State<ExerciseManagementScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Merge duplicate names to bring their statistics together. Your exercise library is shared across all splits.',
+                  'Renaming an exercise changes its name everywhere. If two '
+                  'entries are the same movement, merge them to bring their '
+                  'history together. Your exercise library is shared across '
+                  'all splits.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: textSecondaryColor(context),
                   ),
@@ -214,20 +187,19 @@ class _ExerciseManagementScreenState extends State<ExerciseManagementScreen> {
                         final d = exercises[index];
                         return ListTile(
                           title: Text(d.name),
-                          subtitle: Text(d.category),
+                          subtitle: Text(_describe(d, _usage[d.id])),
                           trailing: PopupMenuButton<String>(
                             tooltip: 'Actions for ${d.name}',
                             onSelected:
                                 (action) =>
                                     action == 'merge' ? _merge(d) : _rename(d),
                             itemBuilder:
-                                (_) => [
-                                  if (!d.builtIn)
-                                    const PopupMenuItem(
-                                      value: 'rename',
-                                      child: Text('Rename'),
-                                    ),
-                                  const PopupMenuItem(
+                                (_) => const [
+                                  PopupMenuItem(
+                                    value: 'rename',
+                                    child: Text('Rename'),
+                                  ),
+                                  PopupMenuItem(
                                     value: 'merge',
                                     child: Text('Merge into another exercise'),
                                   ),
@@ -243,9 +215,21 @@ class _ExerciseManagementScreenState extends State<ExerciseManagementScreen> {
   }
 }
 
+/// The exercise's group, and how much of the account's training uses it.
+String _describe(ExerciseDefinition d, ExerciseUsage? usage) {
+  String count(int value, String noun) =>
+      '$value ${value == 1 ? noun : '${noun}s'}';
+  return [
+    d.category,
+    if (usage != null && usage.workouts > 0) count(usage.workouts, 'workout'),
+    if (usage != null && usage.plans > 0) count(usage.plans, 'plan'),
+  ].join(' · ');
+}
+
 class _MergeTargetSheet extends StatefulWidget {
   final ExerciseDefinition source;
-  const _MergeTargetSheet({required this.source});
+  final Map<String, ExerciseUsage> usage;
+  const _MergeTargetSheet({required this.source, required this.usage});
   @override
   State<_MergeTargetSheet> createState() => _MergeTargetSheetState();
 }
@@ -262,13 +246,29 @@ class _MergeTargetSheetState extends State<_MergeTargetSheet> {
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.8,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             AppHeader(
               leading: AppBackButton(onPressed: () => Navigator.pop(context)),
-              title: const Text('Merge into'),
+              title: Text('Merge ${widget.source.name} into'),
             ),
             Padding(
-              padding: const EdgeInsets.all(AppSpacing.lg),
+              padding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.lg,
+                AppSpacing.sm,
+              ),
+              child: Text(
+                'Choose the exercise to keep. ${widget.source.name} takes its '
+                'name and joins its history.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: textSecondaryColor(context),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
               child: TextField(
                 onChanged: (value) => setState(() => _query = value),
                 decoration: const InputDecoration(
@@ -277,13 +277,19 @@ class _MergeTargetSheetState extends State<_MergeTargetSheet> {
                 ),
               ),
             ),
+            const SizedBox(height: AppSpacing.sm),
             Expanded(
               child: ListView.builder(
                 itemCount: choices.length,
                 itemBuilder:
                     (context, index) => ListTile(
                       title: Text(choices[index].name),
-                      subtitle: Text(choices[index].category),
+                      subtitle: Text(
+                        _describe(
+                          choices[index],
+                          widget.usage[choices[index].id],
+                        ),
+                      ),
                       onTap: () => Navigator.pop(context, choices[index]),
                     ),
               ),

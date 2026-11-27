@@ -137,7 +137,8 @@ class _PlanEditorScreenState extends State<PlanEditorScreen>
         _exercises.add(
           _EditorExercise(
             id: _nextExerciseId++,
-            name: exercise.name,
+            // The movement's current name; saving refreshes the snapshot.
+            name: ExerciseCatalog.label(exercise.name, exercise.exerciseId),
             exerciseId: exercise.exerciseId,
             note: exercise.note,
             sets: List.generate(exercise.sets, (index) {

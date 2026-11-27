@@ -6,6 +6,7 @@ import '../models/workout_plan.dart';
 import '../models/workout_session.dart';
 import '../navigation/open_workout.dart';
 import '../navigation/workout_destination.dart';
+import '../providers/settings_provider.dart';
 import '../providers/split_provider.dart';
 import '../providers/workout_plan_provider.dart';
 import '../providers/workout_session_provider.dart';
@@ -83,7 +84,10 @@ class DashboardScreen extends StatelessWidget {
                     context,
                     wide: wide,
                     totalWorkouts: sessions.length,
-                    thisWeek: HiveService.getWorkoutsThisWeek(splitId),
+                    thisWeek: HiveService.getWorkoutsThisWeek(
+                      splitId,
+                      firstDayOfWeek: SettingsProvider.weekStartOf(context),
+                    ),
                     prsTracked: HiveService.getAllExercisePRs(splitId).length,
                     totalPlans: plans.length,
                   ),
@@ -100,7 +104,12 @@ class DashboardScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          FrequencyHeatmap(sessions: sessions),
+                          FrequencyHeatmap(
+                            sessions: sessions,
+                            firstDayOfWeek: SettingsProvider.weekStartOf(
+                              context,
+                            ),
+                          ),
                           const SizedBox(height: AppSpacing.sm),
                           const HeatmapLegend(),
                         ],

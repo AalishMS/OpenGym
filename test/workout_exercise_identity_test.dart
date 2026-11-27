@@ -81,6 +81,7 @@ void main() {
     WidgetTester tester, {
     List<WorkoutSession> extra = const [],
     WorkoutDestination? destination,
+    List<Exercise>? week1,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(400, 900);
@@ -91,13 +92,19 @@ void main() {
         await Hive.box<WorkoutPlan>(HiveService.plansBox).put(plan.id, plan);
       }
       for (final session in [
-        log('push-1', 'push', DateTime(2026, 1, 1), [
-          Exercise(
-            name: 'Bench Press',
-            sets: [Set(weight: 80, reps: 8), Set(weight: 75, reps: 10)],
-          ),
-          Exercise(name: 'Cable Fly', sets: [Set(weight: 20, reps: 12)]),
-        ]),
+        log(
+          'push-1',
+          'push',
+          DateTime(2026, 1, 1),
+          week1 ??
+              [
+                Exercise(
+                  name: 'Bench Press',
+                  sets: [Set(weight: 80, reps: 8), Set(weight: 75, reps: 10)],
+                ),
+                Exercise(name: 'Cable Fly', sets: [Set(weight: 20, reps: 12)]),
+              ],
+        ),
         ...extra,
       ]) {
         await sessions.put(session.id, session);
@@ -155,164 +162,197 @@ void main() {
     ]);
   });
 
-  workoutTest("renaming to a hold's name keeps the lift and its measure", (
+  workoutTest('the next week carries over last week\'s exercises', (
+    tester,
+  ) async {
+    // Week 1 swapped Cable Fly for Dumbbell Fly and added Chest Dips at the end.
+    await open(
+      tester,
+      week1: [
+        Exercise(
+          name: 'Bench Press',
+          sets: [Set(weight: 80, reps: 8), Set(weight: 75, reps: 10)],
+        ),
+        Exercise(
+          name: 'Dumbbell Fly',
+          exerciseId: 'builtin:dumbbell-fly',
+          sets: [Set(weight: 14, reps: 12)],
+        ),
+        Exercise(
+          name: 'Chest Dips',
+          exerciseId: 'builtin:chest-dips',
+          sets: [Set(weight: 0, reps: 10), Set(weight: 0, reps: 9)],
+        ),
+      ],
+    );
+    expect(find.text('Dumbbell Fly'), findsOneWidget);
+    expect(find.text('Chest Dips'), findsOneWidget);
+    expect(find.text('Cable Fly'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('Dumbbell Fly')).dy,
+      lessThan(tester.getTopLeft(find.text('Chest Dips')).dy),
+    );
+    // Logging any value saves Week 2 with the carried lineup and its sets.
+    await openMenu(tester, 'Chest Dips');
+    await tester.tap(find.text('Exercise note'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Lean forward');
+    await tester.tap(find.text('Save'));
+    await pumpWithStorage(tester);
+    final draft =
+        HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
+    expect(draft.exercises.map((e) => e.exerciseId), [
+      ExerciseCatalog.identity('Bench Press'),
+      'builtin:dumbbell-fly',
+      'builtin:chest-dips',
+    ]);
+    expect(draft.exercises[1].sets.single.weight, 14);
+    expect(draft.exercises[2].sets, hasLength(2));
+    expect(draft.planExerciseIds, [
+      ExerciseCatalog.identity('Bench Press'),
+      ExerciseCatalog.identity('Cable Fly'),
+    ]);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('deleting an exercise from the current week says the next week '
+      'will leave it out', (tester) async {
+    await open(tester);
+    await openMenu(tester, 'Cable Fly');
+    await tester.tap(find.text('Delete exercise'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'This will permanently delete "Cable Fly" and all its sets. '
+        'Next week will start without it too.',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Delete'));
+    await pumpWithStorage(tester);
+    final draft =
+        HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
+    expect(draft.exercises.map((e) => e.name), ['Bench Press']);
+    // The plan still lists it; the draft remembers that it was dropped here.
+    expect(draft.planExerciseIds, [
+      ExerciseCatalog.identity('Bench Press'),
+      ExerciseCatalog.identity('Cable Fly'),
+    ]);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest("renaming to another exercise's name offers a merge", (
     tester,
   ) async {
     await open(tester);
     await openMenu(tester, 'Bench Press');
     await tester.tap(find.text('Rename exercise'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'Plank');
+    await tester.enterText(find.byType(TextField), 'plank');
     await tester.pump();
-    // Plank is another movement: the label changes, the identity does not.
+    // Plank is another movement, and a timed one: merging a lift into it
+    // would read every logged rep as a second, so the dialog explains why
+    // it can't and offers nothing to press.
     expect(find.byKey(const ValueKey('rename-merge-note')), findsOneWidget);
-    await tester.tap(find.text('Rename'));
+    expect(find.text('Plank is already an exercise'), findsOneWidget);
+    expect(
+      find.text(
+        "Bench Press is counted in reps and Plank is timed, so they can't be "
+        'merged.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(FilledButton, 'Rename'), findsNothing);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Merge'))
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.text('Cancel'));
     await pumpWithStorage(tester);
 
-    final draft =
-        HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
-    final renamed = draft.exercises.first;
-    expect(renamed.name, 'Plank');
-    expect(renamed.exerciseId, 'builtin:bench-press');
-    expect(ExerciseCatalog.isTimed(renamed.name, renamed.exerciseId), isFalse);
-    final logged = HiveService.getSessionById('push-1')!.exercises.first;
-    expect(logged.name, 'Plank');
-    expect(logged.exerciseId, 'builtin:bench-press');
-    expect(logged.sets.first.reps, 8, reason: 'reps are never reinterpreted');
-    // Previous still reads as weight × reps, not as a hold in seconds.
+    // They stay apart, and the lift stays weighted.
+    expect(
+      ExerciseCatalog.canonicalId('builtin:bench-press'),
+      isNot('builtin:plank'),
+    );
+    expect(find.text('Bench Press'), findsOneWidget);
     expect(find.text('80 × 8'), findsOneWidget);
     expect(find.text('80 × 8 s'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  workoutTest('rename everywhere updates plans, history and providers', (
+  workoutTest('rename changes the name everywhere without rewriting logs', (
     tester,
   ) async {
     await open(tester);
+    final loggedAt = HiveService.getSessionById('push-1')!.updatedAt;
+    final planAt = HiveService.getPlanById('upper')!.updatedAt;
     await openMenu(tester, 'Bench Press');
     await tester.tap(find.text('Rename exercise'));
     await tester.pumpAndSettle();
-
-    final everywhere = find.byKey(const ValueKey('rename-everywhere'));
-    expect(
-      tester.widget<CheckboxListTile>(everywhere).value,
-      isTrue,
-      reason: 'Renaming everywhere is the default',
-    );
-    expect(find.text('Also rename in plans and past workouts'), findsOneWidget);
     // Week 2 is still an unsaved preview, so only the Week 1 log counts.
     expect(
-      find.text('2 plans and 1 workout in this split use Bench Press.'),
+      find.textContaining('Used in 2 plans and 1 workout.'),
       findsOneWidget,
     );
     expect(find.byKey(const ValueKey('rename-merge-note')), findsNothing);
 
     await tester.enterText(find.byType(TextField), 'Flat bench press');
     await tester.pump();
-    await tester.tap(find.text('Rename'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Rename'));
     await pumpWithStorage(tester);
 
-    expect(names(HiveService.getPlanById('push')!.exercises), [
+    expect(
+      ExerciseCatalog.getById('builtin:bench-press')!.name,
       'Flat bench press',
-      'Cable Fly',
-    ]);
-    expect(names(HiveService.getPlanById('upper')!.exercises), [
-      'Flat bench press',
-      'Squat',
-    ]);
-    expect(HiveService.getPlanById('upper')!.dirty, isTrue);
-    expect(names(HiveService.getSessionById('push-1')!.exercises), [
-      'Flat bench press',
-      'Cable Fly',
-    ]);
-    final draft =
-        HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
-    expect(names(draft.exercises), ['Flat bench press', 'Cable Fly']);
-    expect(draft.exercises.first.sets.first.weight, 80);
-    // Every renamed occurrence keeps (or gains) its stable catalog ID.
-    for (final id in [
-      HiveService.getPlanById('push')!.exercises.first.exerciseId,
-      HiveService.getPlanById('upper')!.exercises.first.exerciseId,
-      HiveService.getSessionById('push-1')!.exercises.first.exerciseId,
-      draft.exercises.first.exerciseId,
-    ]) {
-      expect(id, 'builtin:bench-press');
-    }
-
-    // The renamed workout still finds last week's sets under the new name.
+    );
+    // The workout shows the new name and still finds last week's sets.
     expect(find.text('Flat bench press'), findsOneWidget);
+    expect(find.text('Bench Press'), findsNothing);
     expect(find.text('80 × 8'), findsOneWidget);
-    final context = tester.element(find.byType(WorkoutScreen));
+    // Every plan and log shows it, whatever name it stored.
+    for (final e in [
+      ...HiveService.getPlanById('push')!.exercises,
+      ...HiveService.getPlanById('upper')!.exercises,
+    ].where((e) => e.name.toLowerCase() == 'bench press')) {
+      expect(ExerciseCatalog.label(e.name, e.exerciseId), 'Flat bench press');
+    }
+    final logged = HiveService.getSessionById('push-1')!.exercises.first;
     expect(
-      context
-          .read<WorkoutPlanProvider>()
-          .plans
-          .expand((plan) => plan.exercises)
-          .where((e) => e.name == 'Flat bench press'),
-      hasLength(2),
+      ExerciseCatalog.label(logged.name, logged.exerciseId),
+      'Flat bench press',
     );
-    expect(
-      names(context.read<WorkoutSessionProvider>().sessions.single.exercises),
-      ['Flat bench press', 'Cable Fly'],
-    );
+    expect(logged.sets.first.weight, 80);
+    expect(HiveService.getSessionById('push-1')!.updatedAt, loggedAt);
+    expect(HiveService.getPlanById('upper')!.updatedAt, planAt);
     expect(tester.takeException(), isNull);
   });
 
-  workoutTest("renaming to another exercise's name keeps histories apart", (
+  workoutTest('merging from the workout combines the two movements', (
     tester,
   ) async {
     await open(tester);
-    await openMenu(tester, 'Bench Press');
+    await openMenu(tester, 'Cable Fly');
     await tester.tap(find.text('Rename exercise'));
     await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'squat');
-    await tester.pump();
-    expect(
-      find.text(
-        'Squat is a different exercise, so its history stays separate. To '
-        'combine them, merge them in Settings → Manage exercises.',
-      ),
-      findsOneWidget,
-    );
-    // Renaming only this workout does not merge either.
-    await tester.tap(find.byKey(const ValueKey('rename-everywhere')));
+    await tester.enterText(find.byType(TextField), 'Dumbbell Fly');
     await tester.pump();
     expect(find.byKey(const ValueKey('rename-merge-note')), findsOneWidget);
-    await tester.tap(find.text('Rename'));
-    await pumpWithStorage(tester);
-    final draft =
-        HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
-    expect(draft.exercises.first.name, 'squat');
-    expect(draft.exercises.first.exerciseId, 'builtin:bench-press');
-  });
-
-  workoutTest('unchecked rename changes this workout only', (tester) async {
-    await open(tester);
-    await openMenu(tester, 'Bench Press');
-    await tester.tap(find.text('Rename exercise'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('rename-everywhere')));
-    await tester.pump();
-    await tester.enterText(find.byType(TextField), 'Flat bench press');
-    await tester.pump();
-    await tester.tap(find.text('Rename'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Merge'));
     await pumpWithStorage(tester);
 
-    final draft =
-        HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
-    expect(names(draft.exercises), ['Flat bench press', 'Cable Fly']);
-    expect(names(HiveService.getPlanById('push')!.exercises), [
-      'Bench Press',
-      'Cable Fly',
-    ]);
-    expect(names(HiveService.getPlanById('upper')!.exercises), [
-      'bench press',
-      'Squat',
-    ]);
-    expect(names(HiveService.getSessionById('push-1')!.exercises), [
-      'Bench Press',
-      'Cable Fly',
-    ]);
+    final fly = ExerciseCatalog.identity('Cable Fly');
+    expect(fly, ExerciseCatalog.identity('Dumbbell Fly'));
+    expect(find.text('Merged into Dumbbell Fly'), findsOneWidget);
+    expect(find.text('Dumbbell Fly'), findsWidgets);
+    expect(find.text('Cable Fly'), findsNothing);
+    // The log keeps its sets and stored name; only what it resolves to moved.
+    final logged = HiveService.getSessionById('push-1')!.exercises.last;
+    expect(logged.name, 'Cable Fly');
+    expect(logged.sets.single.weight, 20);
+    expect(tester.takeException(), isNull);
   });
 
   workoutTest('replace uses the latest logged sets for the new exercise', (
@@ -349,6 +389,18 @@ void main() {
     await pumpWithStorage(tester);
 
     expect(find.text('Replace Bench Press'), findsNothing);
+    // The swap is in the workout already; the plan is only changed on request.
+    expect(find.text('Also change the plan?'), findsOneWidget);
+    expect(
+      find.text(
+        'Squat replaced Bench Press in this workout. Change it in the Push '
+        'plan too?',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Keep plan'));
+    await pumpWithStorage(tester);
+    expect(find.text('Also change the plan?'), findsNothing);
     final draft =
         HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
     expect(names(draft.exercises), ['Squat', 'Cable Fly']);
@@ -360,7 +412,131 @@ void main() {
       [for (final s in squat.sets) (s.weight, s.reps, s.rpe, s.note)],
       [(100.0, 5, null, null), (100.0, 5, null, null)],
     );
-    // Other plans and logs are untouched.
+    // Keeping the plan leaves it, and what the draft recorded of it, alone.
+    expect(names(HiveService.getPlanById('push')!.exercises), [
+      'Bench Press',
+      'Cable Fly',
+    ]);
+    expect(draft.planExerciseIds, [
+      ExerciseCatalog.identity('Bench Press'),
+      ExerciseCatalog.identity('Cable Fly'),
+    ]);
+    expect(tester.takeException(), isNull);
+  });
+
+  Future<void> replace(
+    WidgetTester tester,
+    String exercise, {
+    required String search,
+    required String pick,
+  }) async {
+    await openMenu(tester, exercise);
+    await tester.tap(find.text('Replace exercise'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Search exercises'),
+      search,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(pick).first);
+    await pumpWithStorage(tester);
+  }
+
+  workoutTest('after a swap, Change plan makes the same swap in the plan', (
+    tester,
+  ) async {
+    await open(
+      tester,
+      extra: [
+        log('upper-new', 'upper', DateTime(2026, 1, 9), [
+          Exercise(name: 'Squat', sets: [Set(weight: 100, reps: 5)]),
+        ]),
+      ],
+    );
+    await replace(tester, 'Bench Press', search: 'squat', pick: 'Squat');
+    await tester.tap(find.widgetWithText(FilledButton, 'Change plan'));
+    await pumpWithStorage(tester);
+
+    expect(find.text('Also change the plan?'), findsNothing);
+    expect(find.text('Push plan now has Squat'), findsOneWidget);
+    final plan = HiveService.getPlanById('push')!;
+    expect(names(plan.exercises), ['Squat', 'Cable Fly']);
+    final squat = plan.exercises.first;
+    expect(squat.exerciseId, 'builtin:squat');
+    // The plan's two sets, with the replacement's latest logged values.
+    expect(squat.sets, 2);
+    expect(
+      [for (final t in squat.setTargets!) (t.reps, t.weight)],
+      [(5, 100.0), (5, 100.0)],
+    );
+    // Only this plan changes, and the workout keeps what was swapped in.
+    expect(names(HiveService.getPlanById('upper')!.exercises), [
+      'bench press',
+      'Squat',
+    ]);
+    final draft =
+        HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
+    expect(names(draft.exercises), ['Squat', 'Cable Fly']);
+    // The draft has seen the plan's swap, so next week does not read Squat
+    // as an exercise the plan gained since.
+    expect(draft.planExerciseIds, [
+      'builtin:squat',
+      ExerciseCatalog.identity('Cable Fly'),
+    ]);
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('Change plan never brings back a plan deleted meanwhile', (
+    tester,
+  ) async {
+    await open(tester);
+    await replace(tester, 'Bench Press', search: 'squat', pick: 'Squat');
+    expect(find.text('Also change the plan?'), findsOneWidget);
+    // A sync deletes the plan while the question is open.
+    final deletedAt = DateTime(2026, 6, 1);
+    await tester.runAsync(() async {
+      final plan = HiveService.getPlanById('push')!..deletedAt = deletedAt;
+      await HiveService.putPlanRaw(plan);
+    });
+    await tester.tap(find.widgetWithText(FilledButton, 'Change plan'));
+    await pumpWithStorage(tester);
+
+    final plan = HiveService.getPlanById('push')!;
+    expect(plan.deletedAt, deletedAt);
+    expect(names(plan.exercises), ['Bench Press', 'Cable Fly']);
+    expect(
+      find.text('Could not change the plan. Try again or keep the plan.'),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  workoutTest('a swap of an exercise the plan does not have asks nothing', (
+    tester,
+  ) async {
+    // Week 1 swapped Cable Fly for Dumbbell Fly, so Week 2 carries an
+    // exercise the plan never listed.
+    await open(
+      tester,
+      week1: [
+        Exercise(name: 'Bench Press', sets: [Set(weight: 80, reps: 8)]),
+        Exercise(
+          name: 'Dumbbell Fly',
+          exerciseId: 'builtin:dumbbell-fly',
+          sets: [Set(weight: 14, reps: 12)],
+        ),
+      ],
+    );
+    await replace(
+      tester,
+      'Dumbbell Fly',
+      search: 'chest dips',
+      pick: 'Chest Dips',
+    );
+    expect(find.text('Also change the plan?'), findsNothing);
+    final draft =
+        HiveService.getSessionForPlanAndWeek('Push', 2, 'test-split')!;
+    expect(names(draft.exercises), ['Bench Press', 'Chest Dips']);
     expect(names(HiveService.getPlanById('push')!.exercises), [
       'Bench Press',
       'Cable Fly',

@@ -24,6 +24,12 @@ class RaisedCard extends StatelessWidget {
   /// so a row can rise into a card (and settle back) without moving.
   final bool raised;
 
+  /// Makes [onTap] and [onLongPress] a convenience for a finger or a mouse
+  /// only: the card takes no keyboard focus and a screen reader doesn't
+  /// offer it as a button. Use it when a control inside the card already
+  /// carries the same action, so assistive technology meets it once.
+  final bool pointerOnly;
+
   const RaisedCard({
     super.key,
     required this.child,
@@ -31,6 +37,7 @@ class RaisedCard extends StatelessWidget {
     this.onLongPress,
     this.borderRadius = AppRadius.card,
     this.raised = true,
+    this.pointerOnly = false,
   });
 
   @override
@@ -66,6 +73,8 @@ class RaisedCard extends StatelessWidget {
               onTap: onTap,
               onLongPress: onLongPress,
               onHighlightChanged: onHighlightChanged,
+              excludeFromSemantics: pointerOnly,
+              canRequestFocus: !pointerOnly,
               borderRadius: borderRadius,
               child: child,
             ),

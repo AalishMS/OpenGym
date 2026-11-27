@@ -1,6 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'exercise_catalog.dart';
+import 'exercise_name_adoption.dart';
 import '../services/hive_service.dart';
 import '../services/supabase_service.dart';
 import '../services/sync_service.dart';
@@ -44,6 +45,7 @@ class AdoptLocalData {
       await TrainingBlockRestore().recover(ownerId: null);
       await HiveService.ensureOfflineSplitWorkspace();
       await TrainingBlockMigration().normalizeUnderGate(ownerId: null);
+      await ExerciseNameAdoption.run(userId: null);
     });
   }
 
@@ -174,6 +176,7 @@ class AdoptLocalData {
     }
     await TrainingBlockMigration().normalizeUnderGate(ownerId: userId);
     if (isFirstAdoption) await TrainingBlockRestore().removeOwnerRecovery(null);
+    await ExerciseNameAdoption.run(userId: userId);
   }
 
   /// Starts or joins the current user's network reconciliation.

@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../../models/set.dart' as gym;
 import '../../providers/settings_provider.dart';
 import '../../services/exercise_catalog.dart';
-import '../../services/exercise_rename_service.dart';
 import '../../theme/app_typography.dart';
 import '../../theme/app_theme.dart';
 import '../../theme/radii.dart';
@@ -14,26 +13,6 @@ import '../motion/app_modals.dart';
 import 'set_entry_table.dart';
 
 class WorkoutDialogs {
-  static void showRenameExerciseDialog(
-    BuildContext context, {
-    required String currentName,
-    required void Function(String name) onRename,
-    ExerciseRenameImpact Function(String name)? impactFor,
-    void Function(String name)? onRenameEverywhere,
-  }) {
-    final offerEverywhere = impactFor != null && onRenameEverywhere != null;
-    showAppDialog<void>(
-      context: context,
-      builder:
-          (_) => _RenameExerciseDialog(
-            currentName: currentName,
-            onRename: onRename,
-            impactFor: offerEverywhere ? impactFor : null,
-            onRenameEverywhere: offerEverywhere ? onRenameEverywhere : null,
-          ),
-    );
-  }
-
   static void showAddSetDialog(
     BuildContext context, {
     gym.Set? lastSet,
@@ -400,10 +379,15 @@ class WorkoutDialogs {
   static Future<bool> showDeleteExerciseDialog(
     BuildContext context, {
     required String exerciseName,
+
+    /// The workout being trained now: the next week starts from its lineup.
+    bool carriesOver = false,
   }) => _showDestructiveConfirmation(
     context,
     title: 'Delete exercise?',
-    message: 'This will permanently delete "$exerciseName" and all its sets.',
+    message:
+        'This will permanently delete "$exerciseName" and all its sets.'
+        '${carriesOver ? ' Next week will start without it too.' : ''}',
     confirmLabel: 'Delete',
   );
 
@@ -693,124 +677,4 @@ class _DialogSetEntryState extends State<_DialogSetEntry> {
             ..reps = reps;
         }),
   );
-}
-
-class _RenameExerciseDialog extends StatefulWidget {
-  final String currentName;
-  final void Function(String name) onRename;
-  final ExerciseRenameImpact Function(String name)? impactFor;
-  final void Function(String name)? onRenameEverywhere;
-
-  const _RenameExerciseDialog({
-    required this.currentName,
-    required this.onRename,
-    required this.impactFor,
-    required this.onRenameEverywhere,
-  });
-
-  @override
-  State<_RenameExerciseDialog> createState() => _RenameExerciseDialogState();
-}
-
-class _RenameExerciseDialogState extends State<_RenameExerciseDialog> {
-  late final TextEditingController _name = TextEditingController(
-    text: widget.currentName,
-  );
-  bool _everywhere = true;
-  String? _error;
-
-  @override
-  void dispose() {
-    _name.dispose();
-    super.dispose();
-  }
-
-  String _count(int value, String noun) =>
-      '$value ${value == 1 ? noun : '${noun}s'}';
-
-  void _submit() {
-    final name = ExerciseRenameService.canonicalName(_name.text);
-    final error = ExerciseRenameService.validationMessage(name);
-    if (error != null) {
-      setState(() => _error = error);
-      return;
-    }
-    Navigator.pop(context);
-    final everywhere = widget.onRenameEverywhere;
-    if (everywhere != null && _everywhere) {
-      everywhere(name);
-    } else {
-      widget.onRename(name);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final secondary = textSecondaryColor(context);
-    final impactFor = widget.impactFor;
-    final name = ExerciseRenameService.canonicalName(_name.text);
-    final impact = impactFor?.call(name.isEmpty ? widget.currentName : name);
-    return AlertDialog(
-      title: const Text('Rename exercise'),
-      scrollable: true,
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          TextField(
-            controller: _name,
-            autofocus: true,
-            textCapitalization: TextCapitalization.sentences,
-            onChanged: (_) => setState(() => _error = null),
-            onSubmitted: (_) => _submit(),
-            decoration: InputDecoration(
-              labelText: 'Exercise name',
-              errorText: _error,
-            ),
-          ),
-          if (impact != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            CheckboxListTile(
-              key: const ValueKey('rename-everywhere'),
-              value: _everywhere,
-              onChanged: (value) => setState(() => _everywhere = value ?? true),
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('Also rename in plans and past workouts'),
-              subtitle: Text(
-                impact.isEmpty
-                    ? 'No plans or other workouts in this split use '
-                        '${widget.currentName}.'
-                    : '${_count(impact.plans, 'plan')} and '
-                        '${_count(impact.workouts, 'workout')} in this split '
-                        'use ${widget.currentName}.',
-                style: textTheme.bodySmall?.copyWith(color: secondary),
-              ),
-            ),
-            if (impact.otherMovement case final other?)
-              Padding(
-                padding: const EdgeInsets.only(top: AppSpacing.xs),
-                child: Text(
-                  '$other is a different exercise, so its history stays '
-                  'separate. To combine them, merge them in Settings → '
-                  'Manage exercises.',
-                  key: const ValueKey('rename-merge-note'),
-                  style: textTheme.bodySmall?.copyWith(
-                    color: textPrimaryColor(context),
-                  ),
-                ),
-              ),
-          ],
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(onPressed: _submit, child: const Text('Rename')),
-      ],
-    );
-  }
 }
