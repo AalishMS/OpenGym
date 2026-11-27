@@ -3,15 +3,15 @@ import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 import '../../theme/app_theme.dart';
 import '../../theme/app_typography.dart';
-import '../../theme/radii.dart';
 import '../../theme/spacing.dart';
 import '../../utils/statistics_format.dart';
 import '../../utils/workout_context.dart';
 import '../app_button.dart';
 import 'history_journal_data.dart';
 
-/// Width of the date rail that runs down the left of the journal.
-const double _railWidth = 44;
+/// Width of the date column that runs down the left of the journal: room for
+/// a two-digit day and a weekday at the row's small text size.
+const double _railWidth = 32;
 
 class HistorySearchField extends StatelessWidget {
   final TextEditingController controller;
@@ -118,10 +118,11 @@ enum HistoryRowRule {
 
 /// One workout in the journal, as a ruled row rather than a card.
 ///
-/// The date sits on a rail at the left. The workout's name runs the full
-/// width beside it, over its block, week and duration, with the PR flag at
-/// the bottom right. A second workout on the same day leaves its date out,
-/// and the rule between the two starts after the rail.
+/// A row is two lines of text on one grid. The date is that grid's first
+/// column, set no larger than the details so the workout's name leads: the
+/// day sits on the name's baseline and the weekday on the details'. The PR
+/// mark ends the details line. A second workout on the same day leaves its
+/// date out, and the rule between the two starts after the date column.
 class HistoryWorkoutRow extends StatelessWidget {
   final HistoryWorkoutSummary summary;
   final VoidCallback onTap;
@@ -142,35 +143,47 @@ class HistoryWorkoutRow extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final textScale = MediaQuery.textScalerOf(context).scale(1);
+        // Narrow rows and large text put the date above the workout.
         final compact = constraints.maxWidth < 310 || textScale >= 1.6;
         final inset = compact ? 0.0 : _railWidth + AppSpacing.md;
+        final name = _WorkoutName(summary: summary, compact: compact);
+        final details = _WorkoutDetails(summary: summary);
         final Widget content;
         if (compact) {
           content = Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (showDate) ...[
-                _HistoryDate(date: session.date, horizontal: true),
-                const SizedBox(height: AppSpacing.xs),
+                _HistoryDate(date: session.date),
+                const SizedBox(height: AppSpacing.xxs),
               ],
-              _WorkoutSummary(summary: summary, compact: true),
+              name,
+              const SizedBox(height: AppSpacing.xxs),
+              details,
             ],
           );
         } else {
-          content = Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Widget line(Widget? rail, Widget body) => Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
             children: [
-              SizedBox(
-                width: _railWidth,
-                child:
-                    showDate
-                        ? _HistoryDate(date: session.date, horizontal: false)
-                        : null,
-              ),
+              SizedBox(width: _railWidth, child: showDate ? rail : null),
               const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: _WorkoutSummary(summary: summary, compact: false),
+              Expanded(child: body),
+            ],
+          );
+          content = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              line(
+                _HistoryDay(
+                  key: const ValueKey('history-date'),
+                  date: session.date,
+                ),
+                name,
               ),
+              const SizedBox(height: AppSpacing.xxs),
+              line(_HistoryWeekday(date: session.date), details),
             ],
           );
         }
@@ -206,158 +219,161 @@ class HistoryWorkoutRow extends StatelessWidget {
   }
 }
 
-class _HistoryDate extends StatelessWidget {
+/// The day of the month, on the workout name's baseline. Smaller and lighter
+/// than the name, so it indexes the row rather than heading it.
+class _HistoryDay extends StatelessWidget {
   final DateTime date;
-  final bool horizontal;
 
-  const _HistoryDate({required this.date, required this.horizontal});
+  const _HistoryDay({required this.date, super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final day = Text(
-      '${date.day}',
-      style: AppTypography.figures(
-        fontSize: 22,
-        fontWeight: FontWeight.w700,
-        height: 1.1,
-        color: textPrimaryColor(context),
-      ),
-    );
-    final weekday = Text(
-      historyWeekday(date),
-      style: Theme.of(
-        context,
-      ).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.w600),
-    );
-    if (horizontal) {
-      return Row(
-        key: const ValueKey('history-date'),
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
-        children: [day, const SizedBox(width: AppSpacing.sm), weekday],
-      );
-    }
-    return Padding(
-      key: const ValueKey('history-date'),
-      padding: EdgeInsets.zero,
-      child: Column(
-        children: [day, const SizedBox(height: AppSpacing.xxs), weekday],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Text(
+    '${date.day}',
+    style: AppTypography.figures(
+      fontSize: 15,
+      fontWeight: FontWeight.w600,
+      height: 1.35,
+      color: textPrimaryColor(context),
+    ),
+  );
 }
 
-class _WorkoutSummary extends StatelessWidget {
+/// The weekday, on the details line's baseline and in its style.
+class _HistoryWeekday extends StatelessWidget {
+  final DateTime date;
+
+  const _HistoryWeekday({required this.date});
+
+  @override
+  Widget build(BuildContext context) =>
+      Text(historyWeekday(date), style: _detailsStyle(context));
+}
+
+/// The date on a line of its own, above the workout, when the row is narrow.
+class _HistoryDate extends StatelessWidget {
+  final DateTime date;
+
+  const _HistoryDate({required this.date});
+
+  @override
+  Widget build(BuildContext context) => Row(
+    key: const ValueKey('history-date'),
+    crossAxisAlignment: CrossAxisAlignment.baseline,
+    textBaseline: TextBaseline.alphabetic,
+    children: [
+      _HistoryDay(date: date),
+      const SizedBox(width: AppSpacing.sm),
+      _HistoryWeekday(date: date),
+    ],
+  );
+}
+
+TextStyle _detailsStyle(BuildContext context) => AppTypography.figures(
+  fontSize: 12,
+  fontWeight: FontWeight.w500,
+  height: 1.45,
+  color: textSecondaryColor(context),
+);
+
+class _WorkoutName extends StatelessWidget {
   final HistoryWorkoutSummary summary;
 
   /// Large text and narrow rows let the name wrap as far as it needs.
   final bool compact;
 
-  const _WorkoutSummary({required this.summary, required this.compact});
+  const _WorkoutName({required this.summary, required this.compact});
+
+  @override
+  Widget build(BuildContext context) => Text(
+    summary.session.planName,
+    maxLines: compact ? null : 2,
+    overflow: compact ? null : TextOverflow.ellipsis,
+    style: Theme.of(context).textTheme.titleLarge,
+  );
+}
+
+/// Block, week and duration, with the PR mark at the end of the line.
+class _WorkoutDetails extends StatelessWidget {
+  final HistoryWorkoutSummary summary;
+
+  const _WorkoutDetails({required this.summary});
 
   @override
   Widget build(BuildContext context) {
     final session = summary.session;
-    final textTheme = Theme.of(context).textTheme;
     final duration = knownDurationSeconds(session.durationSeconds);
     final details = [
       workoutContext(session),
       if (duration != null) formatStatisticsDuration(duration),
       if (summary.statistics.totalSets == 0) 'No sets logged',
     ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: [
-        Text(
-          session.planName,
-          maxLines: compact ? null : 2,
-          overflow: compact ? null : TextOverflow.ellipsis,
-          style: textTheme.titleLarge,
-        ),
-        const SizedBox(height: AppSpacing.xxs),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    details.join(' · '),
-                    style: AppTypography.figures(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      height: 1.45,
-                      color: textSecondaryColor(context),
-                    ),
-                  ),
-                  // A search that found this workout by an exercise names
-                  // it, so the match explains itself.
-                  if (summary.matchedExercises.isNotEmpty) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Text(
-                      summary.matchedExercises.join(', '),
-                      key: const ValueKey('history-matched-exercises'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: textTheme.bodyMedium?.copyWith(
-                        fontSize: 13,
-                        height: 1.45,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            if (summary.hasPersonalRecord) ...[
-              const SizedBox(width: AppSpacing.md),
-              const HistoryRecordBadge(),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(details.join(' · '), style: _detailsStyle(context)),
+              // A search that found this workout by an exercise names it,
+              // so the match explains itself.
+              if (summary.matchedExercises.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  summary.matchedExercises.join(', '),
+                  key: const ValueKey('history-matched-exercises'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontSize: 13, height: 1.45),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
+        if (summary.hasPersonalRecord) ...[
+          const SizedBox(width: AppSpacing.md),
+          HistoryRecordMark(count: summary.recordCount),
+        ],
       ],
     );
   }
 }
 
-/// History's compact record flag.
-class HistoryRecordBadge extends StatelessWidget {
-  const HistoryRecordBadge({super.key});
+/// How many exercises set a personal record, in accent ink on no ground:
+/// most workouts in a good month carry one, so the mark stays quiet down a
+/// list, and the count still tells one row from the next.
+class HistoryRecordMark extends StatelessWidget {
+  final int count;
+
+  const HistoryRecordMark({required this.count, super.key});
 
   @override
   Widget build(BuildContext context) {
-    final foreground = onAccentColor(context);
+    final ink = accentColor(context);
     return Semantics(
-      label: 'Personal record',
+      label: '$count personal record${count == 1 ? '' : 's'}',
       excludeSemantics: true,
-      child: DecoratedBox(
-        key: const ValueKey('history-personal-record-pill'),
-        decoration: BoxDecoration(
-          color: accentFillColor(context),
-          borderRadius: AppRadius.badge,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.xs + AppSpacing.xxs,
-            vertical: AppSpacing.xxs,
+      child: Row(
+        key: const ValueKey('history-record-mark'),
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Icon(LucideIcons.trophy, size: 12, color: ink),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            '$count PR${count == 1 ? '' : 's'}',
+            style: AppTypography.figures(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              height: 1.45,
+              color: ink,
+            ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(LucideIcons.trophy, size: 11, color: foreground),
-              const SizedBox(width: AppSpacing.xs),
-              Text(
-                'PR',
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: foreground,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
     );
   }

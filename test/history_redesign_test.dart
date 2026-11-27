@@ -276,7 +276,7 @@ void main() {
     },
   );
 
-  testWidgets('personal record pill uses every solved accent pairing', (
+  testWidgets('the record mark is accent ink on no ground in every theme', (
     tester,
   ) async {
     final summary =
@@ -290,7 +290,7 @@ void main() {
           ),
         ]).groups.single.workouts.first;
     expect(summary.session.id, 'accent-pr');
-    expect(summary.hasPersonalRecord, isTrue);
+    expect(summary.recordCount, 1);
 
     for (final brightness in Brightness.values) {
       for (final accent in SettingsProvider.accents) {
@@ -303,27 +303,48 @@ void main() {
           ),
         );
 
-        final pillFinder = find.byKey(
-          const ValueKey('history-personal-record-pill'),
-        );
-        final context = tester.element(pillFinder);
-        final decoration =
-            tester.widget<DecoratedBox>(pillFinder).decoration as BoxDecoration;
-        final label = tester.widget<Text>(find.text('PR'));
+        final mark = find.byKey(const ValueKey('history-record-mark'));
+        final context = tester.element(mark);
         final variant = '${accent.name} / ${brightness.name}';
-
         expect(
-          decoration.color,
-          accentFillColor(context),
-          reason: '$variant should use the accent ground',
+          tester.widget<Text>(find.text('1 PR')).style?.color,
+          accentColor(context),
+          reason: '$variant should read as accent ink',
         );
         expect(
-          label.style?.color,
-          onAccentColor(context),
-          reason: '$variant should use the accent foreground',
+          find.ancestor(of: mark, matching: find.byType(DecoratedBox)),
+          findsNothing,
+          reason: '$variant should have no ground',
         );
       }
     }
+  });
+
+  test('the record mark counts the exercises that set a record', () {
+    final baseline = session(
+      id: 'baseline',
+      name: 'Baseline',
+      date: DateTime(2026, 9, 4),
+    ).copyWith(
+      exercises: [
+        Exercise(name: 'Bench Press', sets: [Set(weight: 80, reps: 5)]),
+        Exercise(name: 'Back Squat', sets: [Set(weight: 100, reps: 5)]),
+      ],
+    );
+    final both = session(
+      id: 'both',
+      name: 'Both up',
+      date: DateTime(2026, 9, 11),
+    ).copyWith(
+      exercises: [
+        Exercise(name: 'Bench Press', sets: [Set(weight: 85, reps: 5)]),
+        Exercise(name: 'Back Squat', sets: [Set(weight: 110, reps: 5)]),
+      ],
+    );
+    final workouts =
+        buildHistoryJournalData([baseline, both]).groups.single.workouts;
+    expect(workouts.map((workout) => workout.recordCount), [2, 0]);
+    expect(workouts.last.hasPersonalRecord, isFalse);
   });
 
   testWidgets(
@@ -362,20 +383,32 @@ void main() {
       expect(details, findsOneWidget);
 
       final row = tester.getRect(find.byType(HistoryWorkoutRow));
-      final name = tester.getRect(
-        find.text('Heavy upper body with a long name'),
-      );
-      final badge = tester.getRect(
-        find.byKey(const ValueKey('history-personal-record-pill')),
+      final nameFinder = find.text('Heavy upper body with a long name');
+      final name = tester.getRect(nameFinder);
+      final mark = tester.getRect(
+        find.byKey(const ValueKey('history-record-mark')),
       );
       // The name runs to the right edge, with nothing beside it.
       expect(name.right, moreOrLessEquals(row.right));
-      // The PR flag sits under it, at the bottom right, level with the details.
-      expect(badge.top, greaterThanOrEqualTo(name.bottom));
-      expect(badge.right, moreOrLessEquals(row.right));
+      // The PR mark ends the details line, at the bottom right.
+      expect(mark.top, greaterThanOrEqualTo(name.bottom));
+      expect(mark.right, moreOrLessEquals(row.right));
       expect(
-        badge.bottom,
-        moreOrLessEquals(tester.getRect(details).bottom, epsilon: 1),
+        mark.center.dy,
+        moreOrLessEquals(tester.getRect(details).center.dy, epsilon: 2),
+      );
+
+      // The date indexes the row: smaller than the name, on its line.
+      final day = find.text('11');
+      expect(
+        tester.widget<Text>(day).style!.fontSize,
+        lessThan(tester.widget<Text>(nameFinder).style!.fontSize!),
+      );
+      final dayRect = tester.getRect(day);
+      expect(dayRect.center.dy, inInclusiveRange(name.top, name.bottom));
+      expect(
+        tester.getRect(find.text('Fri')).center.dy,
+        moreOrLessEquals(tester.getRect(details).center.dy, epsilon: 2),
       );
     },
   );
@@ -639,7 +672,6 @@ void main() {
 
     final date = find.byKey(const ValueKey('history-date'));
     expect(date, findsOneWidget);
-    expect(tester.widget(date), isA<Padding>());
     expect(
       find.descendant(of: date, matching: find.byType(DecoratedBox)),
       findsNothing,

@@ -261,7 +261,7 @@ up/down, and Delete exercise last.
 
 Records are derived, never stored, and have one definition:
 `StatisticsAnalyticsService.recordEvents`. Stats (Records and each block's
-Records figure), the History PR pill, live workout marks and the summary
+Records figure), History's record count, live workout marks and the summary
 after logging all read it, so they cannot disagree.
 
 - Only completed, live workouts in the split count, in date order, and only
@@ -765,13 +765,19 @@ signature:
   (`knownDurationSeconds`), so History never shows "0m".
 - Don't nest a ground inside a card. History is a ruled ledger, not a stack
   of cards: each month heads its workouts with a count over a strong rule,
-  and each workout is a row on the page ground separated by hairlines. The
-  date sits on a rail at the left (above the row at narrow widths or large
-  text); a second workout on the same day leaves the date out and the rule
-  between the two starts after the rail. A row is the workout name across the
-  full width, then its block, week and known duration, with the PR flag at
-  the bottom right. There is no volume or set count, and no exercise list:
-  the workout itself is a tap away. A search that found a workout by an
+  and each workout is a row on the page ground separated by hairlines. A row
+  is two lines of text on one grid: the workout name (`titleLarge`) across
+  the full width, then its block, week and known duration. The date is the
+  grid's first column and never outranks the name: the day (15px `figures`)
+  sits on the name's baseline and the weekday on the details' baseline, in
+  their style. At narrow widths or large text the date moves above the row. A
+  second workout on the same day leaves the date out, and the rule between
+  the two starts after the date column. The details line ends at the right
+  with the record mark: a trophy and how many exercises set a record
+  (*2 PRs*), in accent ink on no ground, because most workouts in a good
+  month carry one and a filled badge on each shouted down the list. There is
+  no volume or set count, and no exercise list: the workout itself is a tap
+  away. A search that found a workout by an
   exercise, not by its name, names the matching exercises beneath so the
   result explains itself. A session with no performed sets says *No sets
   logged*. The ledger appears

@@ -31,7 +31,9 @@ class HistoryMonthGroup {
 class HistoryWorkoutSummary {
   final WorkoutSession session;
   final SessionStatistics statistics;
-  final bool hasPersonalRecord;
+
+  /// How many exercises set a personal record in this workout.
+  final int recordCount;
 
   /// The exercises a search found this workout by, when its name didn't
   /// match. Empty outside a search.
@@ -40,9 +42,11 @@ class HistoryWorkoutSummary {
   const HistoryWorkoutSummary({
     required this.session,
     required this.statistics,
-    required this.hasPersonalRecord,
+    this.recordCount = 0,
     this.matchedExercises = const [],
   });
+
+  bool get hasPersonalRecord => recordCount > 0;
 }
 
 HistoryJournalData buildHistoryJournalData(
@@ -52,9 +56,7 @@ HistoryJournalData buildHistoryJournalData(
   StatisticsAnalyticsService analytics = const StatisticsAnalyticsService(),
 }) {
   final eligible = analytics.eligibleSessions(sessions, splitId: splitId);
-  final recordSessions = <WorkoutSession>{
-    for (final event in analytics.recordEvents(eligible)) event.session,
-  };
+  final records = analytics.recordEvents(eligible);
   final normalizedQuery = query.trim().toLowerCase();
   final matchingIds = ExerciseCatalog.search(query).map((d) => d.id).toSet();
   bool exerciseMatches(Exercise exercise) =>
@@ -94,9 +96,10 @@ HistoryJournalData buildHistoryJournalData(
       HistoryWorkoutSummary(
         session: session,
         statistics: analytics.sessionStatistics(session),
-        hasPersonalRecord: recordSessions.any(
-          (recordSession) => _sameSession(recordSession, session),
-        ),
+        recordCount:
+            records
+                .where((event) => _sameSession(event.session, session))
+                .length,
         matchedExercises:
             normalizedQuery.isEmpty || nameMatches(session)
                 ? const []
